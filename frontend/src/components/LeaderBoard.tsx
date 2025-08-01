@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { useMultiLoginContext } from "@/app/contexts/MultiLoginContext";
+import { useAuth } from "@/app/contexts/AuthContext";
 
 const LeaderBoard = () => {
-  const { userData: user, leader } = useMultiLoginContext();
+  const { user } = useAuth();
+  const [leader, setLeader] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState("users");
   const myPos = leader?.findIndex((ele: any) => {
     return ele.username == user?.username;

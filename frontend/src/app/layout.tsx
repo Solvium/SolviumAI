@@ -1,28 +1,24 @@
-import "@twa-dev/sdk";
 import type { Metadata } from "next";
-import { Space_Grotesk } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
-import App from "@/components/App";
+import AuthProviderWrapper from "./providers/AuthProviderWrapper";
 
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  display: "swap",
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Solvium Task Bot",
-  description: "Earn with Solvium Tasks on NEAR Blockchain",
+  title: "Solvium - Gaming Platform",
+  description: "Multi-chain gaming platform with rewards and competitions",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en" className={spaceGrotesk.className}>
-      <body className="bg-[#0B0B14]">
-        <App>{children}</App>
+    <html lang="en">
+      <body className={inter.className}>
+        <AuthProviderWrapper>{children}</AuthProviderWrapper>
       </body>
     </html>
   );
