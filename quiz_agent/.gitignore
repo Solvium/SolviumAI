@@ -1,0 +1,16 @@
+.env
+.github/prompts/*
+old_code.py
+migrations/
+dev-requirements.txt
+docker-entrypoint.sh
+fix_quiz_deposit_addresses.py
+mental_maze.db
+test_precision_fix.py
+product_anticheat.readme.md
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3

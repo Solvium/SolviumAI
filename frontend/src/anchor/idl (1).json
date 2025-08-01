@@ -1,0 +1,98 @@
+{
+  "version": "0.1.0",
+  "name": "solvium_multiplier",
+  "instructions": [
+    {
+      "name": "initialize",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "programData", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [{ "name": "multiplierFactor", "type": "u32" }]
+    },
+    {
+      "name": "deposit",
+      "accounts": [
+        { "name": "user", "isMut": true, "isSigner": true },
+        { "name": "programData", "isMut": true, "isSigner": false },
+        { "name": "userDeposits", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [{ "name": "amount", "type": "u64" }]
+    },
+    {
+      "name": "adminWithdraw",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "programData", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [{ "name": "amount", "type": "u64" }]
+    },
+    {
+      "name": "updateMultiplierFactor",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "programData", "isMut": true, "isSigner": false }
+      ],
+      "args": [{ "name": "newFactor", "type": "u32" }]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "ProgramData",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "owner", "type": "publicKey" },
+          { "name": "totalContractDeposits", "type": "u64" },
+          { "name": "multiplierFactor", "type": "u32" }
+        ]
+      }
+    },
+    {
+      "name": "UserDeposits",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "totalDeposits", "type": "u64" },
+          {
+            "name": "deposits",
+            "type": { "vec": { "defined": "DepositInfo" } }
+          },
+          { "name": "lastDepositId", "type": "u64" }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "DepositInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "id", "type": "u64" },
+          { "name": "amount", "type": "u64" },
+          { "name": "multiplier", "type": "u64" },
+          { "name": "startTime", "type": "i64" },
+          { "name": "active", "type": "bool" }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "DepositTooLow",
+      "msg": "Deposit amount is too low"
+    },
+    { "code": 6001, "name": "Unauthorized", "msg": "Unauthorized access" },
+    { "code": 6002, "name": "InvalidAmount", "msg": "Invalid amount" },
+    {
+      "code": 6003,
+      "name": "InsufficientReserve",
+      "msg": "Insufficient reserve balance"
+    }
+  ]
+}

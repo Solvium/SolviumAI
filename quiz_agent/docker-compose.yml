@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  #   mental-maze:
+  #     build: .
+  #     container_name: mental-maze-app
+  #     restart: always
+  #     env_file: .env
+  #     volumes:
+  #       - ./mental_maze.db:/app/mental_maze.db
+  #     ports:
+  #       - "8080:8080" # Add port mapping if your app exposes any port
+  #     depends_on: # Add dependency if your app needs Redis to start first
+  #       - redis
+
+  redis:
+    image: "redis:latest"
+    container_name: mental-maze-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
+networks:
+  default:
+    driver: bridge
+
+volumes:
+  redis_data:
