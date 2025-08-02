@@ -1,6 +1,7 @@
 import secrets
 import hashlib
 import base64
+import base58
 import json
 import os
 from datetime import datetime
@@ -96,11 +97,26 @@ class NEARWalletService:
         plaintext = decryptor.update(ciphertext) + decryptor.finalize()
         return plaintext.decode()
     
-    def _generate_secure_keypair(self) -> Tuple[ed25519.Ed25519PrivateKey, ed25519.Ed25519PublicKey]:
-        """Generate a cryptographically secure Ed25519 keypair"""
-        private_key = ed25519.Ed25519PrivateKey.generate()
+    def _generate_secure_keypair(self) -> Tuple[bytes, bytes]:
+        """Generate a cryptographically secure Ed25519 keypair in NEAR format"""
+        # Generate 32 bytes of random data for the private key
+        private_key_bytes = secrets.token_bytes(32)
+        
+        # Create Ed25519 private key from raw bytes
+        private_key = ed25519.Ed25519PrivateKey.from_private_bytes(private_key_bytes)
         public_key = private_key.public_key()
-        return private_key, public_key
+        
+        # Get public key bytes
+        public_key_bytes = public_key.public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw
+        )
+        
+        # For NEAR, we need to create a 64-byte private key
+        # The first 32 bytes are the actual private key, the last 32 bytes are the public key
+        near_private_key_bytes = private_key_bytes + public_key_bytes
+        
+        return near_private_key_bytes, public_key_bytes
     
     def _create_sub_account_id(self, user_id: int) -> str:
         """Create a human-readable sub-account ID under our main testnet account"""
@@ -143,26 +159,20 @@ class NEARWalletService:
         try:
             logger.info(f"Creating NEAR testnet wallet for user {user_id}")
             
-            # Generate secure keypair
-            private_key, public_key = self._generate_secure_keypair()
+            # Generate secure keypair in NEAR format
+            near_private_key_bytes, public_key_bytes = self._generate_secure_keypair()
             
             # Create sub-account ID
             account_id = self._create_sub_account_id(user_id)
             
-            # Convert keys to NEAR format
-            private_key_bytes = private_key.private_bytes(
-                encoding=serialization.Encoding.Raw,
-                format=serialization.PrivateFormat.Raw,
-                encryption_algorithm=serialization.NoEncryption()
-            )
-            public_key_bytes = public_key.public_bytes(
-                encoding=serialization.Encoding.Raw,
-                format=serialization.PublicFormat.Raw
-            )
+            # Format keys for NEAR using base58 encoding
+            near_private_key = f"ed25519:{base58.b58encode(near_private_key_bytes).decode()}"
+            near_public_key = f"ed25519:{base58.b58encode(public_key_bytes).decode()}"
             
-            # Format keys for NEAR
-            near_private_key = f"ed25519:{base64.b64encode(private_key_bytes).decode()}"
-            near_public_key = f"ed25519:{base64.b64encode(public_key_bytes).decode()}"
+            # Debug logging to check key format
+            logger.debug(f"Generated private key length: {len(near_private_key)}")
+            logger.debug(f"Private key format: {near_private_key[:50]}...")
+            logger.debug(f"Public key format: {near_public_key[:50]}...")
             
             # Create sub-account on NEAR testnet
             # Pass the raw public key bytes for py-near create_account method
