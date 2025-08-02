@@ -15,9 +15,41 @@ from .keyboard_markups import (
     remove_keyboard
 )
 from utils.redis_client import RedisClient
+from services.wallet_service import WalletService
 import logging
 
 logger = logging.getLogger(__name__)
+
+async def handle_first_time_wallet_creation(update: Update, context: CallbackContext) -> None:
+    """
+    Handles wallet creation for first-time users
+    """
+    user_id = update.effective_user.id
+    user_name = update.effective_user.first_name
+    
+    try:
+        # Create wallet service and generate demo wallet
+        wallet_service = WalletService()
+        wallet_info = await wallet_service.create_demo_wallet(user_id)
+        
+        # Format the wallet info message
+        wallet_message = await wallet_service.format_wallet_info_message(wallet_info)
+        
+        # Send wallet creation message
+        await update.message.reply_text(
+            f"🎉 Welcome to SolviumAI, {user_name}!\n\n{wallet_message}",
+            parse_mode='Markdown'
+        )
+        
+        # Show the main menu after wallet creation
+        await show_main_menu(update, context)
+        
+    except Exception as e:
+        logger.error(f"Error creating wallet for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Sorry, there was an error creating your wallet. Please try again.",
+            reply_markup=create_main_menu_keyboard()
+        )
 
 async def show_main_menu(update: Update, context: CallbackContext) -> None:
     """
@@ -48,6 +80,15 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
     message_text = update.message.text
     
     logger.info(f"Text message from user {user_id}: {message_text}")
+    
+    # Check if user has a wallet - if not, create one first
+    wallet_service = WalletService()
+    has_wallet = await wallet_service.has_wallet(user_id)
+    
+    if not has_wallet:
+        # Create wallet for first-time user
+        await handle_first_time_wallet_creation(update, context)
+        return
     
     # Parse the button text and route to appropriate handler
     if message_text == "🎯 Create Quiz":
@@ -257,9 +298,30 @@ async def handle_download_mobile(update: Update, context: CallbackContext) -> No
 
 async def handle_connect_wallet(update: Update, context: CallbackContext) -> None:
     """Handle 'Connect Wallet' button press"""
-    await update.message.reply_text("💳 Connecting wallet...")
-    from bot.handlers import link_wallet_handler
-    await link_wallet_handler(update, context)
+    user_id = update.effective_user.id
+    wallet_service = WalletService()
+    
+    try:
+        wallet = await wallet_service.get_user_wallet(user_id)
+        if wallet:
+            wallet_message = await wallet_service.format_wallet_info_message(wallet)
+            
+            await update.message.reply_text(
+                f"💳 **Your Connected Wallet**\n\n{wallet_message}",
+                parse_mode='Markdown',
+                reply_markup=create_cancel_keyboard()
+            )
+        else:
+            await update.message.reply_text(
+                "❌ No wallet found. Please contact support.",
+                reply_markup=create_cancel_keyboard()
+            )
+    except Exception as e:
+        logger.error(f"Error connecting wallet for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Error connecting wallet. Please try again.",
+            reply_markup=create_cancel_keyboard()
+        )
 
 async def handle_view_rewards(update: Update, context: CallbackContext) -> None:
     """Handle 'View Rewards' button press"""
@@ -325,10 +387,34 @@ async def handle_achievements(update: Update, context: CallbackContext) -> None:
 
 async def handle_view_balance(update: Update, context: CallbackContext) -> None:
     """Handle 'View Balance' button press"""
-    await update.message.reply_text(
-        "💰 Your balance:\n\n• Available: 1,250 SOLV\n• Pending: 150 SOLV\n• Total Earned: 2,400 SOLV",
-        reply_markup=create_cancel_keyboard()
-    )
+    user_id = update.effective_user.id
+    wallet_service = WalletService()
+    
+    try:
+        wallet = await wallet_service.get_user_wallet(user_id)
+        if wallet:
+            balance = await wallet_service.get_wallet_balance(user_id)
+            account_id = wallet.get('account_id', 'Unknown')
+            
+            await update.message.reply_text(
+                f"💰 **Your Wallet Balance**\n\n"
+                f"**Account:** `{account_id}`\n"
+                f"**Balance:** {balance}\n\n"
+                f"*This is a demo wallet for testing purposes*",
+                parse_mode='Markdown',
+                reply_markup=create_cancel_keyboard()
+            )
+        else:
+            await update.message.reply_text(
+                "❌ No wallet found. Please contact support.",
+                reply_markup=create_cancel_keyboard()
+            )
+    except Exception as e:
+        logger.error(f"Error viewing balance for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Error retrieving wallet balance. Please try again.",
+            reply_markup=create_cancel_keyboard()
+        )
 
 async def handle_claim_rewards(update: Update, context: CallbackContext) -> None:
     """Handle 'Claim Rewards' button press"""
