@@ -1,10 +1,161 @@
-from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
 from typing import List, Optional
 
-def create_main_menu_keyboard() -> InlineKeyboardMarkup:
+def create_main_menu_keyboard() -> ReplyKeyboardMarkup:
     """
     Creates the main 2x2 grid menu that appears directly below the keyboard input.
-    This mimics the interface shown in the reference image.
+    This mimics the interface shown in the reference image using ReplyKeyboardMarkup.
+    """
+    return ReplyKeyboardMarkup([
+        [
+            KeyboardButton("🎮 Pick a game!"),
+            KeyboardButton("💪 Challenge friends")
+        ],
+        [
+            KeyboardButton("🤝 Join community"),
+            KeyboardButton("📱 Get our cash winning app")
+        ]
+    ], 
+    resize_keyboard=True,  # Makes buttons smaller to fit better
+    one_time_keyboard=False,  # Keeps keyboard visible
+    input_field_placeholder="Choose an option..."  # Placeholder in input field
+    )
+
+def create_game_selection_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a keyboard for game selection when user clicks "Pick a game!"
+    """
+    return ReplyKeyboardMarkup([
+        [
+            KeyboardButton("🎯 Create Quiz"),
+            KeyboardButton("🎲 Play Quiz")
+        ],
+        [
+            KeyboardButton("🏆 Leaderboards"),
+            KeyboardButton("💰 Winners")
+        ],
+        [
+            KeyboardButton("⬅️ Back to Main Menu")
+        ]
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=False,
+    input_field_placeholder="Select a game..."
+    )
+
+def create_challenge_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a keyboard for challenge features
+    """
+    return ReplyKeyboardMarkup([
+        [
+            KeyboardButton("👥 Challenge Group"),
+            KeyboardButton("👤 Challenge Friend")
+        ],
+        [
+            KeyboardButton("🏅 My Challenges"),
+            KeyboardButton("📊 Challenge Stats")
+        ],
+        [
+            KeyboardButton("⬅️ Back to Main Menu")
+        ]
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=False,
+    input_field_placeholder="Choose challenge option..."
+    )
+
+def create_community_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a keyboard for community features
+    """
+    return ReplyKeyboardMarkup([
+        [
+            KeyboardButton("📢 Join Announcements"),
+            KeyboardButton("💬 Join Discussion")
+        ],
+        [
+            KeyboardButton("🎮 Join Gaming"),
+            KeyboardButton("📈 Join Trading")
+        ],
+        [
+            KeyboardButton("⬅️ Back to Main Menu")
+        ]
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=False,
+    input_field_placeholder="Join community..."
+    )
+
+def create_app_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a keyboard for app download/access
+    """
+    return ReplyKeyboardMarkup([
+        [
+            KeyboardButton("🌐 Open Web App"),
+            KeyboardButton("📱 Download Mobile")
+        ],
+        [
+            KeyboardButton("💳 Connect Wallet"),
+            KeyboardButton("💰 View Rewards")
+        ],
+        [
+            KeyboardButton("⬅️ Back to Main Menu")
+        ]
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=False,
+    input_field_placeholder="App options..."
+    )
+
+def create_quiz_creation_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a keyboard for quiz creation options
+    """
+    return ReplyKeyboardMarkup([
+        [
+            KeyboardButton("📝 Quick Quiz"),
+            KeyboardButton("⚙️ Custom Quiz")
+        ],
+        [
+            KeyboardButton("📊 Quiz Templates"),
+            KeyboardButton("📈 My Quizzes")
+        ],
+        [
+            KeyboardButton("⬅️ Back to Games")
+        ]
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=False,
+    input_field_placeholder="Quiz creation..."
+    )
+
+def create_cancel_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a simple cancel/back keyboard
+    """
+    return ReplyKeyboardMarkup([
+        [
+            KeyboardButton("❌ Cancel"),
+            KeyboardButton("⬅️ Back")
+        ]
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=False,
+    input_field_placeholder="Navigation..."
+    )
+
+def remove_keyboard() -> ReplyKeyboardRemove:
+    """
+    Removes the custom keyboard and returns to normal keyboard
+    """
+    return ReplyKeyboardRemove(selective=True)
+
+# Keep the original InlineKeyboardMarkup functions for specific use cases
+def create_inline_main_menu_keyboard() -> InlineKeyboardMarkup:
+    """
+    Creates the main 2x2 grid menu using InlineKeyboardMarkup for specific scenarios
     """
     return InlineKeyboardMarkup([
         [
@@ -29,7 +180,7 @@ def create_main_menu_keyboard() -> InlineKeyboardMarkup:
         ]
     ])
 
-def create_game_selection_keyboard() -> InlineKeyboardMarkup:
+def create_inline_game_selection_keyboard() -> InlineKeyboardMarkup:
     """
     Creates a keyboard for game selection when user clicks "Pick a game!"
     """
@@ -62,7 +213,7 @@ def create_game_selection_keyboard() -> InlineKeyboardMarkup:
         ]
     ])
 
-def create_challenge_keyboard() -> InlineKeyboardMarkup:
+def create_inline_challenge_keyboard() -> InlineKeyboardMarkup:
     """
     Creates a keyboard for challenge features
     """
@@ -95,7 +246,7 @@ def create_challenge_keyboard() -> InlineKeyboardMarkup:
         ]
     ])
 
-def create_community_keyboard() -> InlineKeyboardMarkup:
+def create_inline_community_keyboard() -> InlineKeyboardMarkup:
     """
     Creates a keyboard for community features
     """
@@ -128,7 +279,7 @@ def create_community_keyboard() -> InlineKeyboardMarkup:
         ]
     ])
 
-def create_app_keyboard() -> InlineKeyboardMarkup:
+def create_inline_app_keyboard() -> InlineKeyboardMarkup:
     """
     Creates a keyboard for app download/access
     """
@@ -161,7 +312,7 @@ def create_app_keyboard() -> InlineKeyboardMarkup:
         ]
     ])
 
-def create_quiz_creation_keyboard() -> InlineKeyboardMarkup:
+def create_inline_quiz_creation_keyboard() -> InlineKeyboardMarkup:
     """
     Creates a keyboard for quiz creation options
     """
@@ -194,7 +345,7 @@ def create_quiz_creation_keyboard() -> InlineKeyboardMarkup:
         ]
     ])
 
-def create_cancel_keyboard() -> InlineKeyboardMarkup:
+def create_inline_cancel_keyboard() -> InlineKeyboardMarkup:
     """
     Creates a simple cancel/back keyboard
     """
