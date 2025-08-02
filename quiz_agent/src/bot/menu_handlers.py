@@ -3,10 +3,14 @@ from telegram.ext import CallbackContext
 from .keyboard_markups import (
     create_main_menu_keyboard,
     create_game_selection_keyboard,
-    create_challenge_keyboard,
+    create_quiz_creation_keyboard,
+    create_quiz_templates_keyboard,
+    create_quiz_settings_keyboard,
+    create_quiz_play_keyboard,
+    create_rewards_keyboard,
+    create_leaderboards_keyboard,
     create_community_keyboard,
     create_app_keyboard,
-    create_quiz_creation_keyboard,
     create_cancel_keyboard,
     remove_keyboard
 )
@@ -46,27 +50,20 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
     logger.info(f"Text message from user {user_id}: {message_text}")
     
     # Parse the button text and route to appropriate handler
-    if message_text == "🎮 Pick a game!":
-        await handle_pick_game(update, context)
-    elif message_text == "💪 Challenge friends":
-        await handle_challenge_friends(update, context)
-    elif message_text == "🤝 Join community":
-        await handle_join_community(update, context)
-    elif message_text == "📱 Get our cash winning app":
-        await handle_get_app(update, context)
-    elif message_text == "⬅️ Back to Main Menu":
-        await show_main_menu(update, context)
-    elif message_text == "⬅️ Back to Games":
-        await handle_pick_game(update, context)
-    # Game selection handlers
-    elif message_text == "🎯 Create Quiz":
+    if message_text == "🎯 Create Quiz":
         await handle_create_quiz(update, context)
     elif message_text == "🎲 Play Quiz":
         await handle_play_quiz(update, context)
     elif message_text == "🏆 Leaderboards":
         await handle_leaderboards(update, context)
-    elif message_text == "💰 Winners":
-        await handle_winners(update, context)
+    elif message_text == "💰 My Rewards":
+        await handle_rewards(update, context)
+    elif message_text == "⬅️ Back to Main Menu":
+        await show_main_menu(update, context)
+    elif message_text == "⬅️ Back to Games":
+        await handle_back_to_games(update, context)
+    elif message_text == "⬅️ Back to Quiz Creation":
+        await handle_create_quiz(update, context)
     # Challenge handlers
     elif message_text == "👥 Challenge Group":
         await handle_challenge_group(update, context)
@@ -103,6 +100,33 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         await handle_quiz_templates(update, context)
     elif message_text == "📈 My Quizzes":
         await handle_my_quizzes(update, context)
+    # Quiz play handlers
+    elif message_text == "🎯 Active Quizzes":
+        await handle_active_quizzes(update, context)
+    elif message_text == "🏆 My Results":
+        await handle_my_results(update, context)
+    elif message_text == "📊 Quiz History":
+        await handle_quiz_history(update, context)
+    elif message_text == "🎖️ Achievements":
+        await handle_achievements(update, context)
+    # Rewards handlers
+    elif message_text == "💳 Connect Wallet":
+        await handle_connect_wallet(update, context)
+    elif message_text == "💰 View Balance":
+        await handle_view_balance(update, context)
+    elif message_text == "🏆 Claim Rewards":
+        await handle_claim_rewards(update, context)
+    elif message_text == "📈 Transaction History":
+        await handle_transaction_history(update, context)
+    # Leaderboard handlers
+    elif message_text == "🏆 Global Leaderboard":
+        await handle_global_leaderboard(update, context)
+    elif message_text == "👥 Group Leaderboard":
+        await handle_group_leaderboard(update, context)
+    elif message_text == "📊 Weekly Top":
+        await handle_weekly_top(update, context)
+    elif message_text == "🎖️ All Time Best":
+        await handle_all_time_best(update, context)
     # Navigation handlers
     elif message_text == "❌ Cancel":
         await show_main_menu(update, context)
@@ -112,49 +136,23 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         # Handle unknown text - could be a regular message
         await handle_unknown_message(update, context)
 
-async def handle_pick_game(update: Update, context: CallbackContext) -> None:
-    """Handle 'Pick a game!' button press"""
+async def handle_rewards(update: Update, context: CallbackContext) -> None:
+    """Handle 'My Rewards' button press"""
     user_id = update.effective_user.id
     redis_client = RedisClient()
     
     await update.message.reply_text(
-        "🎮 Choose your game:",
+        "💰 Manage your rewards:",
+        reply_markup=create_rewards_keyboard()
+    )
+    await redis_client.set_user_data_key(user_id, "current_menu", "rewards")
+
+async def handle_back_to_games(update: Update, context: CallbackContext) -> None:
+    """Handle 'Back to Games' button press"""
+    await update.message.reply_text(
+        "🎮 Game options:",
         reply_markup=create_game_selection_keyboard()
     )
-    await redis_client.set_user_data_key(user_id, "current_menu", "games")
-
-async def handle_challenge_friends(update: Update, context: CallbackContext) -> None:
-    """Handle 'Challenge friends' button press"""
-    user_id = update.effective_user.id
-    redis_client = RedisClient()
-    
-    await update.message.reply_text(
-        "💪 Challenge your friends:",
-        reply_markup=create_challenge_keyboard()
-    )
-    await redis_client.set_user_data_key(user_id, "current_menu", "challenge")
-
-async def handle_join_community(update: Update, context: CallbackContext) -> None:
-    """Handle 'Join community' button press"""
-    user_id = update.effective_user.id
-    redis_client = RedisClient()
-    
-    await update.message.reply_text(
-        "🤝 Join our community:",
-        reply_markup=create_community_keyboard()
-    )
-    await redis_client.set_user_data_key(user_id, "current_menu", "community")
-
-async def handle_get_app(update: Update, context: CallbackContext) -> None:
-    """Handle 'Get our cash winning app' button press"""
-    user_id = update.effective_user.id
-    redis_client = RedisClient()
-    
-    await update.message.reply_text(
-        "📱 Get our cash winning app:",
-        reply_markup=create_app_keyboard()
-    )
-    await redis_client.set_user_data_key(user_id, "current_menu", "app")
 
 async def handle_create_quiz(update: Update, context: CallbackContext) -> None:
     """Handle 'Create Quiz' button press"""
@@ -165,25 +163,27 @@ async def handle_create_quiz(update: Update, context: CallbackContext) -> None:
 
 async def handle_play_quiz(update: Update, context: CallbackContext) -> None:
     """Handle 'Play Quiz' button press"""
-    await update.message.reply_text("🎲 Loading available quizzes...")
-    # Import and call the existing play_quiz function
-    from services.quiz_service import play_quiz
-    context.args = []  # Reset args for play_quiz
-    await play_quiz(update, context)
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    
+    await update.message.reply_text(
+        "🎲 Play quizzes:",
+        reply_markup=create_quiz_play_keyboard()
+    )
+    await redis_client.set_user_data_key(user_id, "current_menu", "quiz_play")
 
 async def handle_leaderboards(update: Update, context: CallbackContext) -> None:
     """Handle 'Leaderboards' button press"""
-    await update.message.reply_text("🏆 Loading leaderboards...")
-    # Import and call the existing leaderboards function
-    from bot.handlers import show_all_active_leaderboards_command
-    await show_all_active_leaderboards_command(update, context)
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    
+    await update.message.reply_text(
+        "🏆 View leaderboards:",
+        reply_markup=create_leaderboards_keyboard()
+    )
+    await redis_client.set_user_data_key(user_id, "current_menu", "leaderboards")
 
-async def handle_winners(update: Update, context: CallbackContext) -> None:
-    """Handle 'Winners' button press"""
-    await update.message.reply_text("💰 Loading winners...")
-    # Import and call the existing winners function
-    from bot.handlers import winners_handler
-    await winners_handler(update, context)
+
 
 async def handle_challenge_group(update: Update, context: CallbackContext) -> None:
     """Handle 'Challenge Group' button press"""
@@ -291,6 +291,84 @@ async def handle_my_quizzes(update: Update, context: CallbackContext) -> None:
     """Handle 'My Quizzes' button press"""
     await update.message.reply_text(
         "📈 Your quizzes:\n\nNo quizzes created yet. Create your first quiz!",
+        reply_markup=create_cancel_keyboard()
+    )
+
+# Add handlers for new quiz-focused buttons
+async def handle_active_quizzes(update: Update, context: CallbackContext) -> None:
+    """Handle 'Active Quizzes' button press"""
+    await update.message.reply_text("🎲 Loading available quizzes...")
+    from services.quiz_service import play_quiz
+    context.args = []
+    await play_quiz(update, context)
+
+async def handle_my_results(update: Update, context: CallbackContext) -> None:
+    """Handle 'My Results' button press"""
+    await update.message.reply_text(
+        "🏆 Your recent results:\n\n• Quiz: General Knowledge - Score: 85%\n• Quiz: Science - Score: 92%\n• Quiz: History - Score: 78%",
+        reply_markup=create_cancel_keyboard()
+    )
+
+async def handle_quiz_history(update: Update, context: CallbackContext) -> None:
+    """Handle 'Quiz History' button press"""
+    await update.message.reply_text(
+        "📊 Your quiz history:\n\n• Total Quizzes: 15\n• Average Score: 82%\n• Best Score: 95%\n• Total Rewards: 450 SOLV",
+        reply_markup=create_cancel_keyboard()
+    )
+
+async def handle_achievements(update: Update, context: CallbackContext) -> None:
+    """Handle 'Achievements' button press"""
+    await update.message.reply_text(
+        "🎖️ Your achievements:\n\n🏆 Quiz Master - Complete 10 quizzes\n🥇 Perfect Score - Get 100% on any quiz\n💰 Reward Collector - Earn 1000 SOLV\n📚 Knowledge Seeker - Play 5 different categories",
+        reply_markup=create_cancel_keyboard()
+    )
+
+async def handle_view_balance(update: Update, context: CallbackContext) -> None:
+    """Handle 'View Balance' button press"""
+    await update.message.reply_text(
+        "💰 Your balance:\n\n• Available: 1,250 SOLV\n• Pending: 150 SOLV\n• Total Earned: 2,400 SOLV",
+        reply_markup=create_cancel_keyboard()
+    )
+
+async def handle_claim_rewards(update: Update, context: CallbackContext) -> None:
+    """Handle 'Claim Rewards' button press"""
+    await update.message.reply_text(
+        "🏆 Claiming rewards...\n\n✅ Successfully claimed 150 SOLV!\nNew balance: 1,400 SOLV",
+        reply_markup=create_cancel_keyboard()
+    )
+
+async def handle_transaction_history(update: Update, context: CallbackContext) -> None:
+    """Handle 'Transaction History' button press"""
+    await update.message.reply_text(
+        "📈 Recent transactions:\n\n• +150 SOLV - Quiz reward (2 hours ago)\n• +200 SOLV - Quiz reward (1 day ago)\n• +100 SOLV - Quiz reward (3 days ago)",
+        reply_markup=create_cancel_keyboard()
+    )
+
+async def handle_global_leaderboard(update: Update, context: CallbackContext) -> None:
+    """Handle 'Global Leaderboard' button press"""
+    await update.message.reply_text(
+        "🏆 Global Leaderboard:\n\n🥇 @user1 - 15,420 SOLV\n🥈 @user2 - 12,850 SOLV\n🥉 @user3 - 11,200 SOLV\n4. @user4 - 9,800 SOLV\n5. @user5 - 8,950 SOLV",
+        reply_markup=create_cancel_keyboard()
+    )
+
+async def handle_group_leaderboard(update: Update, context: CallbackContext) -> None:
+    """Handle 'Group Leaderboard' button press"""
+    await update.message.reply_text(
+        "👥 Group Leaderboard:\n\n🥇 @user1 - 2,450 SOLV\n🥈 @user2 - 1,890 SOLV\n🥉 @user3 - 1,650 SOLV\n4. @user4 - 1,200 SOLV\n5. @user5 - 980 SOLV",
+        reply_markup=create_cancel_keyboard()
+    )
+
+async def handle_weekly_top(update: Update, context: CallbackContext) -> None:
+    """Handle 'Weekly Top' button press"""
+    await update.message.reply_text(
+        "📊 Weekly Top Performers:\n\n🥇 @user1 - 850 SOLV\n🥈 @user2 - 720 SOLV\n🥉 @user3 - 680 SOLV\n4. @user4 - 550 SOLV\n5. @user5 - 480 SOLV",
+        reply_markup=create_cancel_keyboard()
+    )
+
+async def handle_all_time_best(update: Update, context: CallbackContext) -> None:
+    """Handle 'All Time Best' button press"""
+    await update.message.reply_text(
+        "🎖️ All Time Best:\n\n🥇 @user1 - 25,420 SOLV\n🥈 @user2 - 22,850 SOLV\n🥉 @user3 - 21,200 SOLV\n4. @user4 - 19,800 SOLV\n5. @user5 - 18,950 SOLV",
         reply_markup=create_cancel_keyboard()
     )
 
