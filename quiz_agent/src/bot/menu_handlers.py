@@ -35,14 +35,16 @@ async def handle_first_time_wallet_creation(update: Update, context: CallbackCon
         # Format the wallet info message
         wallet_message = await wallet_service.format_wallet_info_message(wallet_info)
         
-        # Send wallet creation message
+        # Store user state in Redis
+        redis_client = RedisClient()
+        await redis_client.set_user_data_key(user_id, "current_menu", "main")
+        
+        # Send wallet creation message with main menu keyboard
         await update.message.reply_text(
             f"🎉 Welcome to SolviumAI, {user_name}!\n\n{wallet_message}",
-            parse_mode='Markdown'
+            parse_mode='Markdown',
+            reply_markup=create_main_menu_keyboard()
         )
-        
-        # Show the main menu after wallet creation
-        await show_main_menu(update, context)
         
     except Exception as e:
         logger.error(f"Error creating wallet for user {user_id}: {e}")

@@ -106,6 +106,8 @@ class WalletService:
 • This is a demo wallet for testing purposes
 • In production, use proper wallet security measures
 
-🎉 You can now use all bot features that require a wallet!"""
+🎉 You can now use all bot features that require a wallet!
+
+💡 **What's Next?** Use the buttons below to explore the bot features!"""
         
         return message 
