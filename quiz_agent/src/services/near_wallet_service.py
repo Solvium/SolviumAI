@@ -381,54 +381,35 @@ class NEARWalletService:
             is_demo = wallet_info.get('is_demo', False)
             
             if is_demo:
-                message = f"""🔐 **Your NEAR Testnet Sub-Account Created Successfully!** *(Demo Mode)*
+                message = f"""🔐 **Your NEAR Account Created Successfully!** *(Demo Mode)*
 
-📋 **Wallet Details:**
-• **Sub-Account ID:** `{wallet_info['account_id']}`
-• **Parent Account:** `{Config.NEAR_WALLET_ADDRESS or 'kindpuma8958.testnet'}`
-• **Public Key:** `{wallet_info['public_key']}`
+📋 **Account Details:**
+• **Account ID:** `{wallet_info['account_id']}`
 • **Balance:** {balance}
-• **Network:** Testnet *(Demo)*
 
 🔑 **Private Key (SAVE THIS SECURELY!):**
 `{private_key}`
 
-⚠️ **Important Security Notes:**
-• Never share your private key with anyone
-• Store it in a secure location (password manager recommended)
-• This is a **DEMO TESTNET sub-account** - created locally for testing
-• NEAR testnet services were temporarily unavailable
-• This wallet works for bot features but may not be on the blockchain yet
-• The private key is encrypted in our database
+⚠️ **Security:** Never share your private key with anyone. Store it securely.
 
-🎉 You can now use all bot features that require a wallet!
+🌐 **Explorer:** https://explorer.testnet.near.org/accounts/{wallet_info['account_id']}
 
-💡 **What's Next?** Use the buttons below to explore the bot features!"""
+🎮 **Ready to play?** Use the buttons below to start gaming!"""
             else:
-                message = f"""🔐 **Your NEAR Testnet Sub-Account Created Successfully!**
+                message = f"""🔐 **Your NEAR Account Created Successfully!**
 
-📋 **Wallet Details:**
-• **Sub-Account ID:** `{wallet_info['account_id']}`
-• **Parent Account:** `{Config.NEAR_WALLET_ADDRESS or 'kindpuma8958.testnet'}`
-• **Public Key:** `{wallet_info['public_key']}`
+📋 **Account Details:**
+• **Account ID:** `{wallet_info['account_id']}`
 • **Balance:** {balance}
-• **Network:** Testnet
 
 🔑 **Private Key (SAVE THIS SECURELY!):**
 `{private_key}`
 
-⚠️ **Important Security Notes:**
-• Never share your private key with anyone
-• Store it in a secure location (password manager recommended)
-• This is a TESTNET sub-account - do not use for real funds
-• The private key is encrypted in our database
-• You can use this wallet on NEAR testnet explorer
+⚠️ **Security:** Never share your private key with anyone. Store it securely.
 
-🌐 **Testnet Explorer:** https://explorer.testnet.near.org/accounts/{wallet_info['account_id']}
+🌐 **Explorer:** https://explorer.testnet.near.org/accounts/{wallet_info['account_id']}
 
-🎉 You can now use all bot features that require a wallet!
-
-💡 **What's Next?** Use the buttons below to explore the bot features!"""
+🎮 **Ready to play?** Use the buttons below to start gaming!"""
             
             return message
             

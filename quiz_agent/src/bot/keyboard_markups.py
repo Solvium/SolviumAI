@@ -1,4 +1,4 @@
-from telegram import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton, WebAppInfo
 from typing import List, Optional
 
 def create_main_menu_keyboard() -> ReplyKeyboardMarkup:
@@ -14,6 +14,9 @@ def create_main_menu_keyboard() -> ReplyKeyboardMarkup:
         [
             KeyboardButton("🏆 Leaderboards"),
             KeyboardButton("💰 My Rewards")
+        ],
+        [
+            KeyboardButton("🎮 Play Games", web_app=WebAppInfo(url="https://your-mini-app-url.com"))
         ]
     ], 
     resize_keyboard=True,  # Makes buttons smaller to fit better
