@@ -473,6 +473,28 @@ async def handle_back_navigation(update: Update, context: CallbackContext) -> No
         # Default back to main menu
         await show_main_menu(update, context)
 
+async def handle_reset_wallet(update: Update, context: CallbackContext) -> None:
+    """Development command to reset wallet state for testing"""
+    user_id = update.effective_user.id
+    
+    try:
+        # Delete wallet-related keys from Redis
+        redis_client = RedisClient()
+        await redis_client.delete_user_data_key(str(user_id), "wallet_created")
+        await redis_client.delete_user_data_key(str(user_id), "wallet")
+        
+        await update.message.reply_text(
+            "🔄 Wallet state reset successfully!\n\nYou can now test wallet creation again by clicking any menu button.",
+            reply_markup=create_main_menu_keyboard()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error resetting wallet for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Error resetting wallet state. Please try again.",
+            reply_markup=create_main_menu_keyboard()
+        )
+
 async def handle_unknown_message(update: Update, context: CallbackContext) -> None:
     """Handle unknown text messages"""
     await update.message.reply_text(

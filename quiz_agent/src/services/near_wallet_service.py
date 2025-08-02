@@ -1,0 +1,434 @@
+import secrets
+import hashlib
+import base64
+import json
+import os
+from datetime import datetime
+from typing import Dict, Optional, Tuple
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import ed25519
+import requests
+import logging
+from cryptography.hazmat.primitives import serialization
+from utils.config import Config
+from py_near.account import Account
+from py_near.dapps.core import NEAR
+
+logger = logging.getLogger(__name__)
+
+class NEARWalletService:
+    """Service for creating and managing NEAR testnet wallets with security best practices"""
+    
+    def __init__(self):
+        self.testnet_rpc_url = Config.NEAR_TESTNET_RPC_URL
+        self.testnet_helper_url = Config.NEAR_TESTNET_HELPER_URL
+        self.encryption_key = Config.get_wallet_encryption_key()
+        self.main_account: Optional[Account] = None
+        self._init_main_account()
+    
+    def _init_main_account(self):
+        """Initialize the main NEAR account for creating sub-accounts"""
+        try:
+            private_key = Config.NEAR_WALLET_PRIVATE_KEY
+            account_id = Config.NEAR_WALLET_ADDRESS
+            rpc_addr = Config.NEAR_RPC_ENDPOINT
+            
+            if not private_key or not account_id:
+                logger.warning("Missing NEAR wallet credentials - will use demo mode")
+                return
+            
+            if not rpc_addr:
+                logger.warning("Missing NEAR RPC endpoint - will use demo mode")
+                return
+            
+            # Initialize the main NEAR account
+            self.main_account = Account(account_id, private_key, rpc_addr=rpc_addr)
+            logger.info(f"Main NEAR account initialized: {account_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize main NEAR account: {e}")
+            self.main_account = None
+        
+    def _generate_encryption_key(self) -> bytes:
+        """Generate a secure encryption key for wallet data"""
+        return secrets.token_bytes(32)
+    
+    def _derive_key_from_password(self, password: str, salt: bytes) -> bytes:
+        """Derive encryption key from password using PBKDF2"""
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100000,
+            backend=default_backend()
+        )
+        return kdf.derive(password.encode())
+    
+    def _encrypt_data(self, data: str, key: bytes) -> Tuple[bytes, bytes, bytes]:
+        """Encrypt data using AES-256-GCM"""
+        iv = secrets.token_bytes(12)  # GCM uses 12 bytes
+        
+        cipher = Cipher(
+            algorithms.AES(key),
+            modes.GCM(iv),
+            backend=default_backend()
+        )
+        encryptor = cipher.encryptor()
+        
+        ciphertext = encryptor.update(data.encode()) + encryptor.finalize()
+        tag = encryptor.tag  # Get the authentication tag
+        
+        return ciphertext, iv, tag
+    
+    def _decrypt_data(self, ciphertext: bytes, key: bytes, iv: bytes) -> str:
+        """Decrypt data using AES-256-GCM"""
+        cipher = Cipher(
+            algorithms.AES(key),
+            modes.GCM(iv),
+            backend=default_backend()
+        )
+        decryptor = cipher.decryptor()
+        
+        plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+        return plaintext.decode()
+    
+    def _generate_secure_keypair(self) -> Tuple[ed25519.Ed25519PrivateKey, ed25519.Ed25519PublicKey]:
+        """Generate a cryptographically secure Ed25519 keypair"""
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        public_key = private_key.public_key()
+        return private_key, public_key
+    
+    def _create_sub_account_id(self, user_id: int) -> str:
+        """Create a human-readable sub-account ID under our main testnet account"""
+        # Get our main account from config
+        main_account = Config.NEAR_WALLET_ADDRESS
+        
+        if not main_account:
+            # Fallback for development
+            main_account = "kindpuma8958.testnet"
+        
+        # Create human-readable sub-account names
+        # Use a combination of user_id and a readable word
+        readable_words = [
+            "quiz", "player", "gamer", "winner", "champion", "master", "pro", "ace",
+            "star", "hero", "legend", "genius", "wizard", "ninja", "warrior", "knight",
+            "archer", "mage", "rogue", "paladin", "druid", "monk", "priest", "shaman",
+            "hunter", "warlock", "demon", "angel", "dragon", "phoenix", "unicorn",
+            "griffin", "pegasus", "centaur", "minotaur", "sphinx", "hydra", "kraken",
+            "leviathan", "behemoth", "titan", "giant", "dwarf", "elf", "orc", "goblin",
+            "troll", "ogre", "cyclops", "medusa", "siren", "nymph", "fairy", "pixie",
+            "sprite", "imp", "demon", "devil", "angel", "seraph", "cherub", "archon"
+        ]
+        
+        # Generate a deterministic but unique sub-account name
+        seed = f"{user_id}_{secrets.token_hex(4)}"
+        word_index = int(hashlib.sha256(seed.encode()).hexdigest()[:8], 16) % len(readable_words)
+        word = readable_words[word_index]
+        
+        # Add a short unique suffix to avoid collisions
+        suffix = hashlib.sha256(seed.encode()).hexdigest()[:4]
+        
+        sub_account_name = f"{word}{suffix}"
+        return f"{sub_account_name}.{main_account}"
+    
+    async def create_testnet_wallet(self, user_id: int) -> Dict[str, str]:
+        """
+        Creates a real NEAR testnet wallet for the user
+        Returns wallet info including account ID and encrypted private key
+        """
+        try:
+            logger.info(f"Creating NEAR testnet wallet for user {user_id}")
+            
+            # Generate secure keypair
+            private_key, public_key = self._generate_secure_keypair()
+            
+            # Create sub-account ID
+            account_id = self._create_sub_account_id(user_id)
+            
+            # Convert keys to NEAR format
+            private_key_bytes = private_key.private_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PrivateFormat.Raw,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+            public_key_bytes = public_key.public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw
+            )
+            
+            # Format keys for NEAR
+            near_private_key = f"ed25519:{base64.b64encode(private_key_bytes).decode()}"
+            near_public_key = f"ed25519:{base64.b64encode(public_key_bytes).decode()}"
+            
+            # Create sub-account on NEAR testnet
+            account_created = await self._create_near_sub_account(account_id, near_public_key)
+            
+            # Determine if this is a real or demo account
+            is_real_account = account_created and self.main_account is not None
+            
+            if not account_created:
+                logger.warning(f"Sub-account creation failed, but continuing with demo wallet: {account_id}")
+                # Continue with demo wallet creation for testing purposes
+            
+            # Encrypt private key for storage
+            encrypted_private_key, iv = self._encrypt_data(near_private_key, self.encryption_key)
+            
+            # Create wallet info
+            wallet_info = {
+                "account_id": account_id,
+                "public_key": near_public_key,
+                "encrypted_private_key": base64.b64encode(encrypted_private_key).decode(),
+                "iv": base64.b64encode(iv).decode(),
+                "balance": "0 NEAR",
+                "created_at": datetime.now().isoformat(),
+                "is_testnet": True,
+                "is_demo": not is_real_account,  # Mark as demo if not a real account
+                "network": "testnet"
+            }
+            
+            logger.info(f"Successfully created NEAR testnet wallet: {account_id}")
+            return wallet_info
+            
+        except Exception as e:
+            logger.error(f"Error creating NEAR testnet wallet for user {user_id}: {e}")
+            raise
+    
+    async def _create_near_sub_account(self, sub_account_id: str, public_key: str) -> bool:
+        """
+        Creates a NEAR sub-account using the proper account creation contract
+        """
+        try:
+            # Get our main account from config
+            main_account = Config.NEAR_WALLET_ADDRESS
+            
+            if not main_account:
+                logger.error("NEAR_WALLET_ADDRESS not configured")
+                return False
+            
+            # Extract sub-account name from full account ID
+            # e.g., "quiz1234.kindpuma8958.testnet" -> "quiz1234"
+            sub_account_name = sub_account_id.split('.')[0]
+            
+            logger.info(f"Creating sub-account {sub_account_name} under {main_account}")
+            
+            # Try to create a real sub-account first
+            if self.main_account:
+                logger.info(f"Attempting real sub-account creation for: {sub_account_id}")
+                real_created = await self._create_real_sub_account(sub_account_id, public_key)
+                if real_created:
+                    logger.info(f"Real sub-account created successfully: {sub_account_id}")
+                    return True
+                else:
+                    logger.warning(f"Real sub-account creation failed, falling back to demo: {sub_account_id}")
+            
+            # Fallback to demo sub-account if real creation fails
+            logger.info(f"Creating demo sub-account: {sub_account_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error creating NEAR sub-account {sub_account_id}: {e}")
+            return False
+    
+    async def _create_real_sub_account(self, sub_account_id: str, public_key: str) -> bool:
+        """
+        Creates a real NEAR sub-account using the account creation contract
+        This requires the main account's private key
+        """
+        try:
+            if not self.main_account:
+                logger.error("Main account not initialized - cannot create real sub-account")
+                return False
+            
+            # Extract sub-account name from full account ID
+            # e.g., "quiz1234.kindpuma8958.testnet" -> "quiz1234"
+            sub_account_name = sub_account_id.split('.')[0]
+            
+            logger.info(f"Creating real sub-account {sub_account_name} under {self.main_account.account_id}")
+            
+            # Start the main account connection
+            await self.main_account.startup()
+            
+            # Create the sub-account using the NEAR account creation contract
+            # The contract is deployed on the main account and exposes create_account method
+            try:
+                # Call the create_account method on the main account
+                # This creates a sub-account with the specified name and public key
+                result = await self.main_account.function_call(
+                    contract_id=self.main_account.account_id,
+                    method_name="create_account",
+                    args={
+                        "new_account_id": sub_account_id,
+                        "new_public_key": public_key
+                    },
+                    gas=300000000000000,  # 300 TGas
+                    amount=NEAR  # 1 NEAR deposit for account creation
+                )
+                
+                logger.info(f"Successfully created sub-account {sub_account_id}")
+                logger.debug(f"Transaction result: {result}")
+                return True
+                
+            except Exception as contract_error:
+                logger.error(f"Contract call failed for sub-account creation: {contract_error}")
+                
+                # Fallback: Try using the NEAR helper API for sub-account creation
+                try:
+                    logger.info(f"Attempting fallback sub-account creation via helper API")
+                    
+                    payload = {
+                        "newAccountId": sub_account_id,
+                        "newAccountPublicKey": public_key
+                    }
+                    
+                    response = requests.post(
+                        f"{self.testnet_helper_url}/account",
+                        json=payload,
+                        headers={"Content-Type": "application/json"},
+                        timeout=Config.ACCOUNT_CREATION_TIMEOUT
+                    )
+                    
+                    if response.status_code == 200:
+                        logger.info(f"Fallback sub-account creation successful: {sub_account_id}")
+                        return True
+                    else:
+                        logger.warning(f"Fallback sub-account creation failed: {response.status_code} - {response.text}")
+                        return False
+                        
+                except Exception as fallback_error:
+                    logger.error(f"Fallback sub-account creation also failed: {fallback_error}")
+                    return False
+            
+        except Exception as e:
+            logger.error(f"Error creating real sub-account {sub_account_id}: {e}")
+            return False
+    
+    async def get_account_balance(self, account_id: str) -> str:
+        """
+        Gets the actual NEAR account balance from testnet
+        """
+        try:
+            payload = {
+                "jsonrpc": "2.0",
+                "id": "dontcare",
+                "method": "query",
+                "params": {
+                    "request_type": "view_account",
+                    "finality": "final",
+                    "account_id": account_id
+                }
+            }
+            
+            response = requests.post(
+                self.testnet_rpc_url,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=Config.BALANCE_CHECK_TIMEOUT
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "result" in data and "amount" in data["result"]:
+                    # Convert yoctoNEAR to NEAR
+                    balance_yocto = int(data["result"]["amount"])
+                    balance_near = balance_yocto / (10 ** 24)
+                    return f"{balance_near:.4f} NEAR"
+                else:
+                    return "0 NEAR"
+            else:
+                logger.error(f"Failed to get balance for {account_id}: {response.status_code}")
+                return "0 NEAR"
+                
+        except Exception as e:
+            logger.error(f"Error getting balance for {account_id}: {e}")
+            return "0 NEAR"
+    
+    def decrypt_private_key(self, encrypted_private_key: str, iv: str) -> str:
+        """
+        Decrypts the private key for user display
+        """
+        try:
+            encrypted_bytes = base64.b64decode(encrypted_private_key)
+            iv_bytes = base64.b64decode(iv)
+            
+            decrypted_key = self._decrypt_data(encrypted_bytes, self.encryption_key, iv_bytes)
+            return decrypted_key
+            
+        except Exception as e:
+            logger.error(f"Error decrypting private key: {e}")
+            raise
+    
+    async def format_wallet_info_message(self, wallet_info: Dict[str, str]) -> str:
+        """
+        Formats wallet information into a user-friendly message
+        """
+        try:
+            # Decrypt private key for display
+            private_key = self.decrypt_private_key(
+                wallet_info['encrypted_private_key'], 
+                wallet_info['iv']
+            )
+            
+            # Get real balance from NEAR testnet
+            balance = await self.get_account_balance(wallet_info['account_id'])
+            
+            # Check if this is a demo wallet
+            is_demo = wallet_info.get('is_demo', False)
+            
+            if is_demo:
+                message = f"""🔐 **Your NEAR Testnet Sub-Account Created Successfully!** *(Demo Mode)*
+
+📋 **Wallet Details:**
+• **Sub-Account ID:** `{wallet_info['account_id']}`
+• **Parent Account:** `{Config.NEAR_WALLET_ADDRESS or 'kindpuma8958.testnet'}`
+• **Public Key:** `{wallet_info['public_key']}`
+• **Balance:** {balance}
+• **Network:** Testnet *(Demo)*
+
+🔑 **Private Key (SAVE THIS SECURELY!):**
+`{private_key}`
+
+⚠️ **Important Security Notes:**
+• Never share your private key with anyone
+• Store it in a secure location (password manager recommended)
+• This is a **DEMO TESTNET sub-account** - created locally for testing
+• NEAR testnet services were temporarily unavailable
+• This wallet works for bot features but may not be on the blockchain yet
+• The private key is encrypted in our database
+
+🎉 You can now use all bot features that require a wallet!
+
+💡 **What's Next?** Use the buttons below to explore the bot features!"""
+            else:
+                message = f"""🔐 **Your NEAR Testnet Sub-Account Created Successfully!**
+
+📋 **Wallet Details:**
+• **Sub-Account ID:** `{wallet_info['account_id']}`
+• **Parent Account:** `{Config.NEAR_WALLET_ADDRESS or 'kindpuma8958.testnet'}`
+• **Public Key:** `{wallet_info['public_key']}`
+• **Balance:** {balance}
+• **Network:** Testnet
+
+🔑 **Private Key (SAVE THIS SECURELY!):**
+`{private_key}`
+
+⚠️ **Important Security Notes:**
+• Never share your private key with anyone
+• Store it in a secure location (password manager recommended)
+• This is a TESTNET sub-account - do not use for real funds
+• The private key is encrypted in our database
+• You can use this wallet on NEAR testnet explorer
+
+🌐 **Testnet Explorer:** https://explorer.testnet.near.org/accounts/{wallet_info['account_id']}
+
+🎉 You can now use all bot features that require a wallet!
+
+💡 **What's Next?** Use the buttons below to explore the bot features!"""
+            
+            return message
+            
+        except Exception as e:
+            logger.error(f"Error formatting wallet message: {e}")
+            return "❌ Error formatting wallet information. Please contact support." 

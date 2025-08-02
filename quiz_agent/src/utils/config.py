@@ -78,3 +78,53 @@ class Config:
     @classmethod
     def is_development(cls):
         return ENVIRONMENT == "development"
+
+    # NEAR Wallet Configuration
+    NEAR_TESTNET_RPC_URL = os.getenv('NEAR_TESTNET_RPC_URL', 'https://rpc.testnet.near.org')
+    NEAR_TESTNET_HELPER_URL = os.getenv('NEAR_TESTNET_HELPER_URL', 'https://helper.testnet.near.org')
+    NEAR_MAINNET_RPC_URL = os.getenv('NEAR_MAINNET_RPC_URL', 'https://rpc.mainnet.near.org')
+    
+    # Wallet Security Configuration
+    WALLET_ENCRYPTION_KEY = os.getenv('WALLET_ENCRYPTION_KEY')
+    WALLET_KEY_DERIVATION_ITERATIONS = int(os.getenv('WALLET_KEY_DERIVATION_ITERATIONS', '100000'))
+    
+    # Account Creation Configuration
+    DEFAULT_ACCOUNT_SUFFIX_LENGTH = int(os.getenv('DEFAULT_ACCOUNT_SUFFIX_LENGTH', '8'))
+    ACCOUNT_CREATION_TIMEOUT = int(os.getenv('ACCOUNT_CREATION_TIMEOUT', '30'))
+    BALANCE_CHECK_TIMEOUT = int(os.getenv('BALANCE_CHECK_TIMEOUT', '10'))
+    
+    # Security Settings
+    MIN_PRIVATE_KEY_LENGTH = 64
+    MAX_ACCOUNT_ID_LENGTH = 64
+    ALLOWED_ACCOUNT_CHARS = set('abcdefghijklmnopqrstuvwxyz0123456789._-')
+    
+    @classmethod
+    def validate_wallet_config(cls) -> bool:
+        """Validate that all required wallet configuration is present"""
+        if not cls.WALLET_ENCRYPTION_KEY:
+            print("⚠️  WARNING: WALLET_ENCRYPTION_KEY not set. Using generated key (not persistent across restarts).")
+            return False
+        return True
+    
+    @classmethod
+    def get_wallet_encryption_key(cls) -> bytes:
+        """Get the wallet encryption key, generating one if not set"""
+        if cls.WALLET_ENCRYPTION_KEY:
+            # Ensure we get exactly 32 bytes by hashing the key
+            import hashlib
+            key_bytes = cls.WALLET_ENCRYPTION_KEY.encode()
+            return hashlib.sha256(key_bytes).digest()  # Always returns 32 bytes
+        else:
+            # Generate a temporary key (not persistent)
+            import secrets
+            return secrets.token_bytes(32)
+    
+    @classmethod
+    def is_testnet_enabled(cls) -> bool:
+        """Check if testnet is enabled"""
+        return os.getenv('ENABLE_NEAR_TESTNET', 'true').lower() == 'true'
+    
+    @classmethod
+    def is_mainnet_enabled(cls) -> bool:
+        """Check if mainnet is enabled"""
+        return os.getenv('ENABLE_NEAR_MAINNET', 'false').lower() == 'true'

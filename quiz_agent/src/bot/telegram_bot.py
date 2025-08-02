@@ -134,7 +134,7 @@ class TelegramBot:
         )
         
         # Import menu handlers
-        from bot.menu_handlers import handle_menu_callback, handle_text_message
+        from bot.menu_handlers import handle_menu_callback, handle_text_message, handle_reset_wallet
 
         # Conversation for interactive quiz creation needs to be registered FIRST
         # to ensure it gets priority for handling messages
@@ -232,6 +232,7 @@ class TelegramBot:
         self.app.add_handler(
             CommandHandler("leaderboards", show_all_active_leaderboards_command)
         )
+        self.app.add_handler(CommandHandler("resetwallet", handle_reset_wallet))  # Development command
 
         # self.app.add_handler(
         #     CommandHandler("distributerewards", distribute_rewards_handler)
@@ -257,7 +258,7 @@ class TelegramBot:
                 handle_text_message,
             )
         )
-        
+
         # Handle private text messages (MUST BE LAST as it's the most generic)
         # Only messages not handled by other handlers will reach this
         logger.info("Registering private message handler (lowest priority)")
