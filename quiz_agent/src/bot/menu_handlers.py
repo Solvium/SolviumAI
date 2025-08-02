@@ -512,15 +512,43 @@ async def handle_reset_wallet(update: Update, context: CallbackContext) -> None:
     user_id = update.effective_user.id
     
     try:
+        # Send initial message
+        await update.message.reply_text(
+            "🔄 Resetting wallet state...\n\nThis will delete all wallet data from cache and database.",
+            reply_markup=create_main_menu_keyboard()
+        )
+        
         # Delete wallet-related keys from Redis
         redis_client = RedisClient()
         await redis_client.delete_user_data_key(str(user_id), "wallet_created")
         await redis_client.delete_user_data_key(str(user_id), "wallet")
         
-        await update.message.reply_text(
-            "🔄 Wallet state reset successfully!\n\nYou can now test wallet creation again by clicking any menu button.",
-            reply_markup=create_main_menu_keyboard()
-        )
+        # Clear cache service data
+        from services.cache_service import cache_service
+        await cache_service.clear_user_cache(user_id)
+        
+        # Delete wallet data from database
+        from services.database_service import db_service
+        db_deleted = await db_service.delete_user_wallet_data(user_id)
+        
+        if db_deleted:
+            await update.message.reply_text(
+                "✅ Wallet state reset successfully!\n\n"
+                "🗑️ Deleted from:\n"
+                "• Redis cache\n"
+                "• Database wallet records\n"
+                "• User wallet status\n\n"
+                "You can now test wallet creation again by clicking any menu button.",
+                reply_markup=create_main_menu_keyboard()
+            )
+        else:
+            await update.message.reply_text(
+                "⚠️ Partial wallet reset completed!\n\n"
+                "✅ Redis cache cleared\n"
+                "❌ Database cleanup failed\n\n"
+                "You can still test wallet creation, but old database records may remain.",
+                reply_markup=create_main_menu_keyboard()
+            )
         
     except Exception as e:
         logger.error(f"Error resetting wallet for user {user_id}: {e}")

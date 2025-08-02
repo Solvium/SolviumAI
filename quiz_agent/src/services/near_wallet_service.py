@@ -165,7 +165,8 @@ class NEARWalletService:
             near_public_key = f"ed25519:{base64.b64encode(public_key_bytes).decode()}"
             
             # Create sub-account on NEAR testnet
-            account_created = await self._create_near_sub_account(account_id, near_public_key)
+            # Pass the raw public key bytes for py-near create_account method
+            account_created = await self._create_near_sub_account(account_id, public_key_bytes)
             
             # Determine if this is a real or demo account
             is_real_account = account_created and self.main_account is not None
@@ -198,9 +199,9 @@ class NEARWalletService:
             logger.error(f"Error creating NEAR testnet wallet for user {user_id}: {e}")
             raise
     
-    async def _create_near_sub_account(self, sub_account_id: str, public_key: str) -> bool:
+    async def _create_near_sub_account(self, sub_account_id: str, public_key: bytes) -> bool:
         """
-        Creates a NEAR sub-account using the proper account creation contract
+        Creates a NEAR sub-account using py-near create_account method (most reliable)
         """
         try:
             # Get our main account from config
@@ -216,27 +217,55 @@ class NEARWalletService:
             
             logger.info(f"Creating sub-account {sub_account_name} under {main_account}")
             
-            # Try to create a real sub-account first
+            # Try py-near create_account method first (most reliable)
             if self.main_account:
-                logger.info(f"Attempting real sub-account creation for: {sub_account_id}")
+                logger.info(f"Attempting py-near create_account method: {sub_account_id}")
                 real_created = await self._create_real_sub_account(sub_account_id, public_key)
                 if real_created:
-                    logger.info(f"Real sub-account created successfully: {sub_account_id}")
+                    logger.info(f"py-near create_account method successful: {sub_account_id}")
                     return True
                 else:
-                    logger.warning(f"Real sub-account creation failed, falling back to demo: {sub_account_id}")
+                    logger.warning(f"py-near create_account method failed: {sub_account_id}")
             
-            # Fallback to demo sub-account if real creation fails
-            logger.info(f"Creating demo sub-account: {sub_account_id}")
+            # Fallback: Try NEAR Helper API
+            logger.info(f"Attempting sub-account creation via NEAR Helper API: {sub_account_id}")
+            
+            # Convert bytes to NEAR format for helper API
+            near_public_key = f"ed25519:{base64.b64encode(public_key).decode()}"
+            
+            payload = {
+                "newAccountId": sub_account_id,
+                "newAccountPublicKey": near_public_key
+            }
+            
+            try:
+                response = requests.post(
+                    f"{self.testnet_helper_url}/account",
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=Config.ACCOUNT_CREATION_TIMEOUT
+                )
+                
+                if response.status_code == 200:
+                    logger.info(f"NEAR Helper API sub-account creation successful: {sub_account_id}")
+                    return True
+                else:
+                    logger.warning(f"NEAR Helper API creation failed: {response.status_code} - {response.text}")
+                    
+            except Exception as api_error:
+                logger.error(f"NEAR Helper API error: {api_error}")
+            
+            # Final fallback: Demo sub-account
+            logger.info(f"All real creation methods failed, using demo sub-account: {sub_account_id}")
             return True
             
         except Exception as e:
             logger.error(f"Error creating NEAR sub-account {sub_account_id}: {e}")
             return False
     
-    async def _create_real_sub_account(self, sub_account_id: str, public_key: str) -> bool:
+    async def _create_real_sub_account(self, sub_account_id: str, public_key: bytes) -> bool:
         """
-        Creates a real NEAR sub-account using the account creation contract
+        Creates a real NEAR sub-account using the py-near create_account method
         This requires the main account's private key
         """
         try:
@@ -249,60 +278,29 @@ class NEARWalletService:
             sub_account_name = sub_account_id.split('.')[0]
             
             logger.info(f"Creating real sub-account {sub_account_name} under {self.main_account.account_id}")
+            logger.debug(f"Public key type: {type(public_key)}, length: {len(public_key)}")
             
             # Start the main account connection
             await self.main_account.startup()
             
-            # Create the sub-account using the NEAR account creation contract
-            # The contract is deployed on the main account and exposes create_account method
             try:
-                # Call the create_account method on the main account
+                # Use the py-near create_account method directly
                 # This creates a sub-account with the specified name and public key
-                result = await self.main_account.function_call(
-                    contract_id=self.main_account.account_id,
-                    method_name="create_account",
-                    args={
-                        "new_account_id": sub_account_id,
-                        "new_public_key": public_key
-                    },
-                    gas=300000000000000,  # 300 TGas
-                    amount=NEAR  # 1 NEAR deposit for account creation
+                result = await self.main_account.create_account(
+                    account_id=sub_account_id,
+                    public_key=public_key,
+                    initial_balance=NEAR,  # 1 NEAR initial balance
+                    nowait=False  # Wait for execution
                 )
                 
                 logger.info(f"Successfully created sub-account {sub_account_id}")
                 logger.debug(f"Transaction result: {result}")
                 return True
                 
-            except Exception as contract_error:
-                logger.error(f"Contract call failed for sub-account creation: {contract_error}")
+            except Exception as create_error:
+                logger.error(f"create_account method failed for sub-account creation: {create_error}")
+                return False
                 
-                # Fallback: Try using the NEAR helper API for sub-account creation
-                try:
-                    logger.info(f"Attempting fallback sub-account creation via helper API")
-                    
-                    payload = {
-                        "newAccountId": sub_account_id,
-                        "newAccountPublicKey": public_key
-                    }
-                    
-                    response = requests.post(
-                        f"{self.testnet_helper_url}/account",
-                        json=payload,
-                        headers={"Content-Type": "application/json"},
-                        timeout=Config.ACCOUNT_CREATION_TIMEOUT
-                    )
-                    
-                    if response.status_code == 200:
-                        logger.info(f"Fallback sub-account creation successful: {sub_account_id}")
-                        return True
-                    else:
-                        logger.warning(f"Fallback sub-account creation failed: {response.status_code} - {response.text}")
-                        return False
-                        
-                except Exception as fallback_error:
-                    logger.error(f"Fallback sub-account creation also failed: {fallback_error}")
-                    return False
-            
         except Exception as e:
             logger.error(f"Error creating real sub-account {sub_account_id}: {e}")
             return False

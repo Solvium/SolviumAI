@@ -4,7 +4,7 @@ from typing import Optional, Dict, List
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete
 from models.user import User
 from models.wallet import UserWallet, WalletSecurity
 from utils.config import Config
@@ -333,6 +333,66 @@ class DatabaseService:
                 
         except Exception as e:
             logger.error(f"Error updating wallet usage: {e}")
+    
+    async def delete_user_wallet_data(self, user_id: int) -> bool:
+        """Delete all wallet data for a user from database"""
+        try:
+            async with self.async_session() as session:
+                if hasattr(session, 'execute') and asyncio.iscoroutinefunction(session.execute):
+                    # Async session - delete wallet security records first (due to foreign key)
+                    await session.execute(
+                        delete(WalletSecurity)
+                        .where(WalletSecurity.wallet_id.in_(
+                            select(UserWallet.id)
+                            .where(UserWallet.telegram_user_id == str(user_id))
+                        ))
+                    )
+                    
+                    # Delete user wallet records
+                    await session.execute(
+                        delete(UserWallet)
+                        .where(UserWallet.telegram_user_id == str(user_id))
+                    )
+                    
+                    # Update user record to reset wallet_created flag
+                    await session.execute(
+                        update(User)
+                        .where(User.id == str(user_id))
+                        .values(wallet_created=False)
+                    )
+                    
+                    await session.commit()
+                else:
+                    # Sync session - delete wallet security records first (due to foreign key)
+                    wallet_ids = session.query(UserWallet.id)\
+                        .filter(UserWallet.telegram_user_id == str(user_id))\
+                        .all()
+                    
+                    wallet_id_list = [w[0] for w in wallet_ids]
+                    
+                    if wallet_id_list:
+                        session.query(WalletSecurity)\
+                            .filter(WalletSecurity.wallet_id.in_(wallet_id_list))\
+                            .delete(synchronize_session=False)
+                    
+                    # Delete user wallet records
+                    session.query(UserWallet)\
+                        .filter(UserWallet.telegram_user_id == str(user_id))\
+                        .delete(synchronize_session=False)
+                    
+                    # Update user record to reset wallet_created flag
+                    session.query(User)\
+                        .filter(User.id == str(user_id))\
+                        .update({'wallet_created': False})
+                    
+                    session.commit()
+                
+                logger.info(f"Successfully deleted wallet data for user {user_id}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error deleting wallet data for user {user_id}: {e}")
+            return False
 
 
 # Global database service instance
