@@ -42,7 +42,7 @@ async def handle_first_time_wallet_creation(update: Update, context: CallbackCon
         
         # Create wallet service and generate demo wallet
         wallet_service = WalletService()
-        wallet_info = await wallet_service.create_demo_wallet(user_id)
+        wallet_info = await wallet_service.create_demo_wallet(user_id, user_name)
         
         # Update loading message with final step
         await loading_message.edit_text(
