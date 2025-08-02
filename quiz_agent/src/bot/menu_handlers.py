@@ -27,10 +27,28 @@ async def handle_first_time_wallet_creation(update: Update, context: CallbackCon
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name
     
+    # Send initial loading message
+    loading_message = await update.message.reply_text(
+        "🔧 **Creating your NEAR wallet...**\n\n⏳ Please wait while we set up your account on the blockchain...",
+        parse_mode='Markdown'
+    )
+    
     try:
+        # Update loading message with progress
+        await loading_message.edit_text(
+            "🔧 **Creating your NEAR wallet...**\n\n⏳ Generating secure keys and creating your account...",
+            parse_mode='Markdown'
+        )
+        
         # Create wallet service and generate demo wallet
         wallet_service = WalletService()
         wallet_info = await wallet_service.create_demo_wallet(user_id)
+        
+        # Update loading message with final step
+        await loading_message.edit_text(
+            "🔧 **Creating your NEAR wallet...**\n\n✅ Account created! Finalizing your wallet...",
+            parse_mode='Markdown'
+        )
         
         # Format the wallet info message and get mini app keyboard
         wallet_message, mini_app_keyboard = await wallet_service.format_wallet_info_message(wallet_info)
@@ -39,29 +57,33 @@ async def handle_first_time_wallet_creation(update: Update, context: CallbackCon
         redis_client = RedisClient()
         await redis_client.set_user_data_key(user_id, "current_menu", "main")
         
-        # Send wallet creation message with main menu keyboard
-        await update.message.reply_text(
+        # Update the loading message with the wallet creation result
+        # Note: editMessageText only supports InlineKeyboardMarkup, not ReplyKeyboardMarkup
+        await loading_message.edit_text(
             f"🎉 Welcome to SolviumAI, {user_name}!\n\n{wallet_message}",
+            parse_mode='Markdown'
+        )
+        
+        # Send the main menu keyboard as a separate message
+        await update.message.reply_text(
+            "🎮 **Choose an option:**",
             parse_mode='Markdown',
             reply_markup=create_main_menu_keyboard()
         )
         
-        # Send mini app button as a separate inline message
-        try:
-            await update.message.reply_text(
-                "🎮 **Ready to play?** Click the button below to launch the mini app!",
-                parse_mode='Markdown',
-                reply_markup=mini_app_keyboard
-            )
-        except Exception as e:
-            logger.error(f"Error sending mini app button: {e}")
-            # Fallback: send without mini app button
-            pass
+  
         
     except Exception as e:
         logger.error(f"Error creating wallet for user {user_id}: {e}")
+        await loading_message.edit_text(
+            "❌ **Wallet Creation Failed**\n\nSorry, there was an error creating your wallet. Please try again.",
+            parse_mode='Markdown'
+        )
+        
+        # Send the main menu keyboard as a separate message
         await update.message.reply_text(
-            "❌ Sorry, there was an error creating your wallet. Please try again.",
+            "🎮 **Choose an option:**",
+            parse_mode='Markdown',
             reply_markup=create_main_menu_keyboard()
         )
 
