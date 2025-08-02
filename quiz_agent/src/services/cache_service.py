@@ -55,10 +55,10 @@ class CacheService:
         """
         try:
             cache_key = f"wallet:{user_id}"
-            await self.redis_client.setex(
+            await self.redis_client.set_value(
                 cache_key, 
-                self.WALLET_CACHE_TTL, 
-                json.dumps(wallet_data)
+                wallet_data,
+                ttl_seconds=self.WALLET_CACHE_TTL
             )
             logger.debug(f"Cached wallet data for user {user_id}")
             return True
@@ -103,7 +103,7 @@ class CacheService:
         """
         try:
             cache_key = f"balance:{account_id}"
-            await self.redis_client.setex(cache_key, self.BALANCE_CACHE_TTL, balance)
+            await self.redis_client.set_value(cache_key, balance, ttl_seconds=self.BALANCE_CACHE_TTL)
             logger.debug(f"Cached balance for {account_id}: {balance}")
             return True
         except Exception as e:
@@ -135,10 +135,10 @@ class CacheService:
         """
         try:
             cache_key = f"user:{user_id}"
-            await self.redis_client.setex(
+            await self.redis_client.set_value(
                 cache_key, 
-                self.USER_CACHE_TTL, 
-                json.dumps(user_data)
+                user_data,
+                ttl_seconds=self.USER_CACHE_TTL
             )
             logger.debug(f"Cached user data for {user_id}")
             return True
@@ -155,10 +155,10 @@ class CacheService:
             await self.set_cached_wallet(user_id, wallet_info)
             
             # Cache user wallet status
-            await self.redis_client.setex(
+            await self.redis_client.set_value(
                 f"wallet_created:{user_id}",
-                self.SESSION_CACHE_TTL,
-                "true"
+                "true",
+                ttl_seconds=self.SESSION_CACHE_TTL
             )
             
             # Cache wallet info in legacy format for compatibility
