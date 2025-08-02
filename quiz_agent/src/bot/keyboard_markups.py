@@ -432,8 +432,107 @@ def create_inline_quiz_creation_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                "⬅️ Back to Games", 
-                callback_data="menu:pick_game"
+                "⬅️ Back to Main Menu", 
+                callback_data="menu:main"
+            )
+        ]
+    ])
+
+def create_inline_quiz_play_keyboard() -> InlineKeyboardMarkup:
+    """
+    Creates a keyboard for quiz playing options
+    """
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "🎯 Active Quizzes", 
+                callback_data="quiz:active"
+            ),
+            InlineKeyboardButton(
+                "🏆 My Results", 
+                callback_data="quiz:results"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "📊 Quiz History", 
+                callback_data="quiz:history"
+            ),
+            InlineKeyboardButton(
+                "🎖️ Achievements", 
+                callback_data="quiz:achievements"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "⬅️ Back to Main Menu", 
+                callback_data="menu:main"
+            )
+        ]
+    ])
+
+def create_inline_leaderboards_keyboard() -> InlineKeyboardMarkup:
+    """
+    Creates a keyboard for leaderboard options
+    """
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "🏆 Global Leaderboard", 
+                callback_data="leaderboard:global"
+            ),
+            InlineKeyboardButton(
+                "👥 Group Leaderboard", 
+                callback_data="leaderboard:group"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "📊 Weekly Top", 
+                callback_data="leaderboard:weekly"
+            ),
+            InlineKeyboardButton(
+                "🎖️ All Time Best", 
+                callback_data="leaderboard:alltime"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "⬅️ Back to Main Menu", 
+                callback_data="menu:main"
+            )
+        ]
+    ])
+
+def create_inline_rewards_keyboard() -> InlineKeyboardMarkup:
+    """
+    Creates a keyboard for rewards and wallet management
+    """
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "💳 Connect Wallet", 
+                callback_data="rewards:connect_wallet"
+            ),
+            InlineKeyboardButton(
+                "💰 View Balance", 
+                callback_data="rewards:balance"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🏆 Claim Rewards", 
+                callback_data="rewards:claim"
+            ),
+            InlineKeyboardButton(
+                "📈 Transaction History", 
+                callback_data="rewards:history"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "⬅️ Back to Main Menu", 
+                callback_data="menu:main"
             )
         ]
     ])
