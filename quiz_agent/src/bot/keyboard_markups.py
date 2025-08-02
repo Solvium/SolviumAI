@@ -8,12 +8,12 @@ def create_main_menu_keyboard() -> ReplyKeyboardMarkup:
     """
     return ReplyKeyboardMarkup([
         [
-            KeyboardButton("🎮 Pick a game!"),
-            KeyboardButton("💪 Challenge friends")
+            KeyboardButton("🎯 Create Quiz"),
+            KeyboardButton("🎲 Play Quiz")
         ],
         [
-            KeyboardButton("🤝 Join community"),
-            KeyboardButton("📱 Get our cash winning app")
+            KeyboardButton("🏆 Leaderboards"),
+            KeyboardButton("💰 My Rewards")
         ]
     ], 
     resize_keyboard=True,  # Makes buttons smaller to fit better
@@ -32,7 +32,7 @@ def create_game_selection_keyboard() -> ReplyKeyboardMarkup:
         ],
         [
             KeyboardButton("🏆 Leaderboards"),
-            KeyboardButton("💰 Winners")
+            KeyboardButton("💰 My Rewards")
         ],
         [
             KeyboardButton("⬅️ Back to Main Menu")
@@ -43,18 +43,111 @@ def create_game_selection_keyboard() -> ReplyKeyboardMarkup:
     input_field_placeholder="Select a game..."
     )
 
-def create_challenge_keyboard() -> ReplyKeyboardMarkup:
+def create_quiz_creation_keyboard() -> ReplyKeyboardMarkup:
     """
-    Creates a keyboard for challenge features
+    Creates a keyboard for quiz creation options
     """
     return ReplyKeyboardMarkup([
         [
-            KeyboardButton("👥 Challenge Group"),
-            KeyboardButton("👤 Challenge Friend")
+            KeyboardButton("📝 Quick Quiz"),
+            KeyboardButton("⚙️ Custom Quiz")
         ],
         [
-            KeyboardButton("🏅 My Challenges"),
-            KeyboardButton("📊 Challenge Stats")
+            KeyboardButton("📊 Quiz Templates"),
+            KeyboardButton("📈 My Quizzes")
+        ],
+        [
+            KeyboardButton("⬅️ Back to Games")
+        ]
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=False,
+    input_field_placeholder="Quiz creation..."
+    )
+
+def create_quiz_templates_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a keyboard for quiz template selection
+    """
+    return ReplyKeyboardMarkup([
+        [
+            KeyboardButton("🧠 General Knowledge"),
+            KeyboardButton("🔬 Science & Tech")
+        ],
+        [
+            KeyboardButton("📚 History"),
+            KeyboardButton("⚽ Sports")
+        ],
+        [
+            KeyboardButton("🎬 Entertainment"),
+            KeyboardButton("🌍 Geography")
+        ],
+        [
+            KeyboardButton("⬅️ Back to Quiz Creation")
+        ]
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=False,
+    input_field_placeholder="Choose template..."
+    )
+
+def create_quiz_settings_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a keyboard for quiz settings
+    """
+    return ReplyKeyboardMarkup([
+        [
+            KeyboardButton("⏱️ Set Duration"),
+            KeyboardButton("💰 Set Rewards")
+        ],
+        [
+            KeyboardButton("👥 Public Quiz"),
+            KeyboardButton("🔒 Private Quiz")
+        ],
+        [
+            KeyboardButton("✅ Create Quiz"),
+            KeyboardButton("❌ Cancel")
+        ]
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=False,
+    input_field_placeholder="Configure quiz..."
+    )
+
+def create_quiz_play_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a keyboard for quiz playing options
+    """
+    return ReplyKeyboardMarkup([
+        [
+            KeyboardButton("🎯 Active Quizzes"),
+            KeyboardButton("🏆 My Results")
+        ],
+        [
+            KeyboardButton("📊 Quiz History"),
+            KeyboardButton("🎖️ Achievements")
+        ],
+        [
+            KeyboardButton("⬅️ Back to Games")
+        ]
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=False,
+    input_field_placeholder="Play quizzes..."
+    )
+
+def create_rewards_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a keyboard for rewards and wallet management
+    """
+    return ReplyKeyboardMarkup([
+        [
+            KeyboardButton("💳 Connect Wallet"),
+            KeyboardButton("💰 View Balance")
+        ],
+        [
+            KeyboardButton("🏆 Claim Rewards"),
+            KeyboardButton("📈 Transaction History")
         ],
         [
             KeyboardButton("⬅️ Back to Main Menu")
@@ -62,7 +155,29 @@ def create_challenge_keyboard() -> ReplyKeyboardMarkup:
     ],
     resize_keyboard=True,
     one_time_keyboard=False,
-    input_field_placeholder="Choose challenge option..."
+    input_field_placeholder="Manage rewards..."
+    )
+
+def create_leaderboards_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a keyboard for leaderboard options
+    """
+    return ReplyKeyboardMarkup([
+        [
+            KeyboardButton("🏆 Global Leaderboard"),
+            KeyboardButton("👥 Group Leaderboard")
+        ],
+        [
+            KeyboardButton("📊 Weekly Top"),
+            KeyboardButton("🎖️ All Time Best")
+        ],
+        [
+            KeyboardButton("⬅️ Back to Main Menu")
+        ]
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=False,
+    input_field_placeholder="View leaderboards..."
     )
 
 def create_community_keyboard() -> ReplyKeyboardMarkup:
@@ -71,12 +186,12 @@ def create_community_keyboard() -> ReplyKeyboardMarkup:
     """
     return ReplyKeyboardMarkup([
         [
-            KeyboardButton("📢 Join Announcements"),
-            KeyboardButton("💬 Join Discussion")
+            KeyboardButton("📢 Announcements"),
+            KeyboardButton("💬 Discussion")
         ],
         [
-            KeyboardButton("🎮 Join Gaming"),
-            KeyboardButton("📈 Join Trading")
+            KeyboardButton("🎮 Gaming Group"),
+            KeyboardButton("📈 Trading Group")
         ],
         [
             KeyboardButton("⬅️ Back to Main Menu")
@@ -109,28 +224,6 @@ def create_app_keyboard() -> ReplyKeyboardMarkup:
     input_field_placeholder="App options..."
     )
 
-def create_quiz_creation_keyboard() -> ReplyKeyboardMarkup:
-    """
-    Creates a keyboard for quiz creation options
-    """
-    return ReplyKeyboardMarkup([
-        [
-            KeyboardButton("📝 Quick Quiz"),
-            KeyboardButton("⚙️ Custom Quiz")
-        ],
-        [
-            KeyboardButton("📊 Quiz Templates"),
-            KeyboardButton("📈 My Quizzes")
-        ],
-        [
-            KeyboardButton("⬅️ Back to Games")
-        ]
-    ],
-    resize_keyboard=True,
-    one_time_keyboard=False,
-    input_field_placeholder="Quiz creation..."
-    )
-
 def create_cancel_keyboard() -> ReplyKeyboardMarkup:
     """
     Creates a simple cancel/back keyboard
@@ -160,22 +253,22 @@ def create_inline_main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "🎮 Pick a game!", 
-                callback_data="menu:pick_game"
+                "🎯 Create Quiz", 
+                callback_data="menu:create_quiz"
             ),
             InlineKeyboardButton(
-                "💪 Challenge friends", 
-                callback_data="menu:challenge_friends"
+                "🎲 Play Quiz", 
+                callback_data="menu:play_quiz"
             )
         ],
         [
             InlineKeyboardButton(
-                "🤝 Join community", 
-                callback_data="menu:join_community"
+                "🏆 Leaderboards", 
+                callback_data="menu:leaderboards"
             ),
             InlineKeyboardButton(
-                "📱 Get our cash winning app", 
-                callback_data="menu:get_app"
+                "💰 My Rewards", 
+                callback_data="menu:rewards"
             )
         ]
     ])
@@ -201,8 +294,8 @@ def create_inline_game_selection_keyboard() -> InlineKeyboardMarkup:
                 callback_data="game:leaderboards"
             ),
             InlineKeyboardButton(
-                "💰 Winners", 
-                callback_data="game:winners"
+                "💰 My Rewards", 
+                callback_data="game:rewards"
             )
         ],
         [
