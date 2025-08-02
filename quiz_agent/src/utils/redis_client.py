@@ -15,18 +15,35 @@ class RedisClient:
         if cls._instance is None:
             try:
                 # Use redis.asyncio.Redis for an async client
-                cls._instance = redis.Redis(
-                    host=Config.REDIS_HOST,
-                    port=Config.REDIS_PORT,
-                    ssl=Config.REDIS_SSL,
-                    # db=Config.REDIS_DB,
-                    password=Config.REDIS_PASSWORD,
-                    decode_responses=False,
-                )
+                # Choose local or remote Redis based on environment
+                if Config.is_development():
+                    # Use local Redis for development
+                    cls._instance = redis.Redis(
+                        host=Config.REDIS_HOST_LOCAL,
+                        port=Config.REDIS_PORT_LOCAL,
+                        ssl=Config.REDIS_SSL_LOCAL,
+                        password=Config.REDIS_PASSWORD_LOCAL,
+                        decode_responses=False,
+                    )
+                else:
+                    # Use remote Redis for production
+                    cls._instance = redis.Redis(
+                        host=Config.REDIS_HOST,
+                        port=Config.REDIS_PORT,
+                        ssl=Config.REDIS_SSL,
+                        # db=Config.REDIS_DB,
+                        password=Config.REDIS_PASSWORD,
+                        decode_responses=False,
+                    )
                 await cls._instance.ping()  # await ping
-                logger.info(
-                    f"Successfully connected to Async Redis at {Config.REDIS_HOST}:{Config.REDIS_PORT}"
-                )
+                if Config.is_development():
+                    logger.info(
+                        f"Successfully connected to Local Async Redis at {Config.REDIS_HOST_LOCAL}:{Config.REDIS_PORT_LOCAL}"
+                    )
+                else:
+                    logger.info(
+                        f"Successfully connected to Remote Async Redis at {Config.REDIS_HOST}:{Config.REDIS_PORT}"
+                    )
             except redis.exceptions.ConnectionError as e:
                 logger.error(f"Could not connect to Async Redis: {e}")
                 cls._instance = None  # Ensure instance is None on failure

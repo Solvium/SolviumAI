@@ -103,6 +103,7 @@ class TelegramBot:
     def register_handlers(self):
         # Import handlers here to avoid circular dependencies
         from bot.handlers import (
+            start_handler,
             start_createquiz_group,
             topic_received,
             size_received,
@@ -131,6 +132,9 @@ class TelegramBot:
             handle_reward_method_choice,
             show_all_active_leaderboards_command,
         )
+        
+        # Import menu handlers
+        from bot.menu_handlers import handle_menu_callback
 
         # Conversation for interactive quiz creation needs to be registered FIRST
         # to ensure it gets priority for handling messages
@@ -212,9 +216,13 @@ class TelegramBot:
         self.app.add_handler(
             CallbackQueryHandler(handle_reward_method_choice, pattern="^reward_method:")
         )
+        
+        # Handle menu callbacks - this should be registered before other callback handlers
+        self.app.add_handler(CallbackQueryHandler(handle_menu_callback, pattern="^(menu:|game:|challenge:|app:|quiz:|cancel|back)"))
 
         # THEN register other command handlers
         logger.info("Registering command handlers")
+        self.app.add_handler(CommandHandler("start", start_handler))  # Register start handler
         self.app.add_handler(CommandHandler("linkwallet", link_wallet_handler))
         self.app.add_handler(
             CommandHandler("unlinkwallet", unlink_wallet_handler)
