@@ -15,9 +15,7 @@ def create_main_menu_keyboard() -> ReplyKeyboardMarkup:
             KeyboardButton("🏆 Leaderboards"),
             KeyboardButton("💰 My Rewards")
         ],
-        [
-            KeyboardButton("🎮 Play Games", web_app=WebAppInfo(url="https://your-mini-app-url.com"))
-        ]
+        
     ], 
     resize_keyboard=True,  # Makes buttons smaller to fit better
     one_time_keyboard=False,  # Keeps keyboard visible

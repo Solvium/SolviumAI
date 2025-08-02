@@ -16,6 +16,7 @@ from cryptography.hazmat.primitives import serialization
 from utils.config import Config
 from py_near.account import Account
 from py_near.dapps.core import NEAR
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 logger = logging.getLogger(__name__)
 
@@ -362,7 +363,7 @@ class NEARWalletService:
             logger.error(f"Error decrypting private key: {e}")
             raise
     
-    async def format_wallet_info_message(self, wallet_info: Dict[str, str]) -> str:
+    async def format_wallet_info_message(self, wallet_info: Dict[str, str]) -> tuple[str, Optional[InlineKeyboardMarkup]]:
         """
         Formats wallet information into a user-friendly message
         """
@@ -411,8 +412,16 @@ class NEARWalletService:
 
 🎮 **Ready to play?** Use the buttons below to start gaming!"""
             
-            return message
+            # Create mini app keyboard
+            mini_app_keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(
+                    "🎮 Play Games", 
+                    web_app=WebAppInfo(url="https://quiz-agent.vercel.app/")
+                )]
+            ])
+            
+            return message, mini_app_keyboard
             
         except Exception as e:
             logger.error(f"Error formatting wallet message: {e}")
-            return "❌ Error formatting wallet information. Please contact support." 
+            return "❌ Error formatting wallet information. Please contact support.", None 

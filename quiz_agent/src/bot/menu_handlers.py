@@ -32,8 +32,8 @@ async def handle_first_time_wallet_creation(update: Update, context: CallbackCon
         wallet_service = WalletService()
         wallet_info = await wallet_service.create_demo_wallet(user_id)
         
-        # Format the wallet info message
-        wallet_message = await wallet_service.format_wallet_info_message(wallet_info)
+        # Format the wallet info message and get mini app keyboard
+        wallet_message, mini_app_keyboard = await wallet_service.format_wallet_info_message(wallet_info)
         
         # Store user state in Redis
         redis_client = RedisClient()
@@ -45,6 +45,18 @@ async def handle_first_time_wallet_creation(update: Update, context: CallbackCon
             parse_mode='Markdown',
             reply_markup=create_main_menu_keyboard()
         )
+        
+        # Send mini app button as a separate inline message
+        try:
+            await update.message.reply_text(
+                "🎮 **Ready to play?** Click the button below to launch the mini app!",
+                parse_mode='Markdown',
+                reply_markup=mini_app_keyboard
+            )
+        except Exception as e:
+            logger.error(f"Error sending mini app button: {e}")
+            # Fallback: send without mini app button
+            pass
         
     except Exception as e:
         logger.error(f"Error creating wallet for user {user_id}: {e}")
