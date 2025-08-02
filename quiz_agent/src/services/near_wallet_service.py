@@ -83,11 +83,11 @@ class NEARWalletService:
         
         return ciphertext, iv, tag
     
-    def _decrypt_data(self, ciphertext: bytes, key: bytes, iv: bytes) -> str:
+    def _decrypt_data(self, ciphertext: bytes, key: bytes, iv: bytes, tag: bytes) -> str:
         """Decrypt data using AES-256-GCM"""
         cipher = Cipher(
             algorithms.AES(key),
-            modes.GCM(iv),
+            modes.GCM(iv, tag),
             backend=default_backend()
         )
         decryptor = cipher.decryptor()
@@ -174,7 +174,7 @@ class NEARWalletService:
                 # Continue with demo wallet creation for testing purposes
             
             # Encrypt private key for storage
-            encrypted_private_key, iv = self._encrypt_data(near_private_key, self.encryption_key)
+            encrypted_private_key, iv, tag = self._encrypt_data(near_private_key, self.encryption_key)
             
             # Create wallet info
             wallet_info = {
@@ -182,6 +182,7 @@ class NEARWalletService:
                 "public_key": near_public_key,
                 "encrypted_private_key": base64.b64encode(encrypted_private_key).decode(),
                 "iv": base64.b64encode(iv).decode(),
+                "tag": base64.b64encode(tag).decode(),
                 "balance": "0 NEAR",
                 "created_at": datetime.now().isoformat(),
                 "is_testnet": True,
@@ -345,15 +346,16 @@ class NEARWalletService:
             logger.error(f"Error getting balance for {account_id}: {e}")
             return "0 NEAR"
     
-    def decrypt_private_key(self, encrypted_private_key: str, iv: str) -> str:
+    def decrypt_private_key(self, encrypted_private_key: str, iv: str, tag: str) -> str:
         """
         Decrypts the private key for user display
         """
         try:
             encrypted_bytes = base64.b64decode(encrypted_private_key)
             iv_bytes = base64.b64decode(iv)
+            tag_bytes = base64.b64decode(tag)
             
-            decrypted_key = self._decrypt_data(encrypted_bytes, self.encryption_key, iv_bytes)
+            decrypted_key = self._decrypt_data(encrypted_bytes, self.encryption_key, iv_bytes, tag_bytes)
             return decrypted_key
             
         except Exception as e:
@@ -368,7 +370,8 @@ class NEARWalletService:
             # Decrypt private key for display
             private_key = self.decrypt_private_key(
                 wallet_info['encrypted_private_key'], 
-                wallet_info['iv']
+                wallet_info['iv'],
+                wallet_info['tag']
             )
             
             # Get real balance from NEAR testnet
