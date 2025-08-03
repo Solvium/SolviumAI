@@ -17,11 +17,13 @@ import { useWallet } from "@/app/contexts/WalletContext";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { SolDepositModal } from "./local_ui/SolDeposit";
 import { useAuth } from "@/app/contexts/AuthContext";
+import { useMultiLoginContext } from "@/app/contexts/MultiLoginContext";
 
 import { useWallet as useSolWallet } from "@solana/wallet-adapter-react";
 
 const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
   const { user: userDetails, refreshUser } = useAuth();
+  const { multiplier } = useMultiLoginContext();
   return (
     <div className="min-h-screen w-full bg-[#0B0B14] py-4 px-4 md:py-6">
       <div className="max-w-4xl mx-auto space-y-4">

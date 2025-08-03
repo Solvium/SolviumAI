@@ -1,0 +1,14 @@
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - bigint-buffer
+  - blake-hash
+  - bufferutil
+  - msw
+  - prisma
+  - protobufjs
+  - secp256k1
+  - tiny-secp256k1
+  - unrs-resolver
+  - usb
+  - utf-8-validate

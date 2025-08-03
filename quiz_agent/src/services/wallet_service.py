@@ -1,0 +1,98 @@
+import secrets
+import hashlib
+import base64
+from typing import Dict, Optional
+from utils.redis_client import RedisClient
+from services.near_wallet_service import NEARWalletService
+from services.database_service import db_service
+from services.cache_service import cache_service
+import logging
+
+logger = logging.getLogger(__name__)
+
+class WalletService:
+    """Service for managing NEAR wallet creation and operations"""
+    
+    def __init__(self):
+        self.redis_client = RedisClient()
+        self.near_wallet_service = NEARWalletService()
+    
+    async def create_demo_wallet(self, user_id: int, user_name: str = None) -> Dict[str, str]:
+        """
+        Creates a real NEAR testnet wallet for the user
+        Returns wallet info including account ID and encrypted private key
+        """
+        try:
+            # Create real NEAR testnet wallet
+            wallet_info = await self.near_wallet_service.create_testnet_wallet(user_id)
+            
+            # Enhanced caching with TTL and fallback
+            await cache_service.cache_wallet_creation(user_id, wallet_info)
+            
+            # Save to database (non-blocking background task)
+            await db_service.save_wallet_async(wallet_info, user_id, user_name)
+            
+            logger.info(f"Created NEAR testnet wallet for user {user_id}: {wallet_info['account_id']}")
+            return wallet_info
+            
+        except Exception as e:
+            logger.error(f"Error creating NEAR testnet wallet for user {user_id}: {e}")
+            raise
+    
+    async def get_user_wallet(self, user_id: int) -> Optional[Dict[str, str]]:
+        """
+        Retrieves the user's wallet information with enhanced caching
+        """
+        try:
+            # Use enhanced cache service with database fallback
+            wallet_data = await cache_service.get_cached_wallet(user_id)
+            return wallet_data
+        except Exception as e:
+            logger.error(f"Error retrieving wallet for user {user_id}: {e}")
+            return None
+    
+    async def has_wallet(self, user_id: int) -> bool:
+        """
+        Checks if the user already has a wallet with enhanced caching
+        """
+        try:
+            return await cache_service.has_cached_wallet(user_id)
+        except Exception as e:
+            logger.error(f"Error checking wallet status for user {user_id}: {e}")
+            return False
+    
+    async def get_wallet_balance(self, user_id: int) -> str:
+        """
+        Gets the real NEAR testnet wallet balance with caching
+        """
+        try:
+            wallet = await self.get_user_wallet(user_id)
+            if wallet and wallet.get("account_id"):
+                account_id = wallet["account_id"]
+                
+                # Check cache first
+                cached_balance = await cache_service.get_cached_balance(account_id)
+                if cached_balance:
+                    return cached_balance
+                
+                # Fetch from blockchain
+                balance = await self.near_wallet_service.get_account_balance(account_id)
+                
+                # Cache the result
+                await cache_service.set_cached_balance(account_id, balance)
+                
+                return balance
+            return "0 NEAR"
+        except Exception as e:
+            logger.error(f"Error getting wallet balance for user {user_id}: {e}")
+            return "0 NEAR"
+    
+    async def format_wallet_info_message(self, wallet_info: Dict[str, str]) -> str:
+        """
+        Formats wallet information into a user-friendly message using NEAR service
+        """
+        try:
+            return await self.near_wallet_service.format_wallet_info_message(wallet_info)
+        except Exception as e:
+            logger.error(f"Error formatting wallet message: {e}")
+            return "❌ Error formatting wallet information. Please contact support." 
