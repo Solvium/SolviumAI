@@ -83,8 +83,8 @@ def _escape_markdown_v2_specials(text: str) -> str:
 
 
 # Define conversation states
-TOPIC, SIZE, CONTEXT_CHOICE, CONTEXT_INPUT, DURATION_CHOICE, DURATION_INPUT, CONFIRM = (
-    range(7)
+TOPIC, NOTES_CHOICE, NOTES_INPUT, SIZE, CONTEXT_CHOICE, CONTEXT_INPUT, DURATION_CHOICE, DURATION_INPUT, CONFIRM = (
+    range(9)
 )
 
 # States for reward configuration
@@ -199,6 +199,7 @@ async def start_createquiz_group(update, context):
     await redis_client.delete_user_data_key(
         user_id, "awaiting_duration_input"
     )  # Clear this flag as well
+    await redis_client.delete_user_data_key(user_id, "awaiting_notes")  # Clear notes flag
 
     if chat_type != "private":
         logger.info(
@@ -208,7 +209,8 @@ async def start_createquiz_group(update, context):
             f"@{user.username}, let's create a quiz! I'll message you privately to set it up."
         )
         await context.bot.send_message(
-            chat_id=user_id, text="Great—what topic would you like your quiz to cover?"
+            chat_id=user_id, 
+            text="🎯 Create Quiz - Step 1 of 4\n\nWhat's your quiz topic?\n\n[Quick Topics: Crypto | Gaming | Technology | Custom...]"
         )
         await redis_client.set_user_data_key(
             user_id, "group_chat_id", update.effective_chat.id
@@ -220,7 +222,7 @@ async def start_createquiz_group(update, context):
     else:
         logger.info(f"User {user_id} started quiz creation directly in private chat.")
         await update.message.reply_text(
-            "Great—what topic would you like your quiz to cover?"
+            "🎯 Create Quiz - Step 1 of 4\n\nWhat's your quiz topic?\n\n[Quick Topics: Crypto | Gaming | Technology | Custom...]"
         )
         # Clear any potential leftover group_chat_id if starting fresh in DM
         await redis_client.delete_user_data_key(user_id, "group_chat_id")
@@ -231,9 +233,82 @@ async def start_createquiz_group(update, context):
 async def topic_received(update, context):
     user_id = update.effective_user.id
     redis_client = RedisClient()
-    logger.info(f"Received topic: {update.message.text} from user {user_id}")
-    await redis_client.set_user_data_key(user_id, "topic", update.message.text.strip())
-    await update.message.reply_text("How many questions? (send a number)")
+    topic = update.message.text.strip()
+    logger.info(f"Received topic: {topic} from user {user_id}")
+    await redis_client.set_user_data_key(user_id, "topic", topic)
+    
+    # Show topic and ask about notes
+    buttons = [
+        [InlineKeyboardButton("📝 Add Notes", callback_data="add_notes")],
+        [InlineKeyboardButton("⏭️ Skip Notes", callback_data="skip_notes")]
+    ]
+    
+    await update.message.reply_text(
+        f"✅ Topic set: {topic}\n\n"
+        f"Would you like to add any notes or context for your quiz?\n"
+        f"(This helps AI generate better questions)",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+    return NOTES_CHOICE
+
+
+async def notes_choice(update, context):
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    choice = update.callback_query.data
+    await update.callback_query.answer()
+    
+    if choice == "add_notes":
+        await update.callback_query.message.reply_text(
+            "📝 Add Quiz Notes (Optional)\n\n"
+            "Share any additional information, context, or specific focus areas:\n\n"
+            "Examples:\n"
+            "• Focus on NEAR Protocol basics\n"
+            "• Include questions about DeFi\n"
+            "• Make it beginner-friendly\n"
+            "• Based on recent crypto news\n\n"
+            "Type your notes or send 'skip' to continue:"
+        )
+        await redis_client.set_user_data_key(user_id, "awaiting_notes", True)
+        return NOTES_INPUT
+    
+    elif choice == "skip_notes":
+        await redis_client.set_user_data_key(user_id, "context_text", None)
+        topic = await redis_client.get_user_data_key(user_id, "topic")
+        await update.callback_query.message.reply_text(
+            f"✅ Topic: {topic}\n"
+            f"📝 Notes: None\n"
+            f"❓ Step 2 of 4: How many questions?\n\n"
+            f"[5] [10] [15] [20] [Custom]"
+        )
+        return SIZE
+
+
+async def notes_input(update, context):
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    notes = update.message.text.strip()
+    
+    if notes.lower() == 'skip':
+        await redis_client.set_user_data_key(user_id, "context_text", None)
+        topic = await redis_client.get_user_data_key(user_id, "topic")
+        await update.message.reply_text(
+            f"✅ Topic: {topic}\n"
+            f"📝 Notes: None\n"
+            f"❓ Step 2 of 4: How many questions?\n\n"
+            f"[5] [10] [15] [20] [Custom]"
+        )
+    else:
+        await redis_client.set_user_data_key(user_id, "context_text", notes)
+        topic = await redis_client.get_user_data_key(user_id, "topic")
+        await update.message.reply_text(
+            f"✅ Topic: {topic}\n"
+            f"📝 Notes: {notes[:50]}{'...' if len(notes) > 50 else ''}\n"
+            f"❓ Step 2 of 4: How many questions?\n\n"
+            f"[5] [10] [15] [20] [Custom]"
+        )
+    
+    await redis_client.delete_user_data_key(user_id, "awaiting_notes")
     return SIZE
 
 
@@ -246,17 +321,24 @@ async def size_received(update, context):
     except ValueError:
         await update.message.reply_text("Please send a valid number of questions.")
         return SIZE
+    
     await redis_client.set_user_data_key(user_id, "num_questions", n)
-    # ask for optional long text
-    buttons = [
-        [InlineKeyboardButton("Paste text", callback_data="paste")],
-        [InlineKeyboardButton("Skip", callback_data="skip_context")],
-    ]
-    await update.message.reply_text(
-        "If you have a passage or notes, paste them now; otherwise skip.",
-        reply_markup=InlineKeyboardMarkup(buttons),
-    )
-    return CONTEXT_CHOICE
+    
+    # Show progress and duration options
+    topic = await redis_client.get_user_data_key(user_id, "topic")
+    context_text = await redis_client.get_user_data_key(user_id, "context_text")
+    
+    progress_text = f"✅ Topic: {topic}\n"
+    if context_text:
+        progress_text += f"📝 Notes: {context_text[:50]}{'...' if len(context_text) > 50 else ''}\n"
+    else:
+        progress_text += f"📝 Notes: None\n"
+    progress_text += f"❓ Questions: {n}\n"
+    progress_text += f"⏱ Step 3 of 4: Quiz duration\n\n"
+    progress_text += f"[5 min] [10 min] [30 min] [1 hour] [No limit]"
+    
+    await update.message.reply_text(progress_text)
+    return DURATION_CHOICE
 
 
 async def context_choice(update, context):
