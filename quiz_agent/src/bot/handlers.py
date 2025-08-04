@@ -204,7 +204,7 @@ async def start_createquiz_group(update, context):
     # Check if user has a wallet - if not, create one first
     from services.wallet_service import WalletService
     wallet_service = WalletService()
-    has_wallet = await wallet_service.has_wallet(user_id)
+    has_wallet = await wallet_service.has_wallet_robust(user_id)
     
     if not has_wallet:
         logger.info(f"User {user_id} has no wallet, creating one before quiz creation.")

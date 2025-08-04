@@ -61,6 +61,32 @@ class WalletService:
             logger.error(f"Error checking wallet status for user {user_id}: {e}")
             return False
     
+    async def has_wallet_robust(self, user_id: int) -> bool:
+        """
+        Robust wallet check with cache-first then database fallback for critical operations
+        """
+        try:
+            # 1. Quick cache check first
+            cached_result = await cache_service.has_cached_wallet(user_id)
+            if cached_result:
+                logger.debug(f"Cache HIT: User {user_id} has wallet in cache")
+                return True
+            
+            # 2. Database check for definitive answer
+            logger.debug(f"Cache MISS: Checking database for user {user_id}")
+            db_result = await db_service.has_wallet(user_id)
+            
+            # 3. Update cache if database has wallet but cache doesn't
+            if db_result:
+                logger.info(f"Database has wallet for user {user_id}, updating cache")
+                await cache_service.cache_wallet_creation(user_id, {})
+            
+            return db_result
+            
+        except Exception as e:
+            logger.error(f"Error in robust wallet check for user {user_id}: {e}")
+            return False
+    
     async def get_wallet_balance(self, user_id: int) -> str:
         """
         Gets the real NEAR testnet wallet balance with caching

@@ -125,7 +125,7 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
     
     # Check if user has a wallet - if not, create one first
     wallet_service = WalletService()
-    has_wallet = await wallet_service.has_wallet(user_id)
+    has_wallet = await wallet_service.has_wallet_robust(user_id)
     
     if not has_wallet:
         # Create wallet for first-time user
