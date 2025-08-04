@@ -83,8 +83,8 @@ def _escape_markdown_v2_specials(text: str) -> str:
 
 
 # Define conversation states
-TOPIC, NOTES_CHOICE, NOTES_INPUT, SIZE, CONTEXT_CHOICE, CONTEXT_INPUT, DURATION_CHOICE, DURATION_INPUT, CONFIRM = (
-    range(9)
+TOPIC, NOTES_CHOICE, NOTES_INPUT, SIZE, CONTEXT_CHOICE, CONTEXT_INPUT, DURATION_CHOICE, DURATION_INPUT, REWARD_CHOICE, REWARD_CUSTOM_INPUT, CONFIRM = (
+    range(11)
 )
 
 # States for reward configuration
@@ -398,7 +398,43 @@ async def duration_choice(update, context):
     await update.callback_query.answer()
     logger.info(f"duration_choice: User {user_id} selected {choice}")
 
-    if choice == "set_duration":
+    # Handle quick duration selections
+    duration_map = {
+        "5_min": 300,
+        "10_min": 600, 
+        "30_min": 1800,
+        "1_hour": 3600,
+        "no_limit": None
+    }
+    
+    if choice in duration_map:
+        await redis_client.set_user_data_key(user_id, "duration_seconds", duration_map[choice])
+        await redis_client.delete_user_data_key(user_id, "awaiting_duration_input")
+        
+        # Show final step with reward options
+        topic = await redis_client.get_user_data_key(user_id, "topic")
+        num_questions = await redis_client.get_user_data_key(user_id, "num_questions")
+        context_text = await redis_client.get_user_data_key(user_id, "context_text")
+        
+        progress_text = f"✅ Topic: {topic}\n"
+        if context_text:
+            progress_text += f"📝 Notes: {context_text[:50]}{'...' if len(context_text) > 50 else ''}\n"
+        else:
+            progress_text += f"📝 Notes: None\n"
+        progress_text += f"❓ Questions: {num_questions}\n"
+        
+        if duration_map[choice]:
+            progress_text += f"⏱ Duration: {duration_map[choice]//60} minutes\n"
+        else:
+            progress_text += f"⏱ Duration: No limit\n"
+        
+        progress_text += f"💰 Step 4 of 4: Reward structure\n\n"
+        progress_text += f"[Free Quiz] [0.1 NEAR] [0.5 NEAR] [Custom]"
+        
+        await update.callback_query.message.reply_text(progress_text)
+        return REWARD_CHOICE
+    
+    elif choice == "set_duration":
         # Set a special flag to identify duration input messages
         await redis_client.set_user_data_key(user_id, "awaiting_duration_input", True)
         logger.info(f"Setting awaiting_duration_input flag for user {user_id}")
@@ -410,6 +446,7 @@ async def duration_choice(update, context):
             f"duration_choice: Returning DURATION_INPUT state for user {user_id}"
         )
         return DURATION_INPUT
+    
     # skip ("skip_duration")
     await redis_client.set_user_data_key(
         user_id, "duration_seconds", None
@@ -494,6 +531,56 @@ async def duration_input(update, context):
         # Stay in DURATION_INPUT state to allow user to retry or use the skip button from the prior message.
         # The 'awaiting_duration_input' flag remains True.
         return DURATION_INPUT
+
+
+async def reward_choice(update, context):
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    choice = update.callback_query.data
+    await update.callback_query.answer()
+    
+    reward_map = {
+        "free": 0,
+        "0.1_near": 0.1,
+        "0.5_near": 0.5,
+        "custom": "custom"
+    }
+    
+    if choice in reward_map:
+        if reward_map[choice] == "custom":
+            await update.callback_query.message.reply_text(
+                "Enter custom reward amount in NEAR:"
+            )
+            return REWARD_CUSTOM_INPUT
+        else:
+            await redis_client.set_user_data_key(user_id, "reward_amount", reward_map[choice])
+            return await confirm_prompt(update, context)
+    
+    # Handle text input for reward (if user types instead of using buttons)
+    try:
+        reward_amount = float(choice)
+        await redis_client.set_user_data_key(user_id, "reward_amount", reward_amount)
+        return await confirm_prompt(update, context)
+    except ValueError:
+        await update.callback_query.message.reply_text(
+            "Please enter a valid reward amount in NEAR or use the buttons above."
+        )
+        return REWARD_CHOICE
+
+
+async def reward_custom_input(update, context):
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    
+    try:
+        reward_amount = float(update.message.text.strip())
+        await redis_client.set_user_data_key(user_id, "reward_amount", reward_amount)
+        return await confirm_prompt(update, context)
+    except ValueError:
+        await update.message.reply_text(
+            "Please enter a valid number for the reward amount in NEAR."
+        )
+        return REWARD_CUSTOM_INPUT
 
 
 async def confirm_prompt(update, context):
