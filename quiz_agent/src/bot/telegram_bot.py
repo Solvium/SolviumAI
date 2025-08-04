@@ -122,6 +122,8 @@ class TelegramBot:
             process_payment,
             show_funding_instructions,
             handle_payment_verification_callback,
+            process_questions_with_payment,
+            store_payment_info_in_quiz,
             confirm_prompt,
             confirm_choice,
             TOPIC,

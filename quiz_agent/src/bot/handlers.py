@@ -729,6 +729,8 @@ async def reward_choice(update, context):
         if reward_type == "free":
             await redis_client.set_user_data_key(user_id, "reward_amount", 0)
             await redis_client.set_user_data_key(user_id, "reward_structure", "free")
+            await redis_client.set_user_data_key(user_id, "total_cost", 0)
+            await redis_client.set_user_data_key(user_id, "payment_status", "not_required")
             return await confirm_prompt(update, context)
         
         elif reward_type == "custom":
@@ -858,6 +860,7 @@ async def payment_verification(update, context):
     
     # Check if it's a free quiz
     if total_cost == 0 or reward_amount == 0:
+        await redis_client.set_user_data_key(user_id, "payment_status", "not_required")
         return await confirm_prompt(update, context)
     
     # Get wallet balance
@@ -1051,6 +1054,8 @@ async def confirm_prompt(update, context):
             text += f"💳 Total Cost: {total_cost} NEAR\n"
             if payment_status == "completed":
                 text += f"✅ Payment: Completed\n"
+            elif payment_status == "not_required":
+                text += f"✅ Payment: Not Required\n"
             else:
                 text += f"⏳ Payment: Pending\n"
     else:
@@ -1083,6 +1088,18 @@ async def confirm_choice(update, context):
         await redis_client.clear_user_data(user_id)  # Clear data on cancellation
         return ConversationHandler.END
 
+    # Check payment status before generating quiz
+    payment_status = await redis_client.get_user_data_key(user_id, "payment_status")
+    total_cost = await redis_client.get_user_data_key(user_id, "total_cost")
+    
+    # For paid quizzes, ensure payment is completed
+    if total_cost and float(total_cost) > 0:
+        if payment_status != "completed":
+            await update.callback_query.message.reply_text(
+                "❌ Payment verification required. Please complete payment before generating quiz."
+            )
+            return ConversationHandler.END
+    
     # yes: generate and post
     await update.callback_query.message.reply_text("🛠 Generating your quiz—one moment…")
 
@@ -1092,6 +1109,8 @@ async def confirm_choice(update, context):
     context_text = await redis_client.get_user_data_key(user_id, "context_text")
     group_chat_id = await redis_client.get_user_data_key(user_id, "group_chat_id")
     duration_seconds = await redis_client.get_user_data_key(user_id, "duration_seconds")
+    reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
+    reward_structure = await redis_client.get_user_data_key(user_id, "reward_structure")
 
     # Handle cases where essential data might be missing (e.g., if Redis errored or keys expired)
     if not topic or num_questions is None:  # num_questions can be 0, so check for None
@@ -1108,19 +1127,106 @@ async def confirm_choice(update, context):
 
     group_chat_id_to_use = group_chat_id if group_chat_id else update.effective_chat.id
 
-    # Call process_questions with duration_seconds
-    await process_questions(
+    # Call process_questions with enhanced data including payment info
+    await process_questions_with_payment(
         update,
         context,
         topic,
         quiz_text,
         group_chat_id_to_use,
-        duration_seconds=duration_seconds,  # Pass duration_seconds directly
+        duration_seconds=duration_seconds,
+        reward_amount=reward_amount,
+        reward_structure=reward_structure,
+        payment_status=payment_status,
+        total_cost=total_cost
     )
 
     # Clear conversation data for quiz creation
     await redis_client.clear_user_data(user_id)
     return ConversationHandler.END
+
+
+async def process_questions_with_payment(
+    update, 
+    context, 
+    topic, 
+    quiz_text, 
+    group_chat_id, 
+    duration_seconds=None,
+    reward_amount=None,
+    reward_structure=None,
+    payment_status=None,
+    total_cost=None
+):
+    """
+    Enhanced process_questions function with payment integration
+    """
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    
+    try:
+        # Process the quiz questions using existing logic
+        await process_questions(
+            update,
+            context,
+            topic,
+            quiz_text,
+            group_chat_id,
+            duration_seconds=duration_seconds
+        )
+        
+        # Add payment and reward information to the quiz
+        if reward_amount and float(reward_amount) > 0:
+            # Store payment information in the quiz record
+            await store_payment_info_in_quiz(user_id, {
+                'reward_amount': reward_amount,
+                'reward_structure': reward_structure,
+                'payment_status': payment_status,
+                'total_cost': total_cost,
+                'payment_timestamp': await redis_client.get_user_data_key(user_id, "payment_timestamp")
+            })
+            
+            # Send payment confirmation message
+            payment_msg = f"💳 **Payment Confirmed**\n\n"
+            payment_msg += f"💰 Amount: {total_cost} NEAR\n"
+            payment_msg += f"📊 Structure: {reward_structure}\n"
+            payment_msg += f"✅ Status: {payment_status}\n\n"
+            payment_msg += f"🎯 Your quiz is now active with rewards!"
+            
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=payment_msg,
+                parse_mode='Markdown'
+            )
+            
+            logger.info(f"Payment confirmed for quiz creation by user {user_id}: {total_cost} NEAR")
+        
+        else:
+            # Free quiz - no payment required
+            logger.info(f"Free quiz created by user {user_id}")
+            
+    except Exception as e:
+        logger.error(f"Error in process_questions_with_payment for user {user_id}: {e}")
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="❌ Error creating quiz. Please try again."
+        )
+
+
+async def store_payment_info_in_quiz(user_id: int, payment_info: dict):
+    """
+    Store payment information in the quiz record
+    """
+    try:
+        # TODO: Implement actual database storage for payment info
+        # For now, log the payment information
+        logger.info(f"Payment info for user {user_id}: {payment_info}")
+        
+        # In the future, this would store payment info in the quiz table
+        # await db_service.update_quiz_payment_info(quiz_id, payment_info)
+        
+    except Exception as e:
+        logger.error(f"Error storing payment info for user {user_id}: {e}")
 
 
 async def start_reward_setup_callback(update: Update, context: CallbackContext):
