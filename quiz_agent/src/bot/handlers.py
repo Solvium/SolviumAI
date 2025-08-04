@@ -275,11 +275,20 @@ async def notes_choice(update, context):
     elif choice == "skip_notes":
         await redis_client.set_user_data_key(user_id, "context_text", None)
         topic = await redis_client.get_user_data_key(user_id, "topic")
+        
+        buttons = [
+            [InlineKeyboardButton("5", callback_data="size_5"),
+             InlineKeyboardButton("10", callback_data="size_10"),
+             InlineKeyboardButton("15", callback_data="size_15"),
+             InlineKeyboardButton("20", callback_data="size_20")],
+            [InlineKeyboardButton("Custom", callback_data="size_custom")]
+        ]
+        
         await update.callback_query.message.reply_text(
             f"✅ Topic: {topic}\n"
             f"📝 Notes: None\n"
-            f"❓ Step 2 of 4: How many questions?\n\n"
-            f"[5] [10] [15] [20] [Custom]"
+            f"❓ Step 2 of 4: How many questions?",
+            reply_markup=InlineKeyboardMarkup(buttons)
         )
         return SIZE
 
@@ -301,15 +310,77 @@ async def notes_input(update, context):
     else:
         await redis_client.set_user_data_key(user_id, "context_text", notes)
         topic = await redis_client.get_user_data_key(user_id, "topic")
+        
+        buttons = [
+            [InlineKeyboardButton("5", callback_data="size_5"),
+             InlineKeyboardButton("10", callback_data="size_10"),
+             InlineKeyboardButton("15", callback_data="size_15"),
+             InlineKeyboardButton("20", callback_data="size_20")],
+            [InlineKeyboardButton("Custom", callback_data="size_custom")]
+        ]
+        
         await update.message.reply_text(
             f"✅ Topic: {topic}\n"
             f"📝 Notes: {notes[:50]}{'...' if len(notes) > 50 else ''}\n"
-            f"❓ Step 2 of 4: How many questions?\n\n"
-            f"[5] [10] [15] [20] [Custom]"
+            f"❓ Step 2 of 4: How many questions?",
+            reply_markup=InlineKeyboardMarkup(buttons)
         )
     
     await redis_client.delete_user_data_key(user_id, "awaiting_notes")
     return SIZE
+
+
+async def size_selection(update, context):
+    """Handle size selection from inline keyboard buttons"""
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    choice = update.callback_query.data
+    await update.callback_query.answer()
+    
+    size_map = {
+        "size_5": 5,
+        "size_10": 10,
+        "size_15": 15,
+        "size_20": 20,
+        "size_custom": "custom"
+    }
+    
+    if choice in size_map:
+        if size_map[choice] == "custom":
+            await update.callback_query.message.reply_text(
+                "Enter custom number of questions:"
+            )
+            return SIZE
+        else:
+            n = size_map[choice]
+            await redis_client.set_user_data_key(user_id, "num_questions", n)
+            
+            # Show progress and duration options with inline keyboard
+            topic = await redis_client.get_user_data_key(user_id, "topic")
+            context_text = await redis_client.get_user_data_key(user_id, "context_text")
+            
+            progress_text = f"✅ Topic: {topic}\n"
+            if context_text:
+                progress_text += f"📝 Notes: {context_text[:50]}{'...' if len(context_text) > 50 else ''}\n"
+            else:
+                progress_text += f"📝 Notes: None\n"
+            progress_text += f"❓ Questions: {n}\n"
+            progress_text += f"⏱ Step 3 of 4: Quiz duration"
+            
+            buttons = [
+                [InlineKeyboardButton("5 min", callback_data="5_min"),
+                 InlineKeyboardButton("10 min", callback_data="10_min"),
+                 InlineKeyboardButton("30 min", callback_data="30_min")],
+                [InlineKeyboardButton("1 hour", callback_data="1_hour"),
+                 InlineKeyboardButton("No limit", callback_data="no_limit")],
+                [InlineKeyboardButton("Custom duration", callback_data="set_duration")]
+            ]
+            
+            await update.callback_query.message.reply_text(
+                progress_text,
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+            return DURATION_CHOICE
 
 
 async def size_received(update, context):
@@ -324,7 +395,7 @@ async def size_received(update, context):
     
     await redis_client.set_user_data_key(user_id, "num_questions", n)
     
-    # Show progress and duration options
+    # Show progress and duration options with inline keyboard
     topic = await redis_client.get_user_data_key(user_id, "topic")
     context_text = await redis_client.get_user_data_key(user_id, "context_text")
     
@@ -334,10 +405,21 @@ async def size_received(update, context):
     else:
         progress_text += f"📝 Notes: None\n"
     progress_text += f"❓ Questions: {n}\n"
-    progress_text += f"⏱ Step 3 of 4: Quiz duration\n\n"
-    progress_text += f"[5 min] [10 min] [30 min] [1 hour] [No limit]"
+    progress_text += f"⏱ Step 3 of 4: Quiz duration"
     
-    await update.message.reply_text(progress_text)
+    buttons = [
+        [InlineKeyboardButton("5 min", callback_data="5_min"),
+         InlineKeyboardButton("10 min", callback_data="10_min"),
+         InlineKeyboardButton("30 min", callback_data="30_min")],
+        [InlineKeyboardButton("1 hour", callback_data="1_hour"),
+         InlineKeyboardButton("No limit", callback_data="no_limit")],
+        [InlineKeyboardButton("Custom duration", callback_data="set_duration")]
+    ]
+    
+    await update.message.reply_text(
+        progress_text,
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
     return DURATION_CHOICE
 
 
@@ -428,10 +510,19 @@ async def duration_choice(update, context):
         else:
             progress_text += f"⏱ Duration: No limit\n"
         
-        progress_text += f"💰 Step 4 of 4: Reward structure\n\n"
-        progress_text += f"[Free Quiz] [0.1 NEAR] [0.5 NEAR] [Custom]"
+        progress_text += f"💰 Step 4 of 4: Reward structure"
         
-        await update.callback_query.message.reply_text(progress_text)
+        buttons = [
+            [InlineKeyboardButton("Free Quiz", callback_data="free"),
+             InlineKeyboardButton("0.1 NEAR", callback_data="0.1_near"),
+             InlineKeyboardButton("0.5 NEAR", callback_data="0.5_near")],
+            [InlineKeyboardButton("Custom amount", callback_data="custom")]
+        ]
+        
+        await update.callback_query.message.reply_text(
+            progress_text,
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
         return REWARD_CHOICE
     
     elif choice == "set_duration":
@@ -589,26 +680,44 @@ async def confirm_prompt(update, context):
 
     topic = await redis_client.get_user_data_key(user_id, "topic")
     n = await redis_client.get_user_data_key(user_id, "num_questions")
-    context_text_val = await redis_client.get_user_data_key(user_id, "context_text")
-    has_ctx = bool(context_text_val)
+    context_text = await redis_client.get_user_data_key(user_id, "context_text")
     dur = await redis_client.get_user_data_key(user_id, "duration_seconds")
+    reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
 
-    # Ensure n and dur are not None before using in f-string or arithmetic
-    n = n if n is not None else 0  # Default to 0 if not found, or handle error
-    topic = topic if topic is not None else "[Unknown Topic]"  # Default if not found
+    # Ensure values are not None before using in f-string or arithmetic
+    n = n if n is not None else 0
+    topic = topic if topic is not None else "[Unknown Topic]"
+    reward_amount = reward_amount if reward_amount is not None else 0
 
-    text = f"Ready to generate a {n}-question quiz on '{topic}'"
-    text += " based on your text" if has_ctx else ""
-    text += f", open for {dur//60} minutes" if dur else ""
-    text += ". Generate now?"
+    text = f"🎯 Quiz Summary:\n\n"
+    text += f" Topic: {topic}\n"
+    text += f"❓ Questions: {n}\n"
+    
+    if context_text:
+        text += f"📋 Notes: {context_text[:100]}{'...' if len(context_text) > 100 else ''}\n"
+    
+    if dur:
+        text += f"⏱ Duration: {dur//60} minutes\n"
+    else:
+        text += f"⏱ Duration: No limit\n"
+    
+    if reward_amount > 0:
+        text += f"💰 Reward: {reward_amount} NEAR\n"
+    else:
+        text += f"💰 Reward: Free\n"
+    
+    text += f"\nGenerate this quiz?"
+
     buttons = [
-        [InlineKeyboardButton("Yes", callback_data="yes")],
-        [InlineKeyboardButton("No", callback_data="no")],
+        [InlineKeyboardButton("✅ Generate Quiz", callback_data="yes")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="no")]
     ]
+    
     if update.callback_query:
         msg = update.callback_query.message
     else:
         msg = update.message
+        
     await msg.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
     return CONFIRM
 

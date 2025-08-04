@@ -106,19 +106,28 @@ class TelegramBot:
             start_handler,
             start_createquiz_group,
             topic_received,
+            notes_choice,
+            notes_input,
             size_received,
+            size_selection,
             context_choice,
             context_input,
             duration_choice,
             duration_input,
+            reward_choice,
+            reward_custom_input,
             confirm_prompt,
             confirm_choice,
             TOPIC,
+            NOTES_CHOICE,
+            NOTES_INPUT,
             SIZE,
             CONTEXT_CHOICE,
             CONTEXT_INPUT,
             DURATION_CHOICE,
             DURATION_INPUT,
+            REWARD_CHOICE,
+            REWARD_CUSTOM_INPUT,
             CONFIRM,
             link_wallet_handler,
             unlink_wallet_handler,
@@ -149,11 +158,27 @@ class TelegramBot:
                         topic_received,
                     )
                 ],
-                # In SIZE state we only accept text messages in private chat
+                # Notes choice state - callback queries for add/skip notes
+                NOTES_CHOICE: [
+                    CallbackQueryHandler(
+                        notes_choice, pattern="^(add_notes|skip_notes)$"
+                    )
+                ],
+                # Notes input state - text messages for notes
+                NOTES_INPUT: [
+                    MessageHandler(
+                        filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
+                        notes_input,
+                    )
+                ],
+                # In SIZE state we accept both text messages and callback queries in private chat
                 SIZE: [
                     MessageHandler(
                         filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
                         size_received,
+                    ),
+                    CallbackQueryHandler(
+                        size_selection, pattern="^(size_5|size_10|size_15|size_20|size_custom)$"
                     )
                 ],
                 # For callback queries, we don't need to filter by chat type as they're handled correctly
@@ -172,7 +197,7 @@ class TelegramBot:
                 # For callback queries, we don't need to filter by chat type
                 DURATION_CHOICE: [
                     CallbackQueryHandler(
-                        duration_choice, pattern="^(set_duration|skip_duration)$"
+                        duration_choice, pattern="^(5_min|10_min|30_min|1_hour|no_limit|set_duration|skip_duration)$"
                     )
                 ],
                 # Text input for duration should be in private chat
@@ -180,6 +205,23 @@ class TelegramBot:
                     MessageHandler(
                         filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
                         duration_input,
+                    )
+                ],
+                # Reward choice state - callback queries for reward options
+                REWARD_CHOICE: [
+                    CallbackQueryHandler(
+                        reward_choice, pattern="^(free|0\\.1_near|0\\.5_near|custom)$"
+                    ),
+                    MessageHandler(
+                        filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
+                        reward_choice,
+                    )
+                ],
+                # Custom reward input state
+                REWARD_CUSTOM_INPUT: [
+                    MessageHandler(
+                        filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
+                        reward_custom_input,
                     )
                 ],
                 # Final confirmation is a callback query
