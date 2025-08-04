@@ -337,7 +337,7 @@ importers:
         version: 5.0.7(@types/react@18.3.23)(react@18.3.1)(use-sync-external-store@1.5.0(react@18.3.1))
     devDependencies:
       '@prisma/client':
-        specifier: ^6.3.1
+        specifier: ^6.13.0
         version: 6.13.0(prisma@5.22.0)(typescript@5.9.2)
       '@types/react-copy-to-clipboard':
         specifier: ^5.0.7
@@ -15211,7 +15211,7 @@ snapshots:
 
   dotenv-expand@11.0.7:
     dependencies:
-      dotenv: 16.4.7
+      dotenv: 16.6.1
     optional: true
 
   dotenv@16.4.7:

@@ -7,7 +7,11 @@
     "build": "yarn configbot && prisma generate && next build",
     "start": "next start",
     "configbot": "node configure.mjs",
-    "lint": "next lint"
+    "lint": "next lint",
+    "setup": "node setup-env.js",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.29",
@@ -121,7 +125,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
-    "@prisma/client": "^6.3.1",
+    "@prisma/client": "^6.13.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-copy-to-clipboard": "^5.0.7",

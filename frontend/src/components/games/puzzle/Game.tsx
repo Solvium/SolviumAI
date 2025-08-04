@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useMultiLoginContext } from "@/app/contexts/MultiLoginContext";
+import { useAuth } from "@/app/contexts/AuthContext";
 import { GameTimer } from "../../Timer";
 
 const headbreaker = require("headbreaker");
@@ -132,12 +132,9 @@ export const PicturePuzzle = () => {
 
   const diff = ["", "EASY", "MEDIUM", "EXPERT"];
 
-  const {
-    userData: userDetails,
-    claimPoints,
-    multiplier,
-    loading,
-  } = useMultiLoginContext();
+  const { user: userDetails } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [multiplier, setMultiplier] = useState(1);
 
   useEffect(() => {
     if (isPlaying && !solved) return;
@@ -211,11 +208,13 @@ export const PicturePuzzle = () => {
           points * userDetails.level * (multiplier > 0 ? multiplier : 1)
         );
         setSolved(true);
-        claimPoints(
-          "game claim--" +
-            points * userDetails.level * (multiplier > 0 ? multiplier : 1),
-          setSaving
+        // TODO: Implement claim points with new auth system
+        console.log(
+          "Claiming points:",
+          points * userDetails.level * (multiplier > 0 ? multiplier : 1)
         );
+        setSaving(true);
+        setTimeout(() => setSaving(false), 2000);
       }, 1500);
     });
 

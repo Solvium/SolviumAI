@@ -1,19 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { SessionManager } from "@/lib/auth/session";
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies();
+    // Get session ID from cookies
+    const sessionId = request.cookies.get('session_id')?.value;
 
-    // Clear the authentication cookie
-    cookieStore.delete("auth_token");
+    if (sessionId) {
+      // Invalidate the current session
+      await SessionManager.invalidateSession(sessionId);
+    }
 
-    return NextResponse.json({
+    // Create response
+    const response = NextResponse.json({
       success: true,
       message: "Logged out successfully",
     });
+
+    // Clear all session cookies
+    SessionManager.clearSessionCookies(response);
+
+    return response;
   } catch (error) {
     console.error("Logout error:", error);
-    return NextResponse.json({ error: "Logout failed" }, { status: 500 });
+    
+    // Even if there's an error, clear cookies
+    const response = NextResponse.json({
+      success: true,
+      message: "Logged out successfully",
+    });
+    
+    SessionManager.clearSessionCookies(response);
+    return response;
   }
 }

@@ -1,27 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { prisma } from "@/lib/prisma";
+import { SessionManager } from "@/lib/auth/session";
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies();
-    const authToken = cookieStore.get("auth_token");
+    // Validate session
+    const sessionValidation = await SessionManager.validateSession(request);
 
-    if (!authToken) {
+    if (!sessionValidation.isValid || !sessionValidation.userId) {
       return NextResponse.json({
         authenticated: false,
         user: null,
       });
     }
 
-    // Here you would typically validate the token and fetch user data from database
-    // For now, we'll return a mock response
+    // Fetch user data from database
+    const dbUser = await prisma.user.findUnique({
+      where: { id: parseInt(sessionValidation.userId) },
+      include: {
+        linkedAccounts: true,
+      },
+    });
+
+    if (!dbUser) {
+      return NextResponse.json({
+        authenticated: false,
+        user: null,
+      });
+    }
+
+    // Prepare user data for response
     const userData = {
-      id: authToken.value,
-      username: "user_" + authToken.value.slice(-6),
-      totalPoints: 0,
-      multiplier: 1,
-      createdAt: new Date(),
-      lastLoginAt: new Date(),
+      id: dbUser.id.toString(),
+      username: dbUser.username,
+      email: dbUser.email,
+      telegramId: dbUser.linkedAccounts.find(acc => acc.type === 'telegram')?.value,
+      googleId: dbUser.linkedAccounts.find(acc => acc.type === 'google')?.value,
+      totalPoints: dbUser.totalPoints,
+      multiplier: dbUser.multiplier,
+      level: dbUser.level,
+      createdAt: dbUser.createdAt,
+      lastLoginAt: dbUser.lastClaim,
+      lastSpinClaim: dbUser.lastSpinClaim,
+      dailySpinCount: dbUser.dailySpinCount,
     };
 
     return NextResponse.json({
