@@ -42,6 +42,20 @@ from datetime import datetime, timezone  # Add this import
 # Configure logger
 logger = logging.getLogger(__name__)
 
+async def start_handler(update, context):
+    """Handle /start command - shows the main menu interface"""
+    user = update.effective_user
+    chat_type = update.effective_chat.type
+    
+    if chat_type == "private":
+        # In private chat, show the main menu
+        from .menu_handlers import show_main_menu
+        await show_main_menu(update, context)
+    else:
+        # In group chat, show menu with DM suggestion
+        from .menu_handlers import show_menu_in_group
+        await show_menu_in_group(update, context)
+
 
 # Helper function to escape specific MarkdownV2 characters
 def _escape_markdown_v2_specials(text: str) -> str:
@@ -148,12 +162,10 @@ def _parse_reward_details_for_total(
 
 
 async def group_start(update, context):
-    """Handle /createquiz in group chat by telling user to DM the bot."""
+    """Handle /start in group chat by showing menu and telling user to DM the bot."""
     user = update.effective_user
-    await update.message.reply_text(
-        f"@{user.username}, to set up a quiz, please DM me and send /createquiz."
-    )
-    # no conversation state here
+    from .menu_handlers import show_menu_in_group
+    await show_menu_in_group(update, context)
 
 
 async def start_createquiz_group(update, context):
@@ -166,9 +178,6 @@ async def start_createquiz_group(update, context):
     logger.info(
         f"User {user_id} initiating /createquiz from {chat_type} chat {update.effective_chat.id}."
     )
-    # logger.info(
-    #     f"User_data BEFORE cleaning at quiz creation start for user {user_id}: {context.user_data}"
-    # ) # Cannot log context.user_data directly anymore
 
     # Clear potentially stale user_data from previous incomplete flows
     await redis_client.delete_user_data_key(user_id, "awaiting_reward_input_type")
@@ -190,10 +199,6 @@ async def start_createquiz_group(update, context):
     await redis_client.delete_user_data_key(
         user_id, "awaiting_duration_input"
     )  # Clear this flag as well
-
-    # logger.info(
-    #     f"User_data AFTER cleaning for user {user_id} at quiz creation start: {context.user_data}"
-    # ) # Cannot log context.user_data directly anymore
 
     if chat_type != "private":
         logger.info(

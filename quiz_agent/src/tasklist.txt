@@ -1,0 +1,140 @@
+
+
+## **Phase 1: Bot Integration with Mini App**
+
+### **Task 1.1: Add Mini App Launch Buttons to Bot**
+- [ ] **1.1.1** Add "�� Play Games" button to bot's main menu
+- [ ] **1.1.2** Add "�� Gaming Hub" button to quiz completion messages
+- [ ] **1.1.3** Add "🎮 Continue Gaming" button to user profile responses
+- [ ] **1.1.4** Configure web_app URLs to point to mini app deployment
+
+### **Task 1.2: Enhance Bot Welcome Messages**
+- [ ] **1.2.1** Create new user welcome flow with gaming promotion
+- [ ] **1.2.2** Create returning user welcome with personalized stats
+- [ ] **1.2.3** Add cross-platform achievement recognition
+- [ ] **1.2.4** Implement progressive user journey messaging
+
+### **Task 1.3: Add Gaming Stats to Bot Responses**
+- [ ] **1.3.1** Modify quiz results to include gaming achievements
+- [ ] **1.3.2** Add gaming level and points to user profile commands
+- [ ] **1.3.3** Include gaming stats in leaderboard responses
+- [ ] **1.3.4** Add cross-promotion messages in quiz announcements
+
+### **Task 1.4: Implement User Recognition System**
+- [ ] **1.4.1** Add user activity tracking (quiz + gaming)
+- [ ] **1.4.2** Create user achievement system
+- [ ] **1.4.3** Implement personalized greeting logic
+- [ ] **1.4.4** Add user progression tracking
+
+## **Phase 2: Mini App Development**
+
+### **Task 2.1: Deploy Frontend as Telegram Mini App**
+- [ ] **2.1.1** Configure Next.js app for Telegram Web App
+- [ ] **2.1.2** Set up TWA (Telegram Web App) SDK integration
+- [ ] **2.1.3** Deploy to hosting platform (Vercel/Netlify)
+- [ ] **2.1.4** Configure bot to launch mini app URLs
+
+### **Task 2.2: Remove Quiz Components from Mini App**
+- [ ] **2.2.1** Remove quiz creation interface
+- [ ] **2.2.2** Remove quiz participation components
+- [ ] **2.2.3** Keep only gaming features (Wheel, Wordle, Puzzles)
+- [ ] **2.2.4** Update navigation to focus on gaming
+
+### **Task 2.3: Add Bot Integration to Mini App**
+- [ ] **2.3.1** Add "📝 Join Quizzes" button in mini app
+- [ ] **2.3.2** Display user's quiz achievements in profile
+- [ ] **2.3.3** Show quiz history and statistics
+- [ ] **2.3.4** Add bot promotion messages
+
+### **Task 2.4: Implement Cross-Platform User Recognition**
+- [ ] **2.4.1** Use Telegram user context in mini app
+- [ ] **2.4.2** Fetch user data from bot database
+- [ ] **2.4.3** Display unified achievements (quiz + gaming)
+- [ ] **2.4.4** Show combined statistics and rewards
+
+## **Phase 3: Database Integration**
+
+### **Task 3.1: Extend Database Schema**
+- [ ] **3.1.1** Add gaming tables (game_progress, achievements, etc.)
+- [ ] **3.1.2** Add cross-platform user tracking
+- [ ] **3.1.3** Create unified points/rewards system
+- [ ] **3.1.4** Add achievement and level tracking
+
+### **Task 3.2: Implement Data Synchronization**
+- [ ] **3.2.1** Create API endpoints for cross-platform data sharing
+- [ ] **3.2.2** Implement real-time data updates between bot and mini app
+- [ ] **3.2.3** Add user activity logging across platforms
+- [ ] **3.2.4** Create unified leaderboard calculations
+
+### **Task 3.3: Add Wallet Integration**
+- [ ] **3.3.1** Extend wallet system to work across both platforms
+- [ ] **3.3.2** Implement unified reward distribution
+- [ ] **3.3.3** Add cross-platform transaction tracking
+- [ ] **3.3.4** Create unified balance display
+
+## **Phase 4: User Experience Enhancement**
+
+### **Task 4.1: Implement Progressive User Journey**
+- [ ] **4.1.1** Create new user onboarding flow
+- [ ] **4.1.2** Implement returning user recognition
+- [ ] **4.1.3** Add achievement progression system
+- [ ] **4.1.4** Create personalized recommendations
+
+### **Task 4.2: Add Cross-Promotion Features**
+- [ ] **4.2.1** Implement bot-to-mini app promotions
+- [ ] **4.2.2** Add mini app-to-bot promotions
+- [ ] **4.2.3** Create unified achievement announcements
+- [ ] **4.2.4** Add social sharing features
+
+### **Task 4.3: Enhance Gaming Features**
+- [ ] **4.3.1** Add quiz points integration with games
+- [ ] **4.3.2** Implement gaming rewards for quiz participants
+- [ ] **4.3.3** Create cross-platform challenges
+- [ ] **4.3.4** Add unified leaderboards
+
+## **Phase 5: Testing and Optimization**
+
+### **Task 5.1: Integration Testing**
+- [ ] **5.1.1** Test bot-to-mini app transitions
+- [ ] **5.1.2** Test user recognition across platforms
+- [ ] **5.1.3** Test data synchronization
+- [ ] **5.1.4** Test wallet integration
+
+### **Task 5.2: User Experience Testing**
+- [ ] **5.2.1** Test new user onboarding flow
+- [ ] **5.2.2** Test returning user experience
+- [ ] **5.2.3** Test cross-platform feature discovery
+- [ ] **5.2.4** Test reward system integration
+
+### **Task 5.3: Performance Optimization**
+- [ ] **5.3.1** Optimize data loading between platforms
+- [ ] **5.3.2** Implement caching for user data
+- [ ] **5.3.3** Optimize mini app loading times
+- [ ] **5.3.4** Add error handling and fallbacks
+
+## **Phase 6: Launch and Monitoring**
+
+### **Task 6.1: Gradual Rollout**
+- [ ] **6.1.1** Deploy to test group first
+- [ ] **6.1.2** Gather feedback and iterate
+- [ ] **6.1.3** Roll out to select groups
+- [ ] **6.1.4** Full public launch
+
+### **Task 6.2: Analytics and Monitoring**
+- [ ] **6.2.1** Implement user engagement tracking
+- [ ] **6.2.2** Monitor cross-platform usage patterns
+- [ ] **6.2.3** Track conversion rates (bot to mini app)
+- [ ] **6.2.4** Monitor reward distribution and user satisfaction
+
+### **Task 6.3: Iterative Improvements**
+- [ ] **6.3.1** Analyze user feedback and behavior
+- [ ] **6.3.2** Implement feature improvements
+- [ ] **6.3.3** Add new gaming features based on demand
+- [ ] **6.3.4** Optimize user journey based on data
+
+## **Priority Order:**
+1. **Start with Task 1.1** (Add mini app buttons to bot)
+2. **Then Task 2.1** (Deploy mini app)
+3. **Follow with Task 3.1** (Database integration)
+4. **Continue with remaining tasks** in order
+

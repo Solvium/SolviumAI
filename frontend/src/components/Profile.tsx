@@ -5,10 +5,10 @@ import WebApp from "@twa-dev/sdk";
 import axios from "axios";
 import { FaFacebook, FaXTwitter, FaTelegram, FaYoutube } from "react-icons/fa6";
 import { useAuth } from "@/app/contexts/AuthContext";
+import { useMultiLoginContext } from "@/app/contexts/MultiLoginContext";
 
 const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
   const { user: userDetails, refreshUser } = useAuth();
-
   return (
     <div className="min-h-screen w-full bg-[#0B0B14] py-4 px-4 md:py-6">
       <div className="max-w-4xl mx-auto space-y-4">
