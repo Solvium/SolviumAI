@@ -267,6 +267,7 @@ async def notes_choice(update, context):
             "• Include questions about DeFi\n"
             "• Make it beginner-friendly\n"
             "• Based on recent crypto news\n\n"
+            "💡 Tip: Keep notes concise (under 500 characters for best results)\n"
             "Type your notes or send 'skip' to continue:"
         )
         await redis_client.set_user_data_key(user_id, "awaiting_notes", True)
@@ -298,36 +299,65 @@ async def notes_input(update, context):
     redis_client = RedisClient()
     notes = update.message.text.strip()
     
-    if notes.lower() == 'skip':
-        await redis_client.set_user_data_key(user_id, "context_text", None)
-        topic = await redis_client.get_user_data_key(user_id, "topic")
-        await update.message.reply_text(
-            f"✅ Topic: {topic}\n"
-            f"📝 Notes: None\n"
-            f"❓ Step 2 of 4: How many questions?\n\n"
-            f"[5] [10] [15] [20] [Custom]"
-        )
-    else:
-        await redis_client.set_user_data_key(user_id, "context_text", notes)
-        topic = await redis_client.get_user_data_key(user_id, "topic")
+    try:
+        if notes.lower() == 'skip':
+            await redis_client.set_user_data_key(user_id, "context_text", None)
+            topic = await redis_client.get_user_data_key(user_id, "topic")
+            
+            buttons = [
+                [InlineKeyboardButton("5", callback_data="size_5"),
+                 InlineKeyboardButton("10", callback_data="size_10"),
+                 InlineKeyboardButton("15", callback_data="size_15"),
+                 InlineKeyboardButton("20", callback_data="size_20")],
+                [InlineKeyboardButton("Custom", callback_data="size_custom")]
+            ]
+            
+            await update.message.reply_text(
+                f"✅ Topic: {topic}\n"
+                f"📝 Notes: None\n"
+                f"❓ Step 2 of 4: How many questions?",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+        else:
+            # Truncate notes if too long to prevent processing issues
+            max_notes_length = 2000  # Limit to 2000 characters
+            if len(notes) > max_notes_length:
+                notes = notes[:max_notes_length] + "..."
+                await update.message.reply_text(
+                    f"📝 Notes truncated to {max_notes_length} characters for better processing."
+                )
+            
+            await redis_client.set_user_data_key(user_id, "context_text", notes)
+            topic = await redis_client.get_user_data_key(user_id, "topic")
+            
+            buttons = [
+                [InlineKeyboardButton("5", callback_data="size_5"),
+                 InlineKeyboardButton("10", callback_data="size_10"),
+                 InlineKeyboardButton("15", callback_data="size_15"),
+                 InlineKeyboardButton("20", callback_data="size_20")],
+                [InlineKeyboardButton("Custom", callback_data="size_custom")]
+            ]
+            
+            # Show a shorter preview of notes
+            notes_preview = notes[:100] + "..." if len(notes) > 100 else notes
+            
+            await update.message.reply_text(
+                f"✅ Topic: {topic}\n"
+                f"📝 Notes: {notes_preview}\n"
+                f"❓ Step 2 of 4: How many questions?",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
         
-        buttons = [
-            [InlineKeyboardButton("5", callback_data="size_5"),
-             InlineKeyboardButton("10", callback_data="size_10"),
-             InlineKeyboardButton("15", callback_data="size_15"),
-             InlineKeyboardButton("20", callback_data="size_20")],
-            [InlineKeyboardButton("Custom", callback_data="size_custom")]
-        ]
+        await redis_client.delete_user_data_key(user_id, "awaiting_notes")
+        return SIZE
         
+    except Exception as e:
+        logger.error(f"Error in notes_input for user {user_id}: {e}")
         await update.message.reply_text(
-            f"✅ Topic: {topic}\n"
-            f"📝 Notes: {notes[:50]}{'...' if len(notes) > 50 else ''}\n"
-            f"❓ Step 2 of 4: How many questions?",
-            reply_markup=InlineKeyboardMarkup(buttons)
+            "Sorry, there was an error processing your notes. Please try again with shorter text or skip notes for now."
         )
-    
-    await redis_client.delete_user_data_key(user_id, "awaiting_notes")
-    return SIZE
+        await redis_client.delete_user_data_key(user_id, "awaiting_notes")
+        return SIZE
 
 
 async def size_selection(update, context):
