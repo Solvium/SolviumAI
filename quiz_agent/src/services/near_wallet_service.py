@@ -317,7 +317,31 @@ class NEARWalletService:
     
     async def get_account_balance(self, account_id: str) -> str:
         """
-        Gets the actual NEAR account balance from testnet
+        Gets the actual NEAR account balance using pynear
+        """
+        try:
+            # Use pynear Account to get balance
+            if not self.main_account:
+                logger.warning("Main account not initialized, using RPC fallback")
+                return await self._get_balance_rpc_fallback(account_id)
+            
+            # Use pynear's get_balance method with the account_id parameter
+            try:
+                balance_yocto = await self.main_account.get_balance(account_id)
+                balance_near = balance_yocto / (10 ** 24)
+                logger.debug(f"Successfully got balance for {account_id}: {balance_near} NEAR")
+                return f"{balance_near:.4f} NEAR"
+            except Exception as pynear_error:
+                logger.debug(f"pynear balance check failed, using RPC fallback: {pynear_error}")
+                return await self._get_balance_rpc_fallback(account_id)
+                
+        except Exception as e:
+            logger.error(f"Error getting balance for {account_id}: {e}")
+            return "0 NEAR"
+    
+    async def _get_balance_rpc_fallback(self, account_id: str) -> str:
+        """
+        Fallback RPC method for getting account balance
         """
         try:
             payload = {
@@ -352,7 +376,7 @@ class NEARWalletService:
                 return "0 NEAR"
                 
         except Exception as e:
-            logger.error(f"Error getting balance for {account_id}: {e}")
+            logger.error(f"Error in RPC fallback for {account_id}: {e}")
             return "0 NEAR"
     
     def decrypt_private_key(self, encrypted_private_key: str, iv: str, tag: str) -> str:

@@ -118,6 +118,10 @@ class TelegramBot:
             reward_custom_input,
             show_reward_structure_options,
             reward_structure_choice,
+            payment_verification,
+            process_payment,
+            show_funding_instructions,
+            handle_payment_verification_callback,
             confirm_prompt,
             confirm_choice,
             TOPIC,
@@ -131,6 +135,7 @@ class TelegramBot:
             REWARD_CHOICE,
             REWARD_CUSTOM_INPUT,
             REWARD_STRUCTURE_CHOICE,
+            PAYMENT_VERIFICATION,
             CONFIRM,
             link_wallet_handler,
             unlink_wallet_handler,
@@ -231,6 +236,12 @@ class TelegramBot:
                 REWARD_STRUCTURE_CHOICE: [
                     CallbackQueryHandler(
                         reward_structure_choice, pattern="^(structure_wta|structure_top3|structure_custom)$"
+                    )
+                ],
+                # Payment verification state
+                PAYMENT_VERIFICATION: [
+                    CallbackQueryHandler(
+                        handle_payment_verification_callback, pattern="^(check_balance|cancel_quiz)$"
                     )
                 ],
                 # Final confirmation is a callback query

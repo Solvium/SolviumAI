@@ -83,8 +83,8 @@ def _escape_markdown_v2_specials(text: str) -> str:
 
 
 # Define conversation states
-TOPIC, NOTES_CHOICE, NOTES_INPUT, SIZE, CONTEXT_CHOICE, CONTEXT_INPUT, DURATION_CHOICE, DURATION_INPUT, REWARD_CHOICE, REWARD_CUSTOM_INPUT, REWARD_STRUCTURE_CHOICE, CONFIRM = (
-    range(12)
+TOPIC, NOTES_CHOICE, NOTES_INPUT, SIZE, CONTEXT_CHOICE, CONTEXT_INPUT, DURATION_CHOICE, DURATION_INPUT, REWARD_CHOICE, REWARD_CUSTOM_INPUT, REWARD_STRUCTURE_CHOICE, PAYMENT_VERIFICATION, CONFIRM = (
+    range(13)
 )
 
 # States for reward configuration
@@ -830,20 +830,162 @@ async def reward_structure_choice(update, context):
     if choice == "structure_wta":
         await redis_client.set_user_data_key(user_id, "reward_structure", "winner_takes_all")
         await redis_client.set_user_data_key(user_id, "total_cost", await redis_client.get_user_data_key(user_id, "reward_amount"))
-        return await confirm_prompt(update, context)
+        return await payment_verification(update, context)
     
     elif choice == "structure_top3":
         reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
         total_cost = float(reward_amount) * 3
         await redis_client.set_user_data_key(user_id, "reward_structure", "top_3")
         await redis_client.set_user_data_key(user_id, "total_cost", total_cost)
-        return await confirm_prompt(update, context)
+        return await payment_verification(update, context)
     
     elif choice == "structure_custom":
         await update.callback_query.message.reply_text(
             "Enter custom reward structure (e.g., '0.5 NEAR for 1st, 0.3 NEAR for 2nd, 0.2 NEAR for 3rd'):"
         )
         return REWARD_CUSTOM_STRUCTURE_INPUT
+
+
+async def payment_verification(update, context):
+    """Handle payment verification and processing"""
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    
+    # Get quiz details and cost
+    total_cost = await redis_client.get_user_data_key(user_id, "total_cost")
+    reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
+    reward_structure = await redis_client.get_user_data_key(user_id, "reward_structure")
+    
+    # Check if it's a free quiz
+    if total_cost == 0 or reward_amount == 0:
+        return await confirm_prompt(update, context)
+    
+    # Get wallet balance
+    from services.wallet_service import WalletService
+    wallet_service = WalletService()
+    wallet_balance_str = await wallet_service.get_wallet_balance(user_id)
+    
+    # Parse balance (e.g., "0.5000 NEAR" -> 0.5)
+    try:
+        balance_match = re.search(r'(\d+\.?\d*)', wallet_balance_str)
+        wallet_balance = float(balance_match.group(1)) if balance_match else 0.0
+        logger.debug(f"Parsed wallet balance for user {user_id}: {wallet_balance} NEAR (from: {wallet_balance_str})")
+    except Exception as e:
+        logger.error(f"Error parsing wallet balance for user {user_id}: {e}")
+        wallet_balance = 0.0
+    
+    total_cost_float = float(total_cost)
+    
+    # Check if user has sufficient funds
+    if wallet_balance >= total_cost_float:
+        # Sufficient funds - proceed with payment
+        return await process_payment(update, context, total_cost_float)
+    else:
+        # Insufficient funds - show funding instructions
+        return await show_funding_instructions(update, context, total_cost_float, wallet_balance)
+
+
+async def process_payment(update, context, total_cost):
+    """Process payment for quiz creation"""
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    
+    try:
+        # Get wallet info
+        from services.wallet_service import WalletService
+        wallet_service = WalletService()
+        wallet = await wallet_service.get_user_wallet(user_id)
+        
+        if not wallet:
+            await update.callback_query.message.reply_text(
+                "❌ Error: Wallet not found. Please try again."
+            )
+            return ConversationHandler.END
+        
+        # Show payment processing message
+        processing_msg = await update.callback_query.message.reply_text(
+            f"💳 Processing payment of {total_cost} NEAR...\n\n⏳ Please wait while we verify the transaction..."
+        )
+        
+        # TODO: Implement actual payment processing with escrow
+        # For now, simulate successful payment
+        await asyncio.sleep(2)  # Simulate processing time
+        
+        # Store payment info
+        await redis_client.set_user_data_key(user_id, "payment_status", "completed")
+        await redis_client.set_user_data_key(user_id, "payment_amount", total_cost)
+        await redis_client.set_user_data_key(user_id, "payment_timestamp", str(datetime.datetime.now()))
+        
+        # Update processing message
+        await processing_msg.edit_text(
+            f"✅ Payment successful!\n\n💳 Amount: {total_cost} NEAR\n📊 Status: Processed\n\n🛠 Generating your quiz..."
+        )
+        
+        # Proceed to quiz generation
+        return await confirm_prompt(update, context)
+        
+    except Exception as e:
+        logger.error(f"Error processing payment for user {user_id}: {e}")
+        await update.callback_query.message.reply_text(
+            "❌ Payment processing failed. Please try again."
+        )
+        return ConversationHandler.END
+
+
+async def show_funding_instructions(update, context, required_amount, current_balance):
+    """Show funding instructions for insufficient funds"""
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    
+    shortfall = required_amount - current_balance
+    
+    funding_text = f"💰 **Payment Required**\n\n"
+    funding_text += f"Required: {required_amount} NEAR\n"
+    funding_text += f"Current Balance: {current_balance} NEAR\n"
+    funding_text += f"Shortfall: {shortfall} NEAR\n\n"
+    funding_text += f"To fund your wallet:\n\n"
+    funding_text += f"1️⃣ **Get NEAR tokens** from an exchange\n"
+    funding_text += f"2️⃣ **Send to your wallet** address\n"
+    funding_text += f"3️⃣ **Wait for confirmation** (usually 1-2 minutes)\n"
+    funding_text += f"4️⃣ **Click 'Check Balance'** below\n\n"
+    funding_text += f"💡 **Quick Funding Options:**\n"
+    funding_text += f"• Use a faucet for testnet NEAR\n"
+    funding_text += f"• Buy from exchanges like Binance, Coinbase\n"
+    funding_text += f"• Transfer from another wallet\n\n"
+    funding_text += f"Once funded, click 'Check Balance' to continue."
+    
+    buttons = [
+        [InlineKeyboardButton("🔄 Check Balance", callback_data="check_balance")],
+        [InlineKeyboardButton("❌ Cancel Quiz", callback_data="cancel_quiz")]
+    ]
+    
+    await update.callback_query.message.reply_text(
+        funding_text,
+        parse_mode='Markdown',
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+    
+    return PAYMENT_VERIFICATION
+
+
+async def handle_payment_verification_callback(update, context):
+    """Handle payment verification callbacks"""
+    user_id = update.effective_user.id
+    choice = update.callback_query.data
+    await update.callback_query.answer()
+    
+    if choice == "check_balance":
+        # Re-check balance and proceed if sufficient
+        return await payment_verification(update, context)
+    
+    elif choice == "cancel_quiz":
+        # Clear quiz data and end conversation
+        redis_client = RedisClient()
+        await redis_client.clear_user_data(user_id)
+        await update.callback_query.message.reply_text(
+            "❌ Quiz creation cancelled. You can start over with /createquiz"
+        )
+        return ConversationHandler.END
 
 
 async def reward_custom_input(update, context):
@@ -876,6 +1018,7 @@ async def confirm_prompt(update, context):
     reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
     reward_structure = await redis_client.get_user_data_key(user_id, "reward_structure")
     total_cost = await redis_client.get_user_data_key(user_id, "total_cost")
+    payment_status = await redis_client.get_user_data_key(user_id, "payment_status")
 
     # Ensure values are not None before using in f-string or arithmetic
     n = n if n is not None else 0
@@ -906,6 +1049,10 @@ async def confirm_prompt(update, context):
             text += f"📊 Structure: {structure_display}\n"
         if total_cost > 0:
             text += f"💳 Total Cost: {total_cost} NEAR\n"
+            if payment_status == "completed":
+                text += f"✅ Payment: Completed\n"
+            else:
+                text += f"⏳ Payment: Pending\n"
     else:
         text += f"💰 Reward: Free\n"
     
