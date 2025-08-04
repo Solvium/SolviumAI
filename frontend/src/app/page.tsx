@@ -6,8 +6,7 @@ import LeaderBoard from "@/components/LeaderBoard";
 import WebApp from "@twa-dev/sdk";
 import UserProfile from "@/components/Profile";
 import ContestBoard from "@/components/Contest";
-import { useTonAddress } from "@tonconnect/ui-react";
-import { useWallet } from "./contexts/WalletContext";
+
 import LoginModule from "@/components/auth/LoginModule";
 import { useAuth } from "./contexts/AuthContext";
 import { SolWheelOfFortune } from "@/components/SolWheel";
@@ -16,12 +15,6 @@ import GamesPage from "@/components/games/GamesPage";
 function Home() {
   const [selectedTab, setSelectedTab]: any = useState("Home");
   const [tg, setTg] = useState<typeof WebApp | null>(null);
-
-  const {
-    state: { selector, accountId: nearAddress, isConnected: nearConnected },
-  } = useWallet();
-
-  const address = useTonAddress();
 
   const { user, isAuthenticated, isLoading, logout } = useAuth();
 
@@ -35,7 +28,7 @@ function Home() {
         clearInterval(getTg);
       }
 
-      console.log(count);
+      // console.log(count);
 
       if (count > 10) {
         clearInterval(getTg);
@@ -61,7 +54,7 @@ function Home() {
   if (!isAuthenticated) {
     return <LoginModule />;
   }
-
+  console.log(user);
   return (
     <div className="min-h-screen bg-[#0B0B14]">
       <div>

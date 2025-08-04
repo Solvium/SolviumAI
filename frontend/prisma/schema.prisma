@@ -44,6 +44,7 @@ model User {
   WeeklyScores   WeeklyScore[]
   wallets        Wallet[] // Relation to the new Wallet model
   linkedAccounts LoginMethod[] // Relation to the new LoginMethod model
+  sessions       Session[] // Relation to the new Session model
 }
 
 // New model for wallets
@@ -66,6 +67,35 @@ model LoginMethod {
   user   User   @relation(fields: [userId], references: [id])
 
   @@unique([type, value])
+}
+
+// New model for sessions
+model Session {
+  id           String   @id @default(uuid())
+  userId       Int
+  refreshToken String
+  expiresAt    DateTime
+  userAgent    String?
+  ipAddress    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([refreshToken])
+}
+
+// New model for rate limiting
+model RateLimit {
+  id        Int      @id @default(autoincrement())
+  key       String // Rate limit key (e.g., "ip:path")
+  ipAddress String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+  @@index([ipAddress])
 }
 
 model WeeklyScore {

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { jwtDecode } from "jwt-decode";
 
 export async function POST(request: NextRequest) {
@@ -15,17 +14,26 @@ export async function POST(request: NextRequest) {
     }
 
     // Decode the JWT token from Google
-    const decoded: any = jwtDecode(credential);
-
-    // Validate the token
-    if (!decoded.email || !decoded.sub) {
+    let decoded: any;
+    try {
+      decoded = jwtDecode(credential);
+    } catch (error) {
+      console.error("Failed to decode Google token:", error);
       return NextResponse.json(
-        { error: "Invalid Google token" },
+        { error: "Invalid Google token format" },
         { status: 400 }
       );
     }
 
-    // Create or update user in database
+    // Validate the token
+    if (!decoded.email || !decoded.sub) {
+      return NextResponse.json(
+        { error: "Invalid Google token - missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    // Create mock user data (without database)
     const userData = {
       id: decoded.sub,
       username: decoded.email.split("@")[0],
@@ -36,27 +44,32 @@ export async function POST(request: NextRequest) {
       avatar: decoded.picture,
       totalPoints: 0,
       multiplier: 1,
+      level: 1,
       createdAt: new Date(),
       lastLoginAt: new Date(),
+      lastSpinClaim: new Date(),
+      dailySpinCount: 0,
     };
 
-    // Set authentication cookie
-    const cookieStore = cookies();
-    cookieStore.set("auth_token", userData.id, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60, // 30 days
-    });
-
-    return NextResponse.json({
+    // Create response with simple cookie (without JWT for now)
+    const response = NextResponse.json({
       success: true,
       user: userData,
     });
+
+    // Set a simple auth cookie
+    response.cookies.set("auth_token", userData.id, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+    });
+
+    return response;
   } catch (error) {
     console.error("Google auth error:", error);
     return NextResponse.json(
-      { error: "Authentication failed" },
+      { error: "Authentication failed - please try again" },
       { status: 500 }
     );
   }

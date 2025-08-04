@@ -1,5 +1,4 @@
 "use client";
-
 import React, {
   createContext,
   useContext,
@@ -18,14 +17,19 @@ export interface User {
   id: string;
   username: string;
   email?: string;
-  avatar?: string;
   telegramId?: string;
   googleId?: string;
-  walletAddresses?: string[];
+  firstName?: string;
+  lastName?: string;
+  avatar?: string;
   totalPoints: number;
   multiplier: number;
+  level: number;
+  difficulty: number;
   createdAt: Date;
   lastLoginAt: Date;
+  lastSpinClaim?: Date;
+  dailySpinCount?: number;
 }
 
 export interface AuthState {
@@ -51,6 +55,7 @@ export interface AuthContextType extends AuthState {
   // Utility methods
   refreshUser: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
+  refreshToken: () => Promise<void>;
 }
 
 export interface AuthProviderConfig {
@@ -127,6 +132,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     checkAuthStatus();
   }, []);
 
+  // Set up automatic token refresh
+  useEffect(() => {
+    if (state.isAuthenticated) {
+      const refreshInterval = setInterval(() => {
+        refreshToken();
+      }, 14 * 60 * 1000); // Refresh every 14 minutes (before 15-minute expiry)
+
+      return () => clearInterval(refreshInterval);
+    }
+  }, [state.isAuthenticated]);
+
   const checkAuthStatus = async () => {
     try {
       const response = await axios.get("/api/auth/me");
@@ -153,6 +169,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }));
     }
   };
+
+  const refreshToken = useCallback(async () => {
+    try {
+      await axios.post("/api/auth/refresh");
+      // Token refreshed successfully, no need to update state
+    } catch (error) {
+      console.error("Token refresh failed:", error);
+      // If refresh fails, logout the user
+      await logout();
+    }
+  }, []);
 
   const loginWithTelegram = useCallback(
     async (initData: any): Promise<User> => {
@@ -240,6 +267,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       });
     } catch (error) {
       console.error("Logout error:", error);
+      // Even if logout fails, clear local state
+      setState({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        error: null,
+      });
     }
   }, []);
 
@@ -288,6 +322,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     loginWithProvider,
     refreshUser,
     updateUser,
+    refreshToken,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

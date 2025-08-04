@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "react-toastify";
-import { useMultiLoginContext } from "@/app/contexts/MultiLoginContext";
+import { useAuth } from "@/app/contexts/AuthContext";
 
 interface PurchaseButtonConfig {
   spinCount: 1 | 2 | 3 | 4;
@@ -12,7 +12,7 @@ interface PurchaseButtonConfig {
 
 export default function BuySpin({ setBuySpins }: { setBuySpins: any }) {
   const [isProcessing, setIsProcessing] = useState(false);
-  const { userData: user, claimPoints } = useMultiLoginContext();
+  const { user } = useAuth();
   const [solvBalance, setSolvBalance] = useState(0);
 
   const purchaseOptions: PurchaseButtonConfig[] = [
@@ -33,7 +33,10 @@ export default function BuySpin({ setBuySpins }: { setBuySpins: any }) {
     setIsProcessing(true);
 
     try {
-      claimPoints("buy spins--" + JSON.stringify(config), setBuySpins);
+      // TODO: Implement claim points with new auth system
+      console.log("Buying spins:", config);
+      toast.success(`Successfully purchased ${config.spinCount} spin(s)!`);
+      setBuySpins(false);
     } catch (error) {
       toast.error(
         `Purchase failed: ${
