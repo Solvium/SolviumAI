@@ -236,10 +236,6 @@ class TelegramBot:
             allow_reentry=True,
             # Set a higher conversation timeout - default is 30s which is too short
             conversation_timeout=300,  # 5 minutes
-            # Add timeout handler
-            timeout_callback=lambda update, context: update.message.reply_text(
-                "⏱️ Quiz creation timed out. Please start over with /createquiz"
-            ),
             # Important: Set a name for debugging purposes
             name="quiz_creation",
             # Key conversation by user_id, not by chat_id, for group->DM flow
