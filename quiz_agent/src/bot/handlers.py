@@ -83,8 +83,8 @@ def _escape_markdown_v2_specials(text: str) -> str:
 
 
 # Define conversation states
-TOPIC, NOTES_CHOICE, NOTES_INPUT, SIZE, CONTEXT_CHOICE, CONTEXT_INPUT, DURATION_CHOICE, DURATION_INPUT, REWARD_CHOICE, REWARD_CUSTOM_INPUT, CONFIRM = (
-    range(11)
+TOPIC, NOTES_CHOICE, NOTES_INPUT, SIZE, CONTEXT_CHOICE, CONTEXT_INPUT, DURATION_CHOICE, DURATION_INPUT, REWARD_CHOICE, REWARD_CUSTOM_INPUT, REWARD_STRUCTURE_CHOICE, CONFIRM = (
+    range(12)
 )
 
 # States for reward configuration
@@ -595,13 +595,20 @@ async def duration_choice(update, context):
         else:
             progress_text += f"⏱ Duration: No limit\n"
         
-        progress_text += f"💰 Step 4 of 4: Reward structure"
+        progress_text += f"💰 Step 4 of 4: Reward Setup"
+        
+        # Get wallet balance for user
+        from services.wallet_service import WalletService
+        wallet_service = WalletService()
+        wallet_balance = await wallet_service.get_wallet_balance(user_id)
+        
+        progress_text += f"\n\n💳 Wallet Balance: {wallet_balance}"
         
         buttons = [
-            [InlineKeyboardButton("Free Quiz", callback_data="free"),
-             InlineKeyboardButton("0.1 NEAR", callback_data="0.1_near"),
-             InlineKeyboardButton("0.5 NEAR", callback_data="0.5_near")],
-            [InlineKeyboardButton("Custom amount", callback_data="custom")]
+            [InlineKeyboardButton("Free Quiz", callback_data="reward_free"),
+             InlineKeyboardButton("0.1 NEAR", callback_data="reward_0.1"),
+             InlineKeyboardButton("0.5 NEAR", callback_data="reward_0.5")],
+            [InlineKeyboardButton("Custom amount", callback_data="reward_custom")]
         ]
         
         await update.callback_query.message.reply_text(
@@ -715,33 +722,128 @@ async def reward_choice(update, context):
     choice = update.callback_query.data
     await update.callback_query.answer()
     
-    reward_map = {
-        "free": 0,
-        "0.1_near": 0.1,
-        "0.5_near": 0.5,
-        "custom": "custom"
-    }
-    
-    if choice in reward_map:
-        if reward_map[choice] == "custom":
+    # Handle reward amount selection
+    if choice.startswith("reward_"):
+        reward_type = choice.replace("reward_", "")
+        
+        if reward_type == "free":
+            await redis_client.set_user_data_key(user_id, "reward_amount", 0)
+            await redis_client.set_user_data_key(user_id, "reward_structure", "free")
+            return await confirm_prompt(update, context)
+        
+        elif reward_type == "custom":
             await update.callback_query.message.reply_text(
                 "Enter custom reward amount in NEAR:"
             )
             return REWARD_CUSTOM_INPUT
+        
         else:
-            await redis_client.set_user_data_key(user_id, "reward_amount", reward_map[choice])
-            return await confirm_prompt(update, context)
+            # Handle 0.1 or 0.5 NEAR rewards
+            try:
+                reward_amount = float(reward_type)
+                await redis_client.set_user_data_key(user_id, "reward_amount", reward_amount)
+                
+                # Show reward structure options
+                await show_reward_structure_options(update, context, reward_amount)
+                return REWARD_STRUCTURE_CHOICE
+                
+            except ValueError:
+                await update.callback_query.message.reply_text(
+                    "Please select a valid reward option."
+                )
+                return REWARD_CHOICE
     
     # Handle text input for reward (if user types instead of using buttons)
     try:
         reward_amount = float(choice)
         await redis_client.set_user_data_key(user_id, "reward_amount", reward_amount)
-        return await confirm_prompt(update, context)
+        await show_reward_structure_options(update, context, reward_amount)
+        return REWARD_STRUCTURE_CHOICE
     except ValueError:
         await update.callback_query.message.reply_text(
             "Please enter a valid reward amount in NEAR or use the buttons above."
         )
         return REWARD_CHOICE
+
+
+async def show_reward_structure_options(update, context, reward_amount):
+    """Show reward structure options for paid quizzes"""
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    
+    # Get current quiz details for display
+    topic = await redis_client.get_user_data_key(user_id, "topic")
+    num_questions = await redis_client.get_user_data_key(user_id, "num_questions")
+    context_text = await redis_client.get_user_data_key(user_id, "context_text")
+    duration_seconds = await redis_client.get_user_data_key(user_id, "duration_seconds")
+    
+    progress_text = f"✅ Topic: {topic}\n"
+    if context_text:
+        progress_text += f"📝 Notes: {context_text[:50]}{'...' if len(context_text) > 50 else ''}\n"
+    else:
+        progress_text += f"📝 Notes: None\n"
+    progress_text += f"❓ Questions: {num_questions}\n"
+    
+    if duration_seconds:
+        progress_text += f"⏱ Duration: {duration_seconds//60} minutes\n"
+    else:
+        progress_text += f"⏱ Duration: No limit\n"
+    
+    progress_text += f"💰 Reward Amount: {reward_amount} NEAR\n"
+    progress_text += f"📊 Step 4b of 4: Reward Structure"
+    
+    # Calculate total costs for different structures
+    wta_total = reward_amount
+    top3_total = reward_amount * 3  # 1st, 2nd, 3rd place
+    custom_total = reward_amount  # Base amount, can be modified
+    
+    progress_text += f"\n\n💡 Total Cost Options:\n"
+    progress_text += f"• Winner-takes-all: {wta_total} NEAR\n"
+    progress_text += f"• Top 3 winners: {top3_total} NEAR\n"
+    progress_text += f"• Custom structure: {custom_total} NEAR"
+    
+    buttons = [
+        [InlineKeyboardButton(f"Winner-takes-all ({wta_total} NEAR)", callback_data="structure_wta")],
+        [InlineKeyboardButton(f"Top 3 winners ({top3_total} NEAR)", callback_data="structure_top3")],
+        [InlineKeyboardButton(f"Custom structure", callback_data="structure_custom")]
+    ]
+    
+    if update.callback_query:
+        await update.callback_query.message.reply_text(
+            progress_text,
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+    else:
+        await update.message.reply_text(
+            progress_text,
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+
+async def reward_structure_choice(update, context):
+    """Handle reward structure selection"""
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    choice = update.callback_query.data
+    await update.callback_query.answer()
+    
+    if choice == "structure_wta":
+        await redis_client.set_user_data_key(user_id, "reward_structure", "winner_takes_all")
+        await redis_client.set_user_data_key(user_id, "total_cost", await redis_client.get_user_data_key(user_id, "reward_amount"))
+        return await confirm_prompt(update, context)
+    
+    elif choice == "structure_top3":
+        reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
+        total_cost = float(reward_amount) * 3
+        await redis_client.set_user_data_key(user_id, "reward_structure", "top_3")
+        await redis_client.set_user_data_key(user_id, "total_cost", total_cost)
+        return await confirm_prompt(update, context)
+    
+    elif choice == "structure_custom":
+        await update.callback_query.message.reply_text(
+            "Enter custom reward structure (e.g., '0.5 NEAR for 1st, 0.3 NEAR for 2nd, 0.2 NEAR for 3rd'):"
+        )
+        return REWARD_CUSTOM_STRUCTURE_INPUT
 
 
 async def reward_custom_input(update, context):
@@ -751,7 +853,11 @@ async def reward_custom_input(update, context):
     try:
         reward_amount = float(update.message.text.strip())
         await redis_client.set_user_data_key(user_id, "reward_amount", reward_amount)
-        return await confirm_prompt(update, context)
+        
+        # Show reward structure options for custom amount
+        await show_reward_structure_options(update, context, reward_amount)
+        return REWARD_STRUCTURE_CHOICE
+        
     except ValueError:
         await update.message.reply_text(
             "Please enter a valid number for the reward amount in NEAR."
@@ -768,11 +874,14 @@ async def confirm_prompt(update, context):
     context_text = await redis_client.get_user_data_key(user_id, "context_text")
     dur = await redis_client.get_user_data_key(user_id, "duration_seconds")
     reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
+    reward_structure = await redis_client.get_user_data_key(user_id, "reward_structure")
+    total_cost = await redis_client.get_user_data_key(user_id, "total_cost")
 
     # Ensure values are not None before using in f-string or arithmetic
     n = n if n is not None else 0
     topic = topic if topic is not None else "[Unknown Topic]"
     reward_amount = reward_amount if reward_amount is not None else 0
+    total_cost = total_cost if total_cost is not None else 0
 
     text = f"🎯 Quiz Summary:\n\n"
     text += f" Topic: {topic}\n"
@@ -787,7 +896,16 @@ async def confirm_prompt(update, context):
         text += f"⏱ Duration: No limit\n"
     
     if reward_amount > 0:
-        text += f"💰 Reward: {reward_amount} NEAR\n"
+        text += f"💰 Reward Amount: {reward_amount} NEAR\n"
+        if reward_structure:
+            structure_display = {
+                "winner_takes_all": "Winner-takes-all",
+                "top_3": "Top 3 winners",
+                "free": "Free quiz"
+            }.get(reward_structure, reward_structure)
+            text += f"📊 Structure: {structure_display}\n"
+        if total_cost > 0:
+            text += f"💳 Total Cost: {total_cost} NEAR\n"
     else:
         text += f"💰 Reward: Free\n"
     

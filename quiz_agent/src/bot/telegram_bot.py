@@ -116,6 +116,8 @@ class TelegramBot:
             duration_input,
             reward_choice,
             reward_custom_input,
+            show_reward_structure_options,
+            reward_structure_choice,
             confirm_prompt,
             confirm_choice,
             TOPIC,
@@ -128,6 +130,7 @@ class TelegramBot:
             DURATION_INPUT,
             REWARD_CHOICE,
             REWARD_CUSTOM_INPUT,
+            REWARD_STRUCTURE_CHOICE,
             CONFIRM,
             link_wallet_handler,
             unlink_wallet_handler,
@@ -210,7 +213,7 @@ class TelegramBot:
                 # Reward choice state - callback queries for reward options
                 REWARD_CHOICE: [
                     CallbackQueryHandler(
-                        reward_choice, pattern="^(free|0\\.1_near|0\\.5_near|custom)$"
+                        reward_choice, pattern="^(reward_free|reward_0\\.1|reward_0\\.5|reward_custom)$"
                     ),
                     MessageHandler(
                         filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
@@ -222,6 +225,12 @@ class TelegramBot:
                     MessageHandler(
                         filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
                         reward_custom_input,
+                    )
+                ],
+                # Reward structure choice state
+                REWARD_STRUCTURE_CHOICE: [
+                    CallbackQueryHandler(
+                        reward_structure_choice, pattern="^(structure_wta|structure_top3|structure_custom)$"
                     )
                 ],
                 # Final confirmation is a callback query
