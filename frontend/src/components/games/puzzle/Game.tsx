@@ -4,7 +4,14 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { GameTimer } from "../../Timer";
 
-const headbreaker = require("headbreaker");
+// Add error handling for headbreaker import
+let headbreaker: any;
+try {
+  headbreaker = require("headbreaker");
+} catch (error) {
+  console.error("Failed to load headbreaker library:", error);
+  headbreaker = null;
+}
 
 const images = [
   "https://res.cloudinary.com/dovy5scxo/image/upload/v1738791905/drvo6rl75nrhfnsga38o.webp",
@@ -118,23 +125,22 @@ const images = [
 ];
 
 function ImgIndex(min: number, max: number) {
-  return Math.floor(Math.random() * (max - min + 1) + min);
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 export const PicturePuzzle = () => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [solved, setSolved] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [points, setPoints] = useState(1);
-  const [curImg, setCurImg] = useState<any>();
-  const [timer, setTimer] = useState<number>(Date.now());
-  const [displayImg, setDisplayImg] = useState<any>();
-
-  const diff = ["", "EASY", "MEDIUM", "EXPERT"];
-
   const { user: userDetails } = useAuth();
   const [loading, setLoading] = useState(false);
   const [multiplier, setMultiplier] = useState(1);
+  const [curImg, setCurImg] = useState<any>();
+  const [displayImg, setDisplayImg] = useState<any>();
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [solved, setSolved] = useState(false);
+  const [points, setPoints] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [timer, setTimer] = useState(0);
+
+  const diff = ["", "EASY", "MEDIUM", "EXPERT"];
 
   useEffect(() => {
     if (isPlaying && !solved) return;
@@ -155,6 +161,12 @@ export const PicturePuzzle = () => {
   };
 
   const playGame = async () => {
+    // Check if headbreaker is available
+    if (!headbreaker) {
+      console.error("Headbreaker library not available");
+      return;
+    }
+
     setSolved(false);
     setIsPlaying(true);
     setDisplayImg(curImg);
@@ -167,194 +179,159 @@ export const PicturePuzzle = () => {
     const initialWidth = window.innerWidth > 430 ? 430 : window.innerWidth - 50;
     const initialHeight = window.innerHeight / 2;
 
-    const piecesX = userDetails.level + userDetails.difficulty;
-    const piecesY = userDetails.level + userDetails.difficulty;
+    const piecesX = (userDetails?.level ?? 1) + (userDetails?.difficulty ?? 1);
+    const piecesY = (userDetails?.level ?? 1) + (userDetails?.difficulty ?? 1);
 
     const pieceSize = Math.min(initialWidth / piecesX, initialHeight / piecesY);
 
-    const background = new headbreaker.Canvas("canvas", {
-      width: initialWidth,
-      height: initialHeight,
-      pieceSize:
-        userDetails.level + userDetails.difficulty == 2
-          ? 80
-          : Math.round(pieceSize - 20),
-      proximity: 18,
-      borderFill: 8,
-      strokeWidth: 1,
-      lineSoftness: 0.12,
-      preventOffstageDrag: true,
-      fixed: true,
-      painter: new headbreaker.painters.Konva(),
-      image: curImg,
-      // maxPiecesCount: { x: 4, y: 7 },
-    });
+    try {
+      const background = new headbreaker.Canvas("canvas", {
+        width: initialWidth,
+        height: initialHeight,
+        pieceSize:
+          (userDetails?.level ?? 1) + (userDetails?.difficulty ?? 1) == 2
+            ? 80
+            : Math.round(pieceSize - 20),
+        proximity: 18,
+        borderFill: 8,
+        strokeWidth: 1,
+        lineSoftness: 0.12,
+        preventOffstageDrag: true,
+        fixed: true,
+        painter: new headbreaker.painters.Konva(),
+        image: curImg,
+      });
 
-    background.adjustImagesToPuzzleHeight();
-    background.autogenerate({
-      horizontalPiecesCount: userDetails.level + userDetails.difficulty,
-      verticalPiecesCount: userDetails.level + userDetails.difficulty,
-    });
+      background.adjustImagesToPuzzleHeight();
+      background.autogenerate({
+        horizontalPiecesCount:
+          (userDetails?.level ?? 1) + (userDetails?.difficulty ?? 1),
+        verticalPiecesCount:
+          (userDetails?.level ?? 1) + (userDetails?.difficulty ?? 1),
+      });
 
-    background.shuffle(0.8);
-    background.attachSolvedValidator();
-    background.onValid(() => {
-      const timeDiff = (Date.now() - timer) / 1000;
-      const points =
-        timeDiff < 120 ? 100 : timeDiff > 120 && timeDiff < 240 ? 75 : 50;
-
-      setTimeout(() => {
-        setPoints(
-          points * userDetails.level * (multiplier > 0 ? multiplier : 1)
-        );
-        setSolved(true);
-        // TODO: Implement claim points with new auth system
-        console.log(
-          "Claiming points:",
-          points * userDetails.level * (multiplier > 0 ? multiplier : 1)
-        );
-        setSaving(true);
-        setTimeout(() => setSaving(false), 2000);
-      }, 1500);
-    });
-
-    setTimeout(() => {
-      setTimer(Date.now());
-      background.draw();
-    }, 1000);
-
-    background.onConnect(
-      (
-        _piece: any,
-        figure: { shape: { stroke: (arg0: string) => void } },
-        _target: any,
-        targetFigure: { shape: { stroke: (arg0: string) => void } }
-      ) => {
-        // play sound
-        audio.play();
-
-        // paint borders on click
-        // of conecting and conected figures
-        figure.shape.stroke("yellow");
-        targetFigure.shape.stroke("yellow");
-        background.redraw();
+      background.shuffle(0.8);
+      background.attachSolvedValidator();
+      background.onValid(() => {
+        const timeDiff = (Date.now() - timer) / 1000;
+        const points =
+          timeDiff < 120 ? 100 : timeDiff > 120 && timeDiff < 240 ? 75 : 50;
 
         setTimeout(() => {
-          // restore border colors
-          // later
-          figure.shape.stroke("black");
-          targetFigure.shape.stroke("black");
-          background.redraw();
-        }, 200);
-      }
-    );
+          setPoints(
+            points *
+              (userDetails?.level ?? 1) *
+              (multiplier > 0 ? multiplier : 1)
+          );
+          setSolved(true);
+          // TODO: Implement claim points with new auth system
+          console.log(
+            "Claiming points:",
+            points *
+              (userDetails?.level ?? 1) *
+              (multiplier > 0 ? multiplier : 1)
+          );
+          setSaving(true);
+          setTimeout(() => setSaving(false), 2000);
+        }, 1500);
+      });
 
-    background.onDisconnect((it: any) => {
-      audio.play();
-    });
+      setTimeout(() => {
+        setTimer(Date.now());
+        background.draw();
+      }, 1000);
+
+      background.onConnect(
+        (
+          _piece: any,
+          figure: { shape: { stroke: (arg0: string) => void } },
+          _target: any,
+          targetFigure: { shape: { stroke: (arg0: string) => void } }
+        ) => {
+          // play sound
+          audio.play();
+
+          // paint borders on click
+          // of conecting and conected figures
+          figure.shape.stroke("yellow");
+          targetFigure.shape.stroke("yellow");
+        }
+      );
+    } catch (error) {
+      console.error("Error initializing puzzle game:", error);
+      setSolved(false);
+      setIsPlaying(false);
+    }
   };
 
-  if (!userDetails) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
-  } else
-    return (
-      <div className="bg-[#0B0B14] h-[90vh] flex flex-col items-center justify-center w-full py-4 px-4 md:py-6">
-        <div>
-          <div
-            className={`${
-              !isPlaying || solved ? "hidden" : "block"
-            } flex flex-col items-center space-y-4 mb-6`}
-          >
-            <div className="bg-[#151524] rounded-xl p-4 border border-[#2A2A45] shadow-[0_0_15px_rgba(41,41,69,0.5)]">
-              <div className="flex flex-col items-center">
-                <span className="text-[#8E8EA8] text-sm mb-1">
-                  Time Elapsed
-                </span>
-                <span className="text-[#4C6FFF] text-4xl font-bold">
-                  <GameTimer time={timer} />
-                </span>
-              </div>
-            </div>
+  }
 
-            <div className="flex items-center justify-center space-x-8">
-              <div className="flex flex-col items-center">
-                <span className="text-[#8E8EA8] text-sm mb-1">Level</span>
-                <span className="text-white text-xl font-semibold">
-                  {userDetails.level}
-                </span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-[#8E8EA8] text-sm mb-1">Puzzle</span>
-                <span className="text-white text-xl font-semibold">
-                  {userDetails.puzzleCount}
-                </span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-[#8E8EA8] text-sm mb-1">Difficulty</span>
-                <span className="text-white text-xl font-semibold">
-                  {diff[userDetails.difficulty]}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div
-            className={`${
-              !isPlaying || solved ? "hidden" : "block"
-            } bg-[#151524] border border-[#2A2A45] rounded-2xl mt-4 w-full max-w-[1200px] mx-auto overflow-hidden`}
-            id="canvas"
-            style={{ minHeight: "400px" }}
-          ></div>
-        </div>
-
-        <div
-          id="validated-canvas-overlay"
-          className={`z-[9999999999] w-[60vw] ${
-            !solved ? "hidden" : "flex"
-          } flex-col items-center bg-[#151524] border border-[#2A2A45] rounded-2xl p-6 shadow-[0_0_15px_rgba(41,41,69,0.5)] mt-4`}
-        >
-          <p className="text-2xl font-bold text-[#4C6FFF] mb-2">Huray!!</p>
-          <p className="text-white text-lg mb-2">You Solved This Puzzle</p>
-          <p className="text-[#8E8EA8] mb-4">
-            You have earned{" "}
-            <span className="text-[#4C6FFF] font-bold">{points} SOLV</span>
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-2xl">
+        <div className="text-center mb-6">
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">
+            Picture Puzzle
+          </h1>
+          <p className="text-gray-600">
+            Arrange the pieces to complete the image
           </p>
-          <img
-            className="my-4 rounded-lg border border-[#2A2A45] max-w-full h-auto"
-            src={displayImg?.src}
-            alt="Completed puzzle"
-          />
-          {(userDetails?.level ?? 0) > 3 ? (
-            <p className="text-[#8E8EA8] text-center">
-              You have finished all stages for today, come back tomorrow
-            </p>
-          ) : (
-            <Button
-              onClick={() => {
-                playGame();
-              }}
-              className="bg-[#4C6FFF] hover:bg-[#4C6FFF]/80 text-white"
-            >
-              Next Game
-            </Button>
-          )}
         </div>
-        {!isPlaying && curImg && (
-          <div className="flex items-center justify-center">
+
+        {!headbreaker && (
+          <div className="text-center p-4 bg-red-100 text-red-700 rounded-lg mb-4">
+            <p>Puzzle game is currently unavailable. Please try again later.</p>
+          </div>
+        )}
+
+        {!isPlaying && !solved && (
+          <div className="text-center">
+            <Button
+              onClick={playGame}
+              disabled={!headbreaker}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg text-lg font-semibold"
+            >
+              Start Game
+            </Button>
+          </div>
+        )}
+
+        {isPlaying && (
+          <div className="space-y-4">
+            <GameTimer time={timer} />
+            <div
+              id="canvas"
+              className="border-2 border-gray-300 rounded-lg mx-auto"
+            ></div>
+          </div>
+        )}
+
+        {solved && (
+          <div className="text-center space-y-4">
+            <div className="text-2xl font-bold text-green-600">
+              Congratulations! Puzzle Solved!
+            </div>
+            <div className="text-xl text-gray-700">Points Earned: {points}</div>
+            {saving && <div className="text-blue-600">Saving points...</div>}
             <Button
               onClick={() => {
-                playGame();
+                setSolved(false);
+                setIsPlaying(false);
+                setPoints(0);
               }}
-              className="bg-[#4C6FFF]  hover:bg-[#4C6FFF]/80 text-white mt-4"
+              className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg"
             >
-              Play Game
+              Play Again
             </Button>
           </div>
         )}
       </div>
-    );
+    </div>
+  );
 };

@@ -17,13 +17,15 @@ export interface User {
   id: string;
   username: string;
   email?: string;
-  avatar?: string;
   telegramId?: string;
   googleId?: string;
-  walletAddresses?: string[];
+  firstName?: string;
+  lastName?: string;
+  avatar?: string;
   totalPoints: number;
   multiplier: number;
   level: number;
+  difficulty: number;
   createdAt: Date;
   lastLoginAt: Date;
   lastSpinClaim?: Date;
