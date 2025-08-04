@@ -243,7 +243,7 @@ class TelegramBot:
                 # Payment verification state
                 PAYMENT_VERIFICATION: [
                     CallbackQueryHandler(
-                        handle_payment_verification_callback, pattern="^(check_balance|cancel_quiz)$"
+                        handle_payment_verification_callback, pattern="^(check_balance|retry_payment|cancel_quiz)$"
                     )
                 ],
                 # Final confirmation is a callback query

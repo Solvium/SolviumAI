@@ -907,25 +907,74 @@ async def process_payment(update, context, total_cost):
         
         # Show payment processing message
         processing_msg = await update.callback_query.message.reply_text(
-            f"💳 Processing payment of {total_cost} NEAR...\n\n⏳ Please wait while we verify the transaction..."
+            f"💳 Processing payment of {total_cost} NEAR...\n\n⏳ Please wait while we process the transaction..."
         )
         
-        # TODO: Implement actual payment processing with escrow
-        # For now, simulate successful payment
-        await asyncio.sleep(2)  # Simulate processing time
+        # Calculate payment with 1% charge
+        base_amount = float(total_cost)
+        service_charge = base_amount * 0.01  # 1% charge
+        total_amount = base_amount + service_charge
         
-        # Store payment info
-        await redis_client.set_user_data_key(user_id, "payment_status", "completed")
-        await redis_client.set_user_data_key(user_id, "payment_amount", total_cost)
-        await redis_client.set_user_data_key(user_id, "payment_timestamp", str(datetime.datetime.now()))
+        # Convert to yoctoNEAR
+        total_yocto = int(total_amount * (10 ** 24))
         
-        # Update processing message
-        await processing_msg.edit_text(
-            f"✅ Payment successful!\n\n💳 Amount: {total_cost} NEAR\n📊 Status: Processed\n\n🛠 Generating your quiz..."
+        # Get main account address from config
+        from utils.config import Config
+        main_account_address = Config.NEAR_WALLET_ADDRESS
+        
+        # Process real NEAR transaction
+        transaction_result = await process_real_near_payment(
+            wallet, 
+            main_account_address, 
+            total_yocto,
+            user_id
         )
         
-        # Proceed to quiz generation
-        return await confirm_prompt(update, context)
+        if transaction_result['success']:
+            # Store payment info
+            await redis_client.set_user_data_key(user_id, "payment_status", "completed")
+            await redis_client.set_user_data_key(user_id, "payment_amount", total_cost)
+            await redis_client.set_user_data_key(user_id, "service_charge", service_charge)
+            await redis_client.set_user_data_key(user_id, "total_paid", total_amount)
+            await redis_client.set_user_data_key(user_id, "transaction_hash", transaction_result['transaction_hash'])
+            await redis_client.set_user_data_key(user_id, "payment_timestamp", str(datetime.datetime.now()))
+            
+            # Update processing message
+            await processing_msg.edit_text(
+                f"✅ Payment successful!\n\n"
+                f"💳 Amount: {total_cost} NEAR\n"
+                f"💰 Service Charge: {service_charge:.4f} NEAR\n"
+                f"💸 Total Paid: {total_amount:.4f} NEAR\n"
+                f"🔗 Transaction: {transaction_result['transaction_hash'][:20]}...\n"
+                f"📊 Status: Confirmed\n\n"
+                f"🛠 Generating your quiz..."
+            )
+            
+            # Proceed to quiz generation
+            return await confirm_prompt(update, context)
+        else:
+            # Payment failed - show retry option
+            await processing_msg.edit_text(
+                f"❌ Payment failed!\n\n"
+                f"💳 Amount: {total_cost} NEAR\n"
+                f"💰 Service Charge: {service_charge:.4f} NEAR\n"
+                f"💸 Total: {total_amount:.4f} NEAR\n"
+                f"❌ Error: {transaction_result['error']}\n\n"
+                f"Please check your balance and try again."
+            )
+            
+            # Show retry buttons
+            buttons = [
+                [InlineKeyboardButton("🔄 Retry Payment", callback_data="retry_payment")],
+                [InlineKeyboardButton("❌ Cancel Quiz", callback_data="cancel_quiz")]
+            ]
+            
+            await update.callback_query.message.reply_text(
+                "Would you like to retry the payment?",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+            
+            return PAYMENT_VERIFICATION
         
     except Exception as e:
         logger.error(f"Error processing payment for user {user_id}: {e}")
@@ -981,6 +1030,18 @@ async def handle_payment_verification_callback(update, context):
         # Re-check balance and proceed if sufficient
         return await payment_verification(update, context)
     
+    elif choice == "retry_payment":
+        # Retry payment with current settings
+        redis_client = RedisClient()
+        total_cost = await redis_client.get_user_data_key(user_id, "total_cost")
+        if total_cost:
+            return await process_payment(update, context, total_cost)
+        else:
+            await update.callback_query.message.reply_text(
+                "❌ Error: Payment amount not found. Please start over."
+            )
+            return ConversationHandler.END
+    
     elif choice == "cancel_quiz":
         # Clear quiz data and end conversation
         redis_client = RedisClient()
@@ -1022,6 +1083,9 @@ async def confirm_prompt(update, context):
     reward_structure = await redis_client.get_user_data_key(user_id, "reward_structure")
     total_cost = await redis_client.get_user_data_key(user_id, "total_cost")
     payment_status = await redis_client.get_user_data_key(user_id, "payment_status")
+    service_charge = await redis_client.get_user_data_key(user_id, "service_charge")
+    total_paid = await redis_client.get_user_data_key(user_id, "total_paid")
+    transaction_hash = await redis_client.get_user_data_key(user_id, "transaction_hash")
 
     # Ensure values are not None before using in f-string or arithmetic
     n = n if n is not None else 0
@@ -1052,8 +1116,14 @@ async def confirm_prompt(update, context):
             text += f"📊 Structure: {structure_display}\n"
         if total_cost > 0:
             text += f"💳 Total Cost: {total_cost} NEAR\n"
+            if service_charge:
+                text += f"💰 Service Charge: {service_charge} NEAR\n"
+            if total_paid:
+                text += f"💸 Total Paid: {total_paid} NEAR\n"
             if payment_status == "completed":
                 text += f"✅ Payment: Completed\n"
+                if transaction_hash:
+                    text += f"🔗 Transaction: {transaction_hash[:20]}...\n"
             elif payment_status == "not_required":
                 text += f"✅ Payment: Not Required\n"
             else:
@@ -1144,6 +1214,72 @@ async def confirm_choice(update, context):
     # Clear conversation data for quiz creation
     await redis_client.clear_user_data(user_id)
     return ConversationHandler.END
+
+
+async def process_real_near_payment(wallet: dict, receiver_address: str, amount_yocto: int, user_id: int) -> dict:
+    """
+    Process real NEAR payment from user's sub-account to main account
+    """
+    try:
+        from py_near.account import Account
+        from utils.config import Config
+        from services.near_wallet_service import NEARWalletService
+        
+        # Decrypt user's private key
+        near_service = NEARWalletService()
+        private_key = near_service.decrypt_private_key(
+            wallet['encrypted_private_key'],
+            wallet['iv'],
+            wallet['tag']
+        )
+        
+        # Create Account instance for user's sub-account
+        user_account = Account(
+            account_id=wallet['account_id'],
+            private_key=private_key,
+            rpc_addr=Config.NEAR_RPC_ENDPOINT
+        )
+        
+        # Send money to main account
+        logger.info(f"Processing NEAR payment: {wallet['account_id']} -> {receiver_address}, Amount: {amount_yocto} yoctoNEAR")
+        
+        transaction_result = await user_account.send_money(
+            receiver_id=receiver_address,
+            amount=amount_yocto,
+            nowait=False  # Wait for transaction execution
+        )
+        
+        # Clear private key from memory for security
+        private_key = None
+        
+        # Extract transaction hash
+        if hasattr(transaction_result, 'transaction_hash'):
+            transaction_hash = transaction_result.transaction_hash
+        elif hasattr(transaction_result, 'hash'):
+            transaction_hash = transaction_result.hash
+        else:
+            transaction_hash = str(transaction_result)
+        
+        logger.info(f"NEAR payment successful for user {user_id}: {transaction_hash}")
+        
+        return {
+            'success': True,
+            'transaction_hash': transaction_hash,
+            'transaction_result': transaction_result
+        }
+        
+    except Exception as e:
+        logger.error(f"NEAR payment failed for user {user_id}: {e}")
+        
+        # Clear private key from memory for security
+        if 'private_key' in locals():
+            private_key = None
+        
+        return {
+            'success': False,
+            'error': str(e),
+            'transaction_hash': None
+        }
 
 
 async def process_questions_with_payment(
