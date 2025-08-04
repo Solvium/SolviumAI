@@ -201,6 +201,61 @@ async def start_createquiz_group(update, context):
     )  # Clear this flag as well
     await redis_client.delete_user_data_key(user_id, "awaiting_notes")  # Clear notes flag
 
+    # Check if user has a wallet - if not, create one first
+    from services.wallet_service import WalletService
+    wallet_service = WalletService()
+    has_wallet = await wallet_service.has_wallet(user_id)
+    
+    if not has_wallet:
+        logger.info(f"User {user_id} has no wallet, creating one before quiz creation.")
+        
+        if chat_type != "private":
+            await update.message.reply_text(
+                f"@{user.username}, I'll create a wallet for you first, then we'll set up your quiz in private chat."
+            )
+        
+        # Send initial loading message
+        loading_message = await context.bot.send_message(
+            chat_id=user_id,
+            text="🔧 **Creating your NEAR wallet...**\n\n⏳ Please wait while we set up your account on the blockchain...",
+            parse_mode='Markdown'
+        )
+        
+        try:
+            # Update loading message with progress
+            await loading_message.edit_text(
+                "🔧 **Creating your NEAR wallet...**\n\n⏳ Generating secure keys and creating your account...",
+                parse_mode='Markdown'
+            )
+            
+            # Create wallet using existing service
+            wallet_info = await wallet_service.create_demo_wallet(user_id, user.first_name)
+            
+            # Update loading message with final step
+            await loading_message.edit_text(
+                "🔧 **Creating your NEAR wallet...**\n\n✅ Account created! Finalizing your wallet...",
+                parse_mode='Markdown'
+            )
+            
+            # Format the wallet info message
+            wallet_message, mini_app_keyboard = await wallet_service.format_wallet_info_message(wallet_info)
+            
+            # Update the loading message with the wallet creation result
+            await loading_message.edit_text(
+                f"🎉 **Wallet Created Successfully!**\n\n{wallet_message}\n\nNow let's create your quiz!",
+                parse_mode='Markdown'
+            )
+            
+            logger.info(f"Wallet created successfully for user {user_id}, proceeding to quiz creation.")
+            
+        except Exception as e:
+            logger.error(f"Error creating wallet for user {user_id}: {e}")
+            await loading_message.edit_text(
+                "❌ **Wallet Creation Failed**\n\nSorry, there was an error creating your wallet. Please try again later.",
+                parse_mode='Markdown'
+            )
+            return ConversationHandler.END
+
     if chat_type != "private":
         logger.info(
             f"User {user_id} started quiz creation from group chat {update.effective_chat.id}. Will DM."
