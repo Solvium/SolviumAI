@@ -22,22 +22,59 @@ export const LoginModule: React.FC<LoginModuleProps> = ({
   // Check if Telegram Web App is available
   useEffect(() => {
     const checkTelegramAvailability = () => {
-      const tg = window?.Telegram?.WebApp;
-      if (tg && tg.initDataUnsafe?.user) {
-        setIsTelegramAvailable(true);
+      try {
+        // Check multiple ways to detect Telegram WebApp
+        const tg = window?.Telegram?.WebApp;
+        const webApp = WebApp;
+
+        console.log("Telegram detection:", {
+          windowTelegram: !!window?.Telegram,
+          webAppAvailable: !!webApp,
+          initDataUnsafe: webApp?.initDataUnsafe,
+          user: webApp?.initDataUnsafe?.user,
+          platform: webApp?.platform,
+          isExpanded: webApp?.isExpanded,
+        });
+
+        // Check if we're in Telegram WebApp context
+        if (webApp && webApp.platform !== "unknown") {
+          setIsTelegramAvailable(true);
+          console.log("Telegram WebApp detected");
+          return;
+        }
+
+        // Fallback check for window.Telegram
+        if (tg && tg.platform !== "unknown") {
+          setIsTelegramAvailable(true);
+          console.log("Telegram WebApp detected via window.Telegram");
+          return;
+        }
+
+        // Additional check for user data
+        if (webApp?.initDataUnsafe?.user || tg?.initDataUnsafe?.user) {
+          setIsTelegramAvailable(true);
+          console.log("Telegram user data detected");
+          return;
+        }
+
+        console.log("Telegram WebApp not detected");
+        setIsTelegramAvailable(false);
+      } catch (error) {
+        console.error("Error checking Telegram availability:", error);
+        setIsTelegramAvailable(false);
       }
     };
 
     // Check immediately
     checkTelegramAvailability();
 
-    // Check periodically for the first 10 seconds
+    // Check periodically for the first 5 seconds
     let attempts = 0;
     const interval = setInterval(() => {
       attempts++;
       checkTelegramAvailability();
 
-      if (attempts >= 10) {
+      if (attempts >= 5) {
         clearInterval(interval);
       }
     }, 1000);
@@ -53,12 +90,23 @@ export const LoginModule: React.FC<LoginModuleProps> = ({
 
     setIsProcessing(true);
     try {
-      const tg = window?.Telegram?.WebApp;
-      if (!tg?.initDataUnsafe?.user) {
+      // Try to get user data from WebApp SDK
+      const webApp = WebApp;
+      let userData = null;
+
+      if (webApp?.initDataUnsafe?.user) {
+        userData = webApp.initDataUnsafe.user;
+      } else if (window?.Telegram?.WebApp?.initDataUnsafe?.user) {
+        userData = window.Telegram.WebApp.initDataUnsafe.user;
+      }
+
+      if (!userData) {
         throw new Error("Telegram user data not available");
       }
 
-      await loginWithTelegram(tg.initDataUnsafe);
+      console.log("Telegram user data:", userData);
+
+      await loginWithTelegram({ telegramData: userData });
       toast.success("Successfully logged in with Telegram!");
       onLoginSuccess?.();
     } catch (error: any) {
@@ -122,6 +170,13 @@ export const LoginModule: React.FC<LoginModuleProps> = ({
             </button>
           )}
 
+          {/* Debug info - remove in production */}
+          {process.env.NODE_ENV === "development" && (
+            <div className="text-xs text-gray-400 p-2 bg-gray-800 rounded">
+              Telegram Available: {isTelegramAvailable ? "Yes" : "No"}
+            </div>
+          )}
+
           {/* Google Login */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
@@ -148,7 +203,6 @@ export const LoginModule: React.FC<LoginModuleProps> = ({
               text="continue_with"
               shape="rectangular"
               locale="en"
-              disabled={isProcessing || isLoading}
             />
           </GoogleOAuthProvider>
         </div>
