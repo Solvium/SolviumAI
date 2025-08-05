@@ -1,8 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { useWallet } from "@/app/contexts/WalletContext";
-import { providers, utils } from "near-api-js";
-import { CodeResult } from "near-api-js/lib/providers/provider";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { useUserWallet } from "@/app/hooks/useUserWallet";
 
 import dynamic from "next/dynamic";
 import { CONTRACTID, MEME_TOKEN_ADDRESS } from "./constants/contractId";
@@ -50,6 +49,8 @@ const CountdownTimer = ({ targetTime }: { targetTime: Date }) => {
 
 export const WheelOfFortune = () => {
   const { userData: user, claimPoints } = useMultiLoginContext();
+  const { user: authUser } = useAuth();
+  const { sendTransaction, balance } = useUserWallet();
 
   const [mustSpin, setMustSpin] = useState(false);
   const [prizeNumber, setPrizeNumber] = useState(0);
@@ -68,11 +69,6 @@ export const WheelOfFortune = () => {
 
   const [lastPlayed, setLastPlayed] = useState<number | null>(null);
   const [cooldownTime, setCooldownTime] = useState<Date>(new Date());
-  const {
-    state: { selector, accountId: nearAddress, isConnected: nearConnected },
-    connect: connectNear,
-    disconnect: disconnectNear,
-  } = useWallet();
 
   const data = [
     { option: "1", style: { fontSize: 20, fontWeight: "bold" } },
@@ -88,46 +84,16 @@ export const WheelOfFortune = () => {
     // { option: "10000", style: { fontSize: 20, fontWeight: "bold" } },
   ];
 
+  // Simplified token registration check using user wallet
   const checkTokenRegistration = useCallback(async () => {
-    const { network } = selector!.options;
-    const provider = new providers.JsonRpcProvider({ url: network.nodeUrl });
-    const { contract } = selector!.store.getState();
-
-    const res = await provider.query<CodeResult>({
-      request_type: "call_function",
-      account_id: MEME_TOKEN_ADDRESS,
-      method_name: "storage_balance_of",
-      args_base64: Buffer.from(
-        JSON.stringify({ account_id: nearAddress })
-      ).toString("base64"),
-      finality: "optimistic",
-    });
-    console.log(JSON.parse(Buffer.from(res.result).toString()));
-    return JSON.parse(Buffer.from(res.result).toString());
-  }, [selector, nearAddress]);
+    // For now, assume token is registered since we're using database approach
+    return { total: "1" };
+  }, []);
 
   const registerToken = async (tokenId: string) => {
-    if (!nearAddress || !selector) return;
-
-    const wallet = await selector.wallet();
-    return wallet.signAndSendTransaction({
-      signerId: nearAddress,
-      receiverId: tokenId,
-      actions: [
-        {
-          type: "FunctionCall",
-          params: {
-            methodName: "storage_deposit",
-            args: {
-              account_id: nearAddress,
-              registration_only: true,
-            },
-            gas: "30000000000000",
-            deposit: "1250000000000000000000", // 0.00125 NEAR
-          },
-        },
-      ],
-    });
+    // Token registration is handled by the backend
+    console.log("Token registration handled by backend");
+    return null;
   };
 
   // console.log(user);
@@ -163,67 +129,23 @@ export const WheelOfFortune = () => {
     onSuccess,
     onError,
   }: ClaimProps) => {
-    if (!nearAddress || !selector) {
-      const error = new Error("Wallet not connected");
+    if (!authUser?.id) {
+      const error = new Error("User not authenticated");
       onError?.(error);
       return;
     }
 
     try {
-      const wallet = await selector.wallet();
+      // Use the new user wallet approach
+      const transaction = await sendTransaction(
+        "deposit",
+        parseFloat(rewardAmount)
+      );
 
-      let isRegistered = await checkTokenRegistration();
-      console.log("isRegistered", isRegistered);
-
-      if (!isRegistered) {
-        await registerToken(MEME_TOKEN_ADDRESS);
-      }
-      console.log(rewardAmount, MEME_TOKEN_ADDRESS, "rewardAmount");
-      const transaction = await wallet.signAndSendTransaction({
-        signerId: nearAddress,
-        receiverId: CONTRACTID!,
-        actions: [
-          {
-            type: "FunctionCall",
-            params: {
-              methodName: "claimWheel",
-              args: {
-                rewardAmount: rewardAmount,
-                tokenAddress: MEME_TOKEN_ADDRESS!,
-              },
-              gas: "300000000000000",
-              deposit: "0",
-            },
-          },
-        ],
-      });
-
-      // Wait for transaction completion
-      await transaction;
-
-      // Execute the transfer transaction immediately after claimWheel
-      const executeTransferTx = await wallet.signAndSendTransaction({
-        signerId: nearAddress,
-        receiverId: CONTRACTID!,
-        actions: [
-          {
-            type: "FunctionCall",
-            params: {
-              methodName: "execute_transfer",
-              args: {},
-              gas: "300000000000000",
-              deposit: "0",
-            },
-          },
-        ],
-      });
-
-      // Wait for the execute_transfer transaction to complete
-      await executeTransferTx;
       localStorage.setItem("lastClaimed", Date.now().toString());
       localStorage.setItem("transaction", JSON.stringify({ transaction }));
       onSuccess?.();
-      return { transaction, executeTransferTx };
+      return { transaction };
     } catch (error: any) {
       console.error("Failed to claim reward:", error.message);
       onError?.(error as Error);

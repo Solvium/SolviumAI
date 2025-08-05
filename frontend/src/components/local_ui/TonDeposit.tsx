@@ -4,10 +4,10 @@ import { fromNano } from "@ton/core";
 import { Wallet, Star } from "lucide-react";
 import { useTonConnect } from "@/app/hooks/useTonConnect";
 import { useMultiplierContract } from "@/app/hooks/useDepositContract";
-import { useWalletStore } from "@/app/hooks/useWalletStore";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { useUserWallet } from "@/app/hooks/useUserWallet";
 import { XMarkIcon } from "@heroicons/react/24/solid";
 import { utils, providers } from "near-api-js";
-import { useWallet } from "@/app/contexts/WalletContext";
 import { useNearDeposits } from "@/app/contracts/near_deposits";
 import BarLoader from "react-spinners/BarLoader";
 import { ToastContainer, toast, Bounce } from "react-toastify";
@@ -31,11 +31,8 @@ interface DepositResponse {
 export default function DepositMultiplier({ user }: any) {
   const { connected: tonConnected, connectWallet: connectTon } =
     useTonConnect();
-  const {
-    state: { selector, accountId: nearAddress, isConnected: nearConnected },
-    connect: connectNear,
-    disconnect: disconnectNear,
-  } = useWallet();
+  const { user: authUser } = useAuth();
+  const { sendTransaction, balance } = useUserWallet();
   const [isOpen, setIsOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [activeTab, setActiveTab] = useState("deposit");
@@ -104,7 +101,7 @@ export default function DepositMultiplier({ user }: any) {
   // console.log(currentDeposits, "firstDeposit");
   const isLoading = walletType === "NEAR" ? nearLoading : false;
 
-  const isConnected = walletType === "NEAR" ? nearConnected : false; // Add TON connection check
+  const isConnected = walletType === "NEAR" ? authUser?.isConnected : false; // Add TON connection check
 
   const handleStart = () => {
     if (!isConnected) {
@@ -119,7 +116,7 @@ export default function DepositMultiplier({ user }: any) {
       if (walletType === "TON") {
         await connectTon();
       } else {
-        await connectNear();
+        await sendTransaction();
       }
     } catch (error) {
       console.error("Failed to connect wallet:", error);
@@ -128,18 +125,18 @@ export default function DepositMultiplier({ user }: any) {
 
   const handleNearDeposit = async (amount: string) => {
     setIsDepositing(true);
-    if (!nearAddress || !selector) return;
+    if (!authUser?.nearAddress || !authUser?.selector) return;
 
     try {
       const numAmount = parseFloat(amount);
 
       if (isNaN(numAmount)) throw new Error("Invalid amount");
 
-      const wallet = await selector.wallet();
+      const wallet = authUser.selector;
       const deposit = utils.format.parseNearAmount(amount);
 
       await wallet.signAndSendTransaction({
-        signerId: nearAddress,
+        signerId: authUser.nearAddress,
         receiverId: process.env.NEXT_PUBLIC_CONTRACT_ID!,
         actions: [
           {

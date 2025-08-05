@@ -1,7 +1,6 @@
 import Image from "next/image";
 import { Dispatch, SetStateAction, useState } from "react";
-import { useWallet } from "@/app/contexts/WalletContext";
-import UnifiedWalletConnector from "./walletSelector";
+import { useAuth } from "@/app/contexts/AuthContext";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import axios from "axios";
 import { GOOGLE_CLIENT_ID } from "@/app/config/google";
@@ -15,11 +14,7 @@ export const WelcomeModal = ({
   setUser: any;
   tg: null | typeof WebApp;
 }) => {
-  // const { connected: tonConnected } = useTonConnect();
-  const {
-    state: { selector, accountId: nearAddress, isConnected: nearConnected },
-    connect: connectNear,
-  } = useWallet();
+  const { user: authUser } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [selectedAuth, setSelectedAuth] = useState<string>("");
@@ -120,7 +115,6 @@ export const WelcomeModal = ({
 
               {selectedAuth === "wallet" && (
                 <div>
-                  <UnifiedWalletConnector />
                   <p className="text-black mt-1 text-sm">
                     Connect the same Near wallet to regain old data from
                     Telegram.

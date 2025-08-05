@@ -1,225 +1,273 @@
 // useWheelOfFortune.ts
 import { useEffect, useState } from "react";
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
-import { PublicKey, Connection, Keypair } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from "@solana/spl-token";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { IDL, WheelOfFortune } from "../types/wheel_of_fortune";
+import { useAuth } from "@/app/contexts/AuthContext";
 
-// "DRBAQHfmMW9QpT6ibNUAUe6FGfVpL8r5Wa6A7ca2pm5U"
-const PROGRAM_ID = new PublicKey(
-  "6Ee8epax1K1irV8EFqbTzZurW5UGixjRoB46HJrF6Bgp"
-);
+interface WheelState {
+  isInitialized: boolean;
+  backendPubkey: string;
+  tokenMint: string;
+  totalRewards: number;
+  totalSpins: number;
+}
 
-export const useWheelOfFortune = (connection: Connection) => {
-  const { publicKey, signTransaction } = useWallet();
-  const [program, setProgram] = useState<Program<WheelOfFortune> | null>(null);
-  const [statePDA, setStatePDA] = useState<PublicKey | null>(null);
-  const [rewardVaultPDA, setRewardVaultPDA] = useState<PublicKey | null>(null);
+interface SpinResult {
+  id: string;
+  reward: number;
+  timestamp: Date;
+  txHash?: string;
+}
+
+export const useWheelOfFortune = () => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [wheelState, setWheelState] = useState<any>(null);
+  const [wheelState, setWheelState] = useState<WheelState | null>(null);
+  const [spinHistory, setSpinHistory] = useState<SpinResult[]>([]);
 
-  useEffect(() => {
-    if (connection) {
-      try {
-        // Create provider
-        const provider = new anchor.AnchorProvider(
-          connection,
-          {
-            publicKey:
-              publicKey || new PublicKey("11111111111111111111111111111111"),
-            signTransaction:
-              signTransaction ||
-              (async () => {
-                throw new Error("Wallet not connected");
-              }),
-          } as any,
-          { commitment: "processed" }
-        );
+  // Get wheel state from database
+  const getWheelState = async () => {
+    if (!user?.id) return;
 
-        // Create program instance
-        const program = new Program<WheelOfFortune>(IDL, PROGRAM_ID, provider);
-        setProgram(program);
+    setLoading(true);
+    setError(null);
 
-        // Derive PDAs
-        const [statePDA] = PublicKey.findProgramAddressSync(
-          [Buffer.from("state")],
-          program.programId
-        );
+    try {
+      const response = await fetch(`/api/user/wheel/state`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
 
-        const [rewardVaultPDA] = PublicKey.findProgramAddressSync(
-          [Buffer.from("reward_vault")],
-          program.programId
-        );
-
-        setStatePDA(statePDA);
-        setRewardVaultPDA(rewardVaultPDA);
-      } catch (err) {
-        console.error("Failed to initialize program:", err);
-        setError("Failed to initialize Wheel of Fortune program");
+      if (!response.ok) {
+        throw new Error("Failed to fetch wheel state");
       }
-    }
-  }, [connection, publicKey, signTransaction]);
 
-  // Initialize the wheel of fortune program
-  const initialize = async (backendPubkey: PublicKey, tokenMint: PublicKey) => {
-    if (!program || !publicKey || !statePDA || !rewardVaultPDA) {
-      throw new Error("Program not initialized or wallet not connected");
+      const data = await response.json();
+      setWheelState(data.wheelState);
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Failed to fetch wheel state"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initialize the wheel of fortune
+  const initialize = async (backendPubkey: string, tokenMint: string) => {
+    if (!user?.id) {
+      throw new Error("User not authenticated");
     }
 
     setLoading(true);
     setError(null);
 
     try {
-      await program.methods
-        .initialize(backendPubkey)
-        .accounts({
-          state: statePDA,
-          tokenMint: tokenMint,
-          rewardVault: rewardVaultPDA,
-          authority: publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          systemProgram: anchor.web3.SystemProgram.programId,
-          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        })
-        .rpc();
+      const response = await fetch(`/api/user/wheel/initialize`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          backendPubkey,
+          tokenMint,
+        }),
+      });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to initialize wheel");
+      }
+
+      const data = await response.json();
+      setWheelState(data.wheelState);
       return true;
-    } catch (err) {
-      console.error("Failed to initialize:", err);
-      setError("Failed to initialize Wheel of Fortune");
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Failed to initialize wheel"
+      );
       return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Spin the wheel
+  const spinWheel = async () => {
+    if (!user?.id) {
+      throw new Error("User not authenticated");
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/user/wheel/spin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to spin wheel");
+      }
+
+      const data = await response.json();
+
+      // Add spin result to history
+      setSpinHistory((prev) => [data.spinResult, ...prev]);
+
+      // Update wheel state
+      if (data.wheelState) {
+        setWheelState(data.wheelState);
+      }
+
+      return data.spinResult;
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to spin wheel");
+      throw error;
     } finally {
       setLoading(false);
     }
   };
 
   // Claim reward
-  const claimReward = async (
-    rewardAmount: anchor.BN,
-    nonce: string,
-    signature: number[],
-    userTokenAccount: PublicKey
-  ) => {
-    if (!program || !publicKey || !statePDA || !rewardVaultPDA) {
-      throw new Error("Program not initialized or wallet not connected");
+  const claimReward = async (spinId: string) => {
+    if (!user?.id) {
+      throw new Error("User not authenticated");
     }
 
     setLoading(true);
     setError(null);
 
-    console.log({ rewardAmount, nonce, signature, userTokenAccount });
     try {
-      const ED25519_PROGRAM_ID = new PublicKey(
-        "Ed25519SigVerify111111111111111111111111111"
-      );
+      const response = await fetch(`/api/user/wheel/claim`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          spinId,
+        }),
+      });
 
-      await program.methods
-        .claimReward(
-          rewardAmount,
-          nonce,
-          signature as any // Convert to the expected format
-        )
-        .accounts({
-          state: statePDA,
-          rewardVault: rewardVaultPDA,
-          user: publicKey,
-          userTokenAccount: userTokenAccount,
-          instructionSysvarAccount: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          systemProgram: anchor.web3.SystemProgram.programId,
-          ed25519Program: ED25519_PROGRAM_ID,
-          // ed25519Program:
-        })
-        .rpc();
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to claim reward");
+      }
 
-      return true;
-    } catch (err) {
-      console.error("Failed to claim reward:", err);
+      const data = await response.json();
+      return data.transaction;
+    } catch (error) {
       setError(
-        `Failed to claim reward: ${
-          err instanceof Error ? err.message : String(err)
-        }`
+        error instanceof Error ? error.message : "Failed to claim reward"
       );
-      return false;
+      throw error;
     } finally {
       setLoading(false);
     }
   };
 
   // Add rewards (admin function)
-  const addRewards = async (
-    amount: anchor.BN,
-    authorityTokenAccount: PublicKey
-  ) => {
-    if (!program || !publicKey || !statePDA || !rewardVaultPDA) {
-      throw new Error("Program not initialized or wallet not connected");
+  const addRewards = async (amount: number) => {
+    if (!user?.id) {
+      throw new Error("User not authenticated");
     }
 
     setLoading(true);
     setError(null);
 
     try {
-      await program.methods
-        .addRewards(amount)
-        .accounts({
-          state: statePDA,
-          rewardVault: rewardVaultPDA,
-          authority: publicKey,
-          authorityTokenAccount: authorityTokenAccount,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .rpc();
+      const response = await fetch(`/api/user/wheel/add-rewards`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount,
+        }),
+      });
 
-      return true;
-    } catch (err) {
-      console.error("Failed to add rewards:", err);
-      setError("Failed to add rewards to Wheel of Fortune");
-      return false;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to add rewards");
+      }
+
+      const data = await response.json();
+
+      // Update wheel state
+      if (data.wheelState) {
+        setWheelState(data.wheelState);
+      }
+
+      return data.transaction;
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Failed to add rewards"
+      );
+      throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  // Helper function to find or create user token account
-  const getUserTokenAccount = async (mint: PublicKey) => {
-    if (!publicKey) throw new Error("Wallet not connected");
+  // Get spin history
+  const getSpinHistory = async () => {
+    if (!user?.id) return;
 
-    return await getAssociatedTokenAddress(mint, publicKey, false);
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/user/wheel/history`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch spin history");
+      }
+
+      const data = await response.json();
+      setSpinHistory(data.spinHistory);
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Failed to fetch spin history"
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Get wheel state data
   useEffect(() => {
-    const getWheelState = async () => {
-      if (!program || !statePDA) {
-        console.log("Program not initialized");
-        return;
-      }
-
-      try {
-        setWheelState(await program.account.wheelState.fetch(statePDA));
-      } catch (err) {
-        console.error("Failed to fetch wheel state:", err);
-        setError("Failed to fetch wheel state");
-        return null;
-      }
-    };
-    getWheelState();
-  }, [program, statePDA]);
+    if (user?.id) {
+      getWheelState();
+      getSpinHistory();
+    }
+  }, [user?.id]);
 
   return {
-    program,
-    statePDA,
-    rewardVaultPDA,
-    loading,
+    // State
     wheelState,
+    spinHistory,
+    loading,
     error,
+
+    // Actions
     initialize,
+    spinWheel,
     claimReward,
     addRewards,
-    getUserTokenAccount,
+    getWheelState,
+    getSpinHistory,
+
+    // Computed
+    isConnected: !!user?.id,
+    userId: user?.id,
   };
 };
