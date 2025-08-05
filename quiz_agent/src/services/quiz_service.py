@@ -115,10 +115,13 @@ class QuizSession:
         is_correct = original_label == correct_answer
         logger.info(f"Answer mapping: answer='{answer}' -> original_label='{original_label}', correct_answer='{correct_answer}', is_correct={is_correct}")
         
+        # Get the actual text of the correct answer for display
+        correct_answer_text = original_options.get(correct_answer, 'Unknown')
+        
         self.answers[self.current_question_index] = {
             'answer': answer,
             'correct': is_correct,
-            'correct_answer': correct_answer,
+            'correct_answer': correct_answer_text,  # Store the actual text, not the label
             'answered_at': datetime.utcnow()
         }
         

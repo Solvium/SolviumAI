@@ -2816,7 +2816,6 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
         
         # Create a record that the user has started this quiz (prevents restarting if abandoned)
         try:
-            from models.quiz import QuizAnswer
             quiz_attempt = QuizAnswer(
                 user_id=user_id,
                 quiz_id=quiz_id,
