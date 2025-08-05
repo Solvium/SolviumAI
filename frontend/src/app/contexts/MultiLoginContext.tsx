@@ -160,15 +160,15 @@ export const MultiLoginProvider = ({
     initializeApp();
   }, [tg]);
 
-  useEffect(() => {
-    let total = 0;
-    if (userDeposits) {
-      for (let index = 0; index < userDeposits.deposits?.length; index++) {
-        total += Number(userDeposits.deposits[index].multiplier);
-      }
-    }
-    setMultiplier(total);
-  }, [userDeposits]);
+  // useEffect(() => {
+  //   let total = 0;
+  //   if (userDeposits) {
+  //     for (let index = 0; index < userDeposits.deposits?.length; index++) {
+  //       total += Number(userDeposits.deposits[index].multiplier);
+  //     }
+  //   }
+  //   setMultiplier(total);
+  // }, [userDeposits]);
 
   const engageTasks = async (
     type: string,
