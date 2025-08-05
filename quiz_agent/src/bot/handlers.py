@@ -21,7 +21,8 @@ from services.quiz_service import (
     start_enhanced_quiz,
     send_enhanced_question,
     handle_enhanced_quiz_answer,
-    active_quiz_sessions
+    active_quiz_sessions,
+    QuizSession
 )
 from services.user_service import (
     get_user_wallet,
@@ -2741,21 +2742,35 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
             )
             return
         
-        # Start enhanced quiz
-        success = await start_enhanced_quiz(
-            context.application,
-            str(user_id),
-            quiz,
+        # Create quiz session directly (don't call start_enhanced_quiz to avoid duplicate intro)
+        # Parse questions
+        questions_list = quiz.questions
+        if isinstance(questions_list, dict):
+            questions_list = [questions_list]
+        
+        if not questions_list:
+            await safe_send_message(
+                context.bot,
+                user_id,
+                "❌ This quiz has no questions available."
+            )
+            return
+        
+        # Create quiz session
+        session_key = f"{user_id}:{quiz_id}"
+        quiz_session = QuizSession(
+            user_id=user_id,
+            quiz_id=quiz.id,
+            questions=questions_list,
             shuffle_questions=True,
             shuffle_answers=True
         )
         
-        if success:
-            # Send first question
-            session_key = f"{user_id}:{quiz_id}"
-            if session_key in active_quiz_sessions:
-                quiz_session = active_quiz_sessions[session_key]
-                await send_enhanced_question(context.application, user_id, quiz_session, quiz)
+        active_quiz_sessions[session_key] = quiz_session
+        logger.info(f"Enhanced quiz session created: {session_key}, total_sessions={len(active_quiz_sessions)}")
+        
+        # Send first question immediately
+        await send_enhanced_question(context.application, user_id, quiz_session, quiz)
         
     except Exception as e:
         logger.error(f"Error starting enhanced quiz: {e}")

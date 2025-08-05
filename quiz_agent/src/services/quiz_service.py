@@ -2582,15 +2582,8 @@ async def handle_enhanced_quiz_answer(
     is_correct = quiz_session.submit_answer(answer)
     logger.info(f"Answer submitted, correct: {is_correct}")
     
-    # Send immediate feedback
-    current_num, total_questions = quiz_session.get_progress()
-    feedback = "✅ Correct!" if is_correct else "❌ Wrong!"
-    
-    await safe_send_message(
-        application.bot,
-        user_id,
-        f"{feedback} ({current_num}/{total_questions})"
-    )
+    # Don't send immediate feedback - wait until the end
+    # The user will see their results at the end of the quiz
     
     # Move to next question or finish
     logger.info(f"Moving to next question. Current index: {quiz_session.current_question_index}")
@@ -2646,7 +2639,19 @@ You answered {total_answered} questions:
 ✅ Correct – {results['correct']}
 ❌ Wrong – {results['wrong']}
 ⌛️ Missed – {results['missed']}
-📊 Accuracy – {accuracy:.1f}%"""
+📊 Accuracy – {accuracy:.1f}%
+
+📋 Question Review:"""
+    
+    # Add question-by-question review
+    for i, answer_data in enumerate(results['answers'].values()):
+        question_num = i + 1
+        user_answer = answer_data.get('answer', 'No answer')
+        correct_answer = answer_data.get('correct_answer', 'Unknown')
+        is_correct = answer_data.get('correct', False)
+        
+        status = "✅" if is_correct else "❌"
+        results_text += f"\n{status} Q{question_num}: Your answer: {user_answer} | Correct: {correct_answer}"
 
     # Save results to database
     session = SessionLocal()
