@@ -1356,46 +1356,95 @@ async def process_questions_with_payment(
     redis_client = RedisClient()
     
     try:
-        # Process the quiz questions using existing logic
-        await process_questions(
-            update,
-            context,
-            topic,
-            quiz_text,
-            group_chat_id,
-            duration_seconds=duration_seconds
-        )
+        # Parse multiple questions
+        from services.quiz_service import parse_multiple_questions
+        questions_list = parse_multiple_questions(quiz_text)
         
-        # Add payment and reward information to the quiz
+        if not questions_list:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="Failed to parse quiz questions. Please try again."
+            )
+            return
+        
+        # Create quiz directly with payment information
+        from store.database import SessionLocal
+        from models.quiz import Quiz, QuizStatus
+        from utils.config import Config
+        
+        session = SessionLocal()
+        try:
+            # Create quiz with ACTIVE status (not DRAFT)
+            quiz = Quiz(
+                topic=topic,
+                questions=questions_list,
+                status=QuizStatus.ACTIVE,  # Directly activate the quiz
+                group_chat_id=group_chat_id,
+                duration_seconds=duration_seconds,
+                deposit_address=Config.DEPOSIT_ADDRESS,
+            )
+            session.add(quiz)
+            session.commit()
+            quiz_id = quiz.id
+            logger.info(f"Created active quiz with ID: {quiz_id} for user {user_id}")
+        finally:
+            session.close()
+        
+        # Store payment information
         if reward_amount and float(reward_amount) > 0:
-            # Store payment information in the quiz record
             await store_payment_info_in_quiz(user_id, {
+                'quiz_id': quiz_id,
                 'reward_amount': reward_amount,
                 'reward_structure': reward_structure,
                 'payment_status': payment_status,
                 'total_cost': total_cost,
-                'payment_timestamp': await redis_client.get_user_data_key(user_id, "payment_timestamp")
+                'payment_timestamp': await redis_client.get_user_data_key(user_id, "payment_timestamp"),
+                'transaction_hash': await redis_client.get_user_data_key(user_id, "transaction_hash")
             })
-            
-            # Send payment confirmation message
-            payment_msg = f"💳 **Payment Confirmed**\n\n"
-            payment_msg += f"💰 Amount: {total_cost} NEAR\n"
-            payment_msg += f"📊 Structure: {reward_structure}\n"
-            payment_msg += f"✅ Status: {payment_status}\n\n"
-            payment_msg += f"🎯 Your quiz is now active with rewards!"
-            
-            await context.bot.send_message(
-                chat_id=user_id,
-                text=payment_msg,
-                parse_mode='Markdown'
-            )
-            
-            logger.info(f"Payment confirmed for quiz creation by user {user_id}: {total_cost} NEAR")
         
+        # Announce quiz to group
+        duration_text = ""
+        if duration_seconds and duration_seconds > 0:
+            minutes = duration_seconds // 60
+            duration_text = f" (Active for {minutes} minutes)"
+        
+        announcement_msg = f"🎯 **New Quiz: {topic}**\n\n"
+        announcement_msg += f"📝 {len(questions_list)} questions{duration_text}\n"
+        if reward_amount and float(reward_amount) > 0:
+            announcement_msg += f"💰 Reward: {reward_amount} NEAR ({reward_structure})\n"
         else:
-            # Free quiz - no payment required
-            logger.info(f"Free quiz created by user {user_id}")
-            
+            announcement_msg += f"💰 Reward: Free Quiz\n"
+        announcement_msg += f"🎮 Use /playquiz to start playing!"
+        
+        # Send to group
+        await context.bot.send_message(
+            chat_id=group_chat_id,
+            text=announcement_msg,
+            parse_mode='Markdown'
+        )
+        
+        # Send confirmation to user
+        user_msg = f"✅ **Quiz Created Successfully!**\n\n"
+        user_msg += f"🎯 Topic: {topic}\n"
+        user_msg += f"❓ Questions: {len(questions_list)}\n"
+        user_msg += f"⏱ Duration: {duration_seconds // 60 if duration_seconds else 'No limit'} minutes\n"
+        if reward_amount and float(reward_amount) > 0:
+            user_msg += f"💰 Reward: {reward_amount} NEAR\n"
+            user_msg += f"📊 Structure: {reward_structure}\n"
+            user_msg += f"💳 Payment: {payment_status}\n"
+        else:
+            user_msg += f"💰 Reward: Free Quiz\n"
+        user_msg += f"🆔 Quiz ID: {quiz_id}\n\n"
+        user_msg += f"🎮 Your quiz is now active and ready to play!"
+        
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=user_msg,
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"Quiz {quiz_id} created and announced successfully for user {user_id}")
+        
     except Exception as e:
         logger.error(f"Error in process_questions_with_payment for user {user_id}: {e}")
         await context.bot.send_message(
