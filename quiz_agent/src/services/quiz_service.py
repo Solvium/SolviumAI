@@ -611,15 +611,25 @@ async def save_quiz_payment_hash(
                         quiz.end_time - datetime.now(timezone.utc)
                     ).total_seconds()
                     if seconds_until_end > 0:
-                        # Use application.create_task to run the schedule_auto_distribution coroutine
-                        # schedule_auto_distribution itself will use application.job_queue
+                        # Schedule auto-distribution for quizzes with rewards
+                        if quiz.reward_schedule:
+                            application.create_task(
+                                schedule_auto_distribution(
+                                    application, quiz_id, seconds_until_end
+                                )
+                            )
+                            logger.info(
+                                f"Task created to schedule auto distribution for quiz {quiz_id} in {seconds_until_end} seconds upon activation."
+                            )
+                        
+                        # Always schedule quiz end announcement for all quizzes
                         application.create_task(
-                            schedule_auto_distribution(
+                            schedule_quiz_end_announcement(
                                 application, quiz_id, seconds_until_end
                             )
                         )
                         logger.info(
-                            f"Task created to schedule auto distribution for quiz {quiz_id} in {seconds_until_end} seconds upon activation."
+                            f"Task created to schedule quiz end announcement for quiz {quiz_id} in {seconds_until_end} seconds upon activation."
                         )
                     else:
                         logger.warning(
@@ -2015,6 +2025,86 @@ async def distribute_quiz_rewards(
                 pass  # Ignore if message deletion fails
 
 
+async def announce_quiz_end(
+    application: "Application", quiz_id: str
+):
+    """Announce quiz end with final leaderboard and results"""
+    logger.info(f"Announcing quiz end for quiz_id: {quiz_id}")
+    
+    session = SessionLocal()
+    try:
+        quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
+        if not quiz:
+            logger.error(f"Quiz {quiz_id} not found for end announcement")
+            return
+        
+        if not quiz.group_chat_id:
+            logger.info(f"Quiz {quiz_id} has no group_chat_id, skipping announcement")
+            return
+        
+        # Get all participants and their scores
+        all_participants = QuizAnswer.get_quiz_participants_ranking(session, quiz_id)
+        
+        # Create comprehensive end announcement
+        announcement = f"""🏁 **QUIZ ENDED: {quiz.topic}** 🏁
+
+⏰ The quiz period has officially ended!
+📊 Final results are now available.
+
+👥 **Total Participants:** {len(all_participants)}"""
+
+        if all_participants:
+            # Add leaderboard
+            announcement += "\n\n🏆 **FINAL LEADERBOARD:**\n"
+            for i, participant in enumerate(all_participants[:10]):  # Show top 10
+                medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "🏅"
+                username = participant.get('username', f"User_{participant.get('user_id', 'Unknown')[:8]}")
+                correct_count = participant.get('correct_count', 0)
+                total_questions = participant.get('total_questions', 0)
+                accuracy = (correct_count / total_questions * 100) if total_questions > 0 else 0
+                
+                announcement += f"{medal} **{i+1}.** @{username}\n"
+                announcement += f"   📊 {correct_count}/{total_questions} ({accuracy:.1f}%)\n"
+            
+            # Add participation stats
+            total_correct = sum(p.get('correct_count', 0) for p in all_participants)
+            total_questions_answered = sum(p.get('total_questions', 0) for p in all_participants)
+            avg_accuracy = (total_correct / total_questions_answered * 100) if total_questions_answered > 0 else 0
+            
+            announcement += f"\n📈 **Quiz Statistics:**\n"
+            announcement += f"• Total correct answers: {total_correct}\n"
+            announcement += f"• Average accuracy: {avg_accuracy:.1f}%\n"
+            announcement += f"• Questions answered: {total_questions_answered}\n"
+        else:
+            announcement += "\n\n📊 No participants found for this quiz."
+        
+        # Add reward information if applicable
+        if quiz.reward_schedule:
+            reward_type = quiz.reward_schedule.get('type', '')
+            if reward_type == 'wta_amount':
+                announcement += "\n💰 **Reward Type:** Winner Takes All"
+            elif reward_type == 'top3_details':
+                announcement += "\n💰 **Reward Type:** Top 3 Winners"
+            elif reward_type == 'custom_details':
+                announcement += "\n💰 **Reward Type:** Custom Rewards"
+        
+        announcement += "\n\n🎯 **Thanks to all participants!** 🎯"
+        
+        # Send announcement to group
+        await safe_send_message(
+            application.bot,
+            quiz.group_chat_id,
+            announcement,
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"Quiz end announcement sent for quiz {quiz_id}")
+        
+    except Exception as e:
+        logger.error(f"Error announcing quiz end for {quiz_id}: {e}")
+    finally:
+        session.close()
+
 async def schedule_auto_distribution(
     application: "Application", quiz_id: str, delay_seconds: float
 ):
@@ -2038,6 +2128,8 @@ async def schedule_auto_distribution(
                 logger.info(
                     f"Auto-distribution for quiz {quiz_id} skipped. Status: {quiz.status}, WA: {quiz.winners_announced}"
                 )
+                # Even if rewards aren't distributed, announce quiz end
+                await announce_quiz_end(application, quiz_id)
             else:
                 logger.warning(f"Quiz {quiz_id} not found for auto-distribution job.")
         except Exception as e:
@@ -2080,6 +2172,39 @@ async def schedule_auto_distribution(
             logger.error(
                 f"application.job_queue not available for immediate run of quiz {quiz_id}."
             )
+
+async def schedule_quiz_end_announcement(
+    application: "Application", quiz_id: str, delay_seconds: float
+):
+    """Schedule a quiz end announcement for quizzes without rewards"""
+    logger.info(f"Scheduling quiz end announcement for quiz_id: {quiz_id} with delay: {delay_seconds}")
+    
+    async def announcement_job_callback(context: CallbackContext):
+        logger.info(f"JobQueue executing quiz end announcement for quiz {quiz_id}")
+        try:
+            await announce_quiz_end(application, quiz_id)
+        except Exception as e:
+            logger.error(f"Error during quiz end announcement for quiz {quiz_id}: {e}", exc_info=True)
+    
+    async def announcement_job_wrapper(context: CallbackContext):
+        await announcement_job_callback(context)
+    
+    if delay_seconds > 0:
+        if hasattr(application, "job_queue") and application.job_queue:
+            application.job_queue.run_once(
+                announcement_job_wrapper, delay_seconds, name=f"announce_end_{quiz_id}", job_kwargs={}
+            )
+            logger.info(f"Scheduled quiz end announcement for quiz {quiz_id} in {delay_seconds} seconds.")
+        else:
+            logger.error(f"application.job_queue not available for quiz end announcement of quiz {quiz_id}.")
+    else:
+        logger.info(f"Running quiz end announcement immediately for quiz {quiz_id}.")
+        if hasattr(application, "job_queue") and application.job_queue:
+            application.job_queue.run_once(
+                announcement_job_wrapper, 0, name=f"announce_end_{quiz_id}_immediate", job_kwargs={}
+            )
+        else:
+            logger.error(f"application.job_queue not available for immediate quiz end announcement of quiz {quiz_id}.")
 
 
 # ... rest of the file
@@ -2724,3 +2849,98 @@ You answered {total_answered} questions:
         user_id,
         results_text
     )
+    
+    # Send announcement to group if quiz was created in a group
+    if quiz.group_chat_id:
+        try:
+            # Get user info for the announcement
+            user_info = await application.bot.get_chat_member(quiz.group_chat_id, int(user_id))
+            username = user_info.user.username or user_info.user.first_name
+            
+            # Get current leaderboard for this quiz
+            session = SessionLocal()
+            try:
+                # Get all participants for this quiz
+                all_answers = session.query(QuizAnswer).filter(
+                    QuizAnswer.quiz_id == quiz.id
+                ).all()
+                
+                # Group by user and calculate scores
+                user_scores = {}
+                for answer in all_answers:
+                    if answer.user_id not in user_scores:
+                        user_scores[answer.user_id] = {
+                            'user_id': answer.user_id,
+                            'username': answer.username or 'Unknown',
+                            'correct': 0,
+                            'total': 0
+                        }
+                    user_scores[answer.user_id]['total'] += 1
+                    if answer.is_correct == "True":
+                        user_scores[answer.user_id]['correct'] += 1
+                
+                # Sort by score (descending)
+                sorted_scores = sorted(
+                    user_scores.values(),
+                    key=lambda x: (x['correct'], -x['total']),  # Sort by correct answers, then by fewer total questions
+                    reverse=True
+                )
+                
+                # Create leaderboard text
+                leaderboard_text = ""
+                if len(sorted_scores) > 1:
+                    leaderboard_text = "\n\n🏆 **Current Leaderboard:**\n"
+                    for i, score in enumerate(sorted_scores[:5]):  # Show top 5
+                        medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "🏅"
+                        leaderboard_text += f"{medal} **{score['username']}**: {score['correct']}/{score['total']}\n"
+                
+            except Exception as e:
+                logger.error(f"Error getting leaderboard: {e}")
+                leaderboard_text = ""
+            finally:
+                session.close()
+            
+            # Create group announcement
+            group_announcement = f"""🎉 **Quiz Completion Announcement!**
+
+🏆 **{username}** has completed the quiz **'{quiz.topic}'**
+
+📊 **Results:**
+• Score: {results['correct']}/{results['total_questions']}
+• Accuracy: {accuracy:.1f}%
+• Questions answered: {total_answered}
+
+🎯 **Performance:**
+✅ Correct: {results['correct']}
+❌ Wrong: {results['wrong']}
+⌛️ Missed: {results['missed']}{leaderboard_text}
+
+Great job! 🚀"""
+            
+            await safe_send_message(
+                application.bot,
+                quiz.group_chat_id,
+                group_announcement,
+                parse_mode='Markdown'
+            )
+            
+            logger.info(f"Group announcement sent for quiz {quiz.id} completion by user {user_id}")
+            
+        except Exception as e:
+            logger.error(f"Error sending group announcement: {e}")
+            # Try to send a simpler announcement without user info
+            try:
+                simple_announcement = f"""🎉 **Quiz Completion!**
+
+A user has completed the quiz **'{quiz.topic}'** with a score of **{results['correct']}/{results['total_questions']}**!
+
+Great job! 🚀"""
+                
+                await safe_send_message(
+                    application.bot,
+                    quiz.group_chat_id,
+                    simple_announcement,
+                    parse_mode='Markdown'
+                )
+            except Exception as e2:
+                logger.error(f"Error sending simple group announcement: {e2}")

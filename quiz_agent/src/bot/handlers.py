@@ -22,7 +22,8 @@ from services.quiz_service import (
     send_enhanced_question,
     handle_enhanced_quiz_answer,
     active_quiz_sessions,
-    QuizSession
+    QuizSession,
+    announce_quiz_end  # Added import for quiz end announcements
 )
 from services.user_service import (
     get_user_wallet,
@@ -2603,6 +2604,26 @@ async def winners_handler(update: Update, context: CallbackContext):
 async def distribute_rewards_handler(update: Update, context: CallbackContext):
     """Handler for /distributerewards command to send NEAR rewards to winners."""
     await distribute_quiz_rewards(update, context)
+
+
+async def announce_quiz_end_handler(update: Update, context: CallbackContext):
+    """Handler for /announceend command to manually trigger quiz end announcement."""
+    if not context.args:
+        await safe_send_message(
+            context.bot,
+            update.effective_chat.id,
+            "❌ Please provide a quiz ID. Usage: /announceend <quiz_id>"
+        )
+        return
+    
+    quiz_id = context.args[0]
+    await announce_quiz_end(context.application, quiz_id)
+    
+    await safe_send_message(
+        context.bot,
+        update.effective_chat.id,
+        f"✅ Quiz end announcement triggered for quiz {quiz_id}"
+    )
 
 
 async def show_all_active_leaderboards_command(

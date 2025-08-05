@@ -7,8 +7,8 @@ from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
     ConversationHandler,
-    JobQueue,  # Add JobQueue import for auto-distribution scheduling
-    PollAnswerHandler,  # <-- Add this import
+    JobQueue,  
+    PollAnswerHandler, 
 )
 from telegram.ext import MessageHandler, filters
 from telegram.error import TimedOut, NetworkError, RetryAfter, TelegramError, BadRequest
@@ -171,6 +171,7 @@ class TelegramBot:
             handle_enhanced_quiz_start_callback,  # Enhanced quiz handlers
             handle_poll_answer,
             stop_enhanced_quiz,
+            announce_quiz_end_handler,  # Quiz end announcement handler
         )
         
         # Import menu handlers
@@ -318,6 +319,7 @@ class TelegramBot:
             CommandHandler("leaderboards", show_all_active_leaderboards_command)
         )
         self.app.add_handler(CommandHandler("resetwallet", handle_reset_wallet))  # Development command
+        self.app.add_handler(CommandHandler("announceend", announce_quiz_end_handler))  # Quiz end announcement command
 
         # self.app.add_handler(
         #     CommandHandler("distributerewards", distribute_rewards_handler)
