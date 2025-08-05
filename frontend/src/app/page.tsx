@@ -9,7 +9,6 @@ import ContestBoard from "@/components/Contest";
 
 import LoginModule from "@/components/auth/LoginModule";
 import { useAuth } from "./contexts/AuthContext";
-import { SolWheelOfFortune } from "@/components/SolWheel";
 import GamesPage from "@/components/games/GamesPage";
 
 function Home() {
