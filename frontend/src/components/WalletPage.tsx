@@ -21,6 +21,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const WalletPage = () => {
+  const [showBalance, setShowBalance] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+
   return <div>Wallet</div>;
 };
 
