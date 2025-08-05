@@ -1,4 +1,4 @@
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, Poll
 from telegram.ext import CallbackContext, ContextTypes, Application
 from models.quiz import Quiz, QuizStatus, QuizAnswer
 from store.database import SessionLocal
@@ -20,7 +20,7 @@ from utils.performance_monitor import (
     track_database_query,
     track_cache_operation,
 )
-from typing import Optional, TYPE_CHECKING, Union, Dict, Tuple
+from typing import Optional, TYPE_CHECKING, Union, Dict, Tuple, List
 import random
 from sqlalchemy.exc import IntegrityError
 
@@ -33,6 +33,113 @@ logger = logging.getLogger(__name__)
 # Key: (user_id, quiz_id, question_index), Value: asyncio.Task
 active_question_timers: Dict[Tuple[str, str, int], asyncio.Task] = {}
 
+# Enhanced quiz session management
+class QuizSession:
+    def __init__(self, user_id: str, quiz_id: str, questions: List[Dict], shuffle_questions: bool = True, shuffle_answers: bool = True):
+        self.user_id = user_id
+        self.quiz_id = quiz_id
+        self.original_questions = questions
+        self.shuffle_questions = shuffle_questions
+        self.shuffle_answers = shuffle_answers
+        self.current_question_index = 0
+        self.answers = {}
+        self.start_time = None
+        self.total_time = 0
+        self.correct_answers = 0
+        self.wrong_answers = 0
+        self.missed_questions = 0
+        
+        # Prepare questions with shuffling
+        self.prepared_questions = self._prepare_questions()
+    
+    def _prepare_questions(self) -> List[Dict]:
+        """Prepare questions with optional shuffling"""
+        questions = self.original_questions.copy()
+        
+        if self.shuffle_questions:
+            random.shuffle(questions)
+        
+        prepared = []
+        for i, q in enumerate(questions):
+            question_data = q.copy()
+            options = question_data.get('options', {})
+            
+            if self.shuffle_answers:
+                # Shuffle answer options while preserving correct answer
+                option_items = list(options.items())
+                random.shuffle(option_items)
+                question_data['shuffled_options'] = dict(option_items)
+                question_data['original_options'] = options
+            else:
+                question_data['shuffled_options'] = options
+                question_data['original_options'] = options
+            
+            prepared.append(question_data)
+        
+        return prepared
+    
+    def get_current_question(self) -> Optional[Dict]:
+        """Get current question data"""
+        if self.current_question_index < len(self.prepared_questions):
+            return self.prepared_questions[self.current_question_index]
+        return None
+    
+    def submit_answer(self, answer: str) -> bool:
+        """Submit answer for current question and return if correct"""
+        if self.current_question_index >= len(self.prepared_questions):
+            return False
+        
+        current_q = self.prepared_questions[self.current_question_index]
+        correct_answer = current_q.get('correct_answer', '')
+        
+        # Map shuffled answer back to original
+        shuffled_options = current_q.get('shuffled_options', {})
+        original_options = current_q.get('original_options', {})
+        
+        # Find the original label for the given answer
+        original_label = None
+        for label, value in shuffled_options.items():
+            if value == answer:
+                original_label = label
+                break
+        
+        is_correct = original_label == correct_answer
+        self.answers[self.current_question_index] = {
+            'answer': answer,
+            'correct': is_correct,
+            'correct_answer': correct_answer
+        }
+        
+        if is_correct:
+            self.correct_answers += 1
+        else:
+            self.wrong_answers += 1
+        
+        return is_correct
+    
+    def next_question(self) -> bool:
+        """Move to next question, return False if no more questions"""
+        self.current_question_index += 1
+        return self.current_question_index < len(self.prepared_questions)
+    
+    def get_progress(self) -> Tuple[int, int]:
+        """Get current progress (current, total)"""
+        return (self.current_question_index + 1, len(self.prepared_questions))
+    
+    def get_results(self) -> Dict:
+        """Get final results"""
+        self.missed_questions = len(self.prepared_questions) - self.correct_answers - self.wrong_answers
+        return {
+            'total_questions': len(self.prepared_questions),
+            'correct': self.correct_answers,
+            'wrong': self.wrong_answers,
+            'missed': self.missed_questions,
+            'total_time': self.total_time,
+            'answers': self.answers
+        }
+
+# Global session storage
+active_quiz_sessions: Dict[str, QuizSession] = {}
 
 async def question_timeout(
     application: "Application",
@@ -2244,3 +2351,264 @@ async def get_leaderboards_for_all_active_quizzes() -> List[Dict[str, Any]]:
 
     logger.info(f"Returning {len(all_active_leaderboards)} active leaderboards.")
     return all_active_leaderboards
+
+
+async def start_enhanced_quiz(
+    application: "Application",
+    user_id: str,
+    quiz: Quiz,
+    shuffle_questions: bool = True,
+    shuffle_answers: bool = True
+) -> bool:
+    """Start an enhanced quiz session with sequential questions and timers"""
+    
+    # Parse questions
+    questions_list = quiz.questions
+    if isinstance(questions_list, dict):
+        questions_list = [questions_list]
+    
+    if not questions_list:
+        await safe_send_message(
+            application.bot,
+            user_id,
+            "❌ This quiz has no questions available."
+        )
+        return False
+    
+    # Create quiz session
+    session_key = f"{user_id}:{quiz.id}"
+    quiz_session = QuizSession(
+        user_id=user_id,
+        quiz_id=quiz.id,
+        questions=questions_list,
+        shuffle_questions=shuffle_questions,
+        shuffle_answers=shuffle_answers
+    )
+    
+    active_quiz_sessions[session_key] = quiz_session
+    
+    # Send quiz introduction
+    total_questions = len(questions_list)
+    timer_seconds = Config.QUESTION_TIMER_SECONDS
+    
+    intro_text = f"""🎲 Get ready for the quiz '{quiz.topic}'
+
+🖊 {total_questions} questions
+⏱ {timer_seconds} seconds per question
+{'🔀 Questions and answers shuffled' if shuffle_questions or shuffle_answers else '📝 Questions in order'}
+
+🏁 Press the button below when you are ready.
+Send /stop to stop it."""
+    
+    keyboard = [[InlineKeyboardButton("🚀 Start Quiz", callback_data=f"enhanced_quiz_start:{quiz.id}")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await safe_send_message(
+        application.bot,
+        user_id,
+        intro_text,
+        reply_markup=reply_markup
+    )
+    
+    return True
+
+async def send_enhanced_question(
+    application: "Application",
+    user_id: str,
+    quiz_session: QuizSession,
+    quiz: Quiz
+) -> bool:
+    """Send the current question using Telegram's poll feature"""
+    
+    current_q = quiz_session.get_current_question()
+    if not current_q:
+        return False
+    
+    current_num, total_questions = quiz_session.get_progress()
+    question_text = current_q.get('question', 'Question not available')
+    shuffled_options = current_q.get('shuffled_options', {})
+    
+    # Create poll options
+    poll_options = list(shuffled_options.values())
+    
+    # Send the question as a poll
+    try:
+        poll_message = await application.bot.send_poll(
+            chat_id=user_id,
+            question=f"[{current_num}/{total_questions}] {question_text}",
+            options=poll_options,
+            is_anonymous=False,
+            allows_multiple_answers=False,
+            explanation="",
+            open_period=Config.QUESTION_TIMER_SECONDS,
+            close_date=datetime.now(timezone.utc) + timedelta(seconds=Config.QUESTION_TIMER_SECONDS + 1)
+        )
+        
+        # Store poll message ID for tracking
+        session_key = f"{user_id}:{quiz.id}"
+        redis_client = RedisClient()
+        await redis_client.set_user_quiz_data(
+            user_id, quiz.id, f"poll_message_{current_num-1}", poll_message.message_id
+        )
+        await redis_client.close()
+        
+        # Schedule next question
+        asyncio.create_task(
+            schedule_next_question(
+                application, user_id, quiz_session, quiz, current_num, total_questions
+            )
+        )
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error sending enhanced question: {e}")
+        return False
+
+async def schedule_next_question(
+    application: "Application",
+    user_id: str,
+    quiz_session: QuizSession,
+    quiz: Quiz,
+    current_num: int,
+    total_questions: int
+):
+    """Schedule the next question after timer expires"""
+    
+    await asyncio.sleep(Config.QUESTION_TIMER_SECONDS + 1)  # +1 for poll close
+    
+    # Check if session still exists
+    session_key = f"{user_id}:{quiz.id}"
+    if session_key not in active_quiz_sessions:
+        return
+    
+    # Mark current question as missed if no answer was given
+    if quiz_session.current_question_index not in quiz_session.answers:
+        quiz_session.answers[quiz_session.current_question_index] = {
+            'answer': 'TIMEOUT',
+            'correct': False,
+            'correct_answer': quiz_session.get_current_question().get('correct_answer', '')
+        }
+        quiz_session.missed_questions += 1
+        
+        # Send timeout message
+        await safe_send_message(
+            application.bot,
+            user_id,
+            f"⏰ Time's up for question {current_num}!"
+        )
+        
+        # Move to next question or finish
+        if quiz_session.next_question():
+            await send_enhanced_question(application, user_id, quiz_session, quiz)
+        else:
+            await finish_enhanced_quiz(application, user_id, quiz_session, quiz)
+
+async def handle_enhanced_quiz_answer(
+    application: "Application",
+    user_id: str,
+    quiz_id: str,
+    answer: str
+) -> bool:
+    """Handle answer submission for enhanced quiz"""
+    
+    session_key = f"{user_id}:{quiz_id}"
+    if session_key not in active_quiz_sessions:
+        return False
+    
+    quiz_session = active_quiz_sessions[session_key]
+    
+    # Submit answer
+    is_correct = quiz_session.submit_answer(answer)
+    
+    # Send immediate feedback
+    current_num, total_questions = quiz_session.get_progress()
+    feedback = "✅ Correct!" if is_correct else "❌ Wrong!"
+    
+    await safe_send_message(
+        application.bot,
+        user_id,
+        f"{feedback} ({current_num}/{total_questions})"
+    )
+    
+    # Move to next question or finish
+    if quiz_session.next_question():
+        # Get quiz from database for next question
+        session = SessionLocal()
+        try:
+            quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
+            if quiz:
+                await send_enhanced_question(application, user_id, quiz_session, quiz)
+        except Exception as e:
+            logger.error(f"Error sending next question: {e}")
+        finally:
+            session.close()
+    else:
+        # Quiz finished
+        session = SessionLocal()
+        try:
+            quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
+            if quiz:
+                await finish_enhanced_quiz(application, user_id, quiz_session, quiz)
+        except Exception as e:
+            logger.error(f"Error finishing quiz: {e}")
+        finally:
+            session.close()
+    
+    return True
+
+async def finish_enhanced_quiz(
+    application: "Application",
+    user_id: str,
+    quiz_session: QuizSession,
+    quiz: Quiz
+):
+    """Finish the enhanced quiz and show results"""
+    
+    results = quiz_session.get_results()
+    
+    # Calculate accuracy
+    total_answered = results['correct'] + results['wrong']
+    accuracy = (results['correct'] / total_answered * 100) if total_answered > 0 else 0
+    
+    results_text = f"""🏁 The quiz '{quiz.topic}' has finished!
+
+You answered {total_answered} questions:
+
+✅ Correct – {results['correct']}
+❌ Wrong – {results['wrong']}
+⌛️ Missed – {results['missed']}
+📊 Accuracy – {accuracy:.1f}%"""
+
+    # Save results to database
+    session = SessionLocal()
+    try:
+        # Create quiz answer record
+        quiz_answer = QuizAnswer(
+            user_id=user_id,
+            quiz_id=quiz.id,
+            answers=results['answers'],
+            score=results['correct'],
+            total_questions=results['total_questions'],
+            time_taken=results['total_time']
+        )
+        session.add(quiz_answer)
+        session.commit()
+        
+        # Add leaderboard info
+        results_text += f"\n\n🏆 Your score: {results['correct']}/{results['total_questions']}"
+        
+    except Exception as e:
+        logger.error(f"Error saving enhanced quiz results: {e}")
+    finally:
+        session.close()
+    
+    # Clean up session
+    session_key = f"{user_id}:{quiz.id}"
+    active_quiz_sessions.pop(session_key, None)
+    
+    await safe_send_message(
+        application.bot,
+        user_id,
+        results_text
+    )

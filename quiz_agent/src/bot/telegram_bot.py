@@ -151,6 +151,9 @@ class TelegramBot:
             handle_reward_method_choice,
             show_all_active_leaderboards_command,
             handle_quiz_interaction_callback,  # New quiz interaction handler
+            handle_enhanced_quiz_start_callback,  # Enhanced quiz handlers
+            handle_poll_answer,
+            stop_enhanced_quiz,
         )
         
         # Import menu handlers
@@ -322,6 +325,20 @@ class TelegramBot:
                 pattern=r"^(play_quiz|leaderboard|past_winners|share_quiz|hint|skip_question|answer|refresh_leaderboard|join_quiz):"
             )
         )
+
+        # Handle enhanced quiz callbacks
+        self.app.add_handler(
+            CallbackQueryHandler(
+                handle_enhanced_quiz_start_callback,
+                pattern=r"^enhanced_quiz_start:"
+            )
+        )
+
+        # Handle poll answers for enhanced quizzes
+        self.app.add_handler(MessageHandler(filters.POLL_ANSWER, handle_poll_answer))
+
+        # Handle enhanced quiz stop command
+        self.app.add_handler(CommandHandler("stop", stop_enhanced_quiz))
 
         # Handle text messages for ReplyKeyboardMarkup (higher priority than private_message_handler)
         logger.info("Registering text message handler for ReplyKeyboardMarkup")

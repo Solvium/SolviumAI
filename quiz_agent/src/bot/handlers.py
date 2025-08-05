@@ -18,6 +18,10 @@ from services.quiz_service import (
     save_quiz_payment_hash,  # Added import
     save_quiz_reward_details,  # Added import
     get_leaderboards_for_all_active_quizzes,  # Add this import
+    start_enhanced_quiz,
+    send_enhanced_question,
+    handle_enhanced_quiz_answer,
+    active_quiz_sessions
 )
 from services.user_service import (
     get_user_wallet,
@@ -33,11 +37,11 @@ import asyncio  # Add asyncio import
 from typing import Optional  # Added for type hinting
 from utils.config import Config  # Added to access DEPOSIT_ADDRESS
 from store.database import SessionLocal
-from models.quiz import Quiz
+from models.quiz import Quiz, QuizStatus
 from utils.redis_client import RedisClient  # Added RedisClient import
 from utils.telegram_helpers import safe_send_message  # Ensure this is imported
 import html  # Add this import
-from datetime import datetime, timezone  # Add this import
+from datetime import datetime, timezone, timedelta  # Add this import
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -1968,8 +1972,123 @@ async def unlink_wallet_handler(update: Update, context: CallbackContext):
 
 
 async def play_quiz_handler(update: Update, context: CallbackContext):
-    """Handler for /playquiz command."""
-    await play_quiz(update, context)
+    """Handler for /playquiz command - now uses enhanced quiz system."""
+    user_id = str(update.effective_user.id)
+    user_username = update.effective_user.username or update.effective_user.first_name
+    
+    # Wallet check
+    if not await check_wallet_linked(user_id):
+        await safe_send_message(
+            context.bot,
+            update.effective_chat.id,
+            "Please link your wallet first using /linkwallet <wallet_address>.",
+        )
+        return
+
+    quiz_id_to_play = None
+    if context.args:
+        quiz_id_to_play = context.args[0]
+        logger.info(f"Quiz ID provided via args: {quiz_id_to_play}")
+
+    session = SessionLocal()
+    try:
+        group_chat_id = None
+        if update.effective_chat.type in ["group", "supergroup"]:
+            group_chat_id = update.effective_chat.id
+
+        if not quiz_id_to_play and group_chat_id:
+            # Check for active quizzes in group
+            active_quizzes = (
+                session.query(Quiz)
+                .filter(
+                    Quiz.status == QuizStatus.ACTIVE,
+                    Quiz.group_chat_id == group_chat_id,
+                    Quiz.end_time > datetime.utcnow(),
+                )
+                .order_by(Quiz.end_time)
+                .all()
+            )
+
+            if len(active_quizzes) > 1:
+                # Multiple quizzes - show selection
+                buttons = []
+                for i, q in enumerate(active_quizzes):
+                    num_questions = len(q.questions) if q.questions else 0
+                    buttons.append([
+                        InlineKeyboardButton(
+                            f"{q.topic} ({num_questions} questions)",
+                            callback_data=f"playquiz_select:{q.id}:{user_id}"
+                        )
+                    ])
+                
+                reply_markup = InlineKeyboardMarkup(buttons)
+                await safe_send_message(
+                    context.bot,
+                    update.effective_chat.id,
+                    "Multiple quizzes are active. Choose one to play:",
+                    reply_markup=reply_markup
+                )
+                return
+            elif len(active_quizzes) == 1:
+                quiz_id_to_play = active_quizzes[0].id
+
+        if quiz_id_to_play:
+            # Get the specific quiz
+            quiz = session.query(Quiz).filter(Quiz.id == quiz_id_to_play).first()
+            if not quiz:
+                await safe_send_message(
+                    context.bot,
+                    update.effective_chat.id,
+                    "❌ Quiz not found."
+                )
+                return
+            
+            # Check if quiz is still active
+            if quiz.status != QuizStatus.ACTIVE or (quiz.end_time and quiz.end_time <= datetime.utcnow()):
+                await safe_send_message(
+                    context.bot,
+                    update.effective_chat.id,
+                    "❌ This quiz is no longer active."
+                )
+                return
+            
+            # Start enhanced quiz
+            success = await start_enhanced_quiz(
+                context.application,
+                user_id,
+                quiz,
+                shuffle_questions=True,
+                shuffle_answers=True
+            )
+            
+            if success:
+                await safe_send_message(
+                    context.bot,
+                    update.effective_chat.id,
+                    f"🎲 Enhanced quiz '{quiz.topic}' started! Check your DMs for the quiz."
+                )
+            else:
+                await safe_send_message(
+                    context.bot,
+                    update.effective_chat.id,
+                    "❌ Failed to start quiz. Please try again."
+                )
+        else:
+            await safe_send_message(
+                context.bot,
+                update.effective_chat.id,
+                "❌ No active quizzes found. Use /createquiz to create a new quiz."
+            )
+            
+    except Exception as e:
+        logger.error(f"Error in enhanced play_quiz_handler: {e}")
+        await safe_send_message(
+            context.bot,
+            update.effective_chat.id,
+            "❌ Error starting quiz. Please try again."
+        )
+    finally:
+        session.close()
 
 
 # Handle selection when multiple quizzes are active in a group
@@ -1995,16 +2114,40 @@ async def play_quiz_selection_callback(update: Update, context: CallbackContext)
         )
         return
 
-    # Confirm selection to the correct user
-    await query.edit_message_text(
-        f"✅ You selected Quiz {quiz_id}. Sending your quiz via DM..."
-    )
-    # Set quiz_id for standard play_quiz handler
-    context.args = [quiz_id]
-    # Delegate to play_quiz logic
-    from services.quiz_service import play_quiz
-
-    await play_quiz(update, context)
+    # Get the quiz from database
+    session = SessionLocal()
+    try:
+        quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
+        if not quiz:
+            await query.edit_message_text("❌ Quiz not found.")
+            return
+        
+        # Check if quiz is still active
+        if quiz.status != QuizStatus.ACTIVE or (quiz.end_time and quiz.end_time <= datetime.utcnow()):
+            await query.edit_message_text("❌ This quiz is no longer active.")
+            return
+        
+        # Start enhanced quiz
+        success = await start_enhanced_quiz(
+            context.application,
+            current_user_id,
+            quiz,
+            shuffle_questions=True,
+            shuffle_answers=True
+        )
+        
+        if success:
+            await query.edit_message_text(
+                f"✅ Enhanced quiz '{quiz.topic}' started! Check your DMs for the quiz."
+            )
+        else:
+            await query.edit_message_text("❌ Failed to start quiz. Please try again.")
+            
+    except Exception as e:
+        logger.error(f"Error in enhanced play_quiz_selection_callback: {e}")
+        await query.edit_message_text("❌ Error starting quiz. Please try again.")
+    finally:
+        session.close()
 
 
 async def quiz_answer_handler(update: Update, context: CallbackContext):
@@ -2470,3 +2613,125 @@ async def show_all_active_leaderboards_command(
         )
     finally:
         session.close()
+
+async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackContext):
+    """Handle enhanced quiz start button"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = str(query.from_user.id)
+    quiz_id = query.data.split(":")[1]
+    
+    # Get quiz from database
+    session = SessionLocal()
+    try:
+        quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
+        if not quiz:
+            await safe_send_message(
+                context.bot,
+                user_id,
+                "❌ Quiz not found."
+            )
+            return
+        
+        # Start enhanced quiz
+        success = await start_enhanced_quiz(
+            context.application,
+            user_id,
+            quiz,
+            shuffle_questions=True,
+            shuffle_answers=True
+        )
+        
+        if success:
+            # Send first question
+            session_key = f"{user_id}:{quiz_id}"
+            if session_key in active_quiz_sessions:
+                quiz_session = active_quiz_sessions[session_key]
+                await send_enhanced_question(context.application, user_id, quiz_session, quiz)
+        
+    except Exception as e:
+        logger.error(f"Error starting enhanced quiz: {e}")
+        await safe_send_message(
+            context.bot,
+            user_id,
+            "❌ Error starting quiz. Please try again."
+        )
+    finally:
+        session.close()
+
+async def handle_poll_answer(update: Update, context: CallbackContext):
+    """Handle poll answer submissions for enhanced quizzes"""
+    if not update.poll_answer:
+        return
+    
+    poll_answer = update.poll_answer
+    user_id = str(poll_answer.user.id)
+    poll_id = poll_answer.poll_id
+    selected_option = poll_answer.option_ids[0] if poll_answer.option_ids else None
+    
+    if selected_option is None:
+        return
+    
+    logger.info(f"Poll answer received: user={user_id}, poll_id={poll_id}, option={selected_option}")
+    
+    # Find which quiz session this poll belongs to
+    session_key = None
+    quiz_session = None
+    
+    for key, session in active_quiz_sessions.items():
+        if session.user_id == user_id:
+            # Check if this is the current question's poll
+            current_q = session.get_current_question()
+            if current_q:
+                shuffled_options = current_q.get('shuffled_options', {})
+                options_list = list(shuffled_options.values())
+                if selected_option < len(options_list):
+                    session_key = key
+                    quiz_session = session
+                    break
+    
+    if not quiz_session:
+        logger.warning(f"No active quiz session found for user {user_id}")
+        return
+    
+    # Get the selected answer text
+    current_q = quiz_session.get_current_question()
+    shuffled_options = current_q.get('shuffled_options', {})
+    options_list = list(shuffled_options.values())
+    selected_answer = options_list[selected_option]
+    
+    logger.info(f"Processing answer: {selected_answer} for question {quiz_session.current_question_index}")
+    
+    # Handle the answer
+    await handle_enhanced_quiz_answer(
+        context.application,
+        user_id,
+        quiz_session.quiz_id,
+        selected_answer
+    )
+
+async def stop_enhanced_quiz(update: Update, context: CallbackContext):
+    """Stop current enhanced quiz session"""
+    user_id = str(update.effective_user.id)
+    
+    # Find and remove user's active session
+    session_key = None
+    for key in list(active_quiz_sessions.keys()):
+        if key.startswith(f"{user_id}:"):
+            session_key = key
+            break
+    
+    if session_key:
+        active_quiz_sessions.pop(session_key, None)
+        await safe_send_message(
+            context.bot,
+            user_id,
+            "🛑 Quiz stopped. You can start a new quiz anytime!"
+        )
+    else:
+        await safe_send_message(
+            context.bot,
+            user_id,
+            "ℹ️ No active quiz to stop."
+        )
