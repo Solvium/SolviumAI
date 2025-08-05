@@ -118,7 +118,8 @@ class QuizSession:
         self.answers[self.current_question_index] = {
             'answer': answer,
             'correct': is_correct,
-            'correct_answer': correct_answer
+            'correct_answer': correct_answer,
+            'answered_at': datetime.utcnow()
         }
         
         if is_correct:
@@ -2810,23 +2811,38 @@ You answered {total_answered} questions:
     # Save results to database
     session = SessionLocal()
     try:
-        # Create quiz answer record
-        quiz_answer = QuizAnswer(
-            user_id=user_id,
-            quiz_id=quiz.id,
-            answers=results['answers'],
-            score=results['correct'],
-            total_questions=results['total_questions'],
-            time_taken=results['total_time']
-        )
-        session.add(quiz_answer)
+        # Get user info for username
+        from models.user import User
+        user = session.query(User).filter(User.id == user_id).first()
+        username = user.username if user else None
+        
+        # Save individual answers in the correct format for reward distribution
+        for question_index, answer_data in results['answers'].items():
+            user_answer = answer_data.get('answer', 'No answer')
+            is_correct = answer_data.get('correct', False)
+            answered_at = answer_data.get('answered_at', datetime.utcnow())
+            
+            # Create individual quiz answer record
+            quiz_answer = QuizAnswer(
+                user_id=user_id,
+                quiz_id=quiz.id,
+                username=username,
+                answer=user_answer,
+                is_correct="True" if is_correct else "False",
+                answered_at=answered_at,
+                question_index=int(question_index)
+            )
+            session.add(quiz_answer)
+        
         session.commit()
+        logger.info(f"Saved {len(results['answers'])} answers for user {user_id} in quiz {quiz.id}")
         
         # Add leaderboard info
         results_text += f"\n\n🏆 Your score: {results['correct']}/{results['total_questions']}"
         
     except Exception as e:
         logger.error(f"Error saving enhanced quiz results: {e}")
+        session.rollback()
     finally:
         session.close()
     
