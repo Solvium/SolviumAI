@@ -440,10 +440,6 @@ class NEARWalletService:
 
 💰 **Initial Funding:** Your account was created with {minimal_balance} NEAR to cover storage costs.
 
-💡 **To fund your account for paid quizzes:**
-• Copy your account ID above
-• Send NEAR from an exchange or another wallet
-• Use a faucet for testnet NEAR (if on testnet)
 
 🔑 **Private Key (SAVE THIS SECURELY!):**
 `{private_key}`

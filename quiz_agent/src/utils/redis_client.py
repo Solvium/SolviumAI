@@ -84,6 +84,11 @@ class RedisClient:
             return False
 
     @classmethod
+    async def set(cls, key: str, value: Any, ttl_seconds: Optional[int] = None) -> bool:
+        """Alias for set_value method for consistency."""
+        return await cls.set_value(key, value, ttl_seconds)
+
+    @classmethod
     async def get_value(cls, key: str) -> Optional[Any]:  # Made async
         try:
             r = await cls.get_instance()  # await instance
@@ -106,6 +111,11 @@ class RedisClient:
                 f"Unexpected error getting value from Async Redis for key '{key}': {e}"
             )
             return None
+
+    @classmethod
+    async def get(cls, key: str) -> Optional[Any]:
+        """Alias for get_value method for backward compatibility."""
+        return await cls.get_value(key)
 
     @classmethod
     async def delete_value(cls, key: str) -> bool:  # Made async
@@ -131,6 +141,11 @@ class RedisClient:
 
     @classmethod
     async def delete_key(cls, key: str) -> bool:
+        """Alias for delete_value method for consistency."""
+        return await cls.delete_value(key)
+
+    @classmethod
+    async def delete(cls, key: str) -> bool:
         """Alias for delete_value method for consistency."""
         return await cls.delete_value(key)
 

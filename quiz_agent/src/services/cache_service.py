@@ -26,7 +26,7 @@ class CacheService:
         try:
             # Try Redis cache first
             cache_key = f"wallet:{user_id}"
-            cached_data = await self.redis_client.get(cache_key)
+            cached_data = await self.redis_client.get_value(cache_key)
             
             if cached_data:
                 wallet_data = json.loads(cached_data)
@@ -85,7 +85,7 @@ class CacheService:
         """
         try:
             cache_key = f"balance:{account_id}"
-            cached_balance = await self.redis_client.get(cache_key)
+            cached_balance = await self.redis_client.get_value(cache_key)
             
             if cached_balance:
                 logger.debug(f"Cache HIT for balance {account_id}")

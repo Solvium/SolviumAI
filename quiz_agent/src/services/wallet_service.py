@@ -44,12 +44,22 @@ class WalletService:
         Retrieves the user's wallet information with enhanced caching
         """
         try:
+            logger.debug(f"Getting wallet for user {user_id}")
             # Use enhanced cache service with database fallback
             wallet_data = await cache_service.get_cached_wallet(user_id)
+            logger.debug(f"Retrieved wallet data for user {user_id}: {wallet_data}")
             return wallet_data
         except Exception as e:
             logger.error(f"Error retrieving wallet for user {user_id}: {e}")
-            return None
+            # Fallback to direct database query
+            try:
+                logger.debug(f"Falling back to direct database query for user {user_id}")
+                wallet_data = await db_service.get_user_wallet(user_id)
+                logger.debug(f"Direct DB query result for user {user_id}: {wallet_data}")
+                return wallet_data
+            except Exception as db_error:
+                logger.error(f"Database fallback also failed for user {user_id}: {db_error}")
+                return None
     
     async def has_wallet(self, user_id: int) -> bool:
         """

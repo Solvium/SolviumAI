@@ -993,10 +993,16 @@ async def show_funding_instructions(update, context, required_amount, current_ba
     user_id = update.effective_user.id
     redis_client = RedisClient()
     
-    # Get wallet info
+    # Get wallet info with better error handling
     from services.wallet_service import WalletService
     wallet_service = WalletService()
-    wallet = await wallet_service.get_user_wallet(user_id)
+    
+    try:
+        wallet = await wallet_service.get_user_wallet(user_id)
+        logger.info(f"Retrieved wallet for user {user_id}: {wallet}")
+    except Exception as e:
+        logger.error(f"Error retrieving wallet for user {user_id}: {e}")
+        wallet = None
     
     shortfall = required_amount - current_balance
     
@@ -1007,6 +1013,10 @@ async def show_funding_instructions(update, context, required_amount, current_ba
     
     if wallet and wallet.get('account_id'):
         funding_text += f"**Your Wallet Address:**\n`{wallet['account_id']}`\n\n"
+        logger.info(f"Added wallet address to funding instructions: {wallet['account_id']}")
+    else:
+        logger.warning(f"No wallet or account_id found for user {user_id}. Wallet: {wallet}")
+        funding_text += f"**Your Wallet Address:**\n*Unable to retrieve wallet address*\n\n"
     
     funding_text += f"To fund your wallet:\n\n"
     funding_text += f"1️⃣ **Copy your wallet address** above\n"
