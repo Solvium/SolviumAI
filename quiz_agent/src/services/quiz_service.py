@@ -92,7 +92,10 @@ class QuizSession:
     
     def submit_answer(self, answer: str) -> bool:
         """Submit answer for current question and return if correct"""
+        logger.info(f"QuizSession.submit_answer called: current_index={self.current_question_index}, total_questions={len(self.prepared_questions)}")
+        
         if self.current_question_index >= len(self.prepared_questions):
+            logger.warning(f"Current question index {self.current_question_index} >= total questions {len(self.prepared_questions)}")
             return False
         
         current_q = self.prepared_questions[self.current_question_index]
@@ -110,6 +113,8 @@ class QuizSession:
                 break
         
         is_correct = original_label == correct_answer
+        logger.info(f"Answer mapping: answer='{answer}' -> original_label='{original_label}', correct_answer='{correct_answer}', is_correct={is_correct}")
+        
         self.answers[self.current_question_index] = {
             'answer': answer,
             'correct': is_correct,
@@ -121,12 +126,16 @@ class QuizSession:
         else:
             self.wrong_answers += 1
         
+        logger.info(f"Answer recorded: correct={self.correct_answers}, wrong={self.wrong_answers}")
         return is_correct
     
     def next_question(self) -> bool:
         """Move to next question, return False if no more questions"""
+        logger.info(f"QuizSession.next_question called: current_index={self.current_question_index}, total_questions={len(self.prepared_questions)}")
         self.current_question_index += 1
-        return self.current_question_index < len(self.prepared_questions)
+        has_more = self.current_question_index < len(self.prepared_questions)
+        logger.info(f"Next question result: new_index={self.current_question_index}, has_more={has_more}")
+        return has_more
     
     def get_progress(self) -> Tuple[int, int]:
         """Get current progress (current, total)"""
@@ -2389,6 +2398,7 @@ async def start_enhanced_quiz(
     )
     
     active_quiz_sessions[session_key] = quiz_session
+    logger.info(f"Enhanced quiz session created: {session_key}, total_sessions={len(active_quiz_sessions)}")
     
     # Send quiz introduction
     total_questions = len(questions_list)
@@ -2423,8 +2433,11 @@ async def send_enhanced_question(
 ) -> bool:
     """Send the current question using Telegram's poll feature"""
     
+    logger.info(f"send_enhanced_question called: user={user_id}, quiz={quiz.id}, current_index={quiz_session.current_question_index}")
+    
     current_q = quiz_session.get_current_question()
     if not current_q:
+        logger.error(f"No current question found for session")
         return False
     
     current_num, total_questions = quiz_session.get_progress()
@@ -2436,6 +2449,7 @@ async def send_enhanced_question(
     
     # Send the question as a poll
     try:
+        logger.info(f"Sending poll: question='{question_text[:50]}...', options={len(poll_options)}")
         poll_message = await application.bot.send_poll(
             chat_id=user_id,
             question=f"[{current_num}/{total_questions}] {question_text}",
@@ -2446,6 +2460,7 @@ async def send_enhanced_question(
             open_period=Config.QUESTION_TIMER_SECONDS,
             close_date=datetime.now(timezone.utc) + timedelta(seconds=Config.QUESTION_TIMER_SECONDS + 1)
         )
+        logger.info(f"Poll sent successfully: message_id={poll_message.message_id}")
         
         # Store poll message ID for tracking
         session_key = f"{user_id}:{quiz.id}"
@@ -2464,6 +2479,7 @@ async def send_enhanced_question(
         )
         scheduled_tasks[session_key] = task
         
+        logger.info(f"Enhanced question sent successfully for user {user_id}")
         return True
         
     except Exception as e:
@@ -2524,8 +2540,14 @@ async def handle_enhanced_quiz_answer(
 ) -> bool:
     """Handle answer submission for enhanced quiz"""
     
+    logger.info(f"handle_enhanced_quiz_answer called: user={user_id}, quiz={quiz_id}, answer={answer}")
+    
     session_key = f"{user_id}:{quiz_id}"
+    logger.info(f"Looking for session: {session_key}")
+    logger.info(f"Available sessions: {list(active_quiz_sessions.keys())}")
+    
     if session_key not in active_quiz_sessions:
+        logger.warning(f"Session {session_key} not found in active_quiz_sessions")
         return False
     
     quiz_session = active_quiz_sessions[session_key]
@@ -2556,7 +2578,9 @@ async def handle_enhanced_quiz_answer(
         logger.error(f"Error closing poll: {e}")
     
     # Submit answer
+    logger.info(f"Submitting answer: {answer}")
     is_correct = quiz_session.submit_answer(answer)
+    logger.info(f"Answer submitted, correct: {is_correct}")
     
     # Send immediate feedback
     current_num, total_questions = quiz_session.get_progress()
@@ -2569,18 +2593,25 @@ async def handle_enhanced_quiz_answer(
     )
     
     # Move to next question or finish
+    logger.info(f"Moving to next question. Current index: {quiz_session.current_question_index}")
     if quiz_session.next_question():
+        logger.info(f"Next question available. New index: {quiz_session.current_question_index}")
         # Get quiz from database for next question
         session = SessionLocal()
         try:
             quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
             if quiz:
-                await send_enhanced_question(application, user_id, quiz_session, quiz)
+                logger.info(f"Sending next question for quiz {quiz_id}")
+                result = await send_enhanced_question(application, user_id, quiz_session, quiz)
+                logger.info(f"send_enhanced_question result: {result}")
+            else:
+                logger.error(f"Quiz {quiz_id} not found in database")
         except Exception as e:
             logger.error(f"Error sending next question: {e}")
         finally:
             session.close()
     else:
+        logger.info("No more questions, finishing quiz")
         # Quiz finished
         session = SessionLocal()
         try:
@@ -2642,7 +2673,9 @@ You answered {total_answered} questions:
     
     # Clean up session and scheduled tasks
     session_key = f"{user_id}:{quiz.id}"
+    logger.info(f"Cleaning up enhanced quiz session: {session_key}")
     active_quiz_sessions.pop(session_key, None)
+    logger.info(f"Session removed, remaining_sessions={len(active_quiz_sessions)}")
     
     # Clean up any scheduled tasks
     if session_key in scheduled_tasks:

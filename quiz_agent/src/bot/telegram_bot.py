@@ -8,6 +8,7 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler,
     JobQueue,  # Add JobQueue import for auto-distribution scheduling
+    PollAnswerHandler,  # <-- Add this import
 )
 from telegram.ext import MessageHandler, filters
 from telegram.error import TimedOut, NetworkError, RetryAfter, TelegramError, BadRequest
@@ -58,6 +59,7 @@ class TelegramBot:
         """Handle all updates including poll answers"""
         # Check if this is a poll answer update
         if update.poll_answer:
+            logger.info(f"Poll answer detected: user={update.poll_answer.user.id}, poll_id={update.poll_answer.poll_id}")
             from bot.handlers import handle_poll_answer
             await handle_poll_answer(update, context)
             return
@@ -67,13 +69,7 @@ class TelegramBot:
         # and let the normal handler chain continue
         pass
 
-    async def _handle_poll_answers(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle poll answer updates for enhanced quizzes"""
-        # Only process if this is a poll answer update
-        if update.poll_answer:
-            from bot.handlers import handle_poll_answer
-            await handle_poll_answer(update, context)
-        # For all other updates, do nothing and let other handlers process them
+
 
     @staticmethod
     async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -380,8 +376,9 @@ class TelegramBot:
         # Register error handler
         self.app.add_error_handler(self.error_handler)
 
-        # Handle poll answers for enhanced quizzes (must be last to catch poll answer updates)
-        self.app.add_handler(MessageHandler(filters.ALL, self._handle_poll_answers))
+        # Remove any MessageHandler(filters.ALL, ...) for poll answers
+        # Register PollAnswerHandler for poll answers (highest priority)
+        self.app.add_handler(PollAnswerHandler(handle_poll_answer), group=-1)
 
     async def init_blockchain(self):
         """Initialize the blockchain monitor."""

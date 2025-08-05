@@ -2782,6 +2782,7 @@ async def handle_poll_answer(update: Update, context: CallbackContext):
     
     logger.info(f"Poll answer received: user={user_id}, poll_id={poll_id}, option={selected_option}")
     logger.info(f"Active quiz sessions: {list(active_quiz_sessions.keys())}")
+    logger.info(f"User sessions: {[k for k in active_quiz_sessions.keys() if k.startswith(f'{user_id}:')]}")
     
     # Find which quiz session this poll belongs to
     session_key = None
@@ -2790,15 +2791,12 @@ async def handle_poll_answer(update: Update, context: CallbackContext):
     # Look for active sessions for this user
     for key, session in active_quiz_sessions.items():
         if key.startswith(f"{user_id}:"):
-            # Check if this is the current question's poll
-            current_q = session.get_current_question()
-            if current_q:
-                shuffled_options = current_q.get('shuffled_options', {})
-                options_list = list(shuffled_options.values())
-                if selected_option < len(options_list):
-                    session_key = key
-                    quiz_session = session
-                    break
+            # For now, assume this is the correct session if user has only one active session
+            # This is a simplified approach - in a more complex system, you might want to
+            # track poll IDs to session mappings
+            session_key = key
+            quiz_session = session
+            break
     
     if not quiz_session:
         logger.warning(f"No active quiz session found for user {user_id}")
@@ -2808,19 +2806,30 @@ async def handle_poll_answer(update: Update, context: CallbackContext):
     
     # Get the selected answer text
     current_q = quiz_session.get_current_question()
+    if not current_q:
+        logger.warning(f"No current question found for session {session_key}")
+        return
+    
     shuffled_options = current_q.get('shuffled_options', {})
     options_list = list(shuffled_options.values())
+    
+    if selected_option >= len(options_list):
+        logger.warning(f"Invalid option {selected_option} for question with {len(options_list)} options")
+        return
+    
     selected_answer = options_list[selected_option]
     
     logger.info(f"Processing answer: {selected_answer} for question {quiz_session.current_question_index}")
     
     # Handle the answer
-    await handle_enhanced_quiz_answer(
+    logger.info(f"Calling handle_enhanced_quiz_answer for user {user_id}, quiz {quiz_session.quiz_id}")
+    result = await handle_enhanced_quiz_answer(
         context.application,
         user_id,
         quiz_session.quiz_id,
         selected_answer
     )
+    logger.info(f"handle_enhanced_quiz_answer result: {result}")
 
 async def stop_enhanced_quiz(update: Update, context: CallbackContext):
     """Stop current enhanced quiz session"""
