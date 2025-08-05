@@ -2387,8 +2387,37 @@ async def start_enhanced_quiz(
         )
         return False
     
-    # Create quiz session
+    # Check if user has already completed this quiz
+    session = SessionLocal()
+    try:
+        existing_answers = session.query(QuizAnswer).filter(
+            QuizAnswer.user_id == user_id,
+            QuizAnswer.quiz_id == quiz.id
+        ).count()
+        
+        if existing_answers > 0:
+            await safe_send_message(
+                application.bot,
+                user_id,
+                f"❌ You have already completed the quiz '{quiz.topic}'. Each quiz can only be played once."
+            )
+            return False
+    except Exception as e:
+        logger.error(f"Error checking existing answers: {e}")
+    finally:
+        session.close()
+    
+    # Check if user already has an active session for this quiz
     session_key = f"{user_id}:{quiz.id}"
+    if session_key in active_quiz_sessions:
+        await safe_send_message(
+            application.bot,
+            user_id,
+            f"❌ You already have an active session for the quiz '{quiz.topic}'. Please complete your current session first or use /stop to cancel it."
+        )
+        return False
+    
+    # Create quiz session
     quiz_session = QuizSession(
         user_id=user_id,
         quiz_id=quiz.id,

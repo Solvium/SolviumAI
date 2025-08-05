@@ -39,7 +39,7 @@ import asyncio  # Add asyncio import
 from typing import Optional  # Added for type hinting
 from utils.config import Config  # Added to access DEPOSIT_ADDRESS
 from store.database import SessionLocal
-from models.quiz import Quiz, QuizStatus
+from models.quiz import Quiz, QuizStatus, QuizAnswer
 from utils.redis_client import RedisClient  # Added RedisClient import
 from utils.telegram_helpers import safe_send_message  # Ensure this is imported
 import html  # Add this import
@@ -2756,8 +2756,31 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
             )
             return
         
-        # Create quiz session
+        # Check if user has already completed this quiz
+        existing_answers = session.query(QuizAnswer).filter(
+            QuizAnswer.user_id == user_id,
+            QuizAnswer.quiz_id == quiz_id
+        ).count()
+        
+        if existing_answers > 0:
+            await safe_send_message(
+                context.bot,
+                user_id,
+                f"❌ You have already completed the quiz '{quiz.topic}'. Each quiz can only be played once."
+            )
+            return
+        
+        # Check if user already has an active session for this quiz
         session_key = f"{user_id}:{quiz_id}"
+        if session_key in active_quiz_sessions:
+            await safe_send_message(
+                context.bot,
+                user_id,
+                f"❌ You already have an active session for the quiz '{quiz.topic}'. Please complete your current session first or use /stop to cancel it."
+            )
+            return
+        
+        # Create quiz session
         quiz_session = QuizSession(
             user_id=user_id,
             quiz_id=quiz.id,
