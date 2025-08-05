@@ -1448,7 +1448,7 @@ async def start_quiz_for_user(update, context, quiz):
         if success:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"🎲 Enhanced quiz '{quiz.topic}' started! Check your DMs for the quiz."
+                text=f"🚀 **{quiz.topic}** is now LIVE! 🎯\n\n⚡ Get ready for an exciting challenge with shuffled questions and answers!\n\n💬 Check your DMs to start playing immediately!"
             )
         else:
             await context.bot.send_message(
@@ -2174,7 +2174,7 @@ async def play_quiz_handler(update: Update, context: CallbackContext):
                 await safe_send_message(
                     context.bot,
                     update.effective_chat.id,
-                    f"🎲 Enhanced quiz '{quiz.topic}' started! Check your DMs for the quiz."
+                    f"🎮 **{quiz.topic}** Challenge Activated! 🏆\n\n🔥 Experience the ultimate quiz with randomized questions and answers!\n\n📱 Your personalized quiz is waiting in your DMs!"
                 )
             else:
                 await safe_send_message(
@@ -2247,7 +2247,7 @@ async def play_quiz_selection_callback(update: Update, context: CallbackContext)
         
         if success:
             await query.edit_message_text(
-                f"✅ Enhanced quiz '{quiz.topic}' started! Check your DMs for the quiz."
+                f"🎯 **{quiz.topic}** Quiz Launched! ⚡\n\n🌟 Your enhanced quiz experience is ready with shuffled content for maximum challenge!\n\n💬 Head to your DMs to begin your adventure!"
             )
         else:
             await query.edit_message_text("❌ Failed to start quiz. Please try again.")
@@ -2777,7 +2777,7 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
             )
             return
         
-        # Check if user has already completed this quiz
+        # Check if user has already attempted this quiz (completed or started)
         existing_answers = session.query(QuizAnswer).filter(
             QuizAnswer.user_id == user_id,
             QuizAnswer.quiz_id == quiz_id
@@ -2787,17 +2787,18 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
             await safe_send_message(
                 context.bot,
                 user_id,
-                f"❌ You have already completed the quiz '{quiz.topic}'. Each quiz can only be played once."
+                f"❌ You have already attempted the quiz '{quiz.topic}'. Each quiz can only be played once, even if you didn't finish it."
             )
             return
         
-        # Check if user already has an active session for this quiz
+        # Check if user already has an active session for THIS SPECIFIC quiz
+        # (Allow multiple different quizzes, but not the same quiz)
         session_key = f"{user_id}:{quiz_id}"
         if session_key in active_quiz_sessions:
             await safe_send_message(
                 context.bot,
                 user_id,
-                f"❌ You already have an active session for the quiz '{quiz.topic}'. Please complete your current session first or use /stop to cancel it."
+                f"❌ You already have an active session for the quiz '{quiz.topic}'.\n\n💡 Use /stop to cancel your current session, then try again."
             )
             return
         
@@ -2812,6 +2813,24 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
         
         active_quiz_sessions[session_key] = quiz_session
         logger.info(f"Enhanced quiz session created: {session_key}, total_sessions={len(active_quiz_sessions)}")
+        
+        # Create a record that the user has started this quiz (prevents restarting if abandoned)
+        try:
+            from models.quiz import QuizAnswer
+            quiz_attempt = QuizAnswer(
+                user_id=user_id,
+                quiz_id=quiz_id,
+                answer="",  # Empty answer indicates quiz was started but not completed
+                is_correct=False,
+                answered_at=datetime.utcnow(),
+                question_index=0
+            )
+            session.add(quiz_attempt)
+            session.commit()
+            logger.info(f"Created quiz attempt record for user {user_id}, quiz {quiz_id}")
+        except Exception as e:
+            logger.error(f"Error creating quiz attempt record: {e}")
+            session.rollback()
         
         # Send first question immediately
         await send_enhanced_question(context.application, user_id, quiz_session, quiz)
@@ -2894,23 +2913,96 @@ async def stop_enhanced_quiz(update: Update, context: CallbackContext):
     """Stop current enhanced quiz session"""
     user_id = str(update.effective_user.id)
     
-    # Find and remove user's active session
-    session_key = None
+    # Find and remove ALL user's active sessions (in case there are multiple)
+    removed_sessions = []
     for key in list(active_quiz_sessions.keys()):
         if key.startswith(f"{user_id}:"):
-            session_key = key
-            break
+            removed_sessions.append(key)
+            active_quiz_sessions.pop(key, None)
     
-    if session_key:
-        active_quiz_sessions.pop(session_key, None)
+    # Also clean up any scheduled tasks for this user
+    from services.quiz_service import scheduled_tasks
+    removed_tasks = []
+    for task_key in list(scheduled_tasks.keys()):
+        if task_key.startswith(f"{user_id}:"):
+            try:
+                scheduled_tasks[task_key].cancel()
+                removed_tasks.append(task_key)
+            except Exception as e:
+                logger.error(f"Error cancelling task {task_key}: {e}")
+            finally:
+                scheduled_tasks.pop(task_key, None)
+    
+    # Clean up Redis data for this user
+    try:
+        from utils.redis_client import RedisClient
+        redis_client = RedisClient()
+        # Get all quiz data for this user and clean it up
+        user_quiz_keys = await redis_client.get_user_quiz_keys(user_id)
+        for quiz_key in user_quiz_keys:
+            await redis_client.delete_user_quiz_data(user_id, quiz_key)
+        await redis_client.close()
+    except Exception as e:
+        logger.error(f"Error cleaning up Redis data for user {user_id}: {e}")
+    
+    if removed_sessions:
+        session_count = len(removed_sessions)
+        task_count = len(removed_tasks)
         await safe_send_message(
             context.bot,
             user_id,
-            "🛑 Quiz stopped. You can start a new quiz anytime!"
+            f"🛑 Quiz stopped successfully!\n\n📊 Cleaned up:\n• {session_count} active session(s)\n• {task_count} scheduled task(s)\n\n🎮 You can start a new quiz anytime!"
         )
+        logger.info(f"Stopped {session_count} sessions and {task_count} tasks for user {user_id}")
     else:
         await safe_send_message(
             context.bot,
             user_id,
             "ℹ️ No active quiz to stop."
         )
+
+async def debug_sessions_handler(update: Update, context: CallbackContext):
+    """Debug command to show user's active sessions"""
+    user_id = str(update.effective_user.id)
+    
+    # Check active sessions
+    user_sessions = [key for key in active_quiz_sessions.keys() if key.startswith(f"{user_id}:")]
+    
+    # Check scheduled tasks
+    from services.quiz_service import scheduled_tasks
+    user_tasks = [key for key in scheduled_tasks.keys() if key.startswith(f"{user_id}:")]
+    
+    # Check Redis data
+    try:
+        from utils.redis_client import RedisClient
+        redis_client = RedisClient()
+        user_quiz_keys = await redis_client.get_user_quiz_keys(user_id)
+        await redis_client.close()
+    except Exception as e:
+        user_quiz_keys = []
+        logger.error(f"Error checking Redis data: {e}")
+    
+    debug_text = f"🔍 **Debug Info for User {user_id}**\n\n"
+    debug_text += f"📊 **Active Sessions:** {len(user_sessions)}\n"
+    for session in user_sessions:
+        debug_text += f"• {session}\n"
+    
+    debug_text += f"\n⏰ **Scheduled Tasks:** {len(user_tasks)}\n"
+    for task in user_tasks:
+        debug_text += f"• {task}\n"
+    
+    debug_text += f"\n💾 **Redis Keys:** {len(user_quiz_keys)}\n"
+    for key in user_quiz_keys:
+        debug_text += f"• {key}\n"
+    
+    if not user_sessions and not user_tasks and not user_quiz_keys:
+        debug_text += "\n✅ **All clear!** No active sessions or tasks found."
+    else:
+        debug_text += "\n💡 Use /stop to clean up all sessions and tasks."
+    
+    await safe_send_message(
+        context.bot,
+        user_id,
+        debug_text,
+        parse_mode='Markdown'
+    )

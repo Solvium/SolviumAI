@@ -2816,6 +2816,17 @@ You answered {total_answered} questions:
         user = session.query(User).filter(User.id == user_id).first()
         username = user.username if user else None
         
+        # First, remove the "started" record if it exists (empty answer record)
+        existing_started = session.query(QuizAnswer).filter(
+            QuizAnswer.user_id == user_id,
+            QuizAnswer.quiz_id == quiz.id,
+            QuizAnswer.answer == ""  # This indicates a "started but not completed" record
+        ).first()
+        
+        if existing_started:
+            session.delete(existing_started)
+            logger.info(f"Removed 'started' record for user {user_id} in quiz {quiz.id}")
+        
         # Save individual answers in the correct format for reward distribution
         for question_index, answer_data in results['answers'].items():
             user_answer = answer_data.get('answer', 'No answer')

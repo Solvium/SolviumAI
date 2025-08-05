@@ -172,6 +172,7 @@ class TelegramBot:
             handle_poll_answer,
             stop_enhanced_quiz,
             announce_quiz_end_handler,  # Quiz end announcement handler
+            debug_sessions_handler,  # Debug sessions handler
         )
         
         # Import menu handlers
@@ -320,6 +321,7 @@ class TelegramBot:
         )
         self.app.add_handler(CommandHandler("resetwallet", handle_reset_wallet))  # Development command
         self.app.add_handler(CommandHandler("announceend", announce_quiz_end_handler))  # Quiz end announcement command
+        self.app.add_handler(CommandHandler("debug", debug_sessions_handler))  # Debug sessions command
 
         # self.app.add_handler(
         #     CommandHandler("distributerewards", distribute_rewards_handler)
