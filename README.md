@@ -10,8 +10,9 @@ Solvium is a comprehensive gaming ecosystem that features:
 - **🎯 Interactive Games**: Wordle, Logic Puzzles, Picture Puzzles, and more
 - **💰 Blockchain Rewards**: Multi-chain support (NEAR, Solana, TON, EVM)
 - **🏆 Wheel of Fortune**: Daily spin mechanics with token rewards
-- **📱 Telegram Integration**: Quiz bot for group competitions
+- **📱 Telegram/Discord Integration**: Quiz bot for group competitions
 - **🎨 Modern UI**: Beautiful, responsive design with dark theme
+- **    AI-Powered Social Wallet
 
 ## 🏗️ Architecture
 
@@ -61,6 +62,8 @@ Solvium is a comprehensive gaming ecosystem that features:
 - **Wallet Connection**: Seamless wallet integration
 - **Token Rewards**: Real cryptocurrency rewards
 - **Smart Contracts**: Automated reward distribution
+### 5. AI-Powered Social wallet 
+- **Bitte agent integration on Telegram and Discord wallets 
 
 ## 🤖 AI Features
 
