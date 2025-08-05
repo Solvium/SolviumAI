@@ -10,6 +10,7 @@ import ContestBoard from "@/components/Contest";
 import LoginModule from "@/components/auth/LoginModule";
 import { useAuth } from "./contexts/AuthContext";
 import GamesPage from "@/components/games/GamesPage";
+import { WheelOfFortune } from "@/components/Wheel";
 
 function Home() {
   const [selectedTab, setSelectedTab]: any = useState("Home");
@@ -65,7 +66,7 @@ function Home() {
             <div className="flex-1 overflow-y-auto no-scrollbar pb-20 h-[90vh]">
               {selectedTab === "Home" && <UserProfile tg={tg} />}
               {selectedTab === "Contest" && <ContestBoard />}
-              {selectedTab === "Wheel" && <SolWheelOfFortune />}
+              {selectedTab === "Wheel" && <WheelOfFortune />}
               {selectedTab === "Game" && <GamesPage />}
               {selectedTab === "Leaderboard" && <LeaderBoard />}
             </div>
