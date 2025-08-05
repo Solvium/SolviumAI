@@ -29,6 +29,7 @@ from services.user_service import (
     remove_user_wallet,
     link_wallet as service_link_wallet,  # Renamed import
     handle_wallet_address as service_handle_wallet_address,  # Renamed import
+    check_wallet_linked,  # Add this import
 )
 from agent import generate_quiz
 import logging
@@ -1378,23 +1379,83 @@ async def handle_join_quiz(update, context, quiz_id):
 
 
 async def start_quiz_for_user(update, context, quiz):
-    """Start quiz for a specific user"""
+    """Start quiz for a specific user using enhanced quiz system"""
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
     
     try:
-        # TODO: Implement actual quiz start logic
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"🎮 **Starting Quiz: {quiz.topic}**\n\n"
-                 f"📝 {len(quiz.questions)} questions\n"
-                 f"⏱ {quiz.duration_seconds // 60 if quiz.duration_seconds else 'No limit'} minutes\n\n"
-                 f"🎯 This feature is coming soon!\n"
-                 f"✅ Interactive quiz playing will be implemented in the next phase."
+        # Check if user has a wallet - if not, create one first
+        from services.wallet_service import WalletService
+        wallet_service = WalletService()
+        has_wallet = await wallet_service.has_wallet_robust(user_id)
+        
+        if not has_wallet:
+            logger.info(f"User {user_id} has no wallet, creating one before starting quiz.")
+            
+            # Send initial loading message
+            loading_message = await context.bot.send_message(
+                chat_id=chat_id,
+                text="🔧 **Creating your NEAR wallet...**\n\n⏳ Please wait while we set up your account on the blockchain...",
+                parse_mode='Markdown'
+            )
+            
+            try:
+                # Update loading message with progress
+                await loading_message.edit_text(
+                    "🔧 **Creating your NEAR wallet...**\n\n⏳ Generating secure keys and creating your account...",
+                    parse_mode='Markdown'
+                )
+                
+                # Create wallet using existing service
+                wallet_info = await wallet_service.create_demo_wallet(user_id, update.effective_user.first_name)
+                
+                # Update loading message with final step
+                await loading_message.edit_text(
+                    "🔧 **Creating your NEAR wallet...**\n\n✅ Account created! Finalizing your wallet...",
+                    parse_mode='Markdown'
+                )
+                
+                # Format the wallet info message
+                wallet_message, mini_app_keyboard = await wallet_service.format_wallet_info_message(wallet_info)
+                
+                # Update the loading message with the wallet creation result
+                await loading_message.edit_text(
+                    f"🎉 **Wallet Created Successfully!**\n\n{wallet_message}\n\nNow starting your quiz!",
+                    parse_mode='Markdown'
+                )
+                
+                logger.info(f"Wallet created successfully for user {user_id}, proceeding to start quiz.")
+                
+            except Exception as e:
+                logger.error(f"Error creating wallet for user {user_id}: {e}")
+                await loading_message.edit_text(
+                    "❌ **Wallet Creation Failed**\n\nSorry, there was an error creating your wallet. Please try again later.",
+                    parse_mode='Markdown'
+                )
+                return
+        
+        # Start enhanced quiz
+        success = await start_enhanced_quiz(
+            context.application,
+            str(user_id),
+            quiz,
+            shuffle_questions=True,
+            shuffle_answers=True
         )
         
+        if success:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🎲 Enhanced quiz '{quiz.topic}' started! Check your DMs for the quiz."
+            )
+        else:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="❌ Failed to start quiz. Please try again."
+            )
+        
     except Exception as e:
-        logger.error(f"Error starting quiz for user {user_id}: {e}")
+        logger.error(f"Error starting enhanced quiz for user {user_id}: {e}")
         await context.bot.send_message(
             chat_id=chat_id,
             text="❌ Error starting quiz. Please try again."
@@ -1973,17 +2034,58 @@ async def unlink_wallet_handler(update: Update, context: CallbackContext):
 
 async def play_quiz_handler(update: Update, context: CallbackContext):
     """Handler for /playquiz command - now uses enhanced quiz system."""
-    user_id = str(update.effective_user.id)
+    user_id = update.effective_user.id
     user_username = update.effective_user.username or update.effective_user.first_name
     
-    # Wallet check
-    if not await check_wallet_linked(user_id):
-        await safe_send_message(
-            context.bot,
-            update.effective_chat.id,
-            "Please link your wallet first using /linkwallet <wallet_address>.",
+    # Check if user has a wallet - if not, create one first
+    from services.wallet_service import WalletService
+    wallet_service = WalletService()
+    has_wallet = await wallet_service.has_wallet_robust(user_id)
+    
+    if not has_wallet:
+        logger.info(f"User {user_id} has no wallet, creating one before playing quiz.")
+        
+        # Send initial loading message
+        loading_message = await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="🔧 **Creating your NEAR wallet...**\n\n⏳ Please wait while we set up your account on the blockchain...",
+            parse_mode='Markdown'
         )
-        return
+        
+        try:
+            # Update loading message with progress
+            await loading_message.edit_text(
+                "🔧 **Creating your NEAR wallet...**\n\n⏳ Generating secure keys and creating your account...",
+                parse_mode='Markdown'
+            )
+            
+            # Create wallet using existing service
+            wallet_info = await wallet_service.create_demo_wallet(user_id, update.effective_user.first_name)
+            
+            # Update loading message with final step
+            await loading_message.edit_text(
+                "🔧 **Creating your NEAR wallet...**\n\n✅ Account created! Finalizing your wallet...",
+                parse_mode='Markdown'
+            )
+            
+            # Format the wallet info message
+            wallet_message, mini_app_keyboard = await wallet_service.format_wallet_info_message(wallet_info)
+            
+            # Update the loading message with the wallet creation result
+            await loading_message.edit_text(
+                f"🎉 **Wallet Created Successfully!**\n\n{wallet_message}\n\nNow let's find a quiz for you!",
+                parse_mode='Markdown'
+            )
+            
+            logger.info(f"Wallet created successfully for user {user_id}, proceeding to quiz selection.")
+            
+        except Exception as e:
+            logger.error(f"Error creating wallet for user {user_id}: {e}")
+            await loading_message.edit_text(
+                "❌ **Wallet Creation Failed**\n\nSorry, there was an error creating your wallet. Please try again later.",
+                parse_mode='Markdown'
+            )
+            return
 
     quiz_id_to_play = None
     if context.args:
@@ -2637,7 +2739,7 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
         # Start enhanced quiz
         success = await start_enhanced_quiz(
             context.application,
-            user_id,
+            str(user_id),
             quiz,
             shuffle_questions=True,
             shuffle_answers=True
