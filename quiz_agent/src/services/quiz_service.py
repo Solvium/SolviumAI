@@ -29,6 +29,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Global dictionary to store active quiz sessions
+active_quiz_sessions: Dict[str, "QuizSession"] = {}
+
+# Global dictionary to store scheduled tasks for cancellation
+scheduled_tasks: Dict[str, asyncio.Task] = {}
+
 # Dictionary to keep track of active question timers
 # Key: (user_id, quiz_id, question_index), Value: asyncio.Task
 active_question_timers: Dict[Tuple[str, str, int], asyncio.Task] = {}
@@ -137,9 +143,6 @@ class QuizSession:
             'total_time': self.total_time,
             'answers': self.answers
         }
-
-# Global session storage
-active_quiz_sessions: Dict[str, QuizSession] = {}
 
 async def question_timeout(
     application: "Application",
@@ -2452,12 +2455,14 @@ async def send_enhanced_question(
         )
         await redis_client.close()
         
-        # Schedule next question
-        asyncio.create_task(
+        # Schedule next question and store task for potential cancellation
+        session_key = f"{user_id}:{quiz.id}"
+        task = asyncio.create_task(
             schedule_next_question(
                 application, user_id, quiz_session, quiz, current_num, total_questions
             )
         )
+        scheduled_tasks[session_key] = task
         
         return True
         
@@ -2480,6 +2485,9 @@ async def schedule_next_question(
     # Check if session still exists
     session_key = f"{user_id}:{quiz.id}"
     if session_key not in active_quiz_sessions:
+        # Clean up scheduled task
+        if session_key in scheduled_tasks:
+            del scheduled_tasks[session_key]
         return
     
     # Mark current question as missed if no answer was given
@@ -2503,6 +2511,10 @@ async def schedule_next_question(
             await send_enhanced_question(application, user_id, quiz_session, quiz)
         else:
             await finish_enhanced_quiz(application, user_id, quiz_session, quiz)
+    
+    # Clean up scheduled task
+    if session_key in scheduled_tasks:
+        del scheduled_tasks[session_key]
 
 async def handle_enhanced_quiz_answer(
     application: "Application",
@@ -2517,6 +2529,31 @@ async def handle_enhanced_quiz_answer(
         return False
     
     quiz_session = active_quiz_sessions[session_key]
+    
+    # Cancel the scheduled timeout task since user answered
+    if session_key in scheduled_tasks:
+        try:
+            scheduled_tasks[session_key].cancel()
+            del scheduled_tasks[session_key]
+        except Exception as e:
+            logger.error(f"Error cancelling scheduled task: {e}")
+    
+    # Close the current poll to prevent sharing
+    try:
+        redis_client = RedisClient()
+        poll_message_id = await redis_client.get_user_quiz_data(
+            user_id, quiz_id, f"poll_message_{quiz_session.current_question_index-1}"
+        )
+        await redis_client.close()
+        
+        if poll_message_id:
+            # Close the poll
+            await application.bot.stop_poll(
+                chat_id=user_id,
+                message_id=int(poll_message_id)
+            )
+    except Exception as e:
+        logger.error(f"Error closing poll: {e}")
     
     # Submit answer
     is_correct = quiz_session.submit_answer(answer)
@@ -2603,9 +2640,17 @@ You answered {total_answered} questions:
     finally:
         session.close()
     
-    # Clean up session
+    # Clean up session and scheduled tasks
     session_key = f"{user_id}:{quiz.id}"
     active_quiz_sessions.pop(session_key, None)
+    
+    # Clean up any scheduled tasks
+    if session_key in scheduled_tasks:
+        try:
+            scheduled_tasks[session_key].cancel()
+            del scheduled_tasks[session_key]
+        except Exception as e:
+            logger.error(f"Error cancelling scheduled task: {e}")
     
     await safe_send_message(
         application.bot,

@@ -2043,11 +2043,16 @@ async def play_quiz_handler(update: Update, context: CallbackContext):
     has_wallet = await wallet_service.has_wallet_robust(user_id)
     
     if not has_wallet:
-        logger.info(f"User {user_id} has no wallet, creating one before playing quiz.")
+        logger.info(f"User {user_id} has no wallet, redirecting to private chat for wallet creation.")
         
-        # Send initial loading message
+        if chat_type != "private":
+            await update.message.reply_text(
+                f"@{user_username}, I'll create a wallet for you first, then we'll play quizzes in private chat."
+            )
+        
+        # Send initial loading message in private chat
         loading_message = await context.bot.send_message(
-            chat_id=update.effective_chat.id,
+            chat_id=user_id,
             text="🔧 **Creating your NEAR wallet...**\n\n⏳ Please wait while we set up your account on the blockchain...",
             parse_mode='Markdown'
         )
@@ -2776,13 +2781,15 @@ async def handle_poll_answer(update: Update, context: CallbackContext):
         return
     
     logger.info(f"Poll answer received: user={user_id}, poll_id={poll_id}, option={selected_option}")
+    logger.info(f"Active quiz sessions: {list(active_quiz_sessions.keys())}")
     
     # Find which quiz session this poll belongs to
     session_key = None
     quiz_session = None
     
+    # Look for active sessions for this user
     for key, session in active_quiz_sessions.items():
-        if session.user_id == user_id:
+        if key.startswith(f"{user_id}:"):
             # Check if this is the current question's poll
             current_q = session.get_current_question()
             if current_q:
@@ -2796,6 +2803,8 @@ async def handle_poll_answer(update: Update, context: CallbackContext):
     if not quiz_session:
         logger.warning(f"No active quiz session found for user {user_id}")
         return
+    
+    logger.info(f"Found quiz session: {session_key}")
     
     # Get the selected answer text
     current_q = quiz_session.get_current_question()

@@ -400,7 +400,7 @@ class TelegramBot:
         await self.app.initialize()
         await self.app.start()
 
-        allowed_updates_list = ["message", "callback_query"]
+        allowed_updates_list = ["message", "callback_query", "poll_answer"]
 
         if (
             self.webhook_url
