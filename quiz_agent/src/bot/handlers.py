@@ -941,7 +941,7 @@ async def process_payment(update, context, total_cost):
             await redis_client.set_user_data_key(user_id, "service_charge", service_charge)
             await redis_client.set_user_data_key(user_id, "total_paid", total_amount)
             await redis_client.set_user_data_key(user_id, "transaction_hash", transaction_result['transaction_hash'])
-            await redis_client.set_user_data_key(user_id, "payment_timestamp", str(datetime.datetime.now()))
+            await redis_client.set_user_data_key(user_id, "payment_timestamp", str(datetime.now()))
             
             # Update processing message
             await processing_msg.edit_text(
@@ -1301,12 +1301,19 @@ async def process_real_near_payment(wallet: dict, receiver_address: str, amount_
         private_key = None
         
         # Extract transaction hash
+        logger.info(f"Transaction result type: {type(transaction_result)}")
+        logger.info(f"Transaction result attributes: {dir(transaction_result)}")
+        
         if hasattr(transaction_result, 'transaction_hash'):
             transaction_hash = transaction_result.transaction_hash
         elif hasattr(transaction_result, 'hash'):
             transaction_hash = transaction_result.hash
+        elif hasattr(transaction_result, 'transaction_id'):
+            transaction_hash = transaction_result.transaction_id
         else:
             transaction_hash = str(transaction_result)
+        
+        logger.info(f"Extracted transaction hash: {transaction_hash}")
         
         logger.info(f"NEAR payment successful for user {user_id}: {transaction_hash}")
         
