@@ -1,4 +1,6 @@
-"use client"
+"use client";
+
+import { useState } from "react";
 
 const WalletPage = () => {
   return <div>Wallet</div>;
