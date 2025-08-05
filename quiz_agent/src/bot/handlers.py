@@ -1402,45 +1402,74 @@ async def process_questions_with_payment(
                 'transaction_hash': await redis_client.get_user_data_key(user_id, "transaction_hash")
             })
         
-        # Announce quiz to group
-        duration_text = ""
-        if duration_seconds and duration_seconds > 0:
-            minutes = duration_seconds // 60
-            duration_text = f" (Active for {minutes} minutes)"
+        # Import rich card formatting
+        from utils.quiz_cards import create_quiz_announcement_card
         
-        announcement_msg = f"🎯 **New Quiz: {topic}**\n\n"
-        announcement_msg += f"📝 {len(questions_list)} questions{duration_text}\n"
-        if reward_amount and float(reward_amount) > 0:
-            announcement_msg += f"💰 Reward: {reward_amount} NEAR ({reward_structure})\n"
-        else:
-            announcement_msg += f"💰 Reward: Free Quiz\n"
-        announcement_msg += f"🎮 Use /playquiz to start playing!"
+        # Calculate duration in minutes
+        duration_minutes = duration_seconds // 60 if duration_seconds else 0
         
-        # Send to group
+        # Create rich announcement card
+        announcement_msg, announcement_keyboard = create_quiz_announcement_card(
+            topic=topic,
+            num_questions=len(questions_list),
+            duration_minutes=duration_minutes,
+            reward_amount=reward_amount if reward_amount else 0,
+            reward_structure=reward_structure if reward_structure else "Free Quiz",
+            quiz_id=str(quiz_id),
+            is_free=not (reward_amount and float(reward_amount) > 0)
+        )
+        
+        # Send rich announcement to group
         await context.bot.send_message(
             chat_id=group_chat_id,
             text=announcement_msg,
-            parse_mode='Markdown'
+            parse_mode='Markdown',
+            reply_markup=announcement_keyboard
         )
         
-        # Send confirmation to user
-        user_msg = f"✅ **Quiz Created Successfully!**\n\n"
-        user_msg += f"🎯 Topic: {topic}\n"
-        user_msg += f"❓ Questions: {len(questions_list)}\n"
-        user_msg += f"⏱ Duration: {duration_seconds // 60 if duration_seconds else 'No limit'} minutes\n"
+        # Send confirmation to user with rich formatting
+        user_msg = f"""
+✅ **QUIZ CREATED SUCCESSFULLY!** ✅
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 **Topic:** {topic}
+❓ **Questions:** {len(questions_list)}
+⏱ **Duration:** {duration_seconds // 60 if duration_seconds else 'No limit'} minutes
+🆔 **Quiz ID:** {quiz_id}
+
+"""
+        
         if reward_amount and float(reward_amount) > 0:
-            user_msg += f"💰 Reward: {reward_amount} NEAR\n"
-            user_msg += f"📊 Structure: {reward_structure}\n"
-            user_msg += f"💳 Payment: {payment_status}\n"
+            user_msg += f"""
+💰 **Reward:** {reward_amount} NEAR
+📊 **Structure:** {reward_structure}
+💳 **Payment:** {payment_status}
+"""
         else:
-            user_msg += f"💰 Reward: Free Quiz\n"
-        user_msg += f"🆔 Quiz ID: {quiz_id}\n\n"
-        user_msg += f"🎮 Your quiz is now active and ready to play!"
+            user_msg += f"💰 **Reward:** Free Quiz\n"
+        
+        user_msg += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎮 **Your quiz is now active and ready to play!**
+"""
+        
+        # Create user action buttons
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        
+        user_buttons = [
+            [
+                InlineKeyboardButton("📊 View Leaderboard", callback_data=f"leaderboard:{quiz_id}"),
+                InlineKeyboardButton("📤 Share Quiz", callback_data=f"share_quiz:{quiz_id}")
+            ]
+        ]
+        
+        user_keyboard = InlineKeyboardMarkup(user_buttons)
         
         await context.bot.send_message(
             chat_id=user_id,
-            text=user_msg,
-            parse_mode='Markdown'
+            text=user_msg.strip(),
+            parse_mode='Markdown',
+            reply_markup=user_keyboard
         )
         
         logger.info(f"Quiz {quiz_id} created and announced successfully for user {user_id}")
