@@ -26,10 +26,19 @@ export interface User {
   multiplier: number;
   level: number;
   difficulty: number;
+  puzzleCount: number;
+  referralCount: number;
+  spinCount: number;
+  dailySpinCount: number;
+  claimCount: number;
+  isOfficial: boolean;
+  isMining: boolean;
+  isPremium: boolean;
+  weeklyPoints: number;
   createdAt: Date;
   lastLoginAt: Date;
   lastSpinClaim?: Date;
-  dailySpinCount?: number;
+  lastClaim?: Date;
 }
 
 export interface AuthState {

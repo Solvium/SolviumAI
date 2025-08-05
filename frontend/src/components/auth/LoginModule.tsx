@@ -23,6 +23,12 @@ export const LoginModule: React.FC<LoginModuleProps> = ({
   useEffect(() => {
     const checkTelegramAvailability = () => {
       try {
+        // Only run in browser environment
+        if (typeof window === "undefined") {
+          setIsTelegramAvailable(false);
+          return;
+        }
+
         // Check multiple ways to detect Telegram WebApp
         const tg = window?.Telegram?.WebApp;
         const webApp = WebApp;
@@ -90,6 +96,11 @@ export const LoginModule: React.FC<LoginModuleProps> = ({
 
     setIsProcessing(true);
     try {
+      // Only run in browser environment
+      if (typeof window === "undefined") {
+        throw new Error("Telegram login not available in server environment");
+      }
+
       // Try to get user data from WebApp SDK
       const webApp = WebApp;
       let userData = null;

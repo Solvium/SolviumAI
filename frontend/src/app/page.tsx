@@ -12,6 +12,9 @@ import { useAuth } from "./contexts/AuthContext";
 import GamesPage from "@/components/games/GamesPage";
 import { WheelOfFortune } from "@/components/Wheel";
 
+// Force dynamic rendering since this page uses client-side features
+export const dynamic = "force-dynamic";
+
 function Home() {
   const [selectedTab, setSelectedTab]: any = useState("Home");
   const [tg, setTg] = useState<typeof WebApp | null>(null);
@@ -22,10 +25,13 @@ function Home() {
     if (tg) return;
     let count = 0;
     const getTg = setInterval(() => {
-      const _tg = window?.Telegram?.WebApp;
-      if (_tg) {
-        setTg(_tg);
-        clearInterval(getTg);
+      // Check if we're in browser environment
+      if (typeof window !== "undefined") {
+        const _tg = window?.Telegram?.WebApp;
+        if (_tg) {
+          setTg(_tg);
+          clearInterval(getTg);
+        }
       }
 
       // console.log(count);

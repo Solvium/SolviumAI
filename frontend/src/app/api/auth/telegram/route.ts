@@ -76,16 +76,19 @@ export async function POST(request: NextRequest) {
       multiplier: 1, // Default multiplier
       level: user.level,
       difficulty: user.difficulty,
-      createdAt: new Date(), // Use current date since User model doesn't have createdAt
-      lastLoginAt: new Date(),
-      lastSpinClaim: user.lastSpinClaim,
-      dailySpinCount: user.dailySpinCount,
+      puzzleCount: user.puzzleCount,
+      referralCount: user.referralCount,
       spinCount: user.spinCount,
+      dailySpinCount: user.dailySpinCount,
       claimCount: user.claimCount,
       isOfficial: user.isOfficial,
       isMining: user.isMining,
       isPremium: user.isPremium,
       weeklyPoints: user.weeklyPoints,
+      createdAt: new Date(), // Use current date since User model doesn't have createdAt
+      lastLoginAt: new Date(),
+      lastSpinClaim: user.lastSpinClaim,
+      lastClaim: user.lastClaim,
     };
 
     // Generate tokens
