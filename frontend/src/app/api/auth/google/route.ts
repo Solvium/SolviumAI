@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtDecode } from "jwt-decode";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,22 +34,58 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create mock user data (without database)
+    // Check if user already exists in database
+    let user = await prisma.user.findUnique({
+      where: { email: decoded.email },
+    });
+
+    if (!user) {
+      // Create new user in database
+      user = await prisma.user.create({
+        data: {
+          username: decoded.email.split("@")[0],
+          email: decoded.email,
+          name: `${decoded.given_name || ""} ${
+            decoded.family_name || ""
+          }`.trim(),
+          referredBy: "", // Default empty value
+          level: 1,
+          difficulty: 1,
+          puzzleCount: 1,
+          referralCount: 0,
+          spinCount: 0,
+          dailySpinCount: 0,
+          claimCount: 0,
+          lastSpinClaim: new Date(),
+          totalPoints: 0,
+          isOfficial: false,
+          isMining: false,
+          isPremium: false,
+          lastClaim: new Date(),
+          weeklyPoints: 0,
+        },
+      });
+
+      console.log("New user created:", user.email);
+    } else {
+      console.log("Existing user logged in:", user.email);
+    }
+
+    // Create user data for response
     const userData = {
-      id: decoded.sub,
-      username: decoded.email.split("@")[0],
-      email: decoded.email,
+      id: user.id.toString(),
+      username: user.username,
+      email: user.email,
       googleId: decoded.sub,
       firstName: decoded.given_name,
       lastName: decoded.family_name,
       avatar: decoded.picture,
-      totalPoints: 0,
-      multiplier: 1,
-      level: 1,
-      createdAt: new Date(),
+      totalPoints: user.totalPoints,
+      multiplier: 1, // Default multiplier
+      level: user.level,
       lastLoginAt: new Date(),
-      lastSpinClaim: new Date(),
-      dailySpinCount: 0,
+      lastSpinClaim: user.lastSpinClaim,
+      dailySpinCount: user.dailySpinCount,
     };
 
     // Create response with simple cookie (without JWT for now)

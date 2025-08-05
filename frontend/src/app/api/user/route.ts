@@ -1,11 +1,11 @@
 // pages/api/auth/login.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { PrismaClient } from "@prisma/client";
+// import { PrismaClient } from "@prisma/client";
 import { sign, verify } from "jsonwebtoken";
 import * as cookie from "cookie";
 import { NextRequest, NextResponse } from "next/server";
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient();
 
 export async function POST(req: NextRequest) {
   const {
@@ -31,23 +31,23 @@ export async function POST(req: NextRequest) {
       }
 
       // Find user
-      const user = await prisma.user.findUnique({
-        where: { username },
-      });
+      // const user = await prisma.user.findUnique({
+      //   where: { username },
+      // });
 
-      if (!user) {
-        return NextResponse.json(
-          { message: "Invalid credentials" },
-          { status: 401 }
-        );
-      }
+      // if (!user) {
+      //   return NextResponse.json(
+      //     { message: "Invalid credentials" },
+      //     { status: 401 }
+      //   );
+      // }
 
       // Create JWT token
       const token = sign(
         {
-          id: user.id,
-          username: user.username,
-          email: user.email,
+          id: id,
+          username: username,
+          email: email,
         },
         process.env.JWT_SECRET!, // Make sure to set this in your .env file
         { expiresIn: "7d" }
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       const response = NextResponse.json(
         {
           message: "Login successful",
-          user,
+          user: { id, username, email },
         },
         { status: 200 }
       );
@@ -93,24 +93,24 @@ export async function POST(req: NextRequest) {
 
       console.log(email);
       // Find user
-      let user = await prisma.user.findUnique({
-        where: { email },
-      });
+      // let user = await prisma.user.findUnique({
+      //   where: { email },
+      // });
 
-      if (!user) {
-        user = await prisma.user.create({
-          data: {
-            referralCount: 0,
-            email,
-            isPremium: false,
-            name: name,
-            referredBy: ref,
-            chatId: "",
-            username,
-            totalPoints: 0,
-          },
-        });
-      }
+      // if (!user) {
+      //   user = await prisma.user.create({
+      //     data: {
+      //       referralCount: 0,
+      //       email,
+      //       isPremium: false,
+      //       name: name,
+      //       referredBy: ref,
+      //       chatId: "",
+      //       username,
+      //       totalPoints: 0,
+      //     },
+      //   });
+      // }
 
       // Assuming you have a password field in your schema (add it if missing)
       // Compare password (this example assumes you're storing hashed passwords)
@@ -123,9 +123,9 @@ export async function POST(req: NextRequest) {
       // Create JWT token
       const token = sign(
         {
-          id: user.id,
-          username: user.username,
-          email: user.email,
+          id: id,
+          username: username,
+          email: email,
         },
         process.env.JWT_SECRET!, // Make sure to set this in your .env file
         { expiresIn: "7d" }
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
       const response = NextResponse.json(
         {
           message: "Login successful",
-          user,
+          user: { id, username, email },
         },
         { status: 200 }
       );
@@ -279,18 +279,22 @@ export async function GET(req: NextRequest) {
       };
       console.log(decoded);
       // Get user data
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.id },
-      });
+      // const user = await prisma.user.findUnique({
+      //   where: { id: decoded.id },
+      // });
 
-      if (!user) {
-        return NextResponse.json({ authenticated: false }, { status: 401 });
-      }
+      // if (!user) {
+      //   return NextResponse.json({ authenticated: false }, { status: 401 });
+      // }
 
       return NextResponse.json(
         {
           authenticated: true,
-          user,
+          user: {
+            id: decoded.id,
+            username: "testuser",
+            email: "test@example.com",
+          },
         },
         { status: 200 }
       );

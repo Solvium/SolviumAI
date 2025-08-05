@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,17 +12,45 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // For now, return mock user data
+    // Look up user in database by ID
+    const userId = parseInt(authToken.value);
+
+    if (isNaN(userId)) {
+      return NextResponse.json({
+        authenticated: false,
+        user: null,
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      return NextResponse.json({
+        authenticated: false,
+        user: null,
+      });
+    }
+
+    // Return user data from database
     const userData = {
-      id: authToken.value,
-      username: "user_" + authToken.value.slice(-6),
-      totalPoints: 0,
-      multiplier: 1,
-      level: 1,
-      createdAt: new Date(),
+      id: user.id.toString(),
+      username: user.username,
+      email: user.email,
+      name: user.name,
+      totalPoints: user.totalPoints,
+      multiplier: 1, // Default multiplier
+      level: user.level,
       lastLoginAt: new Date(),
-      lastSpinClaim: new Date(),
-      dailySpinCount: 0,
+      lastSpinClaim: user.lastSpinClaim,
+      dailySpinCount: user.dailySpinCount,
+      spinCount: user.spinCount,
+      claimCount: user.claimCount,
+      isOfficial: user.isOfficial,
+      isMining: user.isMining,
+      isPremium: user.isPremium,
+      weeklyPoints: user.weeklyPoints,
     };
 
     return NextResponse.json({

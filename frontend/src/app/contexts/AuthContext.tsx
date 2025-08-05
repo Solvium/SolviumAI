@@ -146,6 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const checkAuthStatus = async () => {
     try {
       const response = await axios.get("/api/auth/me");
+      console.log("response", response);
       if (response.data.authenticated) {
         setState((prev) => ({
           ...prev,
@@ -218,6 +219,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     async (credential: string): Promise<User> => {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
+      console.log("credential", credential);
       try {
         const response = await axios.post("/api/auth/google", { credential });
 
