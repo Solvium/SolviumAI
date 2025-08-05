@@ -3,7 +3,6 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { useMultiLogin } from "../hooks/useMultiLogin";
 import axios from "axios";
 import WebApp from "@twa-dev/sdk";
-import { useSolviumMultiplier } from "../hooks/useSolMultiplier";
 
 const MultiLoginContext = createContext<
   | (ReturnType<typeof useMultiLogin> & {
@@ -37,8 +36,6 @@ export const MultiLoginProvider = ({
 }) => {
   const multiLogin = useMultiLogin();
   const { userData: user, checkAuthStatus } = multiLogin;
-
-  const { userDeposits } = useSolviumMultiplier();
 
   // Added state for API calls
   const [leader, setLeader] = useState<any[]>([]);
