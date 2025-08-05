@@ -54,6 +54,27 @@ class TelegramBot:
 
         self._stop_signal = asyncio.Future()  # For graceful shutdown signal
 
+    async def _handle_all_updates(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle all updates including poll answers"""
+        # Check if this is a poll answer update
+        if update.poll_answer:
+            from bot.handlers import handle_poll_answer
+            await handle_poll_answer(update, context)
+            return
+        
+        # For other updates, let the normal handlers process them
+        # This method is called before other handlers, so we just return
+        # and let the normal handler chain continue
+        pass
+
+    async def _handle_poll_answers(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle poll answer updates for enhanced quizzes"""
+        # Only process if this is a poll answer update
+        if update.poll_answer:
+            from bot.handlers import handle_poll_answer
+            await handle_poll_answer(update, context)
+        # For all other updates, do nothing and let other handlers process them
+
     @staticmethod
     async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle errors raised during callback execution."""
@@ -334,9 +355,6 @@ class TelegramBot:
             )
         )
 
-        # Handle poll answers for enhanced quizzes
-        self.app.add_handler(MessageHandler(filters.POLL_ANSWER, handle_poll_answer))
-
         # Handle enhanced quiz stop command
         self.app.add_handler(CommandHandler("stop", stop_enhanced_quiz))
 
@@ -361,6 +379,9 @@ class TelegramBot:
 
         # Register error handler
         self.app.add_error_handler(self.error_handler)
+
+        # Handle poll answers for enhanced quizzes (must be last to catch poll answer updates)
+        self.app.add_handler(MessageHandler(filters.ALL, self._handle_poll_answers))
 
     async def init_blockchain(self):
         """Initialize the blockchain monitor."""
