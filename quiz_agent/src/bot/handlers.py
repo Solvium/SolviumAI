@@ -1097,6 +1097,306 @@ async def handle_payment_verification_callback(update, context):
         return ConversationHandler.END
 
 
+async def handle_quiz_interaction_callback(update, context):
+    """Handle quiz interaction callbacks (play, leaderboard, share, etc.)"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    
+    try:
+        # Parse callback data
+        action, quiz_id = query.data.split(':', 1)
+        
+        if action == "play_quiz":
+            await handle_play_quiz(update, context, quiz_id)
+        
+        elif action == "leaderboard":
+            await handle_show_leaderboard(update, context, quiz_id)
+        
+        elif action == "past_winners":
+            await handle_show_past_winners(update, context, quiz_id)
+        
+        elif action == "share_quiz":
+            await handle_share_quiz(update, context, quiz_id)
+        
+        elif action == "hint":
+            await handle_quiz_hint(update, context, quiz_id)
+        
+        elif action == "skip_question":
+            await handle_skip_question(update, context, quiz_id)
+        
+        elif action == "answer":
+            await handle_quiz_answer(update, context, quiz_id)
+        
+        elif action == "refresh_leaderboard":
+            await handle_refresh_leaderboard(update, context, quiz_id)
+        
+        elif action == "join_quiz":
+            await handle_join_quiz(update, context, quiz_id)
+            
+    except ValueError:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ Invalid action. Please try again."
+        )
+    except Exception as e:
+        logger.error(f"Error handling quiz interaction callback: {e}")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ An error occurred. Please try again."
+        )
+
+
+async def handle_play_quiz(update, context, quiz_id):
+    """Handle play quiz button click"""
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    
+    try:
+        from store.database import SessionLocal
+        from models.quiz import Quiz, QuizStatus
+        
+        session = SessionLocal()
+        try:
+            quiz = session.query(Quiz).filter(Quiz.id == quiz_id, Quiz.status == QuizStatus.ACTIVE).first()
+            
+            if not quiz:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="❌ Quiz not found or no longer active."
+                )
+                return
+            
+            # Start quiz for user
+            await start_quiz_for_user(update, context, quiz)
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error starting quiz {quiz_id} for user {user_id}: {e}")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ Error starting quiz. Please try again."
+        )
+
+
+async def handle_show_leaderboard(update, context, quiz_id):
+    """Handle show leaderboard button click"""
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    
+    try:
+        from utils.quiz_cards import create_leaderboard_card
+        from store.database import SessionLocal
+        from models.quiz import Quiz
+        
+        session = SessionLocal()
+        try:
+            quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
+            
+            if not quiz:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="❌ Quiz not found."
+                )
+                return
+            
+            # Get leaderboard data (placeholder for now)
+            leaderboard_data = {
+                'quiz_id': quiz_id,
+                'topic': quiz.topic,
+                'top_players': [],  # TODO: Implement actual leaderboard
+                'total_participants': 0,
+                'time_remaining': 0,
+                'is_active': quiz.status == 'ACTIVE'
+            }
+            
+            # Create rich leaderboard card
+            leaderboard_msg, leaderboard_keyboard = create_leaderboard_card(leaderboard_data)
+            
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=leaderboard_msg,
+                parse_mode='Markdown',
+                reply_markup=leaderboard_keyboard
+            )
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error showing leaderboard for quiz {quiz_id}: {e}")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ Error loading leaderboard. Please try again."
+        )
+
+
+async def handle_show_past_winners(update, context, quiz_id):
+    """Handle show past winners button click"""
+    chat_id = update.effective_chat.id
+    
+    try:
+        from store.database import SessionLocal
+        from models.quiz import Quiz
+        
+        session = SessionLocal()
+        try:
+            quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
+            
+            if not quiz:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="❌ Quiz not found."
+                )
+                return
+            
+            # TODO: Implement past winners functionality
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🏆 **Past Winners for: {quiz.topic}**\n\n"
+                     f"📊 This feature is coming soon!\n"
+                     f"🎯 We're working on tracking quiz winners and their achievements."
+            )
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error showing past winners for quiz {quiz_id}: {e}")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ Error loading past winners. Please try again."
+        )
+
+
+async def handle_share_quiz(update, context, quiz_id):
+    """Handle share quiz button click"""
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    
+    try:
+        from store.database import SessionLocal
+        from models.quiz import Quiz
+        
+        session = SessionLocal()
+        try:
+            quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
+            
+            if not quiz:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="❌ Quiz not found."
+                )
+                return
+            
+            # Create share message
+            share_msg = f"""
+🎯 **Share This Quiz!**
+
+📝 **{quiz.topic}**
+❓ {len(quiz.questions)} Questions
+⏱ {quiz.duration_seconds // 60 if quiz.duration_seconds else 'No limit'} minutes
+
+🎮 **Join the fun!**
+Use /playquiz in this chat to start playing!
+
+#QuizTime #Knowledge #Fun
+"""
+            
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=share_msg.strip(),
+                parse_mode='Markdown'
+            )
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error sharing quiz {quiz_id}: {e}")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ Error sharing quiz. Please try again."
+        )
+
+
+async def handle_quiz_hint(update, context, quiz_id):
+    """Handle quiz hint button click"""
+    chat_id = update.effective_chat.id
+    
+    # TODO: Implement hint system
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="💡 **Hint System**\n\n"
+             "🎯 This feature is coming soon!\n"
+             "💡 Players will be able to get hints for difficult questions."
+    )
+
+
+async def handle_skip_question(update, context, quiz_id):
+    """Handle skip question button click"""
+    chat_id = update.effective_chat.id
+    
+    # TODO: Implement skip question functionality
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="⏭ **Skip Question**\n\n"
+             "🎯 This feature is coming soon!\n"
+             "⏭ Players will be able to skip questions they don't know."
+    )
+
+
+async def handle_quiz_answer(update, context, quiz_id):
+    """Handle quiz answer button click"""
+    chat_id = update.effective_chat.id
+    
+    # TODO: Implement answer processing
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="✅ **Answer Submitted**\n\n"
+             "🎯 This feature is coming soon!\n"
+             "✅ Players will be able to submit answers and see results."
+    )
+
+
+async def handle_refresh_leaderboard(update, context, quiz_id):
+    """Handle refresh leaderboard button click"""
+    await handle_show_leaderboard(update, context, quiz_id)
+
+
+async def handle_join_quiz(update, context, quiz_id):
+    """Handle join quiz button click"""
+    await handle_play_quiz(update, context, quiz_id)
+
+
+async def start_quiz_for_user(update, context, quiz):
+    """Start quiz for a specific user"""
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    
+    try:
+        # TODO: Implement actual quiz start logic
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🎮 **Starting Quiz: {quiz.topic}**\n\n"
+                 f"📝 {len(quiz.questions)} questions\n"
+                 f"⏱ {quiz.duration_seconds // 60 if quiz.duration_seconds else 'No limit'} minutes\n\n"
+                 f"🎯 This feature is coming soon!\n"
+                 f"✅ Interactive quiz playing will be implemented in the next phase."
+        )
+        
+    except Exception as e:
+        logger.error(f"Error starting quiz for user {user_id}: {e}")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ Error starting quiz. Please try again."
+        )
+
+
 async def reward_custom_input(update, context):
     user_id = update.effective_user.id
     redis_client = RedisClient()

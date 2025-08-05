@@ -150,6 +150,7 @@ class TelegramBot:
             start_reward_setup_callback,  # Import new reward setup handlers
             handle_reward_method_choice,
             show_all_active_leaderboards_command,
+            handle_quiz_interaction_callback,  # New quiz interaction handler
         )
         
         # Import menu handlers
@@ -311,6 +312,14 @@ class TelegramBot:
         self.app.add_handler(
             CallbackQueryHandler(
                 play_quiz_selection_callback, pattern=r"^playquiz_select:"
+            )
+        )
+
+        # Handle quiz interaction callbacks (play, leaderboard, share, etc.)
+        self.app.add_handler(
+            CallbackQueryHandler(
+                handle_quiz_interaction_callback, 
+                pattern=r"^(play_quiz|leaderboard|past_winners|share_quiz|hint|skip_question|answer|refresh_leaderboard|join_quiz):"
             )
         )
 
