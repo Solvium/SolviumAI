@@ -105,20 +105,25 @@ class WalletService:
             wallet = await self.get_user_wallet(user_id)
             if wallet and wallet.get("account_id"):
                 account_id = wallet["account_id"]
+                logger.info(f"Getting balance for account: {account_id}, force_refresh: {force_refresh}")
                 
                 # Check cache first (unless force refresh)
                 if not force_refresh:
                     cached_balance = await cache_service.get_cached_balance(account_id)
                     if cached_balance:
+                        logger.info(f"Using cached balance for {account_id}: {cached_balance}")
                         return cached_balance
                 
                 # Fetch from blockchain
+                logger.info(f"Fetching fresh balance from blockchain for {account_id}")
                 balance = await self.near_wallet_service.get_account_balance(account_id)
+                logger.info(f"Fresh balance from blockchain for {account_id}: {balance}")
                 
                 # Cache the result
                 await cache_service.set_cached_balance(account_id, balance)
                 
                 return balance
+            logger.warning(f"No wallet or account_id found for user {user_id}")
             return "0 NEAR"
         except Exception as e:
             logger.error(f"Error getting wallet balance for user {user_id}: {e}")

@@ -29,9 +29,8 @@ class CacheService:
             cached_data = await self.redis_client.get_value(cache_key)
             
             if cached_data:
-                wallet_data = json.loads(cached_data)
                 logger.debug(f"Cache HIT for wallet user {user_id}")
-                return wallet_data
+                return cached_data
             
             # Cache miss - try database
             logger.debug(f"Cache MISS for wallet user {user_id}, checking database")
@@ -116,12 +115,11 @@ class CacheService:
         """
         try:
             cache_key = f"user:{user_id}"
-            cached_data = await self.redis_client.get(cache_key)
+            cached_data = await self.redis_client.get_value(cache_key)
             
             if cached_data:
-                user_data = json.loads(cached_data)
                 logger.debug(f"Cache HIT for user {user_id}")
-                return user_data
+                return cached_data
             
             return None
             
@@ -178,7 +176,7 @@ class CacheService:
         """
         try:
             # Check Redis cache first
-            wallet_created = await self.redis_client.get(f"wallet_created:{user_id}")
+            wallet_created = await self.redis_client.get_value(f"wallet_created:{user_id}")
             if wallet_created == "true":
                 return True
             

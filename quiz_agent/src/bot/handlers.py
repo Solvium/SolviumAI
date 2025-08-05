@@ -1004,6 +1004,13 @@ async def show_funding_instructions(update, context, required_amount, current_ba
         logger.error(f"Error retrieving wallet for user {user_id}: {e}")
         wallet = None
     
+    # Debug: Log the wallet structure
+    if wallet:
+        logger.info(f"Wallet keys for user {user_id}: {list(wallet.keys())}")
+        logger.info(f"Account ID for user {user_id}: {wallet.get('account_id', 'NOT_FOUND')}")
+    else:
+        logger.warning(f"No wallet found for user {user_id}")
+    
     shortfall = required_amount - current_balance
     
     funding_text = f"💰 **Payment Required**\n\n"
@@ -1016,7 +1023,21 @@ async def show_funding_instructions(update, context, required_amount, current_ba
         logger.info(f"Added wallet address to funding instructions: {wallet['account_id']}")
     else:
         logger.warning(f"No wallet or account_id found for user {user_id}. Wallet: {wallet}")
-        funding_text += f"**Your Wallet Address:**\n*Unable to retrieve wallet address*\n\n"
+        
+        # Try direct database fallback
+        try:
+            from services.database_service import db_service
+            db_wallet = await db_service.get_user_wallet(user_id)
+            logger.info(f"Direct DB wallet for user {user_id}: {db_wallet}")
+            
+            if db_wallet and db_wallet.get('account_id'):
+                funding_text += f"**Your Wallet Address:**\n`{db_wallet['account_id']}`\n\n"
+                logger.info(f"Added DB wallet address to funding instructions: {db_wallet['account_id']}")
+            else:
+                funding_text += f"**Your Wallet Address:**\n*Unable to retrieve wallet address*\n\n"
+        except Exception as db_error:
+            logger.error(f"Database fallback also failed for user {user_id}: {db_error}")
+            funding_text += f"**Your Wallet Address:**\n*Unable to retrieve wallet address*\n\n"
     
     funding_text += f"To fund your wallet:\n\n"
     funding_text += f"1️⃣ **Copy your wallet address** above\n"
@@ -1267,8 +1288,11 @@ async def process_real_near_payment(wallet: dict, receiver_address: str, amount_
         # Send money to main account
         logger.info(f"Processing NEAR payment: {wallet['account_id']} -> {receiver_address}, Amount: {amount_yocto} yoctoNEAR")
         
+        # Start the account connection
+        await user_account.startup()
+        
         transaction_result = await user_account.send_money(
-            receiver_id=receiver_address,
+            account_id=receiver_address,
             amount=amount_yocto,
             nowait=False  # Wait for transaction execution
         )
