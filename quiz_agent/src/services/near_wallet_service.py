@@ -296,10 +296,13 @@ class NEARWalletService:
             try:
                 # Use the py-near create_account method directly
                 # This creates a sub-account with the specified name and public key
+                # Use minimal balance from config (minimum for account creation)
+                minimal_balance = int(Config.MINIMAL_ACCOUNT_BALANCE * (10 ** 24))  # Convert to yoctoNEAR
+                
                 result = await self.main_account.create_account(
                     account_id=sub_account_id,
                     public_key=public_key,
-                    initial_balance=NEAR,  # 1 NEAR initial balance
+                    initial_balance=minimal_balance,  # Minimal balance for account creation
                     nowait=False  # Wait for execution
                 )
                 
@@ -407,6 +410,9 @@ class NEARWalletService:
             # Get real balance from NEAR testnet
             balance = await self.get_account_balance(wallet_info['account_id'])
             
+            # Get minimal balance for display
+            minimal_balance = Config.MINIMAL_ACCOUNT_BALANCE
+            
             # Check if this is a demo wallet
             is_demo = wallet_info.get('is_demo', False)
             
@@ -431,6 +437,13 @@ class NEARWalletService:
 📋 **Account Details:**
 • **Account ID:** `{wallet_info['account_id']}`
 • **Balance:** {balance}
+
+💰 **Initial Funding:** Your account was created with {minimal_balance} NEAR to cover storage costs.
+
+💡 **To fund your account for paid quizzes:**
+• Copy your account ID above
+• Send NEAR from an exchange or another wallet
+• Use a faucet for testnet NEAR (if on testnet)
 
 🔑 **Private Key (SAVE THIS SECURELY!):**
 `{private_key}`

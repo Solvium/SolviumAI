@@ -1017,6 +1017,7 @@ async def show_funding_instructions(update, context, required_amount, current_ba
     funding_text += f"• Use a faucet for testnet NEAR\n"
     funding_text += f"• Buy from exchanges like Binance, Coinbase\n"
     funding_text += f"• Transfer from another wallet\n\n"
+    funding_text += f"💡 **Note:** Your account was created with {Config.MINIMAL_ACCOUNT_BALANCE} NEAR for storage costs.\n\n"
     funding_text += f"Once funded, click 'Check Balance' to continue."
     
     buttons = [
