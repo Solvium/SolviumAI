@@ -26,12 +26,11 @@ function Home() {
     let count = 0;
     const getTg = setInterval(() => {
       // Check if we're in browser environment
-      if (typeof window !== "undefined") {
-        const _tg = window?.Telegram?.WebApp;
-        if (_tg) {
-          setTg(_tg);
-          clearInterval(getTg);
-        }
+
+      const _tg = window.Telegram?.WebApp;
+      if (_tg) {
+        setTg(_tg);
+        clearInterval(getTg);
       }
 
       // console.log(count);
