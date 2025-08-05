@@ -317,23 +317,11 @@ class NEARWalletService:
     
     async def get_account_balance(self, account_id: str) -> str:
         """
-        Gets the actual NEAR account balance using pynear
+        Gets the actual NEAR account balance using RPC
         """
         try:
-            # Use pynear Account to get balance
-            if not self.main_account:
-                logger.warning("Main account not initialized, using RPC fallback")
-                return await self._get_balance_rpc_fallback(account_id)
-            
-            # Use pynear's get_balance method with the account_id parameter
-            try:
-                balance_yocto = await self.main_account.get_balance(account_id)
-                balance_near = balance_yocto / (10 ** 24)
-                logger.debug(f"Successfully got balance for {account_id}: {balance_near} NEAR")
-                return f"{balance_near:.4f} NEAR"
-            except Exception as pynear_error:
-                logger.debug(f"pynear balance check failed, using RPC fallback: {pynear_error}")
-                return await self._get_balance_rpc_fallback(account_id)
+            # Always use RPC for balance queries as it's more reliable
+            return await self._get_balance_rpc_fallback(account_id)
                 
         except Exception as e:
             logger.error(f"Error getting balance for {account_id}: {e}")
@@ -341,7 +329,7 @@ class NEARWalletService:
     
     async def _get_balance_rpc_fallback(self, account_id: str) -> str:
         """
-        Fallback RPC method for getting account balance
+        RPC method for getting account balance
         """
         try:
             payload = {
@@ -355,6 +343,8 @@ class NEARWalletService:
                 }
             }
             
+            logger.debug(f"Fetching balance for account: {account_id}")
+            
             response = requests.post(
                 self.testnet_rpc_url,
                 json=payload,
@@ -364,19 +354,26 @@ class NEARWalletService:
             
             if response.status_code == 200:
                 data = response.json()
+                logger.debug(f"RPC response for {account_id}: {data}")
+                
                 if "result" in data and "amount" in data["result"]:
                     # Convert yoctoNEAR to NEAR
                     balance_yocto = int(data["result"]["amount"])
                     balance_near = balance_yocto / (10 ** 24)
+                    logger.info(f"Successfully got balance for {account_id}: {balance_near} NEAR")
                     return f"{balance_near:.4f} NEAR"
+                elif "error" in data:
+                    logger.error(f"RPC error for {account_id}: {data['error']}")
+                    return "0 NEAR"
                 else:
+                    logger.warning(f"No balance data found for {account_id}: {data}")
                     return "0 NEAR"
             else:
-                logger.error(f"Failed to get balance for {account_id}: {response.status_code}")
+                logger.error(f"Failed to get balance for {account_id}: HTTP {response.status_code}")
                 return "0 NEAR"
                 
         except Exception as e:
-            logger.error(f"Error in RPC fallback for {account_id}: {e}")
+            logger.error(f"Error in RPC balance check for {account_id}: {e}")
             return "0 NEAR"
     
     def decrypt_private_key(self, encrypted_private_key: str, iv: str, tag: str) -> str:

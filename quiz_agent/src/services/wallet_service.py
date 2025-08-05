@@ -87,7 +87,7 @@ class WalletService:
             logger.error(f"Error in robust wallet check for user {user_id}: {e}")
             return False
     
-    async def get_wallet_balance(self, user_id: int) -> str:
+    async def get_wallet_balance(self, user_id: int, force_refresh: bool = False) -> str:
         """
         Gets the real NEAR testnet wallet balance with caching
         """
@@ -96,10 +96,11 @@ class WalletService:
             if wallet and wallet.get("account_id"):
                 account_id = wallet["account_id"]
                 
-                # Check cache first
-                cached_balance = await cache_service.get_cached_balance(account_id)
-                if cached_balance:
-                    return cached_balance
+                # Check cache first (unless force refresh)
+                if not force_refresh:
+                    cached_balance = await cache_service.get_cached_balance(account_id)
+                    if cached_balance:
+                        return cached_balance
                 
                 # Fetch from blockchain
                 balance = await self.near_wallet_service.get_account_balance(account_id)

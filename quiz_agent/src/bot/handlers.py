@@ -597,12 +597,16 @@ async def duration_choice(update, context):
         
         progress_text += f"💰 Step 4 of 4: Reward Setup"
         
-        # Get wallet balance for user
+        # Get wallet info and balance for user
         from services.wallet_service import WalletService
         wallet_service = WalletService()
+        wallet = await wallet_service.get_user_wallet(user_id)
         wallet_balance = await wallet_service.get_wallet_balance(user_id)
         
-        progress_text += f"\n\n💳 Wallet Balance: {wallet_balance}"
+        if wallet and wallet.get('account_id'):
+            progress_text += f"\n\n💳 Wallet: `{wallet['account_id']}`\n💰 Balance: {wallet_balance}"
+        else:
+            progress_text += f"\n\n💳 Wallet Balance: {wallet_balance}"
         
         buttons = [
             [InlineKeyboardButton("Free Quiz", callback_data="reward_free"),
@@ -863,10 +867,10 @@ async def payment_verification(update, context):
         await redis_client.set_user_data_key(user_id, "payment_status", "not_required")
         return await confirm_prompt(update, context)
     
-    # Get wallet balance
+    # Get wallet balance (force refresh for payment verification)
     from services.wallet_service import WalletService
     wallet_service = WalletService()
-    wallet_balance_str = await wallet_service.get_wallet_balance(user_id)
+    wallet_balance_str = await wallet_service.get_wallet_balance(user_id, force_refresh=True)
     
     # Parse balance (e.g., "0.5000 NEAR" -> 0.5)
     try:
@@ -989,15 +993,24 @@ async def show_funding_instructions(update, context, required_amount, current_ba
     user_id = update.effective_user.id
     redis_client = RedisClient()
     
+    # Get wallet info
+    from services.wallet_service import WalletService
+    wallet_service = WalletService()
+    wallet = await wallet_service.get_user_wallet(user_id)
+    
     shortfall = required_amount - current_balance
     
     funding_text = f"💰 **Payment Required**\n\n"
     funding_text += f"Required: {required_amount} NEAR\n"
     funding_text += f"Current Balance: {current_balance} NEAR\n"
     funding_text += f"Shortfall: {shortfall} NEAR\n\n"
+    
+    if wallet and wallet.get('account_id'):
+        funding_text += f"**Your Wallet Address:**\n`{wallet['account_id']}`\n\n"
+    
     funding_text += f"To fund your wallet:\n\n"
-    funding_text += f"1️⃣ **Get NEAR tokens** from an exchange\n"
-    funding_text += f"2️⃣ **Send to your wallet** address\n"
+    funding_text += f"1️⃣ **Copy your wallet address** above\n"
+    funding_text += f"2️⃣ **Send NEAR** to that address\n"
     funding_text += f"3️⃣ **Wait for confirmation** (usually 1-2 minutes)\n"
     funding_text += f"4️⃣ **Click 'Check Balance'** below\n\n"
     funding_text += f"💡 **Quick Funding Options:**\n"
@@ -1027,7 +1040,7 @@ async def handle_payment_verification_callback(update, context):
     await update.callback_query.answer()
     
     if choice == "check_balance":
-        # Re-check balance and proceed if sufficient
+        # Re-check balance and proceed if sufficient (force refresh)
         return await payment_verification(update, context)
     
     elif choice == "retry_payment":
