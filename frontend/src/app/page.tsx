@@ -3,7 +3,7 @@ import { GoHome } from "react-icons/go";
 import { MdOutlineLeaderboard } from "react-icons/md";
 import { useEffect, useState } from "react";
 import LeaderBoard from "@/components/LeaderBoard";
-import WebApp from "@twa-dev/sdk";
+import type WebApp from "@twa-dev/sdk";
 import UserProfile from "@/components/Profile";
 import ContestBoard from "@/components/Contest";
 
