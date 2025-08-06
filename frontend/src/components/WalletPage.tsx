@@ -111,8 +111,20 @@ const WalletHeader = () => (
         </Button>
       </div>
     </div>
+
+    {/* NEAR Network Badge */}
+    <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-2 px-3 py-1 bg-[#1A1A2F] border border-[#2A2A45] rounded-full">
+        <div className="w-2 h-2 rounded-full bg-green-500" />
+        <span className="text-sm text-white">NEAR Protocol</span>
+      </div>
+      <Badge variant="secondary" className="bg-green-500/20 text-green-500">
+        Mainnet
+      </Badge>
+    </div>
   </div>
 );
+
 
 
 
