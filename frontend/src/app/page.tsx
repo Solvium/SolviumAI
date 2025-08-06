@@ -29,13 +29,13 @@ function Home() {
         clearInterval(getTg);
       }
 
-      // console.log(count);
+    
 
       if (count > 10) {
         clearInterval(getTg);
       }
       count++;
-    }, 10000);
+    }, 10000)
   }, []);
 
   const handlePageChange = (page: string) => {
@@ -70,6 +70,7 @@ function Home() {
               {selectedTab === "Wheel" && <SolWheelOfFortune />}
               {selectedTab === "Game" && <GamesPage />}
               {selectedTab === "Leaderboard" && <LeaderBoard />}
+              {selectedTab === "Wallet" && <WalletPage />}
             </div>
 
             <div className="fixed bottom-0 left-0 right-0 bg-[#151524] border-t border-[#2A2A45] shadow-glow-blue">
