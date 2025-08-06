@@ -27,7 +27,7 @@ function Home() {
     const getTg = setInterval(() => {
       // Check if we're in browser environment
 
-      const _tg = window.Telegram?.WebApp;
+      const _tg = window?.Telegram?.WebApp;
       if (_tg) {
         setTg(_tg);
         clearInterval(getTg);
