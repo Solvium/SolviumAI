@@ -93,6 +93,11 @@ class Config:
     ACCOUNT_CREATION_TIMEOUT = int(os.getenv('ACCOUNT_CREATION_TIMEOUT', '30'))
     BALANCE_CHECK_TIMEOUT = int(os.getenv('BALANCE_CHECK_TIMEOUT', '10'))
     
+    # NEAR Account Creation Settings
+    # Minimum balance required for account creation (in NEAR)
+    # This covers storage costs and allows the account to exist
+    MINIMAL_ACCOUNT_BALANCE = float(os.getenv('MINIMAL_ACCOUNT_BALANCE', '0.00182'))
+    
     # Security Settings
     MIN_PRIVATE_KEY_LENGTH = 64
     MAX_ACCOUNT_ID_LENGTH = 64

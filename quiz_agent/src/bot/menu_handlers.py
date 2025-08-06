@@ -12,7 +12,13 @@ from .keyboard_markups import (
     create_community_keyboard,
     create_app_keyboard,
     create_cancel_keyboard,
-    remove_keyboard
+    remove_keyboard,
+    create_inline_cancel_keyboard,
+    create_inline_main_menu_keyboard,
+    create_inline_game_selection_keyboard,
+    create_inline_challenge_keyboard,
+    create_inline_community_keyboard,
+    create_inline_app_keyboard,
 )
 from utils.redis_client import RedisClient
 from services.wallet_service import WalletService
@@ -119,7 +125,7 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
     
     # Check if user has a wallet - if not, create one first
     wallet_service = WalletService()
-    has_wallet = await wallet_service.has_wallet(user_id)
+    has_wallet = await wallet_service.has_wallet_robust(user_id)
     
     if not has_wallet:
         # Create wallet for first-time user

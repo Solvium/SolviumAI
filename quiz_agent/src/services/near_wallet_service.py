@@ -296,10 +296,13 @@ class NEARWalletService:
             try:
                 # Use the py-near create_account method directly
                 # This creates a sub-account with the specified name and public key
+                # Use minimal balance from config (minimum for account creation)
+                minimal_balance = int(Config.MINIMAL_ACCOUNT_BALANCE * (10 ** 24))  # Convert to yoctoNEAR
+                
                 result = await self.main_account.create_account(
                     account_id=sub_account_id,
                     public_key=public_key,
-                    initial_balance=NEAR,  # 1 NEAR initial balance
+                    initial_balance=minimal_balance,  # Minimal balance for account creation
                     nowait=False  # Wait for execution
                 )
                 
@@ -317,7 +320,19 @@ class NEARWalletService:
     
     async def get_account_balance(self, account_id: str) -> str:
         """
-        Gets the actual NEAR account balance from testnet
+        Gets the actual NEAR account balance using RPC
+        """
+        try:
+            # Always use RPC for balance queries as it's more reliable
+            return await self._get_balance_rpc_fallback(account_id)
+                
+        except Exception as e:
+            logger.error(f"Error getting balance for {account_id}: {e}")
+            return "0 NEAR"
+    
+    async def _get_balance_rpc_fallback(self, account_id: str) -> str:
+        """
+        RPC method for getting account balance
         """
         try:
             payload = {
@@ -331,6 +346,8 @@ class NEARWalletService:
                 }
             }
             
+            logger.debug(f"Fetching balance for account: {account_id}")
+            
             response = requests.post(
                 self.testnet_rpc_url,
                 json=payload,
@@ -340,19 +357,26 @@ class NEARWalletService:
             
             if response.status_code == 200:
                 data = response.json()
+                logger.debug(f"RPC response for {account_id}: {data}")
+                
                 if "result" in data and "amount" in data["result"]:
                     # Convert yoctoNEAR to NEAR
                     balance_yocto = int(data["result"]["amount"])
                     balance_near = balance_yocto / (10 ** 24)
+                    logger.info(f"Successfully got balance for {account_id}: {balance_near} NEAR")
                     return f"{balance_near:.4f} NEAR"
+                elif "error" in data:
+                    logger.error(f"RPC error for {account_id}: {data['error']}")
+                    return "0 NEAR"
                 else:
+                    logger.warning(f"No balance data found for {account_id}: {data}")
                     return "0 NEAR"
             else:
-                logger.error(f"Failed to get balance for {account_id}: {response.status_code}")
+                logger.error(f"Failed to get balance for {account_id}: HTTP {response.status_code}")
                 return "0 NEAR"
                 
         except Exception as e:
-            logger.error(f"Error getting balance for {account_id}: {e}")
+            logger.error(f"Error in RPC balance check for {account_id}: {e}")
             return "0 NEAR"
     
     def decrypt_private_key(self, encrypted_private_key: str, iv: str, tag: str) -> str:
@@ -386,6 +410,9 @@ class NEARWalletService:
             # Get real balance from NEAR testnet
             balance = await self.get_account_balance(wallet_info['account_id'])
             
+            # Get minimal balance for display
+            minimal_balance = Config.MINIMAL_ACCOUNT_BALANCE
+            
             # Check if this is a demo wallet
             is_demo = wallet_info.get('is_demo', False)
             
@@ -410,6 +437,9 @@ class NEARWalletService:
 📋 **Account Details:**
 • **Account ID:** `{wallet_info['account_id']}`
 • **Balance:** {balance}
+
+💰 **Initial Funding:** Your account was created with {minimal_balance} NEAR to cover storage costs.
+
 
 🔑 **Private Key (SAVE THIS SECURELY!):**
 `{private_key}`

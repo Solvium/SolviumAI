@@ -44,12 +44,22 @@ class WalletService:
         Retrieves the user's wallet information with enhanced caching
         """
         try:
+            logger.debug(f"Getting wallet for user {user_id}")
             # Use enhanced cache service with database fallback
             wallet_data = await cache_service.get_cached_wallet(user_id)
+            logger.debug(f"Retrieved wallet data for user {user_id}: {wallet_data}")
             return wallet_data
         except Exception as e:
             logger.error(f"Error retrieving wallet for user {user_id}: {e}")
-            return None
+            # Fallback to direct database query
+            try:
+                logger.debug(f"Falling back to direct database query for user {user_id}")
+                wallet_data = await db_service.get_user_wallet(user_id)
+                logger.debug(f"Direct DB query result for user {user_id}: {wallet_data}")
+                return wallet_data
+            except Exception as db_error:
+                logger.error(f"Database fallback also failed for user {user_id}: {db_error}")
+                return None
     
     async def has_wallet(self, user_id: int) -> bool:
         """
@@ -61,7 +71,33 @@ class WalletService:
             logger.error(f"Error checking wallet status for user {user_id}: {e}")
             return False
     
-    async def get_wallet_balance(self, user_id: int) -> str:
+    async def has_wallet_robust(self, user_id: int) -> bool:
+        """
+        Robust wallet check with cache-first then database fallback for critical operations
+        """
+        try:
+            # 1. Quick cache check first
+            cached_result = await cache_service.has_cached_wallet(user_id)
+            if cached_result:
+                logger.debug(f"Cache HIT: User {user_id} has wallet in cache")
+                return True
+            
+            # 2. Database check for definitive answer
+            logger.debug(f"Cache MISS: Checking database for user {user_id}")
+            db_result = await db_service.has_wallet(user_id)
+            
+            # 3. Update cache if database has wallet but cache doesn't
+            if db_result:
+                logger.info(f"Database has wallet for user {user_id}, updating cache")
+                await cache_service.cache_wallet_creation(user_id, {})
+            
+            return db_result
+            
+        except Exception as e:
+            logger.error(f"Error in robust wallet check for user {user_id}: {e}")
+            return False
+    
+    async def get_wallet_balance(self, user_id: int, force_refresh: bool = False) -> str:
         """
         Gets the real NEAR testnet wallet balance with caching
         """
@@ -69,19 +105,25 @@ class WalletService:
             wallet = await self.get_user_wallet(user_id)
             if wallet and wallet.get("account_id"):
                 account_id = wallet["account_id"]
+                logger.info(f"Getting balance for account: {account_id}, force_refresh: {force_refresh}")
                 
-                # Check cache first
-                cached_balance = await cache_service.get_cached_balance(account_id)
-                if cached_balance:
-                    return cached_balance
+                # Check cache first (unless force refresh)
+                if not force_refresh:
+                    cached_balance = await cache_service.get_cached_balance(account_id)
+                    if cached_balance:
+                        logger.info(f"Using cached balance for {account_id}: {cached_balance}")
+                        return cached_balance
                 
                 # Fetch from blockchain
+                logger.info(f"Fetching fresh balance from blockchain for {account_id}")
                 balance = await self.near_wallet_service.get_account_balance(account_id)
+                logger.info(f"Fresh balance from blockchain for {account_id}: {balance}")
                 
                 # Cache the result
                 await cache_service.set_cached_balance(account_id, balance)
                 
                 return balance
+            logger.warning(f"No wallet or account_id found for user {user_id}")
             return "0 NEAR"
         except Exception as e:
             logger.error(f"Error getting wallet balance for user {user_id}: {e}")

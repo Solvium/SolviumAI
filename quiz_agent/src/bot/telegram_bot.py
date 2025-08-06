@@ -7,7 +7,8 @@ from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
     ConversationHandler,
-    JobQueue,  # Add JobQueue import for auto-distribution scheduling
+    JobQueue,  
+    PollAnswerHandler, 
 )
 from telegram.ext import MessageHandler, filters
 from telegram.error import TimedOut, NetworkError, RetryAfter, TelegramError, BadRequest
@@ -53,6 +54,22 @@ class TelegramBot:
         self.webhook_url_path = webhook_url_path
 
         self._stop_signal = asyncio.Future()  # For graceful shutdown signal
+
+    async def _handle_all_updates(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle all updates including poll answers"""
+        # Check if this is a poll answer update
+        if update.poll_answer:
+            logger.info(f"Poll answer detected: user={update.poll_answer.user.id}, poll_id={update.poll_answer.poll_id}")
+            from bot.handlers import handle_poll_answer
+            await handle_poll_answer(update, context)
+            return
+        
+        # For other updates, let the normal handlers process them
+        # This method is called before other handlers, so we just return
+        # and let the normal handler chain continue
+        pass
+
+
 
     @staticmethod
     async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -106,19 +123,38 @@ class TelegramBot:
             start_handler,
             start_createquiz_group,
             topic_received,
+            notes_choice,
+            notes_input,
             size_received,
+            size_selection,
             context_choice,
             context_input,
             duration_choice,
             duration_input,
+            reward_choice,
+            reward_custom_input,
+            show_reward_structure_options,
+            reward_structure_choice,
+            payment_verification,
+            process_payment,
+            show_funding_instructions,
+            handle_payment_verification_callback,
+            process_questions_with_payment,
+            store_payment_info_in_quiz,
             confirm_prompt,
             confirm_choice,
             TOPIC,
+            NOTES_CHOICE,
+            NOTES_INPUT,
             SIZE,
             CONTEXT_CHOICE,
             CONTEXT_INPUT,
             DURATION_CHOICE,
             DURATION_INPUT,
+            REWARD_CHOICE,
+            REWARD_CUSTOM_INPUT,
+            REWARD_STRUCTURE_CHOICE,
+            PAYMENT_VERIFICATION,
             CONFIRM,
             link_wallet_handler,
             unlink_wallet_handler,
@@ -131,6 +167,12 @@ class TelegramBot:
             start_reward_setup_callback,  # Import new reward setup handlers
             handle_reward_method_choice,
             show_all_active_leaderboards_command,
+            handle_quiz_interaction_callback,  # New quiz interaction handler
+            handle_enhanced_quiz_start_callback,  # Enhanced quiz handlers
+            handle_poll_answer,
+            stop_enhanced_quiz,
+            announce_quiz_end_handler,  # Quiz end announcement handler
+            debug_sessions_handler,  # Debug sessions handler
         )
         
         # Import menu handlers
@@ -149,11 +191,27 @@ class TelegramBot:
                         topic_received,
                     )
                 ],
-                # In SIZE state we only accept text messages in private chat
+                # Notes choice state - callback queries for add/skip notes
+                NOTES_CHOICE: [
+                    CallbackQueryHandler(
+                        notes_choice, pattern="^(add_notes|skip_notes)$"
+                    )
+                ],
+                # Notes input state - text messages for notes
+                NOTES_INPUT: [
+                    MessageHandler(
+                        filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
+                        notes_input,
+                    )
+                ],
+                # In SIZE state we accept both text messages and callback queries in private chat
                 SIZE: [
                     MessageHandler(
                         filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
                         size_received,
+                    ),
+                    CallbackQueryHandler(
+                        size_selection, pattern="^(size_5|size_10|size_15|size_20|size_custom)$"
                     )
                 ],
                 # For callback queries, we don't need to filter by chat type as they're handled correctly
@@ -172,7 +230,7 @@ class TelegramBot:
                 # For callback queries, we don't need to filter by chat type
                 DURATION_CHOICE: [
                     CallbackQueryHandler(
-                        duration_choice, pattern="^(set_duration|skip_duration)$"
+                        duration_choice, pattern="^(5_min|10_min|30_min|1_hour|no_limit|set_duration|skip_duration)$"
                     )
                 ],
                 # Text input for duration should be in private chat
@@ -180,6 +238,35 @@ class TelegramBot:
                     MessageHandler(
                         filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
                         duration_input,
+                    )
+                ],
+                # Reward choice state - callback queries for reward options
+                REWARD_CHOICE: [
+                    CallbackQueryHandler(
+                        reward_choice, pattern="^(reward_free|reward_0\\.1|reward_0\\.5|reward_custom)$"
+                    ),
+                    MessageHandler(
+                        filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
+                        reward_choice,
+                    )
+                ],
+                # Custom reward input state
+                REWARD_CUSTOM_INPUT: [
+                    MessageHandler(
+                        filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
+                        reward_custom_input,
+                    )
+                ],
+                # Reward structure choice state
+                REWARD_STRUCTURE_CHOICE: [
+                    CallbackQueryHandler(
+                        reward_structure_choice, pattern="^(structure_wta|structure_top3|structure_custom)$"
+                    )
+                ],
+                # Payment verification state
+                PAYMENT_VERIFICATION: [
+                    CallbackQueryHandler(
+                        handle_payment_verification_callback, pattern="^(check_balance|retry_payment|cancel_quiz)$"
                     )
                 ],
                 # Final confirmation is a callback query
@@ -233,6 +320,8 @@ class TelegramBot:
             CommandHandler("leaderboards", show_all_active_leaderboards_command)
         )
         self.app.add_handler(CommandHandler("resetwallet", handle_reset_wallet))  # Development command
+        self.app.add_handler(CommandHandler("announceend", announce_quiz_end_handler))  # Quiz end announcement command
+        self.app.add_handler(CommandHandler("debug", debug_sessions_handler))  # Debug sessions command
 
         # self.app.add_handler(
         #     CommandHandler("distributerewards", distribute_rewards_handler)
@@ -249,6 +338,25 @@ class TelegramBot:
                 play_quiz_selection_callback, pattern=r"^playquiz_select:"
             )
         )
+
+        # Handle quiz interaction callbacks (play, leaderboard, share, etc.)
+        self.app.add_handler(
+            CallbackQueryHandler(
+                handle_quiz_interaction_callback, 
+                pattern=r"^(play_quiz|leaderboard|past_winners|share_quiz|hint|skip_question|answer|refresh_leaderboard|join_quiz):"
+            )
+        )
+
+        # Handle enhanced quiz callbacks
+        self.app.add_handler(
+            CallbackQueryHandler(
+                handle_enhanced_quiz_start_callback,
+                pattern=r"^enhanced_quiz_start:"
+            )
+        )
+
+        # Handle enhanced quiz stop command
+        self.app.add_handler(CommandHandler("stop", stop_enhanced_quiz))
 
         # Handle text messages for ReplyKeyboardMarkup (higher priority than private_message_handler)
         logger.info("Registering text message handler for ReplyKeyboardMarkup")
@@ -272,6 +380,10 @@ class TelegramBot:
         # Register error handler
         self.app.add_error_handler(self.error_handler)
 
+        # Remove any MessageHandler(filters.ALL, ...) for poll answers
+        # Register PollAnswerHandler for poll answers (highest priority)
+        self.app.add_handler(PollAnswerHandler(handle_poll_answer), group=-1)
+
     async def init_blockchain(self):
         """Initialize the blockchain monitor."""
         self.blockchain_monitor = await start_blockchain_monitor(self.app.bot, self.app)
@@ -289,7 +401,7 @@ class TelegramBot:
         await self.app.initialize()
         await self.app.start()
 
-        allowed_updates_list = ["message", "callback_query"]
+        allowed_updates_list = ["message", "callback_query", "poll_answer"]
 
         if (
             self.webhook_url
