@@ -128,10 +128,18 @@ const WalletHeader = () => (
 const BalanceCard = () => (
   <Card className="bg-gradient-to-br from-[#1A1A2F] to-[#151524] border-[#2A2A45]">
     <CardContent className="p-6">
-      <div>Balance Card</div>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 rounded-full bg-green-500" />
+            <span className="text-[#8E8EA8] text-sm">NEAR Balance</span>
+          </div>
+        </div>
+      </div>
     </CardContent>
   </Card>
 );
+
 
 
 
