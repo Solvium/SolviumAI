@@ -247,7 +247,27 @@ const AccountInfo = () => (
       </div>
     </div>
 
-    {/* Additional Account Info Components */}
+    <div className="p-4 bg-[#1A1A2F] rounded-lg border border-[#2A2A45]">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-white font-medium">Network</div>
+          <div className="text-[#8E8EA8] text-sm">NEAR Protocol Mainnet</div>
+        </div>
+        <div className="w-3 h-3 rounded-full bg-green-500" />
+      </div>
+    </div>
+
+    <div className="p-4 bg-[#1A1A2F] rounded-lg border border-[#2A2A45]">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-white font-medium">Storage Used</div>
+          <div className="text-[#8E8EA8] text-sm">2.4 KB of 100 KB</div>
+        </div>
+        <div className="w-16 bg-[#2A2A45] rounded-full h-2">
+          <div className="bg-[#4C6FFF] h-2 rounded-full" style={{ width: "2.4%" }} />
+        </div>
+      </div>
+    </div>
   </div>
 );
 
