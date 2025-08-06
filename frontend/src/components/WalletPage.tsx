@@ -67,6 +67,11 @@ const WalletPage = () => {
     },
   ];
 
+  const WalletConnectSection = () => (
+  <div>Wallet Connect Section</div>
+);
+
+
   return <div>Wallet</div>;
 };
 
