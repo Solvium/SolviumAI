@@ -242,7 +242,7 @@ const Tasks = ({
   // Mock tasks data - in real implementation, this would come from the backend
   const tasks = [
     {
-      id: 1,
+      id: "1",
       name: "Join Solvium Telegram Group",
       description: "Join our official Telegram group",
       points: 50,
@@ -250,7 +250,7 @@ const Tasks = ({
       link: "https://t.me/SolviumGroup",
     },
     {
-      id: 2,
+      id: "2",
       name: "Follow on Twitter",
       description: "Follow our official Twitter account",
       points: 30,

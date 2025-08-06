@@ -55,8 +55,19 @@ export async function POST(request: NextRequest) {
       multiplier: 1,
       level: 1,
       difficulty: 1,
+      puzzleCount: 1,
+      referralCount: 0,
+      spinCount: 0,
+      dailySpinCount: 0,
+      claimCount: 0,
+      isOfficial: false,
+      isMining: false,
+      isPremium: false,
+      weeklyPoints: 0,
       createdAt: new Date(),
       lastLoginAt: new Date(),
+      lastSpinClaim: new Date(),
+      lastClaim: new Date(),
     };
 
     const newAccessToken = JWTService.generateAccessToken(mockUser);

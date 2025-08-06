@@ -9,8 +9,11 @@ import ContestBoard from "@/components/Contest";
 
 import LoginModule from "@/components/auth/LoginModule";
 import { useAuth } from "./contexts/AuthContext";
-import { SolWheelOfFortune } from "@/components/SolWheel";
 import GamesPage from "@/components/games/GamesPage";
+import { WheelOfFortune } from "@/components/Wheel";
+
+// Force dynamic rendering since this page uses client-side features
+export const dynamic = "force-dynamic";
 
 function Home() {
   const [selectedTab, setSelectedTab]: any = useState("Home");
@@ -22,6 +25,8 @@ function Home() {
     if (tg) return;
     let count = 0;
     const getTg = setInterval(() => {
+      // Check if we're in browser environment
+
       const _tg = window?.Telegram?.WebApp;
       if (_tg) {
         setTg(_tg);
@@ -66,7 +71,7 @@ function Home() {
             <div className="flex-1 overflow-y-auto no-scrollbar pb-20 h-[90vh]">
               {selectedTab === "Home" && <UserProfile tg={tg} />}
               {selectedTab === "Contest" && <ContestBoard />}
-              {selectedTab === "Wheel" && <SolWheelOfFortune />}
+              {selectedTab === "Wheel" && <WheelOfFortune />}
               {selectedTab === "Game" && <GamesPage />}
               {selectedTab === "Leaderboard" && <LeaderBoard />}
             </div>
