@@ -155,25 +155,60 @@ const Farming = ({ userDetails }: { userDetails: any }) => {
   const [loadingFarm, setLoadingFarm] = useState(false);
   const [amount, setAmount] = useState(0);
   const [count, setCount] = useState(0);
+  const { refreshUser } = useAuth();
+  const [error, setError] = useState<string | null>(null);
 
+  // Updated mining rate for exactly 63 points in 5 hours
   const hashRate = 0.0035;
-  const remainingTime =
-    new Date(userDetails?.lastClaim ?? 0).getTime() - new Date().getTime();
+  // 5 hours in seconds
+  const miningDurationSeconds = 5 * 60 * 60; // 18,000 seconds
+  // Calculate how many seconds have passed since mining started
+  const now = Date.now();
+  const lastClaimTime = new Date(userDetails?.lastClaim ?? 0).getTime();
+  const miningStartTime = lastClaimTime - miningDurationSeconds * 1000;
+  const secondsMined = Math.max(
+    0,
+    Math.min(miningDurationSeconds, Math.floor((now - miningStartTime) / 1000))
+  );
+  const remainingTime = lastClaimTime - now;
 
   useEffect(() => {
     setAmount(
       hashRate *
         (userDetails?.multiplier == 0 ? 1 : userDetails?.multiplier) *
-        (18000 - count / 1000)
+        secondsMined
     );
-  }, [count, userDetails?.multiplier]);
+  }, [count, userDetails?.multiplier, secondsMined]);
 
   const handleFarming = async () => {
     setLoadingFarm(true);
-    // TODO: Implement farming logic with new auth system
-    setTimeout(() => {
+    setError(null);
+    try {
+      // Only allow claim if not currently mining
+      if (!userDetails?.isMining) {
+        // Start mining: you may want to call an endpoint to set isMining true
+        // For now, just refresh user data
+        await refreshUser();
+        setLoadingFarm(false);
+        return;
+      }
+      // If mining is done, allow claim
+      if (remainingTime <= 0) {
+        const res = await axios.post("/api/claim", {
+          username: userDetails?.username,
+          type: `farm claim--${amount}`,
+        });
+        if (res.data && res.data.success) {
+          await refreshUser();
+        } else {
+          setError(res.data?.error || "Failed to claim reward");
+        }
+      }
+    } catch (err: any) {
+      setError(err?.message || "An error occurred");
+    } finally {
       setLoadingFarm(false);
-    }, 2000);
+    }
   };
 
   return (
@@ -225,6 +260,9 @@ const Farming = ({ userDetails }: { userDetails: any }) => {
           )}
         </button>
       </div>
+      {error && (
+        <div className="text-red-500 text-center mt-2 text-sm">{error}</div>
+      )}
     </div>
   );
 };
