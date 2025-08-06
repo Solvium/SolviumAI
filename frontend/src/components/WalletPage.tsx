@@ -94,8 +94,13 @@ const WalletConnectSection = () => (
 );
 
 const WalletHeader = () => (
-  <div>Wallet Header</div>
+  <div className="space-y-4">
+    <div className="flex items-center justify-between">
+      <h1 className="text-2xl font-bold text-white">NEAR Wallet</h1>
+    </div>
+  </div>
 );
+
 
 
 
