@@ -97,9 +97,23 @@ const WalletHeader = () => (
   <div className="space-y-4">
     <div className="flex items-center justify-between">
       <h1 className="text-2xl font-bold text-white">NEAR Wallet</h1>
+      <div className="flex items-center space-x-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowBalance(!showBalance)}
+          className="text-[#8E8EA8] hover:text-white"
+        >
+          {showBalance ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+        </Button>
+        <Button variant="ghost" size="sm" className="text-[#8E8EA8] hover:text-white">
+          <Settings className="w-4 h-4" />
+        </Button>
+      </div>
     </div>
   </div>
 );
+
 
 
 
