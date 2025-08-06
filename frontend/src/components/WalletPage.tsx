@@ -72,8 +72,15 @@ const WalletPage = () => {
     <div className="w-24 h-24 bg-[#1A1A2F] rounded-full flex items-center justify-center border-2 border-[#4C6FFF]">
       <Wallet className="w-12 h-12 text-[#4C6FFF]" />
     </div>
+    <div className="text-center space-y-2">
+      <h3 className="text-xl font-semibold text-white">Connect Your NEAR Wallet</h3>
+      <p className="text-[#8E8EA8] text-sm max-w-xs">
+        Connect your NEAR wallet to view balance, send tokens, and manage your assets
+      </p>
+    </div>
   </div>
 );
+
 
 
 
