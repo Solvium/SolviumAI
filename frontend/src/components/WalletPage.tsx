@@ -246,8 +246,11 @@ const AccountInfo = () => (
         </div>
       </div>
     </div>
+
+    {/* Additional Account Info Components */}
   </div>
 );
+
 
 
 
