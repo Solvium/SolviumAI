@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google";
 import { GOOGLE_CLIENT_ID } from "@/app/config/google";
-import WebApp from "@twa-dev/sdk";
 import { FaTelegram, FaGoogle, FaSpinner } from "react-icons/fa";
 import { toast } from "react-toastify";
 
@@ -18,23 +17,28 @@ export const LoginModule: React.FC<LoginModuleProps> = ({
   const { loginWithTelegram, loginWithGoogle, isLoading, error } = useAuth();
   const [isTelegramAvailable, setIsTelegramAvailable] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  // Ensure we're on the client side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Check if Telegram Web App is available
   useEffect(() => {
-    const checkTelegramAvailability = () => {
+    if (!isClient) return;
+
+    const checkTelegramAvailability = async () => {
       try {
-        // Only run in browser environment
-        if (typeof window === "undefined") {
-          setIsTelegramAvailable(false);
-          return;
-        }
+        // Dynamically import WebApp to avoid SSR issues
+        const { default: WebApp } = await import("@twa-dev/sdk");
 
         // Check multiple ways to detect Telegram WebApp
-        const tg = window?.Telegram?.WebApp;
+        const tg = (window as any)?.Telegram?.WebApp;
         const webApp = WebApp;
 
         console.log("Telegram detection:", {
-          windowTelegram: !!window?.Telegram,
+          windowTelegram: !!(window as any)?.Telegram,
           webAppAvailable: !!webApp,
           initDataUnsafe: webApp?.initDataUnsafe,
           user: webApp?.initDataUnsafe?.user,
@@ -86,20 +90,18 @@ export const LoginModule: React.FC<LoginModuleProps> = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isClient]);
 
   const handleTelegramLogin = async () => {
-    if (!isTelegramAvailable) {
+    if (!isTelegramAvailable || !isClient) {
       toast.error("Telegram Web App is not available");
       return;
     }
 
     setIsProcessing(true);
     try {
-      // Only run in browser environment
-      if (typeof window === "undefined") {
-        throw new Error("Telegram login not available in server environment");
-      }
+      // Dynamically import WebApp to avoid SSR issues
+      const { default: WebApp } = await import("@twa-dev/sdk");
 
       // Try to get user data from WebApp SDK
       const webApp = WebApp;
@@ -107,8 +109,8 @@ export const LoginModule: React.FC<LoginModuleProps> = ({
 
       if (webApp?.initDataUnsafe?.user) {
         userData = webApp.initDataUnsafe.user;
-      } else if (window?.Telegram?.WebApp?.initDataUnsafe?.user) {
-        userData = window.Telegram.WebApp.initDataUnsafe.user;
+      } else if ((window as any)?.Telegram?.WebApp?.initDataUnsafe?.user) {
+        userData = (window as any).Telegram.WebApp.initDataUnsafe.user;
       }
 
       if (!userData) {
@@ -147,6 +149,22 @@ export const LoginModule: React.FC<LoginModuleProps> = ({
   const handleGoogleError = () => {
     toast.error("Google login failed. Please try again.");
   };
+
+  // Don't render until we're on the client side
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-[#0B0B14] flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-white mb-2">
+              Welcome to Solvium
+            </h1>
+            <p className="text-[#8E8EA8] text-sm">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0B0B14] flex items-center justify-center p-4">
