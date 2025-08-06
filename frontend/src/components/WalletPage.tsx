@@ -235,6 +235,10 @@ const TransactionsSection = () => (
   </div>
 );
 
+const AccountInfo = () => (
+  <div>Account Info</div>
+);
+
 
 
 
