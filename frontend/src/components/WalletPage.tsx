@@ -125,6 +125,14 @@ const WalletHeader = () => (
   </div>
 );
 
+const BalanceCard = () => (
+  <Card className="bg-gradient-to-br from-[#1A1A2F] to-[#151524] border-[#2A2A45]">
+    <CardContent className="p-6">
+      <div>Balance Card</div>
+    </CardContent>
+  </Card>
+);
+
 
 
 
