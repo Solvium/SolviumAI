@@ -160,6 +160,16 @@ function Home() {
                   >
                     <MdOutlineLeaderboard className="text-2xl mb-1" />
                     <span className="text-xs">Ranks</span>
+                    <button
+                    onClick={() => handlePageChange("Wallet")}
+                    className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
+                      selectedTab === "Wallet"
+                        ? "text-[#4C6FFF] bg-[#1A1A2F] shadow-glow-sm"
+                        : "text-[#8E8EA8] hover:text-[#4C6FFF] hover:bg-[#1A1A2F]/50"
+                    }`}
+                  >
+                    <Wallet className="text-2xl mb-1" />
+                    <span className="text-xs">Wallet</span>
                   </button>
                 </div>
               </div>
