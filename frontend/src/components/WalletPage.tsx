@@ -207,8 +207,8 @@ const ActionButtons = () => (
   return (
     <div className="p-4 space-y-6">
       <WalletHeader />
-      {/* <BalanceCard /> */}
-      {/* <ActionButtons /> */}
+      <BalanceCard />
+      <ActionButtons />
       <Tabs defaultValue="transactions" className="w-full">
         <TabsList className="grid w-full grid-cols-2 bg-[#1A1A2F] border border-[#2A2A45]">
           <TabsTrigger value="transactions" className="data-[state=active]:bg-[#4C6FFF] data-[state=active]:text-white">
