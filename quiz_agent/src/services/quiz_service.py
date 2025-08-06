@@ -92,8 +92,6 @@ class QuizSession:
     
     def submit_answer(self, answer: str) -> bool:
         """Submit answer for current question and return if correct"""
-        logger.info(f"QuizSession.submit_answer called: current_index={self.current_question_index}, total_questions={len(self.prepared_questions)}")
-        
         if self.current_question_index >= len(self.prepared_questions):
             logger.warning(f"Current question index {self.current_question_index} >= total questions {len(self.prepared_questions)}")
             return False
@@ -113,7 +111,6 @@ class QuizSession:
                 break
         
         is_correct = original_label == correct_answer
-        logger.info(f"Answer mapping: answer='{answer}' -> original_label='{original_label}', correct_answer='{correct_answer}', is_correct={is_correct}")
         
         # Get the actual text of the correct answer for display
         correct_answer_text = original_options.get(correct_answer, 'Unknown')
@@ -130,15 +127,12 @@ class QuizSession:
         else:
             self.wrong_answers += 1
         
-        logger.info(f"Answer recorded: correct={self.correct_answers}, wrong={self.wrong_answers}")
         return is_correct
     
     def next_question(self) -> bool:
         """Move to next question, return False if no more questions"""
-        logger.info(f"QuizSession.next_question called: current_index={self.current_question_index}, total_questions={len(self.prepared_questions)}")
         self.current_question_index += 1
         has_more = self.current_question_index < len(self.prepared_questions)
-        logger.info(f"Next question result: new_index={self.current_question_index}, has_more={has_more}")
         return has_more
     
     def get_progress(self) -> Tuple[int, int]:
@@ -216,17 +210,14 @@ async def create_quiz(update: Update, context: CallbackContext):
     days_match = re.search(r"for\s+(\d+)\s+days", command_text, re.IGNORECASE)
     if days_match:
         duration_days = int(days_match.group(1))
-        logger.info(f"Detected quiz duration: {duration_days} days")
 
     hours_match = re.search(r"for\s+(\d+)\s+hours", command_text, re.IGNORECASE)
     if hours_match:
         duration_hours = int(hours_match.group(1))
-        logger.info(f"Detected quiz duration: {duration_hours} hours")
 
     minutes_match = re.search(r"for\s+(\d+)\s+minutes", command_text, re.IGNORECASE)
     if minutes_match:
         duration_minutes = int(minutes_match.group(1))
-        logger.info(f"Detected quiz duration: {duration_minutes} minutes")
 
     # Calculate total duration in seconds (CORRECTED LOGIC)
     total_minutes = 0
@@ -259,12 +250,10 @@ async def create_quiz(update: Update, context: CallbackContext):
     questions_match = re.search(r"(\d+)\s+questions", command_text, re.IGNORECASE)
     if questions_match:
         num_questions = min(int(questions_match.group(1)), Config.MAX_QUIZ_QUESTIONS)
-        logger.info(f"Detected number of questions: {num_questions}")
 
     create_match = re.search(r"create\s+(\d+)\s+quiz", command_text, re.IGNORECASE)
     if create_match and not num_questions:
         num_questions = min(int(create_match.group(1)), Config.MAX_QUIZ_QUESTIONS)
-        logger.info(f"Detected 'create X quiz' format: {num_questions} questions")
 
     if num_questions is None:
         simple_num_match = re.search(
@@ -274,7 +263,6 @@ async def create_quiz(update: Update, context: CallbackContext):
             num_questions = min(
                 int(simple_num_match.group(1)), Config.MAX_QUIZ_QUESTIONS
             )
-            logger.info(f"Detected simple number format: {num_questions} questions")
 
     topic = None
     topic_match = re.search(
@@ -311,7 +299,6 @@ async def create_quiz(update: Update, context: CallbackContext):
             num_questions = min(
                 int(topic_num_match.group(1)), Config.MAX_QUIZ_QUESTIONS
             )
-            logger.info(f"Detected number in topic command: {num_questions} questions")
             topic = re.sub(r"create\s+\d+\s+quiz(?:\s+on)?\s+", "", topic).strip()
 
     if num_questions is None:
@@ -695,11 +682,9 @@ async def get_quiz_details(quiz_id: str) -> Optional[dict]:
 
     cached_quiz = await redis_client.get_cached_object(cache_key)
     if cached_quiz:
-        logger.info(f"Quiz details for {quiz_id} found in cache.")
         await redis_client.close()
         return cached_quiz
 
-    logger.info(f"Quiz details for {quiz_id} not in cache. Fetching from DB.")
     session = SessionLocal()
     try:
         quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
@@ -788,10 +773,6 @@ async def play_quiz(update: Update, context: CallbackContext):
             group_chat_id = update.effective_chat.id
 
         if not quiz_id_to_play and group_chat_id:
-            logger.info(
-                f"No quiz ID in args, checking active quizzes for group: {group_chat_id}"
-            )
-
             # PERFORMANCE OPTIMIZATION: Check cache for active quizzes first
             redis_client = RedisClient()
             try:
@@ -799,9 +780,6 @@ async def play_quiz(update: Update, context: CallbackContext):
                     str(group_chat_id)
                 )
                 if cached_active_quizzes:
-                    logger.info(
-                        f"Found {len(cached_active_quizzes)} active quizzes in cache for group {group_chat_id}"
-                    )
                     # Convert cached data back to quiz objects for processing
                     active_quizzes = []
                     for quiz_data in cached_active_quizzes:
@@ -838,9 +816,6 @@ async def play_quiz(update: Update, context: CallbackContext):
                     await redis_client.cache_active_quizzes(
                         str(group_chat_id), quiz_cache_data, ttl_seconds=300
                     )
-                    logger.info(
-                        f"Cached {len(active_quizzes)} active quizzes for group {group_chat_id}"
-                    )
 
                 await redis_client.close()
             except Exception as cache_error:
@@ -859,10 +834,6 @@ async def play_quiz(update: Update, context: CallbackContext):
                     .all()
                 )
                 await redis_client.close()
-
-            logger.info(
-                f"Found {len(active_quizzes)} active quizzes for group {group_chat_id}."
-            )
 
             if len(active_quizzes) > 1:
                 buttons = []
@@ -922,7 +893,6 @@ async def play_quiz(update: Update, context: CallbackContext):
                     return
             elif len(active_quizzes) == 1:
                 quiz_id_to_play = active_quizzes[0].id
-                logger.info(f"One active quiz found ({quiz_id_to_play}), proceeding.")
             else:
                 await safe_send_message(
                     context.bot,
@@ -1232,11 +1202,6 @@ async def handle_quiz_answer_logic(
                     # Find which shuffled label corresponds to the original correct answer
                     correct_shuffled_label = label_mapping.get(correct_answer_label, "")
                     is_correct = answer == correct_shuffled_label
-                    logger.debug(
-                        f"Answer validation: original_correct={correct_answer_label}, "
-                        f"shuffled_correct={correct_shuffled_label}, user_answer={answer}, "
-                        f"is_correct={is_correct}, mapping={label_mapping}"
-                    )
                 else:
                     # Fallback to original logic if no mapping found (shouldn't happen)
                     is_correct = answer == correct_answer_label
@@ -1320,9 +1285,6 @@ async def handle_quiz_answer_logic(
                 try:
                     session.flush()  # Validate first
                     session.commit()
-                    logger.debug(
-                        f"Database committed for quiz {quiz_id} answer submission"
-                    )
                 except Exception as e:
                     logger.error(f"Database commit error: {e}")
                     session.rollback()
@@ -1336,7 +1298,6 @@ async def handle_quiz_answer_logic(
                         "invalidate_quiz_cache", {"quiz_id": quiz_id}
                     ):
                         await redis_client.invalidate_quiz_cache(quiz_id)
-                        logger.debug(f"Cache invalidated for quiz {quiz_id}")
                 except Exception as cache_error:
                     logger.warning(f"Cache invalidation failed: {cache_error}")
                 finally:
