@@ -296,18 +296,21 @@ const AccountInfo = () => (
       <BalanceCard />
       <ActionButtons />
       <Tabs defaultValue="transactions" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 bg-[#1A1A2F] border border-[#2A2A45]">
-        <TabsTrigger
-  value="transactions"
-  className="data-[state=active]:bg-[#4C6FFF] data-[state=active]:text-white hover:bg-[#2A2A45] text-[#8E8EA8]"
->
-  Transactions
-</TabsTrigger>
+      <TabsList className="grid w-full grid-cols-2 bg-[#1A1A2F] border border-[#2A2A45] rounded-lg">
+  <TabsTrigger
+    value="transactions"
+    className="data-[state=active]:bg-[#4C6FFF] data-[state=active]:text-white text-[#8E8EA8] py-2"
+  >
+    Transactions
+  </TabsTrigger>
+  <TabsTrigger
+    value="account"
+    className="data-[state=active]:bg-[#4C6FFF] data-[state=active]:text-white text-[#8E8EA8] py-2"
+  >
+    Account
+  </TabsTrigger>
+</TabsList>
 
-          <TabsTrigger value="account" className="data-[state=active]:bg-[#4C6FFF] data-[state=active]:text-white">
-            Account
-          </TabsTrigger>
-        </TabsList>
         <TabsContent value="transactions" className="mt-6">
           <TransactionsSection />
         </TabsContent>
