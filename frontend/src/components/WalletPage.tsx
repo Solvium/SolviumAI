@@ -218,6 +218,24 @@ const TransactionItem = ({ transaction }: { transaction: any }) => (
   </div>
 );
 
+const TransactionsSection = () => (
+  <div className="space-y-4">
+    <div className="flex items-center justify-between">
+      <h3 className="text-lg font-semibold text-white">Recent Transactions</h3>
+      <Button variant="ghost" size="sm" className="text-[#4C6FFF]">
+        <History className="w-4 h-4 mr-1" />
+        View All
+      </Button>
+    </div>
+    <div className="space-y-3">
+      {transactions.map((transaction) => (
+        <TransactionItem key={transaction.id} transaction={transaction} />
+      ))}
+    </div>
+  </div>
+);
+
+
 
 
 
