@@ -93,13 +93,11 @@ const WalletConnectSection = () => (
   </div>
 );
 
+const WalletHeader = () => (
+  <div>Wallet Header</div>
+);
 
 
-
-
-const WalletPage = () => {
-  const [showBalance, setShowBalance] = useState(true);
-  const [isConnected, setIsConnected] = useState(false);
 
   if (!isConnected) {
     return (
