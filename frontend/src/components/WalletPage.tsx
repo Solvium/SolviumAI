@@ -24,6 +24,9 @@ const WalletPage = () => {
   const [showBalance, setShowBalance] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
 
+  // Mock data for NEAR only
+  const walletAddress = "solvium.near";
+
   return <div>Wallet</div>;
 };
 
