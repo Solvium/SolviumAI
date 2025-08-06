@@ -51,7 +51,7 @@ function Home() {
     );
   }
 
-  console.log(isAuthenticated);
+
 
   // Show login if not authenticated
   if (!isAuthenticated) {
