@@ -6,7 +6,8 @@ import LeaderBoard from "@/components/LeaderBoard";
 import type WebApp from "@twa-dev/sdk";
 import UserProfile from "@/components/Profile";
 import ContestBoard from "@/components/Contest";
-
+import { Wallet } from "lucide-react";
+import WalletPage from "@/components/WalletPage";
 import LoginModule from "@/components/auth/LoginModule";
 import { useAuth } from "./contexts/AuthContext";
 import { SolWheelOfFortune } from "@/components/SolWheel";
