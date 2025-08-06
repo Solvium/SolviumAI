@@ -97,7 +97,27 @@ const WalletConnectSection = () => (
 
 
 
-  return <div>Wallet</div>;
+const WalletPage = () => {
+  const [showBalance, setShowBalance] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+
+  if (!isConnected) {
+    return (
+      <div className="p-4">
+        <WalletConnectSection />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 space-y-6">
+      <WalletHeader />
+      <BalanceCard />
+      <ActionButtons />
+    </div>
+  );
+};
+
 };
 
 export default WalletPage;
