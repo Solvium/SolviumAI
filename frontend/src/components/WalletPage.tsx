@@ -161,6 +161,27 @@ const BalanceCard = () => (
   </Card>
 );
 
+const ActionButtons = () => (
+  <div className="grid grid-cols-4 gap-3">
+    <Button className="flex flex-col items-center space-y-2 h-auto py-4 bg-[#1A1A2F] hover:bg-[#2A2A45] border border-[#2A2A45]">
+      <Send className="w-5 h-5 text-[#4C6FFF]" />
+      <span className="text-xs text-white">Send</span>
+    </Button>
+    <Button className="flex flex-col items-center space-y-2 h-auto py-4 bg-[#1A1A2F] hover:bg-[#2A2A45] border border-[#2A2A45]">
+      <Download className="w-5 h-5 text-[#4C6FFF]" />
+      <span className="text-xs text-white">Receive</span>
+    </Button>
+    <Button className="flex flex-col items-center space-y-2 h-auto py-4 bg-[#1A1A2F] hover:bg-[#2A2A45] border border-[#2A2A45]">
+      <Plus className="w-5 h-5 text-[#4C6FFF]" />
+      <span className="text-xs text-white">Buy</span>
+    </Button>
+    <Button className="flex flex-col items-center space-y-2 h-auto py-4 bg-[#1A1A2F] hover:bg-[#2A2A45] border border-[#2A2A45]">
+      <QrCode className="w-5 h-5 text-[#4C6FFF]" />
+      <span className="text-xs text-white">Scan</span>
+    </Button>
+  </div>
+);
+
 
 
 
