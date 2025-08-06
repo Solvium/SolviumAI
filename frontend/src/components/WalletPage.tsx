@@ -26,6 +26,7 @@ const WalletPage = () => {
 
   // Mock data for NEAR only
   const walletAddress = "solvium.near";
+  const balance = { amount: "125.45", usd: "892.15" };
 
   return <div>Wallet</div>;
 };
