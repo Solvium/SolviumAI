@@ -316,7 +316,7 @@ const AccountInfo = () => (
           <TransactionsSection />
         </TabsContent>
         <TabsContent value="account" className="mt-6">
-          {/* <AccountInfo /> */}
+          <AccountInfo />
         </TabsContent>
       </Tabs>
     </div>
