@@ -67,7 +67,7 @@ const WalletPage = () => {
     },
   ];
 
-  const WalletConnectSection = () => (
+ const WalletConnectSection = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] space-y-6">
     <div className="w-24 h-24 bg-[#1A1A2F] rounded-full flex items-center justify-center border-2 border-[#4C6FFF]">
       <Wallet className="w-12 h-12 text-[#4C6FFF]" />
@@ -78,8 +78,21 @@ const WalletPage = () => {
         Connect your NEAR wallet to view balance, send tokens, and manage your assets
       </p>
     </div>
+    <div className="space-y-3 w-full max-w-xs">
+      <Button
+        onClick={() => setIsConnected(true)}
+        className="w-full bg-gradient-to-r from-[#4C6FFF] to-[#6B46C1] hover:from-[#3B4FE6] hover:to-[#5A3CB8] text-white font-medium"
+      >
+        <span className="mr-2">🟢</span>
+        Connect NEAR Wallet
+      </Button>
+      <div className="text-center">
+        <p className="text-xs text-[#8E8EA8]">Supports NEAR Wallet, MyNearWallet, and Meteor Wallet</p>
+      </div>
+    </div>
   </div>
 );
+
 
 
 
