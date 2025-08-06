@@ -146,20 +146,11 @@ const BalanceCard = () => (
             {showBalance ? `≈ $${balance.usd} USD` : "••••••"}
           </div>
         </div>
-
-        <div className="flex items-center justify-between pt-2">
-          <div className="flex items-center space-x-2 text-xs text-[#8E8EA8]">
-            <Copy className="w-3 h-3" />
-            <span className="font-mono">{walletAddress}</span>
-          </div>
-          <Button variant="ghost" size="sm" className="text-[#8E8EA8] hover:text-white p-1">
-            <Copy className="w-3 h-3" />
-          </Button>
-        </div>
       </div>
     </CardContent>
   </Card>
 );
+
 
 const ActionButtons = () => (
   <div className="grid grid-cols-4 gap-3">
