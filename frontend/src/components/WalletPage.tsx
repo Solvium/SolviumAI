@@ -134,11 +134,15 @@ const BalanceCard = () => (
             <div className="w-3 h-3 rounded-full bg-green-500" />
             <span className="text-[#8E8EA8] text-sm">NEAR Balance</span>
           </div>
+          <Badge variant="secondary" className="bg-[#0B0B14] text-[#4C6FFF]">
+            Connected
+          </Badge>
         </div>
       </div>
     </CardContent>
   </Card>
 );
+
 
 
 
