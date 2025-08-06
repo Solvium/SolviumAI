@@ -275,7 +275,7 @@ const TransactionsSection = () => (
           </TabsTrigger>
         </TabsList>
         <TabsContent value="transactions" className="mt-6">
-          {/* <TransactionsSection /> */}
+          <TransactionsSection />
         </TabsContent>
         <TabsContent value="account" className="mt-6">
           {/* <AccountInfo /> */}
