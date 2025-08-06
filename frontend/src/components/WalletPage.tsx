@@ -183,8 +183,41 @@ const ActionButtons = () => (
 );
 
 const TransactionItem = ({ transaction }: { transaction: any }) => (
-  <div>Transaction Item</div>
+  <div className="flex items-center justify-between p-4 bg-[#1A1A2F] rounded-lg border border-[#2A2A45]">
+    <div className="flex items-center space-x-3">
+      <div
+        className={`w-10 h-10 rounded-full flex items-center justify-center ${
+          transaction.type === "receive" ? "bg-green-500/20" : "bg-red-500/20"
+        }`}
+      >
+        {transaction.type === "receive" ? (
+          <ArrowDownLeft className="w-5 h-5 text-green-500" />
+        ) : (
+          <ArrowUpRight className="w-5 h-5 text-red-500" />
+        )}
+      </div>
+      <div>
+        <div className="text-white font-medium">{transaction.type === "receive" ? "Received" : "Sent"}</div>
+        <div className="text-[#8E8EA8] text-sm">
+          {transaction.type === "receive" ? `From ${transaction.from}` : `To ${transaction.to}`}
+        </div>
+        <div className="text-[#8E8EA8] text-xs">{transaction.timestamp}</div>
+      </div>
+    </div>
+    <div className="text-right">
+      <div
+        className={`font-medium ${transaction.type === "receive" ? "text-green-500" : "text-red-500"}`}
+      >
+        {transaction.type === "receive" ? "+" : "-"}
+        {transaction.amount} NEAR
+      </div>
+      <Badge variant="secondary" className="bg-green-500/20 text-green-500 text-xs">
+        {transaction.status}
+      </Badge>
+    </div>
+  </div>
 );
+
 
 
 
