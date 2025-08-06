@@ -147,9 +147,27 @@ const WalletHeader = () => (
       <WalletHeader />
       {/* <BalanceCard /> */}
       {/* <ActionButtons /> */}
+      <Tabs defaultValue="transactions" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 bg-[#1A1A2F] border border-[#2A2A45]">
+          <TabsTrigger value="transactions" className="data-[state=active]:bg-[#4C6FFF] data-[state=active]:text-white">
+            Transactions
+          </TabsTrigger>
+          <TabsTrigger value="account" className="data-[state=active]:bg-[#4C6FFF] data-[state=active]:text-white">
+            Account
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="transactions" className="mt-6">
+          {/* <TransactionsSection /> */}
+        </TabsContent>
+        <TabsContent value="account" className="mt-6">
+          {/* <AccountInfo /> */}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
+
+
 
 
 
