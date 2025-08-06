@@ -124,7 +124,6 @@ const WalletHeader = () => (
     </div>
   </div>
 );
-
 const BalanceCard = () => (
   <Card className="bg-gradient-to-br from-[#1A1A2F] to-[#151524] border-[#2A2A45]">
     <CardContent className="p-6">
@@ -138,10 +137,20 @@ const BalanceCard = () => (
             Connected
           </Badge>
         </div>
+
+        <div className="space-y-1">
+          <div className="text-3xl font-bold text-white">
+            {showBalance ? `${balance.amount} NEAR` : "••••••"}
+          </div>
+          <div className="text-[#8E8EA8] text-sm">
+            {showBalance ? `≈ $${balance.usd} USD` : "••••••"}
+          </div>
+        </div>
       </div>
     </CardContent>
   </Card>
 );
+
 
 
 
