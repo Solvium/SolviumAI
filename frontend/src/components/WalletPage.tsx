@@ -182,6 +182,11 @@ const ActionButtons = () => (
   </div>
 );
 
+const TransactionItem = ({ transaction }: { transaction: any }) => (
+  <div>Transaction Item</div>
+);
+
+
 
 
 
