@@ -173,6 +173,7 @@ const ActionButtons = () => (
   </div>
 );
 
+
 const TransactionItem = ({ transaction }: { transaction: any }) => (
   <div className="flex items-center justify-between p-4 bg-[#1A1A2F] rounded-lg border border-[#2A2A45]">
     <div className="flex items-center space-x-3">
