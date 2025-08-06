@@ -236,8 +236,19 @@ const TransactionsSection = () => (
 );
 
 const AccountInfo = () => (
-  <div>Account Info</div>
+  <div className="space-y-4">
+    <h3 className="text-lg font-semibold text-white">Account Information</h3>
+    <div className="p-4 bg-[#1A1A2F] rounded-lg border border-[#2A2A45]">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-white font-medium">Account ID</div>
+          <div className="text-[#8E8EA8] text-sm font-mono">{walletAddress}</div>
+        </div>
+      </div>
+    </div>
+  </div>
 );
+
 
 
 
