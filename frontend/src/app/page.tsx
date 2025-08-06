@@ -3,10 +3,11 @@ import { GoHome } from "react-icons/go";
 import { MdOutlineLeaderboard } from "react-icons/md";
 import { useEffect, useState } from "react";
 import LeaderBoard from "@/components/LeaderBoard";
-import WebApp from "@twa-dev/sdk";
+import type WebApp from "@twa-dev/sdk";
 import UserProfile from "@/components/Profile";
 import ContestBoard from "@/components/Contest";
-
+import { Wallet } from "lucide-react";
+import WalletPage from "@/components/WalletPage";
 import LoginModule from "@/components/auth/LoginModule";
 import { useAuth } from "./contexts/AuthContext";
 import GamesPage from "@/components/games/GamesPage";
@@ -33,13 +34,13 @@ function Home() {
         clearInterval(getTg);
       }
 
-      // console.log(count);
+    
 
       if (count > 10) {
         clearInterval(getTg);
       }
       count++;
-    }, 10000);
+    }, 10000)
   }, []);
 
   const handlePageChange = (page: string) => {
@@ -55,7 +56,7 @@ function Home() {
     );
   }
 
-  console.log(isAuthenticated);
+
 
   // Show login if not authenticated
   if (!isAuthenticated) {
@@ -74,6 +75,7 @@ function Home() {
               {selectedTab === "Wheel" && <WheelOfFortune />}
               {selectedTab === "Game" && <GamesPage />}
               {selectedTab === "Leaderboard" && <LeaderBoard />}
+              {selectedTab === "Wallet" && <WalletPage />}
             </div>
 
             <div className="fixed bottom-0 left-0 right-0 bg-[#151524] border-t border-[#2A2A45] shadow-glow-blue">
@@ -163,6 +165,17 @@ function Home() {
                   >
                     <MdOutlineLeaderboard className="text-2xl mb-1" />
                     <span className="text-xs">Ranks</span>
+                    </button>
+                    <button
+                    onClick={() => handlePageChange("Wallet")}
+                    className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
+                      selectedTab === "Wallet"
+                        ? "text-[#4C6FFF] bg-[#1A1A2F] shadow-glow-sm"
+                        : "text-[#8E8EA8] hover:text-[#4C6FFF] hover:bg-[#1A1A2F]/50"
+                    }`}
+                  >
+                    <Wallet className="text-2xl mb-1" />
+                    <span className="text-xs">Wallet</span>
                   </button>
                 </div>
               </div>
