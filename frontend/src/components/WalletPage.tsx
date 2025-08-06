@@ -68,8 +68,13 @@ const WalletPage = () => {
   ];
 
   const WalletConnectSection = () => (
-  <div>Wallet Connect Section</div>
+  <div className="flex flex-col items-center justify-center min-h-[400px] space-y-6">
+    <div className="w-24 h-24 bg-[#1A1A2F] rounded-full flex items-center justify-center border-2 border-[#4C6FFF]">
+      <Wallet className="w-12 h-12 text-[#4C6FFF]" />
+    </div>
+  </div>
 );
+
 
 
   return <div>Wallet</div>;
