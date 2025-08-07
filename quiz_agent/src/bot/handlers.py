@@ -1211,10 +1211,32 @@ async def handle_show_leaderboard(update, context, quiz_id):
                 )
                 return
             
-            # Get leaderboard data (placeholder for now)
-            leaderboard_data = []  # Empty list for now, TODO: Implement actual leaderboard
-            time_remaining = 0  # TODO: Calculate actual time remaining
-            total_participants = 0  # TODO: Get actual participant count
+            # Get actual leaderboard data using the existing service
+            from services.quiz_service import _generate_leaderboard_data_for_quiz
+            from datetime import datetime, timezone
+            
+            # Generate leaderboard data
+            leaderboard_info = await _generate_leaderboard_data_for_quiz(quiz, session)
+            
+            # Extract participant data for the leaderboard card
+            leaderboard_data = []
+            total_participants = len(leaderboard_info.get('participants', []))
+            
+            # Convert to the format expected by create_leaderboard_card
+            for participant in leaderboard_info.get('participants', [])[:10]:  # Top 10
+                leaderboard_data.append({
+                    'username': participant.get('username', 'UnknownUser'),
+                    'score': participant.get('score', 0),
+                    'correct_answers': participant.get('score', 0),
+                    'total_questions': len(quiz.questions) if quiz.questions else 0
+                })
+            
+            # Calculate time remaining
+            time_remaining = 0
+            if quiz.end_time:
+                now = datetime.now(timezone.utc)
+                if quiz.end_time > now:
+                    time_remaining = int((quiz.end_time - now).total_seconds())
             
             # Create rich leaderboard card
             leaderboard_msg, leaderboard_keyboard = create_leaderboard_card(
