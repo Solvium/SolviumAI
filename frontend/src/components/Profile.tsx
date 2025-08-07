@@ -9,6 +9,7 @@ import { Wallet } from "lucide-react";
 // import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useToast } from "@/app/hooks/use-toast";
+import DepositMultiplier from "./DepositMultiplier";
 // import { useWallet as useSolWallet } from "@solana/wallet-adapter-react";
 
 const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
@@ -604,7 +605,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
             >
               Start
             </button>
-            {/* <DepositMultiplier user={userDetails} /> */}
+            <DepositMultiplier user={userDetails} />
           </div>
         </div>
 
