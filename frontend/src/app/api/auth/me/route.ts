@@ -40,13 +40,14 @@ export async function GET(request: NextRequest) {
     const userData = {
       id: user.id.toString(),
       username: user.username,
-      email: user.email,
-      name: user.name,
+      email: user.email || undefined,
+      name: user.name || undefined,
       totalPoints: user.totalPoints,
       multiplier: 1, // Default multiplier
       level: user.level,
       lastLoginAt: new Date(),
       lastSpinClaim: user.lastSpinClaim,
+      lastClaim: user.lastClaim || new Date(), // Ensure lastClaim is always included
       dailySpinCount: user.dailySpinCount,
       spinCount: user.spinCount,
       claimCount: user.claimCount,
@@ -54,7 +55,12 @@ export async function GET(request: NextRequest) {
       isMining: user.isMining,
       isPremium: user.isPremium,
       weeklyPoints: user.weeklyPoints,
+      chatId: user.chatId || undefined,
+      wallet: user.wallet || undefined,
     };
+
+    console.log("User data being returned:", userData);
+    console.log("User from database:", user);
 
     return NextResponse.json({
       authenticated: true,

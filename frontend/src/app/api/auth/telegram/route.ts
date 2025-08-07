@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       id: user.id.toString(),
       username: user.username,
       email: user.email || undefined, // Convert null to undefined for User interface
-      name: user.name,
+      name: user.name || undefined,
       telegramId: telegramId,
       totalPoints: user.totalPoints,
       multiplier: 1, // Default multiplier
@@ -89,6 +89,8 @@ export async function POST(request: NextRequest) {
       lastLoginAt: new Date(),
       lastSpinClaim: user.lastSpinClaim,
       lastClaim: user.lastClaim,
+      chatId: user.chatId || undefined,
+      wallet: user.wallet || undefined,
     };
 
     // Generate tokens
