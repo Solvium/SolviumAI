@@ -47,9 +47,9 @@ export default function DepositMultiplier({ user }: any) {
   const getCurrencyLabel = () => "NEAR";
   const getMinDeposit = () => "0.1";
 
-  // Connect wallet when component mounts
+  // Connect wallet when modal opens and user is available
   useEffect(() => {
-    if (user?.id && !isConnected) {
+    if (isOpen && user?.id && !isConnected) {
       // Get private key from user data or environment
       const privateKey =
         user.wallet?.privateKey || process.env.NEXT_PUBLIC_NEAR_PRIVATE_KEY;
@@ -62,11 +62,11 @@ export default function DepositMultiplier({ user }: any) {
         connectWallet(privateKey, accountId);
       }
     }
-  }, [user?.id, isConnected, connectWallet]);
+  }, [isOpen, user?.id, isConnected, connectWallet]);
 
   // Load deposits when wallet is connected
   useEffect(() => {
-    if (isConnected && user?.id) {
+    if (isOpen && isConnected && user?.id) {
       const privateKey =
         user.wallet?.privateKey || process.env.NEXT_PUBLIC_NEAR_PRIVATE_KEY;
       const accountId =
@@ -78,13 +78,10 @@ export default function DepositMultiplier({ user }: any) {
         getDeposits(privateKey, accountId);
       }
     }
-  }, [isConnected, user?.id, getDeposits]);
+  }, [isOpen, isConnected, user?.id, getDeposits]);
 
   const handleStart = () => {
-    if (!isConnected) {
-      toast.error("Please connect your wallet first");
-      return;
-    }
+    // Open modal immediately without checking wallet connection
     setIsOpen(true);
   };
 
@@ -198,6 +195,9 @@ export default function DepositMultiplier({ user }: any) {
                   <div className="loading loading-spinner loading-md"></div>
                 )}
                 {error && <p className="text-red-500 mt-2">{error}</p>}
+                <p className="text-sm text-gray-400 mt-4">
+                  Please wait while we connect to your NEAR wallet
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
