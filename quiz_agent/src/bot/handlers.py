@@ -1212,17 +1212,17 @@ async def handle_show_leaderboard(update, context, quiz_id):
                 return
             
             # Get leaderboard data (placeholder for now)
-            leaderboard_data = {
-                'quiz_id': quiz_id,
-                'topic': quiz.topic,
-                'top_players': [],  # TODO: Implement actual leaderboard
-                'total_participants': 0,
-                'time_remaining': 0,
-                'is_active': quiz.status == 'ACTIVE'
-            }
+            leaderboard_data = []  # Empty list for now, TODO: Implement actual leaderboard
+            time_remaining = 0  # TODO: Calculate actual time remaining
+            total_participants = 0  # TODO: Get actual participant count
             
             # Create rich leaderboard card
-            leaderboard_msg, leaderboard_keyboard = create_leaderboard_card(leaderboard_data)
+            leaderboard_msg, leaderboard_keyboard = create_leaderboard_card(
+                quiz_id, 
+                leaderboard_data, 
+                time_remaining, 
+                total_participants
+            )
             
             await context.bot.send_message(
                 chat_id=chat_id,
