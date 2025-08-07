@@ -1,3 +1,4 @@
+"use client";
 // src/context/MultiLoginContext.tsx
 import { createContext, useContext, useEffect, useState } from "react";
 import { useMultiLogin } from "../hooks/useMultiLogin";

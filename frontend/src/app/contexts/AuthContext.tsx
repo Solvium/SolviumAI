@@ -39,6 +39,8 @@ export interface User {
   lastLoginAt: Date;
   lastSpinClaim?: Date;
   lastClaim?: Date;
+  chatId?: string;
+  wallet?: string;
 }
 
 export interface AuthState {

@@ -1,11 +1,9 @@
 // pages/api/auth/login.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-// import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { sign, verify } from "jsonwebtoken";
 import * as cookie from "cookie";
 import { NextRequest, NextResponse } from "next/server";
-
-// const prisma = new PrismaClient();
 
 export async function POST(req: NextRequest) {
   const {
@@ -25,29 +23,39 @@ export async function POST(req: NextRequest) {
     try {
       if (!username) {
         return NextResponse.json(
-          { message: "Username and password are required" },
+          { message: "Username is required" },
           { status: 400 }
         );
       }
 
-      // Find user
-      // const user = await prisma.user.findUnique({
-      //   where: { username },
-      // });
+      // Find or create user
+      let user = await prisma.user.findUnique({
+        where: { username },
+      });
 
-      // if (!user) {
-      //   return NextResponse.json(
-      //     { message: "Invalid credentials" },
-      //     { status: 401 }
-      //   );
-      // }
+      if (!user) {
+        // Create new user if doesn't exist
+        user = await prisma.user.create({
+          data: {
+            username,
+            referredBy: "",
+            chatId: "",
+            totalPoints: 0,
+            referralCount: 0,
+            isMining: false,
+            isPremium: false,
+            lastClaim: new Date(),
+            lastSpinClaim: new Date(),
+          },
+        });
+      }
 
       // Create JWT token
       const token = sign(
         {
-          id: id,
-          username: username,
-          email: email,
+          id: user.id,
+          username: user.username,
+          email: user.email,
         },
         process.env.JWT_SECRET!, // Make sure to set this in your .env file
         { expiresIn: "7d" }
@@ -57,7 +65,18 @@ export async function POST(req: NextRequest) {
       const response = NextResponse.json(
         {
           message: "Login successful",
-          user: { id, username, email },
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            name: user.name,
+            totalPoints: user.totalPoints,
+            referralCount: user.referralCount,
+            chatId: user.chatId,
+            isMining: user.isMining,
+            lastClaim: user.lastClaim,
+            wallet: user.wallet,
+          },
         },
         { status: 200 }
       );
@@ -85,47 +104,41 @@ export async function POST(req: NextRequest) {
   if (type == "loginWithGoogle") {
     try {
       if (!email) {
-        NextResponse.json(
-          { message: "email and password are required" },
+        return NextResponse.json(
+          { message: "Email is required" },
           { status: 400 }
         );
       }
 
       console.log(email);
-      // Find user
-      // let user = await prisma.user.findUnique({
-      //   where: { email },
-      // });
+      // Find or create user
+      let user = await prisma.user.findUnique({
+        where: { email },
+      });
 
-      // if (!user) {
-      //   user = await prisma.user.create({
-      //     data: {
-      //       referralCount: 0,
-      //       email,
-      //       isPremium: false,
-      //       name: name,
-      //       referredBy: ref,
-      //       chatId: "",
-      //       username,
-      //       totalPoints: 0,
-      //     },
-      //   });
-      // }
-
-      // Assuming you have a password field in your schema (add it if missing)
-      // Compare password (this example assumes you're storing hashed passwords)
-      // const isValid = await compare(password, user.password);
-
-      // if (!isValid) {
-      //   return res.status(401).json({ message: 'Invalid credentials' });
-      // }
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            referralCount: 0,
+            email,
+            isPremium: false,
+            name: name,
+            referredBy: ref || "",
+            chatId: "",
+            username,
+            totalPoints: 0,
+            lastClaim: new Date(),
+            lastSpinClaim: new Date(),
+          },
+        });
+      }
 
       // Create JWT token
       const token = sign(
         {
-          id: id,
-          username: username,
-          email: email,
+          id: user.id,
+          username: user.username,
+          email: user.email,
         },
         process.env.JWT_SECRET!, // Make sure to set this in your .env file
         { expiresIn: "7d" }
@@ -134,7 +147,18 @@ export async function POST(req: NextRequest) {
       const response = NextResponse.json(
         {
           message: "Login successful",
-          user: { id, username, email },
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            name: user.name,
+            totalPoints: user.totalPoints,
+            referralCount: user.referralCount,
+            chatId: user.chatId,
+            isMining: user.isMining,
+            lastClaim: user.lastClaim,
+            wallet: user.wallet,
+          },
         },
         { status: 200 }
       );
@@ -279,21 +303,28 @@ export async function GET(req: NextRequest) {
       };
       console.log(decoded);
       // Get user data
-      // const user = await prisma.user.findUnique({
-      //   where: { id: decoded.id },
-      // });
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.id },
+      });
 
-      // if (!user) {
-      //   return NextResponse.json({ authenticated: false }, { status: 401 });
-      // }
+      if (!user) {
+        return NextResponse.json({ authenticated: false }, { status: 401 });
+      }
 
       return NextResponse.json(
         {
           authenticated: true,
           user: {
-            id: decoded.id,
-            username: "testuser",
-            email: "test@example.com",
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            name: user.name,
+            totalPoints: user.totalPoints,
+            referralCount: user.referralCount,
+            chatId: user.chatId,
+            isMining: user.isMining,
+            lastClaim: user.lastClaim,
+            wallet: user.wallet,
           },
         },
         { status: 200 }

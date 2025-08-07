@@ -11,7 +11,8 @@
     "setup": "node setup-env.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.29",
