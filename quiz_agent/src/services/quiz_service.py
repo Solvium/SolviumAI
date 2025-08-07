@@ -2376,12 +2376,16 @@ async def _generate_leaderboard_data_for_quiz(
 
     ranked_participants = []
     for idx, stats in enumerate(participant_stats, start=1):
+        score = stats.get("correct_count", 0)
+        username = stats.get("username", "UnknownUser")
+        user_id = stats["user_id"]
+        logger.info(f"Database participant: {username} (user_id: {user_id}), correct_count: {score}")
         ranked_participants.append(
             {
                 "rank": idx,
-                "user_id": stats["user_id"],
-                "username": stats.get("username", "UnknownUser"),
-                "score": stats.get("correct_count", 0),
+                "user_id": user_id,
+                "username": username,
+                "score": score,
                 "time_taken": None,
                 "is_winner": False,
             }

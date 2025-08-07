@@ -1224,10 +1224,13 @@ async def handle_show_leaderboard(update, context, quiz_id):
             
             # Convert to the format expected by create_leaderboard_card
             for participant in leaderboard_info.get('participants', [])[:10]:  # Top 10
+                score = participant.get('score', 0)
+                username = participant.get('username', 'UnknownUser')
+                logger.info(f"Leaderboard participant: {username}, score: {score}")
                 leaderboard_data.append({
-                    'username': participant.get('username', 'UnknownUser'),
-                    'score': participant.get('score', 0),
-                    'correct_answers': participant.get('score', 0),
+                    'username': username,
+                    'score': score,
+                    'correct_answers': score,
                     'total_questions': len(quiz.questions) if quiz.questions else 0
                 })
             
