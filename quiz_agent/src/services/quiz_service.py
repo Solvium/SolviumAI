@@ -2797,17 +2797,35 @@ You answered {total_answered} questions:
             is_correct = answer_data.get('correct', False)
             answered_at = answer_data.get('answered_at', datetime.utcnow())
             
-            # Create individual quiz answer record
-            quiz_answer = QuizAnswer(
-                user_id=user_id,
-                quiz_id=quiz.id,
-                username=username,
-                answer=user_answer,
-                is_correct="True" if is_correct else "False",
-                answered_at=answered_at,
-                question_index=int(question_index)
-            )
-            session.add(quiz_answer)
+            # Check if answer already exists for this user/quiz/question
+            existing_answer = session.query(QuizAnswer).filter(
+                QuizAnswer.user_id == user_id,
+                QuizAnswer.quiz_id == quiz.id,
+                QuizAnswer.question_index == int(question_index)
+            ).first()
+            
+            if existing_answer:
+                # Update existing answer if it's different
+                if (existing_answer.answer != user_answer or 
+                    existing_answer.is_correct != ("True" if is_correct else "False")):
+                    existing_answer.answer = user_answer
+                    existing_answer.is_correct = "True" if is_correct else "False"
+                    existing_answer.answered_at = answered_at
+                    existing_answer.username = username
+                    logger.info(f"Updated existing answer for user {user_id}, quiz {quiz.id}, question {question_index}")
+            else:
+                # Create new quiz answer record
+                quiz_answer = QuizAnswer(
+                    user_id=user_id,
+                    quiz_id=quiz.id,
+                    username=username,
+                    answer=user_answer,
+                    is_correct="True" if is_correct else "False",
+                    answered_at=answered_at,
+                    question_index=int(question_index)
+                )
+                session.add(quiz_answer)
+                logger.info(f"Created new answer for user {user_id}, quiz {quiz.id}, question {question_index}")
         
         session.commit()
         logger.info(f"Saved {len(results['answers'])} answers for user {user_id} in quiz {quiz.id}")
