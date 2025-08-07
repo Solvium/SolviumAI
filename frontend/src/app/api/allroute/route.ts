@@ -52,16 +52,23 @@ export async function POST(req: NextRequest) {
     }
 
     if (type == "completetasks") {
-      if (!data?.task?.id || !data?.userId) {
+      // Handle both data.task.id (nested structure) and data.id (direct task ID)
+      const taskId = data?.task?.id || data?.id;
+      const userId = data?.userId || data?.task?.userId;
+
+      if (!taskId || !userId) {
         return NextResponse.json(
           { error: "Task ID and User ID are required" },
           { status: 400 }
         );
       }
 
+      // Convert userId to number for Prisma
+      const userIdNumber = parseInt(userId.toString());
+
       // Get the task to know how many points to award
       const task = await prisma.task.findUnique({
-        where: { id: data.task.id },
+        where: { id: taskId },
       });
 
       if (!task) {
@@ -72,8 +79,8 @@ export async function POST(req: NextRequest) {
       const existingUserTask = await prisma.userTask.findUnique({
         where: {
           userId_taskId: {
-            userId: data.userId,
-            taskId: data.task.id,
+            userId: userIdNumber,
+            taskId: taskId,
           },
         },
       });
@@ -95,23 +102,23 @@ export async function POST(req: NextRequest) {
         const userTask = await tx.userTask.upsert({
           where: {
             userId_taskId: {
-              userId: data.userId,
-              taskId: data.task.id,
+              userId: userIdNumber,
+              taskId: taskId,
             },
           },
           update: {
             isCompleted: true,
           },
           create: {
-            userId: data.userId,
-            taskId: data.task.id,
+            userId: userIdNumber,
+            taskId: taskId,
             isCompleted: true,
           },
         });
 
         // Update user's total points
         const updatedUser = await tx.user.update({
-          where: { id: data.userId },
+          where: { id: userIdNumber },
           data: {
             totalPoints: {
               increment: pointsToAward,
@@ -126,7 +133,7 @@ export async function POST(req: NextRequest) {
         const weeklyScore = await tx.weeklyScore.upsert({
           where: {
             userId_weekNumber_year: {
-              userId: data.userId,
+              userId: userIdNumber,
               weekNumber: currentWeek,
               year: currentYear,
             },
@@ -137,7 +144,7 @@ export async function POST(req: NextRequest) {
             },
           },
           create: {
-            userId: data.userId,
+            userId: userIdNumber,
             weekNumber: currentWeek,
             year: currentYear,
             points: pointsToAward,
@@ -151,6 +158,69 @@ export async function POST(req: NextRequest) {
         success: true,
         pointsAwarded: pointsToAward,
         user: result.updatedUser,
+      });
+    }
+
+    if (type == "reg4tasks") {
+      // Handle both data.id (direct task ID) and data.task.id (nested structure)
+      const taskId = data?.id || data?.task?.id;
+
+      if (!taskId || !username) {
+        return NextResponse.json(
+          { error: "Task ID and username are required" },
+          { status: 400 }
+        );
+      }
+
+      // Get user by username
+      const user = await prisma.user.findUnique({
+        where: { username },
+      });
+
+      if (!user) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+
+      // Get the task
+      const task = await prisma.task.findUnique({
+        where: { id: taskId },
+      });
+
+      if (!task) {
+        return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      }
+
+      // Check if user has already registered for this task
+      const existingUserTask = await prisma.userTask.findUnique({
+        where: {
+          userId_taskId: {
+            userId: user.id, // user.id is already a number
+            taskId: taskId,
+          },
+        },
+      });
+
+      if (existingUserTask) {
+        return NextResponse.json({
+          success: true,
+          message: "Already registered for this task",
+          userTask: existingUserTask,
+        });
+      }
+
+      // Register user for the task
+      const userTask = await prisma.userTask.create({
+        data: {
+          userId: user.id, // user.id is already a number
+          taskId: taskId,
+          isCompleted: false,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: "Successfully registered for task",
+        userTask: userTask,
       });
     }
 

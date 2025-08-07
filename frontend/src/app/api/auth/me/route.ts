@@ -41,26 +41,36 @@ export async function GET(request: NextRequest) {
       id: user.id.toString(),
       username: user.username,
       email: user.email || undefined,
+      telegramId: undefined, // Not in current schema
+      googleId: undefined, // Not in current schema
+      firstName: user.name || undefined,
+      lastName: undefined, // Not in current schema
+      avatar: undefined, // Not in current schema
       name: user.name || undefined,
       totalPoints: user.totalPoints,
       multiplier: 1, // Default multiplier
       level: user.level,
-      lastLoginAt: new Date(),
-      lastSpinClaim: user.lastSpinClaim,
-      lastClaim: user.lastClaim || new Date(), // Ensure lastClaim is always included
-      dailySpinCount: user.dailySpinCount,
+      difficulty: user.difficulty,
+      puzzleCount: user.puzzleCount,
+      referralCount: user.referralCount,
       spinCount: user.spinCount,
+      dailySpinCount: user.dailySpinCount,
       claimCount: user.claimCount,
       isOfficial: user.isOfficial,
       isMining: user.isMining,
       isPremium: user.isPremium,
       weeklyPoints: user.weeklyPoints,
+      lastLoginAt: new Date(),
+      lastSpinClaim: user.lastSpinClaim,
+      lastClaim: user.lastClaim || new Date(), // Ensure lastClaim is always included
       chatId: user.chatId || undefined,
       wallet: user.wallet || undefined,
     };
 
     console.log("User data being returned:", userData);
     console.log("User from database:", user);
+    console.log("lastClaim from database:", user.lastClaim);
+    console.log("lastClaim in userData:", userData.lastClaim);
 
     return NextResponse.json({
       authenticated: true,

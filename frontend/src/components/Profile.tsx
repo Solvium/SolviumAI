@@ -168,6 +168,7 @@ const Farming = () => {
     new Date(userDetails?.lastClaim || new Date()).getTime() -
     new Date().getTime();
 
+  console.log(userDetails);
   // Real claimPoints function that calls the API and refreshes user data
   const claimPoints = async (
     type: string,
@@ -308,26 +309,53 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   const [onGoing, setOnGoing] = useState(false);
   const [isOpenSolModal, setIsOpenSolModal] = useState(false);
   const [error, setError] = useState("");
-  // const address = useTonAddress();
-  // const { deposits } = useMultiplierContract(address);
-
-  // const {
-  //   state: { accountId: nearAddress },
-  // } = useWallet();
-  // const { publicKey } = useSolWallet();
-
-  // const {
-  //   deposits: nearDeposits,
-  //   loading: nearLoading,
-  //   refetch,
-  // } = useNearDeposits();
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [userTasks, setUserTasks] = useState<any[]>([]);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true);
 
   const { user: userDetails, refreshUser } = useAuth();
   const { toast } = useToast();
 
-  // Placeholder data for tasks
-  const userTasks: any[] = [];
-  const tasks: any[] = [];
+  // Fetch tasks from database
+  const fetchTasks = async () => {
+    try {
+      setIsLoadingTasks(true);
+      const response = await fetch("/api/tasks");
+      const data = await response.json();
+
+      if (response.ok) {
+        setTasks(data.tasks || []);
+        setUserTasks(data.userTasks || []);
+      } else {
+        console.error("Failed to fetch tasks:", data.error);
+        toast({
+          title: "Error",
+          description: "Failed to load tasks. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+      toast({
+        title: "Network Error",
+        description:
+          "Failed to connect to server. Please check your connection.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingTasks(false);
+    }
+  };
+
+  // Fetch tasks on component mount
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  // Refresh tasks after completing a task
+  const refreshTasks = async () => {
+    await fetchTasks();
+  };
 
   // Real engageTasks function that calls the API and refreshes user data
   const engageTasks = async (
@@ -355,6 +383,8 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
       if (response.ok && (result.weeklyScore || result.id || result.success)) {
         // Immediately refresh user data to show updated points and status
         await refreshUser();
+        // Refresh tasks to show updated completion status
+        await refreshTasks();
         // Show success toast
         toast({
           title: "Task Completed!",
@@ -415,7 +445,11 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   // };
 
   const sendComplete = async (data: any) => {
-    const res = await engageTasks("completetasks", data, () =>
+    const taskData = {
+      task: data,
+      userId: userDetails?.id,
+    };
+    const res = await engageTasks("completetasks", taskData, () =>
       setLoading({ id: data.id, status: false })
     );
   };
@@ -574,104 +608,119 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
           </div>
         </div>
 
-        {tasks?.map((task: any, i: number) => {
-          let curCat = "Tg";
-          let icon = <FaTelegram className="text-[#4C6FFF] text-xl" />;
+        {isLoadingTasks ? (
+          <div className="flex justify-center items-center py-8">
+            <div className="w-8 h-8 border-t-2 border-white animate-spin rounded-full"></div>
+            <span className="ml-2 text-white">Loading tasks...</span>
+          </div>
+        ) : tasks?.length === 0 ? (
+          <div className="text-center text-white">No tasks available.</div>
+        ) : (
+          <div className="space-y-3">
+            {tasks?.map((task: any, i: number) => {
+              let curCat = "Tg";
+              let icon = <FaTelegram className="text-[#4C6FFF] text-xl" />;
 
-          switch (task.name.toLowerCase()) {
-            case "follow x".toLowerCase():
-              icon = <FaXTwitter className="text-[#4C6FFF] text-xl" />;
-              curCat = "x";
-              break;
-            case "Follow Facebook".toLowerCase():
-            case "Join Facebook Group".toLowerCase():
-              curCat = "fb";
-              icon = <FaFacebook className="text-[#4C6FFF] text-xl" />;
-              break;
-            case "Subscribe to Youtube".toLowerCase():
-              curCat = "yt";
-              icon = <FaYoutube className="text-[#4C6FFF] text-xl" />;
-              break;
-            case "connect wallet".toLowerCase():
-              curCat = "wallet";
-              icon = <Wallet className="text-[#4C6FFF] text-xl" />;
-              break;
-            default:
-              break;
-          }
-
-          let found = false;
-          let onGoing = false;
-
-          userTasks?.length > 0 &&
-            userTasks?.map((utask: any) => {
-              if (task.id == utask.taskId) {
-                if (utask.isCompleted) found = true;
-                onGoing = true;
+              switch (task.name.toLowerCase()) {
+                case "follow x".toLowerCase():
+                  icon = <FaXTwitter className="text-[#4C6FFF] text-xl" />;
+                  curCat = "x";
+                  break;
+                case "Follow Facebook".toLowerCase():
+                case "Join Facebook Group".toLowerCase():
+                  curCat = "fb";
+                  icon = <FaFacebook className="text-[#4C6FFF] text-xl" />;
+                  break;
+                case "Subscribe to Youtube".toLowerCase():
+                  curCat = "yt";
+                  icon = <FaYoutube className="text-[#4C6FFF] text-xl" />;
+                  break;
+                case "connect wallet".toLowerCase():
+                  curCat = "wallet";
+                  icon = <Wallet className="text-[#4C6FFF] text-xl" />;
+                  break;
+                default:
+                  break;
               }
-            });
 
-          if (found) return <div key={i + task.name + "task" + i}> </div>;
-          if (task.points == 0)
-            return <div key={task.name + task.id + "task" + i}> </div>;
+              let found = false;
+              let onGoing = false;
 
-          // const found = userDetails?.completedTasks?.find(
-          //   (completedTask: any) =>
-          //     completedTask.name === task.name &&
-          //     completedTask.category === curCat
-          // );
+              userTasks?.length > 0 &&
+                userTasks?.map((utask: any) => {
+                  if (task.id == utask.taskId) {
+                    if (utask.isCompleted) found = true;
+                    onGoing = true;
+                  }
+                });
 
-          // if (found) return null;
+              if (found) return <div key={i + task.name + "task" + i}> </div>;
+              if (task.points == 0)
+                return <div key={task.name + task.id + "task" + i}> </div>;
 
-          return (
-            <div
-              key={"bbb" + task.name + "task" + i}
-              className="bg-[#1A1A2F] rounded-lg p-3 border border-[#2A2A45] relative overflow-hidden"
-            >
-              <div className="absolute inset-0 bg-[#4C6FFF] blur-2xl opacity-5"></div>
-              <div className="relative flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#4C6FFF]/10 flex items-center justify-center">
-                  {icon}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-white">{task.name}</p>
-                  <div className="flex items-center gap-1">
-                    <svg
-                      className="w-3 h-3 text-[#4C6FFF]"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
+              // const found = userDetails?.completedTasks?.find(
+              //   (completedTask: any) =>
+              //     completedTask.name === task.name &&
+              //     completedTask.category === curCat
+              // );
+
+              // if (found) return null;
+
+              return (
+                <div
+                  key={"bbb" + task.name + "task" + i}
+                  className="bg-[#1A1A2F] rounded-lg p-3 border border-[#2A2A45] relative overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-[#4C6FFF] blur-2xl opacity-5"></div>
+                  <div className="relative flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-[#4C6FFF]/10 flex items-center justify-center">
+                      {icon}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-white">
+                        {task.name}
+                      </p>
+                      <div className="flex items-center gap-1">
+                        <svg
+                          className="w-3 h-3 text-[#4C6FFF]"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        <p className="text-xs text-[#4C6FFF]">
+                          {task.points} SOLV
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setLoading({ id: task.id, status: true });
+                        onGoing ? Verify(task) : ProcessLink(task);
+                      }}
+                      className="px-4 py-2 bg-[#4C6FFF] hover:bg-[#4C6FFF]/90 text-white rounded-lg transition-all text-sm font-medium disabled:opacity-50"
+                      disabled={loading.id == task.id && loading.status}
                     >
-                      <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
-                      <path
-                        fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    <p className="text-xs text-[#4C6FFF]">{task.points} SOLV</p>
+                      {loading.id == task.id && loading.status ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 border-t-2 border-white animate-spin rounded-full"></div>
+                          <span>Processing...</span>
+                        </div>
+                      ) : (
+                        <span>{onGoing ? "Verify" : "Start"}</span>
+                      )}
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={() => {
-                    setLoading({ id: task.id, status: true });
-                    onGoing ? Verify(task) : ProcessLink(task);
-                  }}
-                  className="px-4 py-2 bg-[#4C6FFF] hover:bg-[#4C6FFF]/90 text-white rounded-lg transition-all text-sm font-medium disabled:opacity-50"
-                  disabled={loading.id == task.id && loading.status}
-                >
-                  {loading.id == task.id && loading.status ? (
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-t-2 border-white animate-spin rounded-full"></div>
-                      <span>Processing...</span>
-                    </div>
-                  ) : (
-                    <span>{onGoing ? "Verify" : "Start"}</span>
-                  )}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* <SolDepositModal
