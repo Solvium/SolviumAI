@@ -115,6 +115,18 @@ class QuizSession:
         # Get the actual text of the correct answer for display
         correct_answer_text = original_options.get(correct_answer, 'Unknown')
         
+        # Debug logging to understand the data structure
+        logger.debug(f"Question data: correct_answer={correct_answer}, original_options={original_options}")
+        logger.debug(f"Shuffled options: {shuffled_options}")
+        
+        # If we still don't have the correct answer text, try to find it in shuffled options
+        if correct_answer_text == 'Unknown' and correct_answer:
+            # Look for the correct answer in shuffled options
+            for label, value in shuffled_options.items():
+                if label == correct_answer:
+                    correct_answer_text = value
+                    break
+        
         self.answers[self.current_question_index] = {
             'answer': answer,
             'correct': is_correct,

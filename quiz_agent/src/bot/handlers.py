@@ -2815,8 +2815,33 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
         
         # Check if user already has an active session for THIS SPECIFIC quiz
         # (Allow multiple different quizzes, but not the same quiz)
-        session_key = f"{user_id}:{quiz_id}"
+        session_key = f"{user_id}:{quiz.id}"  # Use quiz.id to match the format in start_enhanced_quiz
+        
+        # Debug: Log all active sessions for this user
+        user_sessions = [k for k in active_quiz_sessions.keys() if k.startswith(f"{user_id}:")]
+        logger.info(f"User {user_id} active sessions: {user_sessions}")
+        logger.info(f"Looking for session key: {session_key}")
+        
+        # Clean up any stale sessions for this user (older than 1 hour)
+        current_time = datetime.utcnow()
+        stale_sessions = []
+        for key in user_sessions:
+            if key in active_quiz_sessions:
+                session = active_quiz_sessions[key]
+                # Check if session is older than 1 hour (3600 seconds)
+                if hasattr(session, 'start_time') and session.start_time:
+                    time_diff = (current_time - session.start_time).total_seconds()
+                    if time_diff > 3600:  # 1 hour
+                        stale_sessions.append(key)
+                        logger.info(f"Found stale session {key}, age: {time_diff} seconds")
+        
+        # Remove stale sessions
+        for key in stale_sessions:
+            active_quiz_sessions.pop(key, None)
+            logger.info(f"Removed stale session: {key}")
+        
         if session_key in active_quiz_sessions:
+            logger.warning(f"Found existing session for {session_key}, preventing duplicate start")
             await safe_send_message(
                 context.bot,
                 user_id,
