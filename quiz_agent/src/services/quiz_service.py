@@ -97,7 +97,7 @@ class QuizSession:
             return False
         
         current_q = self.prepared_questions[self.current_question_index]
-        correct_answer = current_q.get('correct_answer', '')
+        correct_answer = current_q.get('correct', '')  # Use 'correct' field as parsed by parse_questions
         
         # Map shuffled answer back to original
         shuffled_options = current_q.get('shuffled_options', {})
@@ -114,6 +114,18 @@ class QuizSession:
         
         # Get the actual text of the correct answer for display
         correct_answer_text = original_options.get(correct_answer, 'Unknown')
+        
+        # Debug logging to understand the data structure
+        logger.debug(f"Question data: correct_answer={correct_answer}, original_options={original_options}")
+        logger.debug(f"Shuffled options: {shuffled_options}")
+        
+        # If we still don't have the correct answer text, try to find it in shuffled options
+        if correct_answer_text == 'Unknown' and correct_answer:
+            # Look for the correct answer in shuffled options
+            for label, value in shuffled_options.items():
+                if label == correct_answer:
+                    correct_answer_text = value
+                    break
         
         self.answers[self.current_question_index] = {
             'answer': answer,
@@ -2364,12 +2376,16 @@ async def _generate_leaderboard_data_for_quiz(
 
     ranked_participants = []
     for idx, stats in enumerate(participant_stats, start=1):
+        score = stats.get("correct_count", 0)
+        username = stats.get("username", "UnknownUser")
+        user_id = stats["user_id"]
+        logger.info(f"Database participant: {username} (user_id: {user_id}), correct_count: {score}")
         ranked_participants.append(
             {
                 "rank": idx,
-                "user_id": stats["user_id"],
-                "username": stats.get("username", "UnknownUser"),
-                "score": stats.get("correct_count", 0),
+                "user_id": user_id,
+                "username": username,
+                "score": score,
                 "time_taken": None,
                 "is_winner": False,
             }
@@ -2797,17 +2813,35 @@ You answered {total_answered} questions:
             is_correct = answer_data.get('correct', False)
             answered_at = answer_data.get('answered_at', datetime.utcnow())
             
-            # Create individual quiz answer record
-            quiz_answer = QuizAnswer(
-                user_id=user_id,
-                quiz_id=quiz.id,
-                username=username,
-                answer=user_answer,
-                is_correct="True" if is_correct else "False",
-                answered_at=answered_at,
-                question_index=int(question_index)
-            )
-            session.add(quiz_answer)
+            # Check if answer already exists for this user/quiz/question
+            existing_answer = session.query(QuizAnswer).filter(
+                QuizAnswer.user_id == user_id,
+                QuizAnswer.quiz_id == quiz.id,
+                QuizAnswer.question_index == int(question_index)
+            ).first()
+            
+            if existing_answer:
+                # Update existing answer if it's different
+                if (existing_answer.answer != user_answer or 
+                    existing_answer.is_correct != ("True" if is_correct else "False")):
+                    existing_answer.answer = user_answer
+                    existing_answer.is_correct = "True" if is_correct else "False"
+                    existing_answer.answered_at = answered_at
+                    existing_answer.username = username
+                    logger.info(f"Updated existing answer for user {user_id}, quiz {quiz.id}, question {question_index}")
+            else:
+                # Create new quiz answer record
+                quiz_answer = QuizAnswer(
+                    user_id=user_id,
+                    quiz_id=quiz.id,
+                    username=username,
+                    answer=user_answer,
+                    is_correct="True" if is_correct else "False",
+                    answered_at=answered_at,
+                    question_index=int(question_index)
+                )
+                session.add(quiz_answer)
+                logger.info(f"Created new answer for user {user_id}, quiz {quiz.id}, question {question_index}")
         
         session.commit()
         logger.info(f"Saved {len(results['answers'])} answers for user {user_id} in quiz {quiz.id}")

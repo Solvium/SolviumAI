@@ -1211,18 +1211,43 @@ async def handle_show_leaderboard(update, context, quiz_id):
                 )
                 return
             
-            # Get leaderboard data (placeholder for now)
-            leaderboard_data = {
-                'quiz_id': quiz_id,
-                'topic': quiz.topic,
-                'top_players': [],  # TODO: Implement actual leaderboard
-                'total_participants': 0,
-                'time_remaining': 0,
-                'is_active': quiz.status == 'ACTIVE'
-            }
+            # Get actual leaderboard data using the existing service
+            from services.quiz_service import _generate_leaderboard_data_for_quiz
+            from datetime import datetime, timezone
+            
+            # Generate leaderboard data
+            leaderboard_info = await _generate_leaderboard_data_for_quiz(quiz, session)
+            
+            # Extract participant data for the leaderboard card
+            leaderboard_data = []
+            total_participants = len(leaderboard_info.get('participants', []))
+            
+            # Convert to the format expected by create_leaderboard_card
+            for participant in leaderboard_info.get('participants', [])[:10]:  # Top 10
+                score = participant.get('score', 0)
+                username = participant.get('username', 'UnknownUser')
+                logger.info(f"Leaderboard participant: {username}, score: {score}")
+                leaderboard_data.append({
+                    'username': username,
+                    'score': score,
+                    'correct_answers': score,
+                    'total_questions': len(quiz.questions) if quiz.questions else 0
+                })
+            
+            # Calculate time remaining
+            time_remaining = 0
+            if quiz.end_time:
+                now = datetime.now(timezone.utc)
+                if quiz.end_time > now:
+                    time_remaining = int((quiz.end_time - now).total_seconds())
             
             # Create rich leaderboard card
-            leaderboard_msg, leaderboard_keyboard = create_leaderboard_card(leaderboard_data)
+            leaderboard_msg, leaderboard_keyboard = create_leaderboard_card(
+                quiz_id, 
+                leaderboard_data, 
+                time_remaining, 
+                total_participants
+            )
             
             await context.bot.send_message(
                 chat_id=chat_id,
@@ -2793,8 +2818,33 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
         
         # Check if user already has an active session for THIS SPECIFIC quiz
         # (Allow multiple different quizzes, but not the same quiz)
-        session_key = f"{user_id}:{quiz_id}"
+        session_key = f"{user_id}:{quiz.id}"  # Use quiz.id to match the format in start_enhanced_quiz
+        
+        # Debug: Log all active sessions for this user
+        user_sessions = [k for k in active_quiz_sessions.keys() if k.startswith(f"{user_id}:")]
+        logger.info(f"User {user_id} active sessions: {user_sessions}")
+        logger.info(f"Looking for session key: {session_key}")
+        
+        # Clean up any stale sessions for this user (older than 1 hour)
+        current_time = datetime.utcnow()
+        stale_sessions = []
+        for key in user_sessions:
+            if key in active_quiz_sessions:
+                session = active_quiz_sessions[key]
+                # Check if session is older than 1 hour (3600 seconds)
+                if hasattr(session, 'start_time') and session.start_time:
+                    time_diff = (current_time - session.start_time).total_seconds()
+                    if time_diff > 3600:  # 1 hour
+                        stale_sessions.append(key)
+                        logger.info(f"Found stale session {key}, age: {time_diff} seconds")
+        
+        # Remove stale sessions
+        for key in stale_sessions:
+            active_quiz_sessions.pop(key, None)
+            logger.info(f"Removed stale session: {key}")
+        
         if session_key in active_quiz_sessions:
+            logger.warning(f"Found existing session for {session_key}, preventing duplicate start")
             await safe_send_message(
                 context.bot,
                 user_id,
