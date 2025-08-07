@@ -97,7 +97,7 @@ class QuizSession:
             return False
         
         current_q = self.prepared_questions[self.current_question_index]
-        correct_answer = current_q.get('correct_answer', '')
+        correct_answer = current_q.get('correct', '')  # Use 'correct' field as parsed by parse_questions
         
         # Map shuffled answer back to original
         shuffled_options = current_q.get('shuffled_options', {})
