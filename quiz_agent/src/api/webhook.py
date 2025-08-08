@@ -59,9 +59,6 @@ async def telegram_webhook(
             logger.error("Bot instance not available for webhook processing")
             raise HTTPException(status_code=503, detail="Bot service unavailable")
 
-        # Log the incoming update
-        logger.info(f"Received webhook update: {update_data}")
-
         # Create Telegram Update object from the received data
         try:
             update = Update.de_json(update_data, bot.app.bot)
@@ -75,13 +72,10 @@ async def telegram_webhook(
         # Process the update using the bot's application
         try:
             await bot.app.process_update(update)
-            logger.info(f"Successfully processed update {update.update_id}")
         except Exception as e:
             logger.error(
                 f"Error processing update {update.update_id}: {e}", exc_info=True
             )
-            # Don't raise HTTP error here - we still want to return 200 to Telegram
-            # to avoid webhook retries for application errors
 
         return JSONResponse(content={"status": "ok"})
 
