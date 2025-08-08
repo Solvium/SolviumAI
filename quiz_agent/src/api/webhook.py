@@ -1,51 +1,145 @@
 """
-Telegram webhook handler for FastAPI.
-Processes incoming webhook updates from Telegram.
+High-performance Telegram webhook handler for FastAPI.
+Optimized for sub-second response times with background processing.
 """
 
+import asyncio
+import time
 import logging
 from typing import Dict, Any
 
-from fastapi import APIRouter, Request, HTTPException, Depends
+from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from telegram import Update
 
 from api.main import get_bot_instance
 from utils.config import Config
+from utils.redis_client import RedisClient
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-async def verify_telegram_webhook(request: Request) -> bool:
+async def process_telegram_update_background(update_data: Dict[str, Any]):
     """
-    Verify that the request is actually coming from Telegram.
-    This is a basic security check.
+    Process Telegram update in background for optimal performance.
+    This function handles all the heavy lifting without blocking the webhook response.
     """
-    # You can implement more sophisticated verification here
-    # For example, checking the X-Telegram-Bot-Api-Secret-Token header
-    # or verifying the request signature
+    try:
+        start_time = time.perf_counter()
+        
+        # Get bot instance
+        bot = get_bot_instance()
+        if not bot:
+            logger.error("Bot instance not available for background processing")
+            return
 
-    # For now, we'll just check if the request has the expected path
-    expected_path = f"/webhook/{Config.TELEGRAM_TOKEN}"
-    return request.url.path == expected_path
+        # Create Telegram Update object
+        try:
+            update = Update.de_json(update_data, bot.app.bot)
+            if not update:
+                logger.error("Failed to parse update in background processing")
+                return
+        except Exception as e:
+            logger.error(f"Error parsing Telegram update in background: {e}")
+            return
+
+        # Process the update
+        try:
+            await bot.app.process_update(update)
+            processing_time = (time.perf_counter() - start_time) * 1000
+            logger.debug(f"Background processing completed in {processing_time:.2f}ms for update {update.update_id}")
+        except Exception as e:
+            logger.error(f"Error in background processing for update {update.update_id}: {e}", exc_info=True)
+
+    except Exception as e:
+        logger.error(f"Unexpected error in background processing: {e}", exc_info=True)
+
+
+async def verify_telegram_webhook(request: Request, token: str) -> bool:
+    """
+    High-performance webhook verification.
+    """
+    # Quick token verification
+    if token != Config.TELEGRAM_TOKEN:
+        return False
+    
+    # Optional: Add IP whitelist verification for Telegram servers
+    # client_ip = request.client.host
+    # if client_ip not in TELEGRAM_IP_RANGES:
+    #     return False
+    
+    return True
 
 
 @router.post("/{token}")
-async def telegram_webhook(
+async def telegram_webhook_optimized(
+    token: str, 
+    request: Request, 
+    background_tasks: BackgroundTasks,
+    update_data: Dict[str, Any]
+) -> JSONResponse:
+    """
+    Ultra-fast webhook handler optimized for sub-second response times.
+    
+    This endpoint:
+    1. Immediately validates the request
+    2. Queues processing in background
+    3. Returns instant acknowledgment to Telegram
+    
+    Target response time: < 50ms
+    """
+    # Start performance timer
+    start_time = time.perf_counter()
+    
+    try:
+        # Fast token verification (< 1ms)
+        if not await verify_telegram_webhook(request, token):
+            logger.warning(f"Invalid token received in webhook: {token}")
+            raise HTTPException(status_code=403, detail="Invalid token")
+
+        # Quick validation of update data (< 5ms)
+        if not update_data:
+            raise HTTPException(status_code=400, detail="Empty update data")
+        
+        # Check if this is a relevant update type (quick filter)
+        has_message = "message" in update_data
+        has_callback = "callback_query" in update_data
+        has_poll = "poll_answer" in update_data
+        
+        if not (has_message or has_callback or has_poll):
+            # Return OK but don't process irrelevant updates
+            response_time = (time.perf_counter() - start_time) * 1000
+            logger.debug(f"Ignored irrelevant update in {response_time:.2f}ms")
+            return JSONResponse(content={"status": "ignored"})
+
+        # Queue background processing (< 1ms)
+        background_tasks.add_task(process_telegram_update_background, update_data)
+        
+        # Calculate and log response time
+        response_time = (time.perf_counter() - start_time) * 1000
+        logger.info(f"Webhook response: 200 | Processing time: {response_time:.2f}ms")
+        
+        # Immediate response to Telegram
+        return JSONResponse(content={"status": "ok"})
+
+    except HTTPException:
+        # Re-raise HTTP exceptions (these will be handled by FastAPI)
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in webhook handler: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# Legacy webhook handler for compatibility
+@router.post("/{token}/legacy")
+async def telegram_webhook_legacy(
     token: str, request: Request, update_data: Dict[str, Any]
 ) -> JSONResponse:
     """
-    Handle incoming Telegram webhook updates.
-
-    Args:
-        token: The bot token from the URL path
-        request: The FastAPI request object
-        update_data: The JSON payload from Telegram
-
-    Returns:
-        JSONResponse indicating success or failure
+    Legacy webhook handler that processes updates synchronously.
+    Use only for debugging or when background processing is not desired.
     """
     try:
         # Verify the token matches our bot token
@@ -83,7 +177,7 @@ async def telegram_webhook(
         # Re-raise HTTP exceptions (these will be handled by FastAPI)
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in webhook handler: {e}", exc_info=True)
+        logger.error(f"Unexpected error in legacy webhook handler: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
