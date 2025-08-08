@@ -71,22 +71,51 @@ export async function POST(request: NextRequest) {
       console.log("Existing user logged in:", user.email);
     }
 
-    // Create user data for response
+    // Parse wallet data if it exists
+    let walletData = null;
+    if (user.wallet) {
+      try {
+        walletData =
+          typeof user.wallet === "string"
+            ? JSON.parse(user.wallet)
+            : user.wallet;
+      } catch (error) {
+        console.error("Error parsing wallet data:", error);
+      }
+    }
+
+    // Create complete user data for response
     const userData = {
       id: user.id.toString(),
       username: user.username,
       email: user.email,
+      telegramId: undefined, // Not available for Google auth
       googleId: decoded.sub,
       firstName: decoded.given_name,
       lastName: decoded.family_name,
       avatar: decoded.picture,
-      totalPoints: user.totalPoints,
+      totalPoints: user.totalPoints || 0,
       multiplier: 1, // Default multiplier
-      level: user.level,
+      level: user.level || 1,
+      difficulty: user.difficulty || 1,
+      puzzleCount: user.puzzleCount || 0,
+      referralCount: user.referralCount || 0,
+      spinCount: user.spinCount || 0,
+      dailySpinCount: user.dailySpinCount || 0,
+      claimCount: user.claimCount || 0,
+      isOfficial: user.isOfficial || false,
+      isMining: user.isMining || false,
+      isPremium: user.isPremium || false,
+      weeklyPoints: user.weeklyPoints || 0,
+      createdAt: new Date(), // Default since not in schema
       lastLoginAt: new Date(),
-      lastSpinClaim: user.lastSpinClaim,
-      dailySpinCount: user.dailySpinCount,
+      lastSpinClaim: user.lastSpinClaim || undefined,
+      lastClaim: user.lastClaim || undefined,
+      chatId: user.chatId || undefined,
+      wallet: walletData, // Include parsed wallet data
     };
+
+    console.log("Complete user data from Google auth:", userData);
 
     // Create response with simple cookie (without JWT for now)
     const response = NextResponse.json({

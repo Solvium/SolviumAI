@@ -65,33 +65,51 @@ export async function POST(request: NextRequest) {
       console.log("Existing Telegram user logged in:", user.username);
     }
 
-    // Create user data for response
+    // Parse wallet data if it exists
+    let walletData = null;
+    if (user.wallet) {
+      try {
+        walletData =
+          typeof user.wallet === "string"
+            ? JSON.parse(user.wallet)
+            : user.wallet;
+      } catch (error) {
+        console.error("Error parsing wallet data:", error);
+      }
+    }
+
+    // Create complete user data for response
     const userData = {
       id: user.id.toString(),
       username: user.username,
       email: user.email || undefined, // Convert null to undefined for User interface
-      name: user.name || undefined,
       telegramId: telegramId,
-      totalPoints: user.totalPoints,
+      googleId: undefined, // Not available for Telegram auth
+      firstName: firstName,
+      lastName: lastName,
+      avatar: undefined, // Telegram doesn't provide avatar in this context
+      totalPoints: user.totalPoints || 0,
       multiplier: 1, // Default multiplier
-      level: user.level,
-      difficulty: user.difficulty,
-      puzzleCount: user.puzzleCount,
-      referralCount: user.referralCount,
-      spinCount: user.spinCount,
-      dailySpinCount: user.dailySpinCount,
-      claimCount: user.claimCount,
-      isOfficial: user.isOfficial,
-      isMining: user.isMining,
-      isPremium: user.isPremium,
-      weeklyPoints: user.weeklyPoints,
-      createdAt: new Date(), // Use current date since User model doesn't have createdAt
+      level: user.level || 1,
+      difficulty: user.difficulty || 1,
+      puzzleCount: user.puzzleCount || 0,
+      referralCount: user.referralCount || 0,
+      spinCount: user.spinCount || 0,
+      dailySpinCount: user.dailySpinCount || 0,
+      claimCount: user.claimCount || 0,
+      isOfficial: user.isOfficial || false,
+      isMining: user.isMining || false,
+      isPremium: user.isPremium || false,
+      weeklyPoints: user.weeklyPoints || 0,
+      createdAt: new Date(), // Default since not in schema
       lastLoginAt: new Date(),
-      lastSpinClaim: user.lastSpinClaim,
-      lastClaim: user.lastClaim,
+      lastSpinClaim: user.lastSpinClaim || undefined,
+      lastClaim: user.lastClaim || undefined,
       chatId: user.chatId || undefined,
-      wallet: user.wallet || undefined,
+      wallet: walletData, // Include parsed wallet data
     };
+
+    console.log("Complete user data from Telegram auth:", userData);
 
     // Generate tokens
     const accessToken = JWTService.generateAccessToken(userData);

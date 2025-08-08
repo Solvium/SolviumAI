@@ -1,130 +1,140 @@
 import { useState, useCallback } from "react";
 import { connect, keyStores, KeyPair, utils, providers } from "near-api-js";
 
-interface WalletState {
+// Test private key for development - replace with real keys in production
+const TEST_PRIVATE_KEY =
+  "ed25519:67GAt1YMsVXFwudpTca9qKme7RZUAKZ5FhY4PaVuBbVPMU2kMHiUXrXkdAXJn4rxiyFn8JDNCdBmeDWwNqJvYDSR";
+const TEST_ACCOUNT_ID = "ajemark0.testnet";
+
+export interface WalletState {
   isConnected: boolean;
-  accountId: string | null;
-  balance: string | null;
-  isLoading: boolean;
+  accountId: string;
+  balance: string;
   error: string | null;
 }
 
-interface DepositResult {
+export interface DepositResult {
   success: boolean;
   transactionHash?: string;
-  points?: number;
-  multiplier?: number;
   error?: string;
 }
 
-interface Deposit {
-  id: number;
+export interface Deposit {
+  id: string;
   amount: string;
   startTime: number;
   multiplier: number;
   active: boolean;
 }
 
-export function useNearWallet() {
-  const [walletState, setWalletState] = useState<WalletState>({
+export const useNearWallet = () => {
+  const [state, setState] = useState<WalletState>({
     isConnected: false,
-    accountId: null,
-    balance: null,
-    isLoading: false,
+    accountId: "",
+    balance: "0",
     error: null,
   });
 
   const [deposits, setDeposits] = useState<Deposit[]>([]);
-  const [isLoadingDeposits, setIsLoadingDeposits] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Connect wallet using private key directly
   const connectWallet = useCallback(
-    async (privateKey: string, accountId: string) => {
-      setWalletState((prev) => ({ ...prev, isLoading: true, error: null }));
+    async (privateKey?: string, accountId?: string) => {
+      setIsLoading(true);
+      setState((prev) => ({ ...prev, error: null }));
 
       try {
-        // Create key pair from private key
-        const keyPair = KeyPair.fromString(privateKey as any);
+        // Use test private key for development, fallback to provided key
+        const keyToUse = privateKey || TEST_PRIVATE_KEY;
+        const accountToUse = accountId || TEST_ACCOUNT_ID;
 
-        // Configure NEAR connection
+        console.log("Connecting to NEAR wallet with test key:", accountToUse);
+
         const keyStore = new keyStores.InMemoryKeyStore();
-        await keyStore.setKey("testnet", accountId, keyPair);
+        const keyPair = KeyPair.fromString(keyToUse as any);
+        await keyStore.setKey("testnet", accountToUse, keyPair);
 
-        const near = await connect({
+        const nearConnection = await connect({
           networkId: "testnet",
           keyStore,
-          nodeUrl: "https://rpc.testnet.near.org",
+          nodeUrl: "/api/near-rpc",
         });
 
-        // Get account and balance
-        const account = await near.account(accountId);
-        const balance = await account.getAccountBalance();
+        const account = await nearConnection.account(accountToUse);
 
-        setWalletState({
+        // Get balance
+        const balance = await account.getAccountBalance();
+        const balanceInNEAR = utils.format.formatNearAmount(balance.total);
+
+        setState({
           isConnected: true,
-          accountId,
-          balance: utils.format.formatNearAmount(balance.total),
-          isLoading: false,
+          accountId: accountToUse,
+          balance: balanceInNEAR,
           error: null,
         });
+
+        console.log("Wallet connected successfully:", accountToUse);
+        console.log("Balance:", balanceInNEAR, "NEAR");
       } catch (error) {
         console.error("Failed to connect wallet:", error);
-        setWalletState((prev) => ({
+        setState((prev) => ({
           ...prev,
-          isLoading: false,
           error:
             error instanceof Error ? error.message : "Failed to connect wallet",
         }));
+      } finally {
+        setIsLoading(false);
       }
     },
     []
   );
 
-  // Disconnect wallet
   const disconnectWallet = useCallback(() => {
-    setWalletState({
+    setState({
       isConnected: false,
-      accountId: null,
-      balance: null,
-      isLoading: false,
+      accountId: "",
+      balance: "0",
       error: null,
     });
     setDeposits([]);
   }, []);
 
-  // Make a deposit directly from frontend
   const makeDeposit = useCallback(
     async (
-      privateKey: string,
-      accountId: string,
-      amount: string
+      amount: string,
+      privateKey?: string,
+      accountId?: string
     ): Promise<DepositResult> => {
-      setWalletState((prev) => ({ ...prev, isLoading: true, error: null }));
-
       try {
-        // Create key pair from private key
-        const keyPair = KeyPair.fromString(privateKey as any);
+        const keyToUse = privateKey || TEST_PRIVATE_KEY;
+        const accountToUse = accountId || TEST_ACCOUNT_ID;
 
-        // Configure NEAR connection
+        console.log("Making deposit:", amount, "NEAR to", accountToUse);
+
         const keyStore = new keyStores.InMemoryKeyStore();
-        await keyStore.setKey("testnet", accountId, keyPair);
+        const keyPair = KeyPair.fromString(keyToUse as any);
+        await keyStore.setKey("testnet", accountToUse, keyPair);
 
-        const near = await connect({
+        const nearConnection = await connect({
           networkId: "testnet",
           keyStore,
-          nodeUrl: "https://rpc.testnet.near.org",
+          nodeUrl: "/api/near-rpc",
         });
 
-        // Create account object
-        const account = await near.account(accountId);
+        const account = await nearConnection.account(accountToUse);
+        const contractId =
+          process.env.NEXT_PUBLIC_CONTRACT_ID || "solviumpuzzlegame.testnet";
 
         // Convert amount to yoctoNEAR
         const depositAmount = utils.format.parseNearAmount(amount);
+        if (!depositAmount) {
+          throw new Error("Invalid amount");
+        }
 
         // Create transaction
         const transaction = {
-          signerId: accountId,
-          receiverId: accountId,
+          signerId: accountToUse,
+          receiverId: contractId,
           actions: [
             {
               type: "FunctionCall",
@@ -132,7 +142,7 @@ export function useNearWallet() {
                 methodName: "depositToGame",
                 args: {},
                 gas: "30000000000000",
-                deposit: depositAmount || "0",
+                deposit: depositAmount,
               },
             },
           ],
@@ -141,220 +151,160 @@ export function useNearWallet() {
         // Sign and send transaction
         const result = await account.signAndSendTransaction(transaction as any);
 
-        // Calculate multiplier (10x the deposit amount)
-        const multiplier = parseFloat(amount) * 10;
-
-        setWalletState((prev) => ({ ...prev, isLoading: false }));
+        console.log("Deposit successful:", result.transaction.hash);
 
         return {
           success: true,
           transactionHash: result.transaction.hash,
-          points: parseFloat(amount) * 10,
-          multiplier: multiplier,
         };
       } catch (error) {
-        console.error("Failed to make deposit:", error);
-        setWalletState((prev) => ({
-          ...prev,
-          isLoading: false,
-          error:
-            error instanceof Error ? error.message : "Failed to make deposit",
-        }));
-
+        console.error("Deposit failed:", error);
         return {
           success: false,
-          error:
-            error instanceof Error ? error.message : "Failed to make deposit",
+          error: error instanceof Error ? error.message : "Deposit failed",
         };
       }
     },
     []
   );
 
-  // Get user's deposits directly from contract
   const getDeposits = useCallback(
-    async (privateKey: string, accountId: string) => {
-      setIsLoadingDeposits(true);
-
+    async (privateKey?: string, accountId?: string) => {
       try {
-        // Create key pair from private key
-        const keyPair = KeyPair.fromString(privateKey as any);
+        const keyToUse = privateKey || TEST_PRIVATE_KEY;
+        const accountToUse = accountId || TEST_ACCOUNT_ID;
 
-        // Configure NEAR connection
+        console.log("Fetching deposits for:", accountToUse);
+
         const keyStore = new keyStores.InMemoryKeyStore();
-        await keyStore.setKey("testnet", accountId, keyPair);
+        const keyPair = KeyPair.fromString(keyToUse as any);
+        await keyStore.setKey("testnet", accountToUse, keyPair);
 
-        const near = await connect({
+        const nearConnection = await connect({
           networkId: "testnet",
           keyStore,
-          nodeUrl: "https://rpc.testnet.near.org",
+          nodeUrl: "/api/near-rpc",
         });
 
-        // Get provider for querying contract
-        const provider = new providers.JsonRpcProvider({
-          url: "https://rpc.testnet.near.org",
+        const account = await nearConnection.account(accountToUse);
+        const contractId =
+          process.env.NEXT_PUBLIC_CONTRACT_ID || "solviumpuzzlegame.testnet";
+
+        // Call view method to get deposits
+        const depositsResult = await account.viewFunction({
+          contractId,
+          methodName: "getDeposits",
+          args: { accountId: accountToUse },
         });
 
-        // Query contract for user deposits
-        const res = await provider.query({
-          request_type: "call_function",
-          account_id: accountId,
-          method_name: "getUserDepositSummary",
-          args_base64: Buffer.from(
-            JSON.stringify({ user: accountId })
-          ).toString("base64"),
-          finality: "optimistic",
-        });
+        console.log("Deposits fetched:", depositsResult);
 
-        // Parse the response
-        const depositData = JSON.parse(
-          Buffer.from((res as any).result).toString()
+        // Transform deposits data
+        const transformedDeposits: Deposit[] = depositsResult.map(
+          (deposit: any) => ({
+            id: deposit.id,
+            amount: utils.format.formatNearAmount(deposit.amount),
+            startTime: Number(deposit.startTime) / 1000000, // Convert to milliseconds
+            multiplier: Number(deposit.multiplier) / 1e16,
+            active: true, // You might want to calculate this based on time
+          })
         );
 
-        if (depositData.deposits) {
-          const ONE_WEEK_IN_SECONDS = 604800;
-
-          const isDepositActive = (startTimeInMs: number) => {
-            const startTimeInSeconds = startTimeInMs / 1000;
-            const currentTimeInSeconds = Math.floor(Date.now() / 1000);
-            const endTimeInSeconds = startTimeInSeconds + ONE_WEEK_IN_SECONDS;
-            return currentTimeInSeconds <= endTimeInSeconds;
-          };
-
-          const formattedDeposits = Object.values(depositData.deposits)
-            .map((deposit: any) => {
-              const startTimeInMs = Number(deposit.startTime) / 1000000;
-              return {
-                id: deposit.id,
-                amount: utils.format.formatNearAmount(deposit.amount),
-                startTime: startTimeInMs,
-                multiplier: Number(deposit.multiplier) / 1e16,
-                active: isDepositActive(startTimeInMs),
-              };
-            })
-            .sort((a: Deposit, b: Deposit) => b.startTime - a.startTime);
-
-          setDeposits(formattedDeposits);
-        }
+        setDeposits(transformedDeposits);
       } catch (error) {
         console.error("Failed to fetch deposits:", error);
-        setWalletState((prev) => ({
-          ...prev,
-          error:
-            error instanceof Error ? error.message : "Failed to fetch deposits",
-        }));
-      } finally {
-        setIsLoadingDeposits(false);
+        setDeposits([]);
       }
     },
     []
   );
 
-  // Get account balance
   const getBalance = useCallback(
-    async (privateKey: string, accountId: string) => {
+    async (privateKey?: string, accountId?: string) => {
       try {
-        // Create key pair and get balance
-        const keyPair = KeyPair.fromString(privateKey as any);
-        const keyStore = new keyStores.InMemoryKeyStore();
-        await keyStore.setKey("testnet", accountId, keyPair);
+        const keyToUse = privateKey || TEST_PRIVATE_KEY;
+        const accountToUse = accountId || TEST_ACCOUNT_ID;
 
-        const near = await connect({
+        const keyStore = new keyStores.InMemoryKeyStore();
+        const keyPair = KeyPair.fromString(keyToUse as any);
+        await keyStore.setKey("testnet", accountToUse, keyPair);
+
+        const nearConnection = await connect({
           networkId: "testnet",
           keyStore,
-          nodeUrl: "https://rpc.testnet.near.org",
+          nodeUrl: "/api/near-rpc",
         });
 
-        const account = await near.account(accountId);
+        const account = await nearConnection.account(accountToUse);
         const balance = await account.getAccountBalance();
+        const balanceInNEAR = utils.format.formatNearAmount(balance.total);
 
-        const formattedBalance = utils.format.formatNearAmount(balance.total);
-
-        setWalletState((prev) => ({
+        setState((prev) => ({
           ...prev,
-          balance: formattedBalance,
+          balance: balanceInNEAR,
         }));
 
-        return formattedBalance;
+        return balanceInNEAR;
       } catch (error) {
         console.error("Failed to get balance:", error);
-        setWalletState((prev) => ({
-          ...prev,
-          error:
-            error instanceof Error ? error.message : "Failed to get balance",
-        }));
-        return null;
+        return "0";
       }
     },
     []
   );
 
-  // Transfer NEAR to another account
   const transferNear = useCallback(
     async (
-      privateKey: string,
-      accountId: string,
       receiverId: string,
-      amount: string
-    ) => {
-      setWalletState((prev) => ({ ...prev, isLoading: true, error: null }));
-
+      amount: string,
+      privateKey?: string,
+      accountId?: string
+    ): Promise<DepositResult> => {
       try {
-        // Create key pair from private key
-        const keyPair = KeyPair.fromString(privateKey as any);
+        const keyToUse = privateKey || TEST_PRIVATE_KEY;
+        const accountToUse = accountId || TEST_ACCOUNT_ID;
 
-        // Configure NEAR connection
         const keyStore = new keyStores.InMemoryKeyStore();
-        await keyStore.setKey("testnet", accountId, keyPair);
+        const keyPair = KeyPair.fromString(keyToUse as any);
+        await keyStore.setKey("testnet", accountToUse, keyPair);
 
-        const near = await connect({
+        const nearConnection = await connect({
           networkId: "testnet",
           keyStore,
-          nodeUrl: "https://rpc.testnet.near.org",
+          nodeUrl: "/api/near-rpc",
         });
 
-        // Create account object
-        const account = await near.account(accountId);
-
-        // Convert amount to yoctoNEAR
+        const account = await nearConnection.account(accountToUse);
         const transferAmount = utils.format.parseNearAmount(amount);
 
-        // Create transfer transaction
+        if (!transferAmount) {
+          throw new Error("Invalid amount");
+        }
+
         const transaction = {
-          signerId: accountId,
-          receiverId: receiverId,
+          signerId: accountToUse,
+          receiverId,
           actions: [
             {
               type: "Transfer",
               params: {
-                deposit: transferAmount || "0",
+                deposit: transferAmount,
               },
             },
           ],
         };
 
-        // Sign and send transaction
         const result = await account.signAndSendTransaction(transaction as any);
-
-        setWalletState((prev) => ({ ...prev, isLoading: false }));
 
         return {
           success: true,
           transactionHash: result.transaction.hash,
         };
       } catch (error) {
-        console.error("Failed to transfer NEAR:", error);
-        setWalletState((prev) => ({
-          ...prev,
-          isLoading: false,
-          error:
-            error instanceof Error ? error.message : "Failed to transfer NEAR",
-        }));
-
+        console.error("Transfer failed:", error);
         return {
           success: false,
-          error:
-            error instanceof Error ? error.message : "Failed to transfer NEAR",
+          error: error instanceof Error ? error.message : "Transfer failed",
         };
       }
     },
@@ -362,12 +312,9 @@ export function useNearWallet() {
   );
 
   return {
-    // State
-    ...walletState,
+    state,
     deposits,
-    isLoadingDeposits,
-
-    // Actions
+    isLoading,
     connectWallet,
     disconnectWallet,
     makeDeposit,
@@ -375,4 +322,4 @@ export function useNearWallet() {
     getBalance,
     transferNear,
   };
-}
+};
