@@ -11,6 +11,7 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
 class Config:
     # Telegram Bot Configuration
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+    
     # Webhook Configuration (optional, if not set, polling is used)
     WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://yourdomain.com or ngrok URL
     WEBHOOK_LISTEN_IP = os.getenv("WEBHOOK_LISTEN_IP", "0.0.0.0")  # IP to listen on
@@ -20,6 +21,15 @@ class Config:
     )  # Path for the webhook, defaults to TELEGRAM_TOKEN in main.py if not set
     SSL_CERT_PATH = os.getenv("SSL_CERT_PATH")
     SSL_PRIVATE_KEY_PATH = os.getenv("SSL_PRIVATE_KEY_PATH")
+    
+    # FastAPI Configuration
+    FASTAPI_HOST = os.getenv("FASTAPI_HOST", "0.0.0.0")
+    FASTAPI_PORT = int(os.getenv("FASTAPI_PORT", "8000"))
+    FASTAPI_RELOAD = os.getenv("FASTAPI_RELOAD", "false").lower() == "true"
+    FASTAPI_WORKERS = int(os.getenv("FASTAPI_WORKERS", "1"))
+    
+    # Use FastAPI for webhooks (default: True in production, False in development)
+    USE_FASTAPI_WEBHOOK = os.getenv("USE_FASTAPI_WEBHOOK", "true" if ENVIRONMENT == "production" else "false").lower() == "true"
     # Gemini API for quiz generation
     GOOGLE_API_KEY = os.getenv("GOOGLE_GEMINI_API_KEY")
 

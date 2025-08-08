@@ -31,6 +31,7 @@ class TelegramBot:
         webhook_listen_ip: str = None,
         webhook_port: int = None,
         webhook_url_path: str = None,
+        use_fastapi_webhook: bool = False,
     ):
         # Build the Telegram application with increased connection timeout and retry settings
         # CRITICAL FIX: Enable JobQueue for auto-distribution scheduling
@@ -52,6 +53,7 @@ class TelegramBot:
         self.webhook_listen_ip = webhook_listen_ip
         self.webhook_port = webhook_port
         self.webhook_url_path = webhook_url_path
+        self.use_fastapi_webhook = use_fastapi_webhook
 
         self._stop_signal = asyncio.Future()  # For graceful shutdown signal
 
@@ -409,67 +411,109 @@ class TelegramBot:
             and self.webhook_port
             and self.webhook_url_path
         ):
-            logger.info(
-                f"Starting Telegram bot in WEBHOOK mode. Base URL: {self.webhook_url}, Path: {self.webhook_url_path}, Listen IP: {self.webhook_listen_ip}, Port: {self.webhook_port}"
-            )
-
-            max_retries = 3
-            retry_delay = 5  # seconds
-            current_port = self.webhook_port
-            # Try to delete any existing webhook before setting a new one to prevent conflicts
-            try:
-                logger.info("Removing any existing webhook...")
-                await self.app.bot.delete_webhook(drop_pending_updates=True)
-            except Exception as e:
-                logger.warning(f"Failed to delete existing webhook: {e}")
-
-            # Start the webhook server with retry logic for port binding
-            for retry in range(max_retries):
+            if self.use_fastapi_webhook:
+                logger.info(
+                    f"Starting Telegram bot in FASTAPI WEBHOOK mode. Bot will be managed by FastAPI."
+                )
+                
+                # Set up webhook with Telegram but don't start local server
+                webhook_url = f"{self.webhook_url}/webhook/{self.webhook_url_path}"
+                
                 try:
-                    logger.info(
-                        f"Attempt {retry + 1}/{max_retries} to start webhook on port {current_port}"
-                    )
-                    await self.app.updater.start_webhook(
-                        listen=self.webhook_listen_ip,
-                        port=current_port,
-                        url_path=self.webhook_url_path,  # We need to specify this explicitly
-                        webhook_url=f"{self.webhook_url}/{self.webhook_url_path}",
+                    logger.info("Removing any existing webhook...")
+                    await self.app.bot.delete_webhook(drop_pending_updates=True)
+                    
+                    logger.info(f"Setting webhook URL: {webhook_url}")
+                    success = await self.app.bot.set_webhook(
+                        url=webhook_url,
                         allowed_updates=allowed_updates_list,
-                        drop_pending_updates=True,
+                        drop_pending_updates=True
                     )
-                    logger.info(
-                        f"Webhook server set up to listen on {self.webhook_listen_ip}:{current_port} for path /{self.webhook_url_path} and registered with URL {self.webhook_url}/{self.webhook_url_path}"
-                    )
-                    # Success! Break out of retry loop
-                    break
-                except OSError as e:
-                    if e.errno == 98:  # Address already in use
-                        current_port = current_port + 1
-                        logger.warning(
-                            f"Port {current_port - 1} is already in use. Trying port {current_port}..."
-                        )
-                        if retry == max_retries - 1:
-                            # This was our last retry
-                            logger.error(
-                                f"All ports in range {self.webhook_port} to {current_port} are in use."
-                            )
-                            raise
-                        await asyncio.sleep(retry_delay)
+                    
+                    if success:
+                        logger.info(f"Webhook set successfully with FastAPI: {webhook_url}")
                     else:
-                        # Some other OSError occurred
-                        logger.error(f"OSError when starting webhook: {e}")
-                        raise
+                        logger.error("Failed to set webhook with Telegram")
+                        raise Exception("Failed to set webhook with Telegram")
+                        
                 except Exception as e:
-                    logger.error(f"Failed to start webhook: {e}", exc_info=True)
+                    logger.error(f"Error setting up FastAPI webhook: {e}", exc_info=True)
                     raise
+                
+                # In FastAPI mode, we don't start the updater here
+                # The FastAPI server will handle webhook requests
+                logger.info("Bot initialized for FastAPI webhook mode - waiting for FastAPI to handle requests")
+                
+                try:
+                    await self._stop_signal  # Wait for stop signal
+                except asyncio.CancelledError:
+                    logger.info("FastAPI webhook stop signal received via CancelledError.")
+                finally:
+                    logger.info("FastAPI webhook mode ended.")
+                    
+            else:
+                # Original webhook implementation using python-telegram-bot's built-in server
+                logger.info(
+                    f"Starting Telegram bot in LEGACY WEBHOOK mode. Base URL: {self.webhook_url}, Path: {self.webhook_url_path}, Listen IP: {self.webhook_listen_ip}, Port: {self.webhook_port}"
+                )
 
-            # Since start_webhook is blocking, the bot will run until updater.stop() is called.
-            try:
-                await self._stop_signal  # This will block until stop() is called
-            except asyncio.CancelledError:
-                logger.info("Webhook stop signal received via CancelledError.")
-            finally:
-                logger.info("Webhook event loop part ended.")
+                max_retries = 3
+                retry_delay = 5  # seconds
+                current_port = self.webhook_port
+                # Try to delete any existing webhook before setting a new one to prevent conflicts
+                try:
+                    logger.info("Removing any existing webhook...")
+                    await self.app.bot.delete_webhook(drop_pending_updates=True)
+                except Exception as e:
+                    logger.warning(f"Failed to delete existing webhook: {e}")
+
+                # Start the webhook server with retry logic for port binding
+                for retry in range(max_retries):
+                    try:
+                        logger.info(
+                            f"Attempt {retry + 1}/{max_retries} to start webhook on port {current_port}"
+                        )
+                        await self.app.updater.start_webhook(
+                            listen=self.webhook_listen_ip,
+                            port=current_port,
+                            url_path=self.webhook_url_path,  # We need to specify this explicitly
+                            webhook_url=f"{self.webhook_url}/{self.webhook_url_path}",
+                            allowed_updates=allowed_updates_list,
+                            drop_pending_updates=True,
+                        )
+                        logger.info(
+                            f"Webhook server set up to listen on {self.webhook_listen_ip}:{current_port} for path /{self.webhook_url_path} and registered with URL {self.webhook_url}/{self.webhook_url_path}"
+                        )
+                        # Success! Break out of retry loop
+                        break
+                    except OSError as e:
+                        if e.errno == 98:  # Address already in use
+                            current_port = current_port + 1
+                            logger.warning(
+                                f"Port {current_port - 1} is already in use. Trying port {current_port}..."
+                            )
+                            if retry == max_retries - 1:
+                                # This was our last retry
+                                logger.error(
+                                    f"All ports in range {self.webhook_port} to {current_port} are in use."
+                                )
+                                raise
+                            await asyncio.sleep(retry_delay)
+                        else:
+                            # Some other OSError occurred
+                            logger.error(f"OSError when starting webhook: {e}")
+                            raise
+                    except Exception as e:
+                        logger.error(f"Failed to start webhook: {e}", exc_info=True)
+                        raise
+
+                # Since start_webhook is blocking, the bot will run until updater.stop() is called.
+                try:
+                    await self._stop_signal  # This will block until stop() is called
+                except asyncio.CancelledError:
+                    logger.info("Webhook stop signal received via CancelledError.")
+                finally:
+                    logger.info("Webhook event loop part ended.")
         else:
             logger.info("Starting Telegram bot in POLLING mode.")
             await self.app.updater.start_polling(
@@ -501,11 +545,6 @@ class TelegramBot:
             except Exception as e:
                 logger.error(f"Error stopping blockchain monitor: {e}", exc_info=True)
 
-        if self.app.updater and self.app.updater.running:
-            logger.info("Stopping Telegram updater (polling/webhook)...")
-            await self.app.updater.stop()
-            logger.info("Telegram updater stopped.")
-
         if self.webhook_url:
             try:
                 logger.info(
@@ -520,6 +559,12 @@ class TelegramBot:
                     logger.warning("Failed to delete webhook or no webhook was set.")
             except Exception as e:
                 logger.error(f"Error deleting webhook: {e}", exc_info=True)
+
+        # Only stop the updater if we're not in FastAPI webhook mode
+        if self.app.updater and self.app.updater.running and not self.use_fastapi_webhook:
+            logger.info("Stopping Telegram updater (polling/webhook)...")
+            await self.app.updater.stop()
+            logger.info("Telegram updater stopped.")
 
         if self.app.running:  # Check if application is running before stopping
             logger.info("Stopping Telegram application...")
