@@ -11,7 +11,7 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
 class Config:
     # Telegram Bot Configuration
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-    
+
     # Webhook Configuration (optional, if not set, polling is used)
     WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://yourdomain.com or ngrok URL
     WEBHOOK_LISTEN_IP = os.getenv("WEBHOOK_LISTEN_IP", "0.0.0.0")  # IP to listen on
@@ -21,15 +21,20 @@ class Config:
     )  # Path for the webhook, defaults to TELEGRAM_TOKEN in main.py if not set
     SSL_CERT_PATH = os.getenv("SSL_CERT_PATH")
     SSL_PRIVATE_KEY_PATH = os.getenv("SSL_PRIVATE_KEY_PATH")
-    
+
     # FastAPI Configuration
     FASTAPI_HOST = os.getenv("FASTAPI_HOST", "0.0.0.0")
     FASTAPI_PORT = int(os.getenv("FASTAPI_PORT", "8000"))
     FASTAPI_RELOAD = os.getenv("FASTAPI_RELOAD", "false").lower() == "true"
     FASTAPI_WORKERS = int(os.getenv("FASTAPI_WORKERS", "1"))
-    
+
     # Use FastAPI for webhooks (default: True in production, False in development)
-    USE_FASTAPI_WEBHOOK = os.getenv("USE_FASTAPI_WEBHOOK", "true" if ENVIRONMENT == "production" else "false").lower() == "true"
+    USE_FASTAPI_WEBHOOK = (
+        os.getenv(
+            "USE_FASTAPI_WEBHOOK", "true" if ENVIRONMENT == "production" else "false"
+        ).lower()
+        == "true"
+    )
     # Gemini API for quiz generation
     GOOGLE_API_KEY = os.getenv("GOOGLE_GEMINI_API_KEY")
 
@@ -73,7 +78,7 @@ class Config:
     REDIS_SSL = os.getenv("REDIS_SSL", True)
     # REDIS_DB = int(os.getenv("REDIS_DB", 0))
     REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
-    
+
     # Local Redis (development)
     REDIS_HOST_LOCAL = os.getenv("REDIS_HOST_LOCAL", "localhost")
     REDIS_PORT_LOCAL = int(os.getenv("REDIS_PORT_LOCAL", 6379))
@@ -90,56 +95,68 @@ class Config:
         return ENVIRONMENT == "development"
 
     # NEAR Wallet Configuration
-    NEAR_TESTNET_RPC_URL = os.getenv('NEAR_TESTNET_RPC_URL', 'https://rpc.testnet.near.org')
-    NEAR_TESTNET_HELPER_URL = os.getenv('NEAR_TESTNET_HELPER_URL', 'https://helper.testnet.near.org')
-    NEAR_MAINNET_RPC_URL = os.getenv('NEAR_MAINNET_RPC_URL', 'https://rpc.mainnet.near.org')
-    
+    NEAR_TESTNET_RPC_URL = os.getenv(
+        "NEAR_TESTNET_RPC_URL", "https://rpc.testnet.near.org"
+    )
+    NEAR_TESTNET_HELPER_URL = os.getenv(
+        "NEAR_TESTNET_HELPER_URL", "https://helper.testnet.near.org"
+    )
+    NEAR_MAINNET_RPC_URL = os.getenv(
+        "NEAR_MAINNET_RPC_URL", "https://rpc.mainnet.near.org"
+    )
+
     # Wallet Security Configuration
-    WALLET_ENCRYPTION_KEY = os.getenv('WALLET_ENCRYPTION_KEY')
-    WALLET_KEY_DERIVATION_ITERATIONS = int(os.getenv('WALLET_KEY_DERIVATION_ITERATIONS', '100000'))
-    
+    WALLET_ENCRYPTION_KEY = os.getenv("WALLET_ENCRYPTION_KEY")
+    WALLET_KEY_DERIVATION_ITERATIONS = int(
+        os.getenv("WALLET_KEY_DERIVATION_ITERATIONS", "100000")
+    )
+
     # Account Creation Configuration
-    DEFAULT_ACCOUNT_SUFFIX_LENGTH = int(os.getenv('DEFAULT_ACCOUNT_SUFFIX_LENGTH', '8'))
-    ACCOUNT_CREATION_TIMEOUT = int(os.getenv('ACCOUNT_CREATION_TIMEOUT', '30'))
-    BALANCE_CHECK_TIMEOUT = int(os.getenv('BALANCE_CHECK_TIMEOUT', '10'))
-    
+    DEFAULT_ACCOUNT_SUFFIX_LENGTH = int(os.getenv("DEFAULT_ACCOUNT_SUFFIX_LENGTH", "8"))
+    ACCOUNT_CREATION_TIMEOUT = int(os.getenv("ACCOUNT_CREATION_TIMEOUT", "30"))
+    BALANCE_CHECK_TIMEOUT = int(os.getenv("BALANCE_CHECK_TIMEOUT", "10"))
+
     # NEAR Account Creation Settings
     # Minimum balance required for account creation (in NEAR)
     # This covers storage costs and allows the account to exist
-    MINIMAL_ACCOUNT_BALANCE = float(os.getenv('MINIMAL_ACCOUNT_BALANCE', '0.00182'))
-    
+    MINIMAL_ACCOUNT_BALANCE = float(os.getenv("MINIMAL_ACCOUNT_BALANCE", "0.00182"))
+
     # Security Settings
     MIN_PRIVATE_KEY_LENGTH = 64
     MAX_ACCOUNT_ID_LENGTH = 64
-    ALLOWED_ACCOUNT_CHARS = set('abcdefghijklmnopqrstuvwxyz0123456789._-')
-    
+    ALLOWED_ACCOUNT_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789._-")
+
     @classmethod
     def validate_wallet_config(cls) -> bool:
         """Validate that all required wallet configuration is present"""
         if not cls.WALLET_ENCRYPTION_KEY:
-            print("⚠️  WARNING: WALLET_ENCRYPTION_KEY not set. Using generated key (not persistent across restarts).")
+            print(
+                "⚠️  WARNING: WALLET_ENCRYPTION_KEY not set. Using generated key (not persistent across restarts)."
+            )
             return False
         return True
-    
+
     @classmethod
     def get_wallet_encryption_key(cls) -> bytes:
         """Get the wallet encryption key, generating one if not set"""
         if cls.WALLET_ENCRYPTION_KEY:
             # Ensure we get exactly 32 bytes by hashing the key
             import hashlib
+
             key_bytes = cls.WALLET_ENCRYPTION_KEY.encode()
             return hashlib.sha256(key_bytes).digest()  # Always returns 32 bytes
         else:
             # Generate a temporary key (not persistent)
             import secrets
+
             return secrets.token_bytes(32)
-    
+
     @classmethod
     def is_testnet_enabled(cls) -> bool:
         """Check if testnet is enabled"""
-        return os.getenv('ENABLE_NEAR_TESTNET', 'true').lower() == 'true'
-    
+        return os.getenv("ENABLE_NEAR_TESTNET", "true").lower() == "true"
+
     @classmethod
     def is_mainnet_enabled(cls) -> bool:
         """Check if mainnet is enabled"""
-        return os.getenv('ENABLE_NEAR_MAINNET', 'false').lower() == 'true'
+        return os.getenv("ENABLE_NEAR_MAINNET", "false").lower() == "true"

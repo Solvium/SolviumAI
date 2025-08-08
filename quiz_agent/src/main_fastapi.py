@@ -34,15 +34,15 @@ bot_instance = None
 async def initialize_services():
     """Initialize all required services."""
     global bot_instance
-    
+
     logger.info("Initializing services for FastAPI mode...")
-    
+
     # Initialize database if needed
     # if "postgresql" in Config.DATABASE_URL or "postgres" in Config.DATABASE_URL:
     #     logger.info("Attempting to migrate database schema for PostgreSQL...")
     #     migrate_schema()
     # init_db()
-    
+
     # Initialize Redis
     try:
         redis_instance = await RedisClient.get_instance()
@@ -52,15 +52,17 @@ async def initialize_services():
             logger.error("Failed to get Redis instance.")
     except Exception as e:
         logger.error(f"Failed to connect to Redis: {e}. Continuing without Redis.")
-    
+
     # Initialize Telegram bot for FastAPI webhook mode
     if Config.WEBHOOK_URL:
         webhook_listen_ip = Config.WEBHOOK_LISTEN_IP
         webhook_port = int(Config.WEBHOOK_PORT)
         webhook_url_path = Config.WEBHOOK_URL_PATH or Config.TELEGRAM_TOKEN
-        
-        logger.info(f"Initializing bot for FastAPI webhook mode. URL: {Config.WEBHOOK_URL}")
-        
+
+        logger.info(
+            f"Initializing bot for FastAPI webhook mode. URL: {Config.WEBHOOK_URL}"
+        )
+
         bot_instance = TelegramBot(
             token=Config.TELEGRAM_TOKEN,
             webhook_url=Config.WEBHOOK_URL,
@@ -72,40 +74,40 @@ async def initialize_services():
     else:
         logger.info("Initializing bot for polling mode.")
         bot_instance = TelegramBot(token=Config.TELEGRAM_TOKEN)
-    
+
     # Register handlers
     bot_instance.register_handlers()
-    
+
     # Set bot instance in FastAPI app
     set_bot_instance(bot_instance)
-    
+
     # Start the bot (this will set up webhook with Telegram if in webhook mode)
     await bot_instance.start()
-    
+
     logger.info("Services initialized successfully.")
 
 
 async def cleanup_services():
     """Cleanup all services."""
     global bot_instance
-    
+
     logger.info("Cleaning up services...")
-    
+
     # Stop bot
-    if bot_instance and hasattr(bot_instance, 'stop'):
+    if bot_instance and hasattr(bot_instance, "stop"):
         try:
             await bot_instance.stop()
             logger.info("Bot stopped successfully.")
         except Exception as e:
             logger.error(f"Error stopping bot: {e}")
-    
+
     # Close Redis
     try:
         await RedisClient.close()
         logger.info("Redis connection closed.")
     except Exception as e:
         logger.error(f"Error closing Redis: {e}")
-    
+
     logger.info("Cleanup completed.")
 
 
@@ -128,9 +130,9 @@ async def main_fastapi():
     try:
         # Import uvicorn here to avoid import errors if not installed
         import uvicorn
-        
+
         logger.info("Starting FastAPI server...")
-        
+
         # Configure uvicorn
         config = uvicorn.Config(
             app=app,
@@ -139,13 +141,15 @@ async def main_fastapi():
             reload=Config.FASTAPI_RELOAD and Config.is_development(),
             workers=Config.FASTAPI_WORKERS if not Config.is_development() else 1,
             log_level="info",
-            ssl_keyfile=Config.SSL_PRIVATE_KEY_PATH if Config.SSL_PRIVATE_KEY_PATH else None,
+            ssl_keyfile=(
+                Config.SSL_PRIVATE_KEY_PATH if Config.SSL_PRIVATE_KEY_PATH else None
+            ),
             ssl_certfile=Config.SSL_CERT_PATH if Config.SSL_CERT_PATH else None,
         )
-        
+
         server = uvicorn.Server(config)
         await server.serve()
-        
+
     except ImportError:
         logger.error("uvicorn is not installed. Please install it: pip install uvicorn")
         sys.exit(1)

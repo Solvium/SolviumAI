@@ -7,8 +7,8 @@ from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
     ConversationHandler,
-    JobQueue,  
-    PollAnswerHandler, 
+    JobQueue,
+    PollAnswerHandler,
 )
 from telegram.ext import MessageHandler, filters
 from telegram.error import TimedOut, NetworkError, RetryAfter, TelegramError, BadRequest
@@ -57,21 +57,24 @@ class TelegramBot:
 
         self._stop_signal = asyncio.Future()  # For graceful shutdown signal
 
-    async def _handle_all_updates(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def _handle_all_updates(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ):
         """Handle all updates including poll answers"""
         # Check if this is a poll answer update
         if update.poll_answer:
-            logger.info(f"Poll answer detected: user={update.poll_answer.user.id}, poll_id={update.poll_answer.poll_id}")
+            logger.info(
+                f"Poll answer detected: user={update.poll_answer.user.id}, poll_id={update.poll_answer.poll_id}"
+            )
             from bot.handlers import handle_poll_answer
+
             await handle_poll_answer(update, context)
             return
-        
+
         # For other updates, let the normal handlers process them
         # This method is called before other handlers, so we just return
         # and let the normal handler chain continue
         pass
-
-
 
     @staticmethod
     async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -176,9 +179,13 @@ class TelegramBot:
             announce_quiz_end_handler,  # Quiz end announcement handler
             debug_sessions_handler,  # Debug sessions handler
         )
-        
+
         # Import menu handlers
-        from bot.menu_handlers import handle_menu_callback, handle_text_message, handle_reset_wallet
+        from bot.menu_handlers import (
+            handle_menu_callback,
+            handle_text_message,
+            handle_reset_wallet,
+        )
 
         # Conversation for interactive quiz creation needs to be registered FIRST
         # to ensure it gets priority for handling messages
@@ -213,8 +220,9 @@ class TelegramBot:
                         size_received,
                     ),
                     CallbackQueryHandler(
-                        size_selection, pattern="^(size_5|size_10|size_15|size_20|size_custom)$"
-                    )
+                        size_selection,
+                        pattern="^(size_5|size_10|size_15|size_20|size_custom)$",
+                    ),
                 ],
                 # For callback queries, we don't need to filter by chat type as they're handled correctly
                 CONTEXT_CHOICE: [
@@ -232,7 +240,8 @@ class TelegramBot:
                 # For callback queries, we don't need to filter by chat type
                 DURATION_CHOICE: [
                     CallbackQueryHandler(
-                        duration_choice, pattern="^(5_min|10_min|30_min|1_hour|no_limit|set_duration|skip_duration)$"
+                        duration_choice,
+                        pattern="^(5_min|10_min|30_min|1_hour|no_limit|set_duration|skip_duration)$",
                     )
                 ],
                 # Text input for duration should be in private chat
@@ -245,12 +254,13 @@ class TelegramBot:
                 # Reward choice state - callback queries for reward options
                 REWARD_CHOICE: [
                     CallbackQueryHandler(
-                        reward_choice, pattern="^(reward_free|reward_0\\.1|reward_0\\.5|reward_custom)$"
+                        reward_choice,
+                        pattern="^(reward_free|reward_0\\.1|reward_0\\.5|reward_custom)$",
                     ),
                     MessageHandler(
                         filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
                         reward_choice,
-                    )
+                    ),
                 ],
                 # Custom reward input state
                 REWARD_CUSTOM_INPUT: [
@@ -262,13 +272,15 @@ class TelegramBot:
                 # Reward structure choice state
                 REWARD_STRUCTURE_CHOICE: [
                     CallbackQueryHandler(
-                        reward_structure_choice, pattern="^(structure_wta|structure_top3|structure_custom)$"
+                        reward_structure_choice,
+                        pattern="^(structure_wta|structure_top3|structure_custom)$",
                     )
                 ],
                 # Payment verification state
                 PAYMENT_VERIFICATION: [
                     CallbackQueryHandler(
-                        handle_payment_verification_callback, pattern="^(check_balance|retry_payment|cancel_quiz)$"
+                        handle_payment_verification_callback,
+                        pattern="^(check_balance|retry_payment|cancel_quiz)$",
                     )
                 ],
                 # Final confirmation is a callback query
@@ -305,13 +317,20 @@ class TelegramBot:
         self.app.add_handler(
             CallbackQueryHandler(handle_reward_method_choice, pattern="^reward_method:")
         )
-        
+
         # Handle menu callbacks - this should be registered before other callback handlers
-        self.app.add_handler(CallbackQueryHandler(handle_menu_callback, pattern="^(menu:|game:|challenge:|app:|quiz:|cancel|back)"))
+        self.app.add_handler(
+            CallbackQueryHandler(
+                handle_menu_callback,
+                pattern="^(menu:|game:|challenge:|app:|quiz:|cancel|back)",
+            )
+        )
 
         # THEN register other command handlers
         logger.info("Registering command handlers")
-        self.app.add_handler(CommandHandler("start", start_handler))  # Register start handler
+        self.app.add_handler(
+            CommandHandler("start", start_handler)
+        )  # Register start handler
         self.app.add_handler(CommandHandler("linkwallet", link_wallet_handler))
         self.app.add_handler(
             CommandHandler("unlinkwallet", unlink_wallet_handler)
@@ -321,9 +340,15 @@ class TelegramBot:
         self.app.add_handler(
             CommandHandler("leaderboards", show_all_active_leaderboards_command)
         )
-        self.app.add_handler(CommandHandler("resetwallet", handle_reset_wallet))  # Development command
-        self.app.add_handler(CommandHandler("announceend", announce_quiz_end_handler))  # Quiz end announcement command
-        self.app.add_handler(CommandHandler("debug", debug_sessions_handler))  # Debug sessions command
+        self.app.add_handler(
+            CommandHandler("resetwallet", handle_reset_wallet)
+        )  # Development command
+        self.app.add_handler(
+            CommandHandler("announceend", announce_quiz_end_handler)
+        )  # Quiz end announcement command
+        self.app.add_handler(
+            CommandHandler("debug", debug_sessions_handler)
+        )  # Debug sessions command
 
         # self.app.add_handler(
         #     CommandHandler("distributerewards", distribute_rewards_handler)
@@ -344,16 +369,15 @@ class TelegramBot:
         # Handle quiz interaction callbacks (play, leaderboard, share, etc.)
         self.app.add_handler(
             CallbackQueryHandler(
-                handle_quiz_interaction_callback, 
-                pattern=r"^(play_quiz|leaderboard|past_winners|share_quiz|hint|skip_question|answer|refresh_leaderboard|join_quiz):"
+                handle_quiz_interaction_callback,
+                pattern=r"^(play_quiz|leaderboard|past_winners|share_quiz|hint|skip_question|answer|refresh_leaderboard|join_quiz):",
             )
         )
 
         # Handle enhanced quiz callbacks
         self.app.add_handler(
             CallbackQueryHandler(
-                handle_enhanced_quiz_start_callback,
-                pattern=r"^enhanced_quiz_start:"
+                handle_enhanced_quiz_start_callback, pattern=r"^enhanced_quiz_start:"
             )
         )
 
@@ -415,42 +439,50 @@ class TelegramBot:
                 logger.info(
                     f"Starting Telegram bot in FASTAPI WEBHOOK mode. Bot will be managed by FastAPI."
                 )
-                
+
                 # Set up webhook with Telegram but don't start local server
                 webhook_url = f"{self.webhook_url}/webhook/{self.webhook_url_path}"
-                
+
                 try:
                     logger.info("Removing any existing webhook...")
                     await self.app.bot.delete_webhook(drop_pending_updates=True)
-                    
+
                     logger.info(f"Setting webhook URL: {webhook_url}")
                     success = await self.app.bot.set_webhook(
                         url=webhook_url,
                         allowed_updates=allowed_updates_list,
-                        drop_pending_updates=True
+                        drop_pending_updates=True,
                     )
-                    
+
                     if success:
-                        logger.info(f"Webhook set successfully with FastAPI: {webhook_url}")
+                        logger.info(
+                            f"Webhook set successfully with FastAPI: {webhook_url}"
+                        )
                     else:
                         logger.error("Failed to set webhook with Telegram")
                         raise Exception("Failed to set webhook with Telegram")
-                        
+
                 except Exception as e:
-                    logger.error(f"Error setting up FastAPI webhook: {e}", exc_info=True)
+                    logger.error(
+                        f"Error setting up FastAPI webhook: {e}", exc_info=True
+                    )
                     raise
-                
+
                 # In FastAPI mode, we don't start the updater here
                 # The FastAPI server will handle webhook requests
-                logger.info("Bot initialized for FastAPI webhook mode - waiting for FastAPI to handle requests")
-                
+                logger.info(
+                    "Bot initialized for FastAPI webhook mode - waiting for FastAPI to handle requests"
+                )
+
                 try:
                     await self._stop_signal  # Wait for stop signal
                 except asyncio.CancelledError:
-                    logger.info("FastAPI webhook stop signal received via CancelledError.")
+                    logger.info(
+                        "FastAPI webhook stop signal received via CancelledError."
+                    )
                 finally:
                     logger.info("FastAPI webhook mode ended.")
-                    
+
             else:
                 # Original webhook implementation using python-telegram-bot's built-in server
                 logger.info(
@@ -561,7 +593,11 @@ class TelegramBot:
                 logger.error(f"Error deleting webhook: {e}", exc_info=True)
 
         # Only stop the updater if we're not in FastAPI webhook mode
-        if self.app.updater and self.app.updater.running and not self.use_fastapi_webhook:
+        if (
+            self.app.updater
+            and self.app.updater.running
+            and not self.use_fastapi_webhook
+        ):
             logger.info("Stopping Telegram updater (polling/webhook)...")
             await self.app.updater.stop()
             logger.info("Telegram updater stopped.")

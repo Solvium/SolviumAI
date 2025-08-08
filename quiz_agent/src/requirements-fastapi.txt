@@ -1,0 +1,16 @@
+# FastAPI and related dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Existing dependencies (add these if not already installed)
+# python-telegram-bot>=20.0
+# sqlalchemy
+# redis
+# python-dotenv
+# psycopg2-binary  # for PostgreSQL
+# httpx
+
+# Development dependencies (optional)
+# pytest
+# pytest-asyncio
