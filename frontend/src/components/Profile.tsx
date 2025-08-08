@@ -169,7 +169,7 @@ const Farming = () => {
     new Date(userDetails?.lastClaim || new Date()).getTime() -
     new Date().getTime();
 
-  console.log(userDetails);
+  // console.log(userDetails);
   // Real claimPoints function that calls the API and refreshes user data
   const claimPoints = async (
     type: string,
@@ -599,16 +599,17 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
             <p className="text-sm font-medium text-white">
               Purchase Multiplier
             </p>
-            <button
+            {/* <button
               onClick={() => setIsOpenSolModal(true)}
               className="mt-3 text-[13px] border-blue-80 border-[2px] text-white h-8 flex items-center justify-center rounded-lg px-3"
             >
               Start
-            </button>
+            </button> */}
             <DepositMultiplier user={userDetails} />
           </div>
         </div>
-
+        {/* series embrace artefact myth miracle okay farm pony spoil sell coconut
+        chair */}
         {isLoadingTasks ? (
           <div className="flex justify-center items-center py-8">
             <div className="w-8 h-8 border-t-2 border-white animate-spin rounded-full"></div>

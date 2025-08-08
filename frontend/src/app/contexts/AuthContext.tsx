@@ -40,7 +40,7 @@ export interface User {
   lastSpinClaim?: Date;
   lastClaim?: Date;
   chatId?: string;
-  wallet?: string;
+  wallet?: any; // Changed from string to any to handle parsed wallet data
 }
 
 export interface AuthState {

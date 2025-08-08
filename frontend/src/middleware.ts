@@ -1,70 +1,33 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+export function middleware(request: NextRequest) {
+  // Handle CORS for API routes
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    const response = NextResponse.next();
 
-  // Add security headers to all responses
-  const response = NextResponse.next();
+    // Add CORS headers
+    response.headers.set("Access-Control-Allow-Origin", "*");
+    response.headers.set(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS"
+    );
+    response.headers.set(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization"
+    );
 
-  // Security headers
-  response.headers.set("X-Content-Type-Options", "nosniff");
-  // response.headers.set("X-Frame-Options", "SAMEORIGIN");
-  response.headers.set("X-XSS-Protection", "1; mode=block");
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  response.headers.set(
-    "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=()"
-  );
-
-  // Content Security Policy - Updated for Google OAuth
-  const csp = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://accounts.google.com https://telegram.org",
-    "style-src 'self' 'unsafe-inline' https://accounts.google.com",
-    "style-src-elem 'self' 'unsafe-inline' https://accounts.google.com",
-    "img-src 'self' data: https: blob:",
-    "font-src 'self'",
-    "connect-src 'self' https://accounts.google.com https://telegram.org",
-    "frame-src 'self' https://accounts.google.com",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-  ].join("; ");
-
-  response.headers.set("Content-Security-Policy", csp);
-
-  // Handle API routes
-  if (pathname.startsWith("/api/")) {
-    // For now, skip rate limiting until database is properly configured
-    // We'll add it back once the database connection is working
-
-    // Special handling for auth routes
-    if (pathname.startsWith("/api/auth/")) {
-      // Skip session validation for login/register endpoints
-      if (
-        pathname === "/api/auth/telegram" ||
-        pathname === "/api/auth/google"
-      ) {
-        return response;
-      }
-
-      // For now, allow all auth routes to pass through
-      // We'll add proper session validation once database is working
+    // Handle preflight requests
+    if (request.method === "OPTIONS") {
+      return new NextResponse(null, { status: 200 });
     }
+
+    return response;
   }
 
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    "/((?!_next/static|_next/image|favicon.ico|public/).*)",
-  ],
+  matcher: ["/api/:path*"],
 };
