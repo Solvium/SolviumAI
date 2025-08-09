@@ -2532,6 +2532,9 @@ async def start_enhanced_quiz(
         shuffle_answers=shuffle_answers
     )
     
+    # Set the start time immediately after creation
+    quiz_session.start_time = datetime.utcnow()
+    
     active_quiz_sessions[session_key] = quiz_session
     logger.info(f"Enhanced quiz session created: {session_key}, total_sessions={len(active_quiz_sessions)}")
     

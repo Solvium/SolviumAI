@@ -2940,20 +2940,23 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
         logger.info(f"User {user_id} active sessions: {user_sessions}")
         logger.info(f"Looking for session key: {session_key}")
 
-        # Clean up any stale sessions for this user (older than 1 hour)
+        # Clean up any stale sessions for this user (older than 30 minutes or without start_time)
         current_time = datetime.utcnow()
         stale_sessions = []
         for key in user_sessions:
             if key in active_quiz_sessions:
                 quiz_session = active_quiz_sessions[key]
-                # Check if session is older than 1 hour (3600 seconds)
-                if hasattr(quiz_session, "start_time") and quiz_session.start_time:
+                
+                # Remove sessions that don't have a start_time (incomplete initialization)
+                if not hasattr(quiz_session, "start_time") or quiz_session.start_time is None:
+                    stale_sessions.append(key)
+                    logger.info(f"Found session without start_time: {key}")
+                else:
+                    # Check if session is older than 30 minutes (1800 seconds)
                     time_diff = (current_time - quiz_session.start_time).total_seconds()
-                    if time_diff > 3600:  # 1 hour
+                    if time_diff > 1800:  # 30 minutes instead of 1 hour
                         stale_sessions.append(key)
-                        logger.info(
-                            f"Found stale session {key}, age: {time_diff} seconds"
-                        )
+                        logger.info(f"Found stale session {key}, age: {time_diff} seconds")
 
         # Remove stale sessions
         for key in stale_sessions:
@@ -2979,6 +2982,9 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
             shuffle_questions=True,
             shuffle_answers=True,
         )
+        
+        # Set the start time immediately after creation
+        quiz_session.start_time = datetime.utcnow()
 
         active_quiz_sessions[session_key] = quiz_session
         logger.info(
