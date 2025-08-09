@@ -2046,17 +2046,17 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         # Get all participants and their scores
         all_participants = QuizAnswer.get_quiz_participants_ranking(session, quiz_id)
 
-        # Create comprehensive end announcement
-        announcement = f"""🏁 **QUIZ ENDED: {quiz.topic}** 🏁
+        # Create comprehensive end announcement with HTML formatting
+        announcement = f"""🏁 <b>QUIZ ENDED: {quiz.topic}</b> 🏁
 
 ⏰ The quiz period has officially ended!
 📊 Final results are now available.
 
-👥 **Total Participants:** {len(all_participants)}"""
+👥 <b>Total Participants:</b> {len(all_participants)}"""
 
         if all_participants:
             # Add leaderboard
-            announcement += "\n\n🏆 **FINAL LEADERBOARD:**\n"
+            announcement += "\n\n🏆 <b>FINAL LEADERBOARD:</b>\n"
             for i, participant in enumerate(all_participants[:10]):  # Show top 10
                 medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "🏅"
                 username = participant.get(
@@ -2070,7 +2070,7 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                     else 0
                 )
 
-                announcement += f"{medal} **{i+1}.** @{username}\n"
+                announcement += f"{medal} <b>{i+1}.</b> @{username}\n"
                 announcement += (
                     f"   📊 {correct_count}/{total_questions} ({accuracy:.1f}%)\n"
                 )
@@ -2086,7 +2086,7 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                 else 0
             )
 
-            announcement += f"\n📈 **Quiz Statistics:**\n"
+            announcement += f"\n📈 <b>Quiz Statistics:</b>\n"
             announcement += f"• Total correct answers: {total_correct}\n"
             announcement += f"• Average accuracy: {avg_accuracy:.1f}%\n"
             announcement += f"• Questions answered: {total_questions_answered}\n"
@@ -2097,17 +2097,17 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         if quiz.reward_schedule:
             reward_type = quiz.reward_schedule.get("type", "")
             if reward_type == "wta_amount":
-                announcement += "\n💰 **Reward Type:** Winner Takes All"
+                announcement += "\n💰 <b>Reward Type:</b> Winner Takes All"
             elif reward_type == "top3_details":
-                announcement += "\n💰 **Reward Type:** Top 3 Winners"
+                announcement += "\n💰 <b>Reward Type:</b> Top 3 Winners"
             elif reward_type == "custom_details":
-                announcement += "\n💰 **Reward Type:** Custom Rewards"
+                announcement += "\n💰 <b>Reward Type:</b> Custom Rewards"
 
-        announcement += "\n\n🎯 **Thanks to all participants!** 🎯"
+        announcement += "\n\n🎯 <b>Thanks to all participants!</b> 🎯"
 
         # Send announcement to appropriate chat (group or DM)
         await safe_send_message(
-            application.bot, announcement_chat_id, announcement, parse_mode="Markdown"
+            application.bot, announcement_chat_id, announcement, parse_mode="HTML"
         )
 
         logger.info(f"Quiz end announcement sent for quiz {quiz_id}")
