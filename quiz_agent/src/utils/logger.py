@@ -24,7 +24,7 @@ def setup_logger(
     """
     # Default format with emojis for better visibility
     if format_string is None:
-        format_string = "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
+        format_string = "📝 %(asctime)s | %(name)s | %(levelname)s | %(message)s"
 
     # Create logger
     logger = logging.getLogger(name)
