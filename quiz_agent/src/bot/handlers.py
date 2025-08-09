@@ -1334,8 +1334,13 @@ async def handle_show_leaderboard(update, context, quiz_id):
             time_remaining = 0
             if quiz.end_time:
                 now = datetime.now(timezone.utc)
-                if quiz.end_time > now:
-                    time_remaining = int((quiz.end_time - now).total_seconds())
+                # Ensure quiz.end_time is timezone-aware
+                quiz_end_time = quiz.end_time
+                if quiz_end_time.tzinfo is None:
+                    quiz_end_time = quiz_end_time.replace(tzinfo=timezone.utc)
+                
+                if quiz_end_time > now:
+                    time_remaining = int((quiz_end_time - now).total_seconds())
 
             # Create rich leaderboard card
             leaderboard_msg, leaderboard_keyboard = create_leaderboard_card(
@@ -1916,7 +1921,7 @@ async def process_questions_with_payment(
         if duration_seconds and duration_seconds > 0:
             from services.quiz_service import schedule_quiz_end_announcement
             logger.info(f"Scheduling end announcement for quiz {quiz_id} in {duration_seconds} seconds")
-            await schedule_quiz_end_announcement(str(quiz_id), duration_seconds, context.application)
+            await schedule_quiz_end_announcement(context.application, str(quiz_id), duration_seconds)
 
         # Store payment information
         if reward_amount and float(reward_amount) > 0:
