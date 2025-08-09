@@ -2033,6 +2033,15 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         if not quiz.group_chat_id:
             logger.info(f"Quiz {quiz_id} has no group_chat_id, skipping announcement")
             return
+        
+        # For DM quizzes, we need to send to the creator instead of group
+        is_dm_quiz = quiz.group_chat_id > 0  # DM chat IDs are positive, group IDs are negative
+        announcement_chat_id = quiz.group_chat_id
+        
+        if is_dm_quiz:
+            # For DM quizzes, send announcement to the quiz creator
+            announcement_chat_id = quiz.creator_user_id
+            logger.info(f"Quiz {quiz_id} is a DM quiz, sending announcement to creator {quiz.creator_user_id}")
 
         # Get all participants and their scores
         all_participants = QuizAnswer.get_quiz_participants_ranking(session, quiz_id)
@@ -2096,9 +2105,9 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
 
         announcement += "\n\n🎯 **Thanks to all participants!** 🎯"
 
-        # Send announcement to group
+        # Send announcement to appropriate chat (group or DM)
         await safe_send_message(
-            application.bot, quiz.group_chat_id, announcement, parse_mode="Markdown"
+            application.bot, announcement_chat_id, announcement, parse_mode="Markdown"
         )
 
         logger.info(f"Quiz end announcement sent for quiz {quiz_id}")
