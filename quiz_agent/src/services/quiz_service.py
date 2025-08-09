@@ -49,7 +49,7 @@ class QuizSession:
         self.shuffle_answers = shuffle_answers
         self.current_question_index = 0
         self.answers = {}
-        self.start_time = None
+        self.start_time = datetime.utcnow()  # Set start time automatically
         self.total_time = 0
         self.correct_answers = 0
         self.wrong_answers = 0
@@ -2531,9 +2531,6 @@ async def start_enhanced_quiz(
         shuffle_questions=shuffle_questions,
         shuffle_answers=shuffle_answers
     )
-    
-    # Set the start time immediately after creation
-    quiz_session.start_time = datetime.utcnow()
     
     active_quiz_sessions[session_key] = quiz_session
     logger.info(f"Enhanced quiz session created: {session_key}, total_sessions={len(active_quiz_sessions)}")

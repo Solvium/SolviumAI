@@ -1556,24 +1556,12 @@ async def start_quiz_for_user(update, context, quiz):
                 )
                 return
 
-        # Start enhanced quiz
-        success = await start_enhanced_quiz(
-            context.application,
-            str(user_id),
-            quiz,
-            shuffle_questions=True,
-            shuffle_answers=True,
+        # Send quiz created message to creator
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🚀 **{quiz.topic}** is now LIVE! 🎯\n\n⚡ Quiz created successfully!\n\n💬 Use `/playquiz {quiz.id}` to start playing or check your DMs!",
+            parse_mode="Markdown",
         )
-
-        if success:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"🚀 **{quiz.topic}** is now LIVE! 🎯\n\n⚡ Get ready for an exciting challenge with shuffled questions and answers!\n\n💬 Check your DMs to start playing immediately!",
-            )
-        else:
-            await context.bot.send_message(
-                chat_id=chat_id, text="❌ Failed to start quiz. Please try again."
-            )
 
     except Exception as e:
         logger.error(f"Error starting enhanced quiz for user {user_id}: {e}")
@@ -2301,27 +2289,41 @@ async def play_quiz_handler(update: Update, context: CallbackContext):
                 )
                 return
 
-            # Start enhanced quiz
-            success = await start_enhanced_quiz(
-                context.application,
-                user_id,
-                quiz,
-                shuffle_questions=True,
-                shuffle_answers=True,
+            # Send quiz intro with start button (don't create session yet)
+            total_questions = len(quiz.questions) if quiz.questions else 0
+            timer_seconds = Config.QUESTION_TIMER_SECONDS
+
+            intro_text = f"""🎲 Get ready for the quiz '{quiz.topic}'
+
+🖊 {total_questions} questions
+⏱ {timer_seconds} seconds per question
+🔀 Questions and answers shuffled
+
+🏁 Press the button below when you are ready.
+Send /stop to stop it."""
+
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+            keyboard = [
+                [
+                    InlineKeyboardButton(
+                        "🚀 Start Quiz", callback_data=f"enhanced_quiz_start:{quiz.id}"
+                    )
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            # Send to user's DM
+            await safe_send_message(
+                context.bot, user_id, intro_text, reply_markup=reply_markup
             )
 
-            if success:
-                await safe_send_message(
-                    context.bot,
-                    update.effective_chat.id,
-                    f"🎮 **{quiz.topic}** Challenge Activated! 🏆\n\n🔥 Experience the ultimate quiz with randomized questions and answers!\n\n📱 Your personalized quiz is waiting in your DMs!",
-                )
-            else:
-                await safe_send_message(
-                    context.bot,
-                    update.effective_chat.id,
-                    "❌ Failed to start quiz. Please try again.",
-                )
+            # Confirm in group chat
+            await safe_send_message(
+                context.bot,
+                update.effective_chat.id,
+                f"🎮 **{quiz.topic}** Challenge Ready! 🏆\n\n📱 Check your DMs to start the quiz!",
+            )
         else:
             await safe_send_message(
                 context.bot,
@@ -2378,21 +2380,39 @@ async def play_quiz_selection_callback(update: Update, context: CallbackContext)
             await query.edit_message_text("❌ This quiz is no longer active.")
             return
 
-        # Start enhanced quiz
-        success = await start_enhanced_quiz(
-            context.application,
-            current_user_id,
-            quiz,
-            shuffle_questions=True,
-            shuffle_answers=True,
+        # Send quiz intro with start button (don't create session yet)
+        total_questions = len(quiz.questions) if quiz.questions else 0
+        timer_seconds = Config.QUESTION_TIMER_SECONDS
+
+        intro_text = f"""🎲 Get ready for the quiz '{quiz.topic}'
+
+🖊 {total_questions} questions
+⏱ {timer_seconds} seconds per question
+🔀 Questions and answers shuffled
+
+🏁 Press the button below when you are ready.
+Send /stop to stop it."""
+
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "🚀 Start Quiz", callback_data=f"enhanced_quiz_start:{quiz.id}"
+                )
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        # Send to user's DM
+        await safe_send_message(
+            context.bot, current_user_id, intro_text, reply_markup=reply_markup
         )
 
-        if success:
-            await query.edit_message_text(
-                f"🎯 **{quiz.topic}** Quiz Launched! ⚡\n\n🌟 Your enhanced quiz experience is ready with shuffled content for maximum challenge!\n\n💬 Head to your DMs to begin your adventure!"
-            )
-        else:
-            await query.edit_message_text("❌ Failed to start quiz. Please try again.")
+        # Update the selection message
+        await query.edit_message_text(
+            f"🎯 **{quiz.topic}** Quiz Ready! ⚡\n\n📱 Check your DMs to start the quiz!"
+        )
 
     except Exception as e:
         logger.error(f"Error in enhanced play_quiz_selection_callback: {e}")
@@ -2940,23 +2960,50 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
         logger.info(f"User {user_id} active sessions: {user_sessions}")
         logger.info(f"Looking for session key: {session_key}")
 
-        # Clean up any stale sessions for this user (older than 30 minutes or without start_time)
+        # Comprehensive session cleanup for this user
         current_time = datetime.utcnow()
         stale_sessions = []
         for key in user_sessions:
             if key in active_quiz_sessions:
                 quiz_session = active_quiz_sessions[key]
-                
+                should_remove = False
+
                 # Remove sessions that don't have a start_time (incomplete initialization)
-                if not hasattr(quiz_session, "start_time") or quiz_session.start_time is None:
-                    stale_sessions.append(key)
+                if (
+                    not hasattr(quiz_session, "start_time")
+                    or quiz_session.start_time is None
+                ):
+                    should_remove = True
                     logger.info(f"Found session without start_time: {key}")
-                else:
-                    # Check if session is older than 30 minutes (1800 seconds)
+
+                # Check if session is older than 30 minutes (1800 seconds)
+                elif hasattr(quiz_session, "start_time") and quiz_session.start_time:
                     time_diff = (current_time - quiz_session.start_time).total_seconds()
                     if time_diff > 1800:  # 30 minutes instead of 1 hour
-                        stale_sessions.append(key)
-                        logger.info(f"Found stale session {key}, age: {time_diff} seconds")
+                        should_remove = True
+                        logger.info(
+                            f"Found stale session {key}, age: {time_diff} seconds"
+                        )
+
+                # Remove sessions that don't have proper quiz_id or user_id
+                elif not hasattr(quiz_session, "quiz_id") or not hasattr(
+                    quiz_session, "user_id"
+                ):
+                    should_remove = True
+                    logger.info(f"Found session with missing quiz_id or user_id: {key}")
+
+                # Remove sessions where the quiz_id doesn't match the session key
+                elif (
+                    hasattr(quiz_session, "quiz_id")
+                    and f"{user_id}:{quiz_session.quiz_id}" != key
+                ):
+                    should_remove = True
+                    logger.info(
+                        f"Found session with mismatched quiz_id: {key} vs expected {user_id}:{quiz_session.quiz_id}"
+                    )
+
+                if should_remove:
+                    stale_sessions.append(key)
 
         # Remove stale sessions
         for key in stale_sessions:
@@ -2982,9 +3029,6 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
             shuffle_questions=True,
             shuffle_answers=True,
         )
-        
-        # Set the start time immediately after creation
-        quiz_session.start_time = datetime.utcnow()
 
         active_quiz_sessions[session_key] = quiz_session
         logger.info(
