@@ -153,7 +153,9 @@ def init_db():
     # Drop existing tables to sync new schema (dev only)
     # This is potentially dangerous in production, so add a safety check
     if not Config.is_production():
-        logger.info("Development environment detected. Creating tables if they don't exist...")
+        logger.info(
+            "Development environment detected. Creating tables if they don't exist..."
+        )
         # Only create tables that don't exist - don't drop existing ones
         UserBase.metadata.create_all(bind=engine)
         QuizBase.metadata.create_all(bind=engine)
@@ -170,53 +172,83 @@ def migrate_schema():
     """Handle schema migrations for existing database structures."""
     try:
         logger.info("Checking for schema migrations...")
-        
+
         # Get inspector to check existing tables
         from sqlalchemy import inspect
+
         inspector = inspect(engine)
         existing_tables = inspector.get_table_names()
-        
+
         logger.info(f"Existing tables: {existing_tables}")
-        
+
         # Check if we need to create wallet tables
-        wallet_tables = ['user_wallets', 'wallet_security']
-        missing_tables = [table for table in wallet_tables if table not in existing_tables]
-        
+        wallet_tables = ["user_wallets", "wallet_security"]
+        missing_tables = [
+            table for table in wallet_tables if table not in existing_tables
+        ]
+
         if missing_tables:
             logger.info(f"Creating missing wallet tables: {missing_tables}")
-            
+
             # Import wallet models
             from models.wallet import UserWallet, WalletSecurity
-            
+
             # Create missing tables
             for table_name in missing_tables:
-                if table_name == 'user_wallets':
+                if table_name == "user_wallets":
                     UserWallet.__table__.create(engine, checkfirst=True)
                     logger.info("Created user_wallets table")
-                elif table_name == 'wallet_security':
+                elif table_name == "wallet_security":
                     WalletSecurity.__table__.create(engine, checkfirst=True)
                     logger.info("Created wallet_security table")
-        
+
         # Check if users table needs wallet_created column
-        if 'users' in existing_tables:
+        if "users" in existing_tables:
             try:
                 with engine.connect() as conn:
                     # Check if wallet_created column exists
-                    result = conn.execute(text("""
-                        SELECT column_name FROM information_schema.columns 
+                    result = conn.execute(
+                        text(
+                            """
+                        SELECT column_name FROM information_schema.columns
                         WHERE table_name = 'users' AND column_name = 'wallet_created'
-                    """))
+                    """
+                        )
+                    )
                     if not result.fetchone():
                         logger.info("Adding wallet_created column to users table")
-                        conn.execute(text("ALTER TABLE users ADD COLUMN wallet_created BOOLEAN DEFAULT FALSE"))
+                        conn.execute(
+                            text(
+                                "ALTER TABLE users ADD COLUMN wallet_created BOOLEAN DEFAULT FALSE"
+                            )
+                        )
                         conn.commit()
                         logger.info("Added wallet_created column successfully")
             except Exception as e:
                 logger.warning(f"Could not check/add wallet_created column: {e}")
-        
+
         logger.info("Schema migration completed successfully")
         return True
-        
+
     except Exception as e:
         logger.error(f"Schema migration failed: {e}")
+        return False
+
+
+async def test_connection() -> bool:
+    """
+    Test database connection for health checks.
+
+    Returns:
+        bool: True if connection is successful, False otherwise
+    """
+    try:
+        engine = create_db_engine()
+        with engine.connect() as conn:
+            # Simple query to test connection
+            result = conn.execute(text("SELECT 1"))
+            result.fetchone()
+        return True
+    except Exception as e:
+        logger.error(f"Database connection test failed: {e}")
         return False

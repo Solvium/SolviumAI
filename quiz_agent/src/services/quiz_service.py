@@ -39,9 +39,17 @@ scheduled_tasks: Dict[str, asyncio.Task] = {}
 # Key: (user_id, quiz_id, question_index), Value: asyncio.Task
 active_question_timers: Dict[Tuple[str, str, int], asyncio.Task] = {}
 
+
 # Enhanced quiz session management
 class QuizSession:
-    def __init__(self, user_id: str, quiz_id: str, questions: List[Dict], shuffle_questions: bool = True, shuffle_answers: bool = True):
+    def __init__(
+        self,
+        user_id: str,
+        quiz_id: str,
+        questions: List[Dict],
+        shuffle_questions: bool = True,
+        shuffle_answers: bool = True,
+    ):
         self.user_id = user_id
         self.quiz_id = quiz_id
         self.original_questions = questions
@@ -49,119 +57,128 @@ class QuizSession:
         self.shuffle_answers = shuffle_answers
         self.current_question_index = 0
         self.answers = {}
-        self.start_time = None
+        self.start_time = datetime.utcnow()  # Set start time automatically
         self.total_time = 0
         self.correct_answers = 0
         self.wrong_answers = 0
         self.missed_questions = 0
-        
+
         # Prepare questions with shuffling
         self.prepared_questions = self._prepare_questions()
-    
+
     def _prepare_questions(self) -> List[Dict]:
         """Prepare questions with optional shuffling"""
         questions = self.original_questions.copy()
-        
+
         if self.shuffle_questions:
             random.shuffle(questions)
-        
+
         prepared = []
         for i, q in enumerate(questions):
             question_data = q.copy()
-            options = question_data.get('options', {})
-            
+            options = question_data.get("options", {})
+
             if self.shuffle_answers:
                 # Shuffle answer options while preserving correct answer
                 option_items = list(options.items())
                 random.shuffle(option_items)
-                question_data['shuffled_options'] = dict(option_items)
-                question_data['original_options'] = options
+                question_data["shuffled_options"] = dict(option_items)
+                question_data["original_options"] = options
             else:
-                question_data['shuffled_options'] = options
-                question_data['original_options'] = options
-            
+                question_data["shuffled_options"] = options
+                question_data["original_options"] = options
+
             prepared.append(question_data)
-        
+
         return prepared
-    
+
     def get_current_question(self) -> Optional[Dict]:
         """Get current question data"""
         if self.current_question_index < len(self.prepared_questions):
             return self.prepared_questions[self.current_question_index]
         return None
-    
+
     def submit_answer(self, answer: str) -> bool:
         """Submit answer for current question and return if correct"""
         if self.current_question_index >= len(self.prepared_questions):
-            logger.warning(f"Current question index {self.current_question_index} >= total questions {len(self.prepared_questions)}")
+            logger.warning(
+                f"Current question index {self.current_question_index} >= total questions {len(self.prepared_questions)}"
+            )
             return False
-        
+
         current_q = self.prepared_questions[self.current_question_index]
-        correct_answer = current_q.get('correct', '')  # Use 'correct' field as parsed by parse_questions
-        
+        correct_answer = current_q.get(
+            "correct", ""
+        )  # Use 'correct' field as parsed by parse_questions
+
         # Map shuffled answer back to original
-        shuffled_options = current_q.get('shuffled_options', {})
-        original_options = current_q.get('original_options', {})
-        
+        shuffled_options = current_q.get("shuffled_options", {})
+        original_options = current_q.get("original_options", {})
+
         # Find the original label for the given answer
         original_label = None
         for label, value in shuffled_options.items():
             if value == answer:
                 original_label = label
                 break
-        
+
         is_correct = original_label == correct_answer
-        
+
         # Get the actual text of the correct answer for display
-        correct_answer_text = original_options.get(correct_answer, 'Unknown')
-        
+        correct_answer_text = original_options.get(correct_answer, "Unknown")
+
         # Debug logging to understand the data structure
-        logger.debug(f"Question data: correct_answer={correct_answer}, original_options={original_options}")
+        logger.debug(
+            f"Question data: correct_answer={correct_answer}, original_options={original_options}"
+        )
         logger.debug(f"Shuffled options: {shuffled_options}")
-        
+
         # If we still don't have the correct answer text, try to find it in shuffled options
-        if correct_answer_text == 'Unknown' and correct_answer:
+        if correct_answer_text == "Unknown" and correct_answer:
             # Look for the correct answer in shuffled options
             for label, value in shuffled_options.items():
                 if label == correct_answer:
                     correct_answer_text = value
                     break
-        
+
         self.answers[self.current_question_index] = {
-            'answer': answer,
-            'correct': is_correct,
-            'correct_answer': correct_answer_text,  # Store the actual text, not the label
-            'answered_at': datetime.utcnow()
+            "answer": answer,
+            "correct": is_correct,
+            "correct_answer": correct_answer_text,  # Store the actual text, not the label
+            "answered_at": datetime.utcnow(),
         }
-        
+
         if is_correct:
             self.correct_answers += 1
         else:
             self.wrong_answers += 1
-        
+
         return is_correct
-    
+
     def next_question(self) -> bool:
         """Move to next question, return False if no more questions"""
         self.current_question_index += 1
         has_more = self.current_question_index < len(self.prepared_questions)
         return has_more
-    
+
     def get_progress(self) -> Tuple[int, int]:
         """Get current progress (current, total)"""
         return (self.current_question_index + 1, len(self.prepared_questions))
-    
+
     def get_results(self) -> Dict:
         """Get final results"""
-        self.missed_questions = len(self.prepared_questions) - self.correct_answers - self.wrong_answers
+        self.missed_questions = (
+            len(self.prepared_questions) - self.correct_answers - self.wrong_answers
+        )
         return {
-            'total_questions': len(self.prepared_questions),
-            'correct': self.correct_answers,
-            'wrong': self.wrong_answers,
-            'missed': self.missed_questions,
-            'total_time': self.total_time,
-            'answers': self.answers
+            "total_questions": len(self.prepared_questions),
+            "correct": self.correct_answers,
+            "wrong": self.wrong_answers,
+            "missed": self.missed_questions,
+            "total_time": self.total_time,
+            "answers": self.answers,
         }
+
 
 async def question_timeout(
     application: "Application",
@@ -624,7 +641,7 @@ async def save_quiz_payment_hash(
                             logger.info(
                                 f"Task created to schedule auto distribution for quiz {quiz_id} in {seconds_until_end} seconds upon activation."
                             )
-                        
+
                         # Always schedule quiz end announcement for all quizzes
                         application.create_task(
                             schedule_quiz_end_announcement(
@@ -1048,11 +1065,11 @@ async def send_quiz_question(
     keyboard = []
     # ANTI-CHEAT: Shuffle answer options while preserving correct answer tracking
     labels = sorted(options.keys())
-    
+
     # Create a list of (label, value) pairs and shuffle them together
     label_value_pairs = list(options.items())
     random.shuffle(label_value_pairs)
-    
+
     # Create a mapping from original labels to shuffled labels
     label_mapping = {}
     for new_position, (original_label, value) in enumerate(label_value_pairs):
@@ -1068,7 +1085,7 @@ async def send_quiz_question(
                 )
             ]
         )
-    
+
     # Store the label mapping in Redis for this user's question so we can use it during validation
     redis_client = RedisClient()
     await redis_client.set_user_quiz_data(
@@ -1202,14 +1219,14 @@ async def handle_quiz_answer_logic(
             else:
                 current_q = questions_list[question_index]
                 correct_answer_label = current_q.get("correct", "")
-                
+
                 # Get the label mapping for this user's question from Redis
                 redis_client = RedisClient()
                 label_mapping = await redis_client.get_user_quiz_data(
                     user_id, quiz_id, f"label_mapping_{question_index}"
                 )
                 await redis_client.close()
-                
+
                 if label_mapping:
                     # Find which shuffled label corresponds to the original correct answer
                     correct_shuffled_label = label_mapping.get(correct_answer_label, "")
@@ -2002,85 +2019,104 @@ async def distribute_quiz_rewards(
                 pass  # Ignore if message deletion fails
 
 
-async def announce_quiz_end(
-    application: "Application", quiz_id: str
-):
+async def announce_quiz_end(application: "Application", quiz_id: str):
     """Announce quiz end with final leaderboard and results"""
     logger.info(f"Announcing quiz end for quiz_id: {quiz_id}")
-    
+
     session = SessionLocal()
     try:
         quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
         if not quiz:
             logger.error(f"Quiz {quiz_id} not found for end announcement")
             return
-        
+
         if not quiz.group_chat_id:
             logger.info(f"Quiz {quiz_id} has no group_chat_id, skipping announcement")
             return
         
+        # For DM quizzes, we need to send to the creator instead of group
+        is_dm_quiz = quiz.group_chat_id > 0  # DM chat IDs are positive, group IDs are negative
+        announcement_chat_id = quiz.group_chat_id
+        
+        if is_dm_quiz:
+            # For DM quizzes, send announcement to the quiz creator
+            announcement_chat_id = quiz.creator_user_id
+            logger.info(f"Quiz {quiz_id} is a DM quiz, sending announcement to creator {quiz.creator_user_id}")
+
         # Get all participants and their scores
         all_participants = QuizAnswer.get_quiz_participants_ranking(session, quiz_id)
-        
-        # Create comprehensive end announcement
-        announcement = f"""🏁 **QUIZ ENDED: {quiz.topic}** 🏁
+
+        # Create comprehensive end announcement with HTML formatting
+        announcement = f"""🏁 <b>QUIZ ENDED: {quiz.topic}</b> 🏁
 
 ⏰ The quiz period has officially ended!
 📊 Final results are now available.
 
-👥 **Total Participants:** {len(all_participants)}"""
+👥 <b>Total Participants:</b> {len(all_participants)}"""
 
         if all_participants:
             # Add leaderboard
-            announcement += "\n\n🏆 **FINAL LEADERBOARD:**\n"
+            announcement += "\n\n🏆 <b>FINAL LEADERBOARD:</b>\n"
             for i, participant in enumerate(all_participants[:10]):  # Show top 10
                 medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "🏅"
-                username = participant.get('username', f"User_{participant.get('user_id', 'Unknown')[:8]}")
-                correct_count = participant.get('correct_count', 0)
-                total_questions = participant.get('total_questions', 0)
-                accuracy = (correct_count / total_questions * 100) if total_questions > 0 else 0
-                
-                announcement += f"{medal} **{i+1}.** @{username}\n"
-                announcement += f"   📊 {correct_count}/{total_questions} ({accuracy:.1f}%)\n"
-            
+                username = participant.get(
+                    "username", f"User_{participant.get('user_id', 'Unknown')[:8]}"
+                )
+                correct_count = participant.get("correct_count", 0)
+                total_questions = participant.get("total_questions", 0)
+                accuracy = (
+                    (correct_count / total_questions * 100)
+                    if total_questions > 0
+                    else 0
+                )
+
+                announcement += f"{medal} <b>{i+1}.</b> @{username}\n"
+                announcement += (
+                    f"   📊 {correct_count}/{total_questions} ({accuracy:.1f}%)\n"
+                )
+
             # Add participation stats
-            total_correct = sum(p.get('correct_count', 0) for p in all_participants)
-            total_questions_answered = sum(p.get('total_questions', 0) for p in all_participants)
-            avg_accuracy = (total_correct / total_questions_answered * 100) if total_questions_answered > 0 else 0
-            
-            announcement += f"\n📈 **Quiz Statistics:**\n"
+            total_correct = sum(p.get("correct_count", 0) for p in all_participants)
+            total_questions_answered = sum(
+                p.get("total_questions", 0) for p in all_participants
+            )
+            avg_accuracy = (
+                (total_correct / total_questions_answered * 100)
+                if total_questions_answered > 0
+                else 0
+            )
+
+            announcement += f"\n📈 <b>Quiz Statistics:</b>\n"
             announcement += f"• Total correct answers: {total_correct}\n"
             announcement += f"• Average accuracy: {avg_accuracy:.1f}%\n"
             announcement += f"• Questions answered: {total_questions_answered}\n"
         else:
             announcement += "\n\n📊 No participants found for this quiz."
-        
+
         # Add reward information if applicable
         if quiz.reward_schedule:
-            reward_type = quiz.reward_schedule.get('type', '')
-            if reward_type == 'wta_amount':
-                announcement += "\n💰 **Reward Type:** Winner Takes All"
-            elif reward_type == 'top3_details':
-                announcement += "\n💰 **Reward Type:** Top 3 Winners"
-            elif reward_type == 'custom_details':
-                announcement += "\n💰 **Reward Type:** Custom Rewards"
-        
-        announcement += "\n\n🎯 **Thanks to all participants!** 🎯"
-        
-        # Send announcement to group
+            reward_type = quiz.reward_schedule.get("type", "")
+            if reward_type == "wta_amount":
+                announcement += "\n💰 <b>Reward Type:</b> Winner Takes All"
+            elif reward_type == "top3_details":
+                announcement += "\n💰 <b>Reward Type:</b> Top 3 Winners"
+            elif reward_type == "custom_details":
+                announcement += "\n💰 <b>Reward Type:</b> Custom Rewards"
+
+        announcement += "\n\n🎯 <b>Thanks to all participants!</b> 🎯"
+
+        # Send announcement to appropriate chat (group or DM)
         await safe_send_message(
-            application.bot,
-            quiz.group_chat_id,
-            announcement,
-            parse_mode='Markdown'
+            application.bot, announcement_chat_id, announcement, parse_mode="HTML"
         )
-        
+
         logger.info(f"Quiz end announcement sent for quiz {quiz_id}")
-        
+
     except Exception as e:
         logger.error(f"Error announcing quiz end for {quiz_id}: {e}")
     finally:
         session.close()
+
 
 async def schedule_auto_distribution(
     application: "Application", quiz_id: str, delay_seconds: float
@@ -2150,38 +2186,56 @@ async def schedule_auto_distribution(
                 f"application.job_queue not available for immediate run of quiz {quiz_id}."
             )
 
+
 async def schedule_quiz_end_announcement(
     application: "Application", quiz_id: str, delay_seconds: float
 ):
     """Schedule a quiz end announcement for quizzes without rewards"""
-    logger.info(f"Scheduling quiz end announcement for quiz_id: {quiz_id} with delay: {delay_seconds}")
-    
+    logger.info(
+        f"Scheduling quiz end announcement for quiz_id: {quiz_id} with delay: {delay_seconds}"
+    )
+
     async def announcement_job_callback(context: CallbackContext):
         logger.info(f"JobQueue executing quiz end announcement for quiz {quiz_id}")
         try:
             await announce_quiz_end(application, quiz_id)
         except Exception as e:
-            logger.error(f"Error during quiz end announcement for quiz {quiz_id}: {e}", exc_info=True)
-    
+            logger.error(
+                f"Error during quiz end announcement for quiz {quiz_id}: {e}",
+                exc_info=True,
+            )
+
     async def announcement_job_wrapper(context: CallbackContext):
         await announcement_job_callback(context)
-    
+
     if delay_seconds > 0:
         if hasattr(application, "job_queue") and application.job_queue:
             application.job_queue.run_once(
-                announcement_job_wrapper, delay_seconds, name=f"announce_end_{quiz_id}", job_kwargs={}
+                announcement_job_wrapper,
+                delay_seconds,
+                name=f"announce_end_{quiz_id}",
+                job_kwargs={},
             )
-            logger.info(f"Scheduled quiz end announcement for quiz {quiz_id} in {delay_seconds} seconds.")
+            logger.info(
+                f"Scheduled quiz end announcement for quiz {quiz_id} in {delay_seconds} seconds."
+            )
         else:
-            logger.error(f"application.job_queue not available for quiz end announcement of quiz {quiz_id}.")
+            logger.error(
+                f"application.job_queue not available for quiz end announcement of quiz {quiz_id}."
+            )
     else:
         logger.info(f"Running quiz end announcement immediately for quiz {quiz_id}.")
         if hasattr(application, "job_queue") and application.job_queue:
             application.job_queue.run_once(
-                announcement_job_wrapper, 0, name=f"announce_end_{quiz_id}_immediate", job_kwargs={}
+                announcement_job_wrapper,
+                0,
+                name=f"announce_end_{quiz_id}_immediate",
+                job_kwargs={},
             )
         else:
-            logger.error(f"application.job_queue not available for immediate quiz end announcement of quiz {quiz_id}.")
+            logger.error(
+                f"application.job_queue not available for immediate quiz end announcement of quiz {quiz_id}."
+            )
 
 
 # ... rest of the file
@@ -2379,7 +2433,9 @@ async def _generate_leaderboard_data_for_quiz(
         score = stats.get("correct_count", 0)
         username = stats.get("username", "UnknownUser")
         user_id = stats["user_id"]
-        logger.info(f"Database participant: {username} (user_id: {user_id}), correct_count: {score}")
+        logger.info(
+            f"Database participant: {username} (user_id: {user_id}), correct_count: {score}"
+        )
         ranked_participants.append(
             {
                 "rank": idx,
@@ -2476,69 +2532,70 @@ async def start_enhanced_quiz(
     user_id: str,
     quiz: Quiz,
     shuffle_questions: bool = True,
-    shuffle_answers: bool = True
+    shuffle_answers: bool = True,
 ) -> bool:
     """Start an enhanced quiz session with sequential questions and timers"""
-    
+
     # Parse questions
     questions_list = quiz.questions
     if isinstance(questions_list, dict):
         questions_list = [questions_list]
-    
+
     if not questions_list:
         await safe_send_message(
-            application.bot,
-            user_id,
-            "❌ This quiz has no questions available."
+            application.bot, user_id, "❌ This quiz has no questions available."
         )
         return False
-    
+
     # Check if user has already completed this quiz
     session = SessionLocal()
     try:
-        existing_answers = session.query(QuizAnswer).filter(
-            QuizAnswer.user_id == user_id,
-            QuizAnswer.quiz_id == quiz.id
-        ).count()
-        
+        existing_answers = (
+            session.query(QuizAnswer)
+            .filter(QuizAnswer.user_id == user_id, QuizAnswer.quiz_id == quiz.id)
+            .count()
+        )
+
         if existing_answers > 0:
             await safe_send_message(
                 application.bot,
                 user_id,
-                f"❌ You have already completed the quiz '{quiz.topic}'. Each quiz can only be played once."
+                f"❌ You have already completed the quiz '{quiz.topic}'. Each quiz can only be played once.",
             )
             return False
     except Exception as e:
         logger.error(f"Error checking existing answers: {e}")
     finally:
         session.close()
-    
+
     # Check if user already has an active session for this quiz
     session_key = f"{user_id}:{quiz.id}"
     if session_key in active_quiz_sessions:
         await safe_send_message(
             application.bot,
             user_id,
-            f"❌ You already have an active session for the quiz '{quiz.topic}'. Please complete your current session first or use /stop to cancel it."
+            f"❌ You already have an active session for the quiz '{quiz.topic}'. Please complete your current session first or use /stop to cancel it.",
         )
         return False
-    
+
     # Create quiz session
     quiz_session = QuizSession(
         user_id=user_id,
         quiz_id=quiz.id,
         questions=questions_list,
         shuffle_questions=shuffle_questions,
-        shuffle_answers=shuffle_answers
+        shuffle_answers=shuffle_answers,
     )
-    
+
     active_quiz_sessions[session_key] = quiz_session
-    logger.info(f"Enhanced quiz session created: {session_key}, total_sessions={len(active_quiz_sessions)}")
-    
+    logger.info(
+        f"Enhanced quiz session created: {session_key}, total_sessions={len(active_quiz_sessions)}"
+    )
+
     # Send quiz introduction
     total_questions = len(questions_list)
     timer_seconds = Config.QUESTION_TIMER_SECONDS
-    
+
     intro_text = f"""🎲 Get ready for the quiz '{quiz.topic}'
 
 🖊 {total_questions} questions
@@ -2547,44 +2604,49 @@ async def start_enhanced_quiz(
 
 🏁 Press the button below when you are ready.
 Send /stop to stop it."""
-    
-    keyboard = [[InlineKeyboardButton("🚀 Start Quiz", callback_data=f"enhanced_quiz_start:{quiz.id}")]]
+
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "🚀 Start Quiz", callback_data=f"enhanced_quiz_start:{quiz.id}"
+            )
+        ]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     await safe_send_message(
-        application.bot,
-        user_id,
-        intro_text,
-        reply_markup=reply_markup
+        application.bot, user_id, intro_text, reply_markup=reply_markup
     )
-    
+
     return True
 
+
 async def send_enhanced_question(
-    application: "Application",
-    user_id: str,
-    quiz_session: QuizSession,
-    quiz: Quiz
+    application: "Application", user_id: str, quiz_session: QuizSession, quiz: Quiz
 ) -> bool:
     """Send the current question using Telegram's poll feature"""
-    
-    logger.info(f"send_enhanced_question called: user={user_id}, quiz={quiz.id}, current_index={quiz_session.current_question_index}")
-    
+
+    logger.info(
+        f"send_enhanced_question called: user={user_id}, quiz={quiz.id}, current_index={quiz_session.current_question_index}"
+    )
+
     current_q = quiz_session.get_current_question()
     if not current_q:
         logger.error(f"No current question found for session")
         return False
-    
+
     current_num, total_questions = quiz_session.get_progress()
-    question_text = current_q.get('question', 'Question not available')
-    shuffled_options = current_q.get('shuffled_options', {})
-    
+    question_text = current_q.get("question", "Question not available")
+    shuffled_options = current_q.get("shuffled_options", {})
+
     # Create poll options
     poll_options = list(shuffled_options.values())
-    
+
     # Send the question as a poll
     try:
-        logger.info(f"Sending poll: question='{question_text[:50]}...', options={len(poll_options)}")
+        logger.info(
+            f"Sending poll: question='{question_text[:50]}...', options={len(poll_options)}"
+        )
         poll_message = await application.bot.send_poll(
             chat_id=user_id,
             question=f"[{current_num}/{total_questions}] {question_text}",
@@ -2593,10 +2655,11 @@ async def send_enhanced_question(
             allows_multiple_answers=False,
             explanation="",
             open_period=Config.QUESTION_TIMER_SECONDS,
-            close_date=datetime.now(timezone.utc) + timedelta(seconds=Config.QUESTION_TIMER_SECONDS + 1)
+            close_date=datetime.now(timezone.utc)
+            + timedelta(seconds=Config.QUESTION_TIMER_SECONDS + 1),
         )
         logger.info(f"Poll sent successfully: message_id={poll_message.message_id}")
-        
+
         # Store poll message ID for tracking
         session_key = f"{user_id}:{quiz.id}"
         redis_client = RedisClient()
@@ -2604,7 +2667,7 @@ async def send_enhanced_question(
             user_id, quiz.id, f"poll_message_{current_num-1}", poll_message.message_id
         )
         await redis_client.close()
-        
+
         # Schedule next question and store task for potential cancellation
         session_key = f"{user_id}:{quiz.id}"
         task = asyncio.create_task(
@@ -2613,13 +2676,14 @@ async def send_enhanced_question(
             )
         )
         scheduled_tasks[session_key] = task
-        
+
         logger.info(f"Enhanced question sent successfully for user {user_id}")
         return True
-        
+
     except Exception as e:
         logger.error(f"Error sending enhanced question: {e}")
         return False
+
 
 async def schedule_next_question(
     application: "Application",
@@ -2627,12 +2691,12 @@ async def schedule_next_question(
     quiz_session: QuizSession,
     quiz: Quiz,
     current_num: int,
-    total_questions: int
+    total_questions: int,
 ):
     """Schedule the next question after timer expires"""
-    
+
     await asyncio.sleep(Config.QUESTION_TIMER_SECONDS + 1)  # +1 for poll close
-    
+
     # Check if session still exists
     session_key = f"{user_id}:{quiz.id}"
     if session_key not in active_quiz_sessions:
@@ -2640,53 +2704,53 @@ async def schedule_next_question(
         if session_key in scheduled_tasks:
             del scheduled_tasks[session_key]
         return
-    
+
     # Mark current question as missed if no answer was given
     if quiz_session.current_question_index not in quiz_session.answers:
         quiz_session.answers[quiz_session.current_question_index] = {
-            'answer': 'TIMEOUT',
-            'correct': False,
-            'correct_answer': quiz_session.get_current_question().get('correct_answer', '')
+            "answer": "TIMEOUT",
+            "correct": False,
+            "correct_answer": quiz_session.get_current_question().get(
+                "correct_answer", ""
+            ),
         }
         quiz_session.missed_questions += 1
-        
+
         # Send timeout message
         await safe_send_message(
-            application.bot,
-            user_id,
-            f"⏰ Time's up for question {current_num}!"
+            application.bot, user_id, f"⏰ Time's up for question {current_num}!"
         )
-        
+
         # Move to next question or finish
         if quiz_session.next_question():
             await send_enhanced_question(application, user_id, quiz_session, quiz)
         else:
             await finish_enhanced_quiz(application, user_id, quiz_session, quiz)
-    
+
     # Clean up scheduled task
     if session_key in scheduled_tasks:
         del scheduled_tasks[session_key]
 
+
 async def handle_enhanced_quiz_answer(
-    application: "Application",
-    user_id: str,
-    quiz_id: str,
-    answer: str
+    application: "Application", user_id: str, quiz_id: str, answer: str
 ) -> bool:
     """Handle answer submission for enhanced quiz"""
-    
-    logger.info(f"handle_enhanced_quiz_answer called: user={user_id}, quiz={quiz_id}, answer={answer}")
-    
+
+    logger.info(
+        f"handle_enhanced_quiz_answer called: user={user_id}, quiz={quiz_id}, answer={answer}"
+    )
+
     session_key = f"{user_id}:{quiz_id}"
     logger.info(f"Looking for session: {session_key}")
     logger.info(f"Available sessions: {list(active_quiz_sessions.keys())}")
-    
+
     if session_key not in active_quiz_sessions:
         logger.warning(f"Session {session_key} not found in active_quiz_sessions")
         return False
-    
+
     quiz_session = active_quiz_sessions[session_key]
-    
+
     # Cancel the scheduled timeout task since user answered
     if session_key in scheduled_tasks:
         try:
@@ -2694,7 +2758,7 @@ async def handle_enhanced_quiz_answer(
             del scheduled_tasks[session_key]
         except Exception as e:
             logger.error(f"Error cancelling scheduled task: {e}")
-    
+
     # Close the current poll to prevent sharing
     try:
         redis_client = RedisClient()
@@ -2702,35 +2766,40 @@ async def handle_enhanced_quiz_answer(
             user_id, quiz_id, f"poll_message_{quiz_session.current_question_index-1}"
         )
         await redis_client.close()
-        
+
         if poll_message_id:
             # Close the poll
             await application.bot.stop_poll(
-                chat_id=user_id,
-                message_id=int(poll_message_id)
+                chat_id=user_id, message_id=int(poll_message_id)
             )
     except Exception as e:
         logger.error(f"Error closing poll: {e}")
-    
+
     # Submit answer
     logger.info(f"Submitting answer: {answer}")
     is_correct = quiz_session.submit_answer(answer)
     logger.info(f"Answer submitted, correct: {is_correct}")
-    
+
     # Don't send immediate feedback - wait until the end
     # The user will see their results at the end of the quiz
-    
+
     # Move to next question or finish
-    logger.info(f"Moving to next question. Current index: {quiz_session.current_question_index}")
+    logger.info(
+        f"Moving to next question. Current index: {quiz_session.current_question_index}"
+    )
     if quiz_session.next_question():
-        logger.info(f"Next question available. New index: {quiz_session.current_question_index}")
+        logger.info(
+            f"Next question available. New index: {quiz_session.current_question_index}"
+        )
         # Get quiz from database for next question
         session = SessionLocal()
         try:
             quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
             if quiz:
                 logger.info(f"Sending next question for quiz {quiz_id}")
-                result = await send_enhanced_question(application, user_id, quiz_session, quiz)
+                result = await send_enhanced_question(
+                    application, user_id, quiz_session, quiz
+                )
                 logger.info(f"send_enhanced_question result: {result}")
             else:
                 logger.error(f"Quiz {quiz_id} not found in database")
@@ -2750,23 +2819,21 @@ async def handle_enhanced_quiz_answer(
             logger.error(f"Error finishing quiz: {e}")
         finally:
             session.close()
-    
+
     return True
 
+
 async def finish_enhanced_quiz(
-    application: "Application",
-    user_id: str,
-    quiz_session: QuizSession,
-    quiz: Quiz
+    application: "Application", user_id: str, quiz_session: QuizSession, quiz: Quiz
 ):
     """Finish the enhanced quiz and show results"""
-    
+
     results = quiz_session.get_results()
-    
+
     # Calculate accuracy
-    total_answered = results['correct'] + results['wrong']
-    accuracy = (results['correct'] / total_answered * 100) if total_answered > 0 else 0
-    
+    total_answered = results["correct"] + results["wrong"]
+    accuracy = (results["correct"] / total_answered * 100) if total_answered > 0 else 0
+
     results_text = f"""🏁 The quiz '{quiz.topic}' has finished!
 
 You answered {total_answered} questions:
@@ -2777,14 +2844,14 @@ You answered {total_answered} questions:
 📊 Accuracy – {accuracy:.1f}%
 
 📋 Question Review:"""
-    
+
     # Add question-by-question review
-    for i, answer_data in enumerate(results['answers'].values()):
+    for i, answer_data in enumerate(results["answers"].values()):
         question_num = i + 1
-        user_answer = answer_data.get('answer', 'No answer')
-        correct_answer = answer_data.get('correct_answer', 'Unknown')
-        is_correct = answer_data.get('correct', False)
-        
+        user_answer = answer_data.get("answer", "No answer")
+        correct_answer = answer_data.get("correct_answer", "Unknown")
+        is_correct = answer_data.get("correct", False)
+
         status = "✅" if is_correct else "❌"
         results_text += f"\n{status} Q{question_num}: Your answer: {user_answer} | Correct: {correct_answer}"
 
@@ -2793,42 +2860,58 @@ You answered {total_answered} questions:
     try:
         # Get user info for username
         from models.user import User
+
         user = session.query(User).filter(User.id == user_id).first()
         username = user.username if user else None
-        
+
         # First, remove the "started" record if it exists (empty answer record)
-        existing_started = session.query(QuizAnswer).filter(
-            QuizAnswer.user_id == user_id,
-            QuizAnswer.quiz_id == quiz.id,
-            QuizAnswer.answer == ""  # This indicates a "started but not completed" record
-        ).first()
-        
-        if existing_started:
-            session.delete(existing_started)
-            logger.info(f"Removed 'started' record for user {user_id} in quiz {quiz.id}")
-        
-        # Save individual answers in the correct format for reward distribution
-        for question_index, answer_data in results['answers'].items():
-            user_answer = answer_data.get('answer', 'No answer')
-            is_correct = answer_data.get('correct', False)
-            answered_at = answer_data.get('answered_at', datetime.utcnow())
-            
-            # Check if answer already exists for this user/quiz/question
-            existing_answer = session.query(QuizAnswer).filter(
+        existing_started = (
+            session.query(QuizAnswer)
+            .filter(
                 QuizAnswer.user_id == user_id,
                 QuizAnswer.quiz_id == quiz.id,
-                QuizAnswer.question_index == int(question_index)
-            ).first()
-            
+                QuizAnswer.answer
+                == "",  # This indicates a "started but not completed" record
+            )
+            .first()
+        )
+
+        if existing_started:
+            session.delete(existing_started)
+            logger.info(
+                f"Removed 'started' record for user {user_id} in quiz {quiz.id}"
+            )
+
+        # Save individual answers in the correct format for reward distribution
+        for question_index, answer_data in results["answers"].items():
+            user_answer = answer_data.get("answer", "No answer")
+            is_correct = answer_data.get("correct", False)
+            answered_at = answer_data.get("answered_at", datetime.utcnow())
+
+            # Check if answer already exists for this user/quiz/question
+            existing_answer = (
+                session.query(QuizAnswer)
+                .filter(
+                    QuizAnswer.user_id == user_id,
+                    QuizAnswer.quiz_id == quiz.id,
+                    QuizAnswer.question_index == int(question_index),
+                )
+                .first()
+            )
+
             if existing_answer:
                 # Update existing answer if it's different
-                if (existing_answer.answer != user_answer or 
-                    existing_answer.is_correct != ("True" if is_correct else "False")):
+                if (
+                    existing_answer.answer != user_answer
+                    or existing_answer.is_correct != ("True" if is_correct else "False")
+                ):
                     existing_answer.answer = user_answer
                     existing_answer.is_correct = "True" if is_correct else "False"
                     existing_answer.answered_at = answered_at
                     existing_answer.username = username
-                    logger.info(f"Updated existing answer for user {user_id}, quiz {quiz.id}, question {question_index}")
+                    logger.info(
+                        f"Updated existing answer for user {user_id}, quiz {quiz.id}, question {question_index}"
+                    )
             else:
                 # Create new quiz answer record
                 quiz_answer = QuizAnswer(
@@ -2838,29 +2921,35 @@ You answered {total_answered} questions:
                     answer=user_answer,
                     is_correct="True" if is_correct else "False",
                     answered_at=answered_at,
-                    question_index=int(question_index)
+                    question_index=int(question_index),
                 )
                 session.add(quiz_answer)
-                logger.info(f"Created new answer for user {user_id}, quiz {quiz.id}, question {question_index}")
-        
+                logger.info(
+                    f"Created new answer for user {user_id}, quiz {quiz.id}, question {question_index}"
+                )
+
         session.commit()
-        logger.info(f"Saved {len(results['answers'])} answers for user {user_id} in quiz {quiz.id}")
-        
+        logger.info(
+            f"Saved {len(results['answers'])} answers for user {user_id} in quiz {quiz.id}"
+        )
+
         # Add leaderboard info
-        results_text += f"\n\n🏆 Your score: {results['correct']}/{results['total_questions']}"
-        
+        results_text += (
+            f"\n\n🏆 Your score: {results['correct']}/{results['total_questions']}"
+        )
+
     except Exception as e:
         logger.error(f"Error saving enhanced quiz results: {e}")
         session.rollback()
     finally:
         session.close()
-    
+
     # Clean up session and scheduled tasks
     session_key = f"{user_id}:{quiz.id}"
     logger.info(f"Cleaning up enhanced quiz session: {session_key}")
     active_quiz_sessions.pop(session_key, None)
     logger.info(f"Session removed, remaining_sessions={len(active_quiz_sessions)}")
-    
+
     # Clean up any scheduled tasks
     if session_key in scheduled_tasks:
         try:
@@ -2868,9 +2957,5 @@ You answered {total_answered} questions:
             del scheduled_tasks[session_key]
         except Exception as e:
             logger.error(f"Error cancelling scheduled task: {e}")
-    
-    await safe_send_message(
-        application.bot,
-        user_id,
-        results_text
-    )
+
+    await safe_send_message(application.bot, user_id, results_text)
