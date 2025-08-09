@@ -1898,8 +1898,25 @@ async def process_questions_with_payment(
             session.commit()
             quiz_id = quiz.id
             logger.info(f"Created active quiz with ID: {quiz_id} for user {user_id}")
+            
+            # Set activation time and end time for all quizzes (free and paid)
+            from datetime import datetime, timedelta, timezone
+            quiz.activated_at = datetime.now(timezone.utc)
+            
+            if duration_seconds and duration_seconds > 0:
+                quiz.end_time = quiz.activated_at + timedelta(seconds=duration_seconds)
+                logger.info(f"Quiz {quiz_id} end time set to: {quiz.end_time} (duration: {duration_seconds}s)")
+            
+            session.commit()
+            
         finally:
             session.close()
+
+        # Schedule quiz end announcement for all quizzes with duration
+        if duration_seconds and duration_seconds > 0:
+            from services.quiz_service import schedule_quiz_end_announcement
+            logger.info(f"Scheduling end announcement for quiz {quiz_id} in {duration_seconds} seconds")
+            await schedule_quiz_end_announcement(str(quiz_id), duration_seconds, context.application)
 
         # Store payment information
         if reward_amount and float(reward_amount) > 0:
