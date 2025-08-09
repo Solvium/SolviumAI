@@ -1493,7 +1493,7 @@ async def handle_join_quiz(update, context, quiz_id):
 
 async def start_quiz_for_user(update, context, quiz):
     """Start quiz for a specific user using enhanced quiz system"""
-    user_id = update.effective_user.id
+    user_id = str(update.effective_user.id)
     chat_id = update.effective_chat.id
 
     try:
@@ -1556,12 +1556,51 @@ async def start_quiz_for_user(update, context, quiz):
                 )
                 return
 
-        # Send quiz created message to creator
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"🚀 **{quiz.topic}** is now LIVE! 🎯\n\n⚡ Quiz created successfully!\n\n💬 Use `/playquiz {quiz.id}` to start playing or check your DMs!",
-            parse_mode="Markdown",
+        # Send quiz intro with start button to user's DM
+        total_questions = len(quiz.questions) if quiz.questions else 0
+        timer_seconds = Config.QUESTION_TIMER_SECONDS
+
+        intro_text = f"""🎲 Get ready for the quiz '{quiz.topic}'
+
+🖊 {total_questions} questions
+⏱ {timer_seconds} seconds per question
+🔀 Questions and answers shuffled
+
+🏁 Press the button below when you are ready.
+Send /stop to stop it."""
+
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [[InlineKeyboardButton("🚀 Start Quiz", callback_data=f"enhanced_quiz_start:{quiz.id}")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        # Send DM to user
+        await safe_send_message(
+            context.bot,
+            user_id,
+            intro_text,
+            reply_markup=reply_markup
         )
+
+        # Acknowledge button click in group chat if it was from a group
+        if update.callback_query:
+            await update.callback_query.answer("📱 Quiz intro sent to your DMs!")
+
+        # Send confirmation to group chat if applicable
+        if chat_id != int(user_id):  # If this was triggered from a group
+            await safe_send_message(
+                context.bot,
+                chat_id,
+                f"🎮 **{quiz.topic}** Quiz Ready! �\n\n📱 @{update.effective_user.username or update.effective_user.first_name}, check your DMs to start the quiz!"
+            )
+
+    except Exception as e:
+        logger.error(f"Error starting quiz {quiz.id} for user {user_id}: {e}")
+        if update.callback_query:
+            await update.callback_query.answer("❌ Error starting quiz. Please try again.", show_alert=True)
+        else:
+            await context.bot.send_message(
+                chat_id=chat_id, text="❌ Error starting quiz. Please try again."
+            )
 
     except Exception as e:
         logger.error(f"Error starting enhanced quiz for user {user_id}: {e}")
