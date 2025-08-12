@@ -2033,15 +2033,19 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         if not quiz.group_chat_id:
             logger.info(f"Quiz {quiz_id} has no group_chat_id, skipping announcement")
             return
-        
+
         # For DM quizzes, we need to send to the creator instead of group
-        is_dm_quiz = quiz.group_chat_id > 0  # DM chat IDs are positive, group IDs are negative
+        is_dm_quiz = (
+            quiz.group_chat_id > 0
+        )  # DM chat IDs are positive, group IDs are negative
         announcement_chat_id = quiz.group_chat_id
-        
+
         if is_dm_quiz:
             # For DM quizzes, send announcement to the quiz creator
             announcement_chat_id = quiz.creator_user_id
-            logger.info(f"Quiz {quiz_id} is a DM quiz, sending announcement to creator {quiz.creator_user_id}")
+            logger.info(
+                f"Quiz {quiz_id} is a DM quiz, sending announcement to creator {quiz.creator_user_id}"
+            )
 
         # Get all participants and their scores
         all_participants = QuizAnswer.get_quiz_participants_ranking(session, quiz_id)
@@ -2063,22 +2067,22 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                     "username", f"User_{participant.get('user_id', 'Unknown')[:8]}"
                 )
                 correct_count = participant.get("correct_count", 0)
-                total_questions = participant.get("total_questions", 0)
+                questions_answered = participant.get("questions_answered", 0)
                 accuracy = (
-                    (correct_count / total_questions * 100)
-                    if total_questions > 0
+                    (correct_count / questions_answered * 100)
+                    if questions_answered > 0
                     else 0
                 )
 
                 announcement += f"{medal} <b>{i+1}.</b> @{username}\n"
                 announcement += (
-                    f"   📊 {correct_count}/{total_questions} ({accuracy:.1f}%)\n"
+                    f"   📊 {correct_count}/{questions_answered} ({accuracy:.1f}%)\n"
                 )
 
             # Add participation stats
             total_correct = sum(p.get("correct_count", 0) for p in all_participants)
             total_questions_answered = sum(
-                p.get("total_questions", 0) for p in all_participants
+                p.get("questions_answered", 0) for p in all_participants
             )
             avg_accuracy = (
                 (total_correct / total_questions_answered * 100)
@@ -2431,10 +2435,11 @@ async def _generate_leaderboard_data_for_quiz(
     ranked_participants = []
     for idx, stats in enumerate(participant_stats, start=1):
         score = stats.get("correct_count", 0)
+        questions_answered = stats.get("questions_answered", 0)
         username = stats.get("username", "UnknownUser")
         user_id = stats["user_id"]
         logger.info(
-            f"Database participant: {username} (user_id: {user_id}), correct_count: {score}"
+            f"Database participant: {username} (user_id: {user_id}), correct_count: {score}, questions_answered: {questions_answered}"
         )
         ranked_participants.append(
             {
@@ -2442,6 +2447,7 @@ async def _generate_leaderboard_data_for_quiz(
                 "user_id": user_id,
                 "username": username,
                 "score": score,
+                "questions_answered": questions_answered,
                 "time_taken": None,
                 "is_winner": False,
             }
