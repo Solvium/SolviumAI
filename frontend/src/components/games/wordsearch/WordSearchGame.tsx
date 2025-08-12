@@ -965,6 +965,78 @@ export default function MobileWordSearchGame(): ReactElement {
         </DialogContent>
       </Dialog>
 
+       {/* Mobile Completion Dialog */}
+       <Dialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
+        <DialogContent className="w-[90vw] max-w-md dark:bg-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-center text-xl dark:text-white">
+              {completionStats?.completed ? "🎉 Puzzle Complete!" : "⏰ Time's Up!"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-center space-y-4">
+            {completionStats?.completed && (
+              <>
+                <div className="text-3xl font-bold text-green-600 dark:text-green-400">
+                  {completionStats.score.toLocaleString()} Points
+                </div>
+                <div className="space-y-2">
+                  <div className="text-lg dark:text-white">
+                    Multiplier: <span className="font-bold">×{completionStats.multiplier}</span>
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Time: {formatTime(completionStats.timeUsed)}
+                  </div>
+                  {completionStats.isSpeedBonus && (
+                    <Badge className="bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">
+                      <Zap className="w-3 h-3 mr-1" />
+                      Speed Bonus!
+                    </Badge>
+                  )}
+                  {completionStats.isPerfect && (
+                    <Badge className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                      <Trophy className="w-3 h-3 mr-1" />
+                      Perfect Solve!
+                    </Badge>
+                  )}
+                </div>
+              </>
+            )}
+
+            {!completionStats?.completed && (
+              <div className="space-y-2">
+                <div className="text-lg text-gray-600 dark:text-gray-400">Better luck next time!</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  Words Found: {completionStats?.wordsFound || 0}/{completionStats?.totalWords || 0}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button
+                onClick={() => {
+                  setGameStats((prev) => ({ ...prev, puzzle: prev.puzzle + 1 }))
+                  setShowCompletionDialog(false)
+                  playSound("button")
+                }}
+                className="flex-1"
+              >
+                Next Puzzle
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  initializePuzzle()
+                  setShowCompletionDialog(false)
+                }}
+                className="flex-1 dark:bg-gray-700 dark:text-white"
+              >
+                Replay
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
         </div>
     )
 }
