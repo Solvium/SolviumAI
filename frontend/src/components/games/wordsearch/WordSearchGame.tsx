@@ -76,6 +76,16 @@ interface GridCell {
     wordsFound: number
   }
 
+  interface PuzzleData {
+    id: string
+    title: string
+    theme: string
+    grid: GridCell[][]
+    words: WordToFind[]
+    gridSize: number
+    basePoints: number
+  }
+
 export default function MobileWordSearchGame(): ReactElement {
     return (
         <div>
