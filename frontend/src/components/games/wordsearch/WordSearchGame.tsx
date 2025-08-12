@@ -429,6 +429,169 @@ class SoundManager {
     },
   }
 
+  // Generate word search (same logic as before)
+const generateWordSearch = (words: string[], gridSize: number, difficulty: string): PuzzleData => {
+    const grid: GridCell[][] = Array(gridSize)
+      .fill(null)
+      .map(() =>
+        Array(gridSize)
+          .fill(null)
+          .map(() => ({
+            letter: "",
+            isPartOfWord: false,
+            foundWordIds: [],
+            isHighlighted: false,
+            isSelected: false,
+          })),
+      )
+  
+    const wordsToFind: WordToFind[] = []
+    const directions = ["horizontal", "vertical", "diagonal-down", "diagonal-up"]
+  
+    words.forEach((word, index) => {
+      let placed = false
+      let attempts = 0
+      const maxAttempts = 50
+  
+      while (!placed && attempts < maxAttempts) {
+        const direction = directions[Math.floor(Math.random() * directions.length)]
+        const isReversed = Math.random() < 0.2
+        const wordToPlace = isReversed ? word.split("").reverse().join("") : word
+  
+        let startRow, startCol, endRow, endCol
+        let canPlace = true
+  
+        switch (direction) {
+          case "horizontal":
+            startRow = Math.floor(Math.random() * gridSize)
+            startCol = Math.floor(Math.random() * (gridSize - wordToPlace.length + 1))
+            endRow = startRow
+            endCol = startCol + wordToPlace.length - 1
+            break
+          case "vertical":
+            startRow = Math.floor(Math.random() * (gridSize - wordToPlace.length + 1))
+            startCol = Math.floor(Math.random() * gridSize)
+            endRow = startRow + wordToPlace.length - 1
+            endCol = startCol
+            break
+          case "diagonal-down":
+            startRow = Math.floor(Math.random() * (gridSize - wordToPlace.length + 1))
+            startCol = Math.floor(Math.random() * (gridSize - wordToPlace.length + 1))
+            endRow = startRow + wordToPlace.length - 1
+            endCol = startCol + wordToPlace.length - 1
+            break
+          case "diagonal-up":
+            startRow = Math.floor(Math.random() * (gridSize - wordToPlace.length + 1)) + wordToPlace.length - 1
+            startCol = Math.floor(Math.random() * (gridSize - wordToPlace.length + 1))
+            endRow = startRow - wordToPlace.length + 1
+            endCol = startCol + wordToPlace.length - 1
+            break
+          default:
+            continue
+        }
+  
+        for (let i = 0; i < wordToPlace.length; i++) {
+          let row, col
+          switch (direction) {
+            case "horizontal":
+              row = startRow
+              col = startCol + i
+              break
+            case "vertical":
+              row = startRow + i
+              col = startCol
+              break
+            case "diagonal-down":
+              row = startRow + i
+              col = startCol + i
+              break
+            case "diagonal-up":
+              row = startRow - i
+              col = startCol + i
+              break
+            default:
+              canPlace = false
+              break
+          }
+  
+          if (row < 0 || row >= gridSize || col < 0 || col >= gridSize) {
+            canPlace = false
+            break
+          }
+  
+          if (grid[row][col].letter && grid[row][col].letter !== wordToPlace[i]) {
+            canPlace = false
+            break
+          }
+        }
+  
+        if (canPlace) {
+          for (let i = 0; i < wordToPlace.length; i++) {
+            let row, col
+            switch (direction) {
+              case "horizontal":
+                row = startRow
+                col = startCol + i
+                break
+              case "vertical":
+                row = startRow + i
+                col = startCol
+                break
+              case "diagonal-down":
+                row = startRow + i
+                col = startCol + i
+                break
+              case "diagonal-up":
+                row = startRow - i
+                col = startCol + i
+                break
+            }
+  
+            grid[row][col].letter = wordToPlace[i]
+            grid[row][col].isPartOfWord = true
+          }
+  
+          wordsToFind.push({
+            id: index,
+            word: word,
+            found: false,
+            startRow,
+            startCol,
+            endRow,
+            endCol,
+            direction: direction as any,
+            isReversed,
+          })
+  
+          placed = true
+        }
+  
+        attempts++
+      }
+    })
+  
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for (let row = 0; row < gridSize; row++) {
+      for (let col = 0; col < gridSize; col++) {
+        if (!grid[row][col].letter) {
+          grid[row][col].letter = alphabet[Math.floor(Math.random() * alphabet.length)]
+        }
+      }
+    }
+  
+    const difficultyPoints = { easy: 100, medium: 200, hard: 300 }
+  
+    return {
+      id: `${Math.random()}`,
+      title: `${wordThemes[1][difficulty].theme} Hunt`,
+      theme: wordThemes[1][difficulty].theme,
+      grid,
+      words: wordsToFind,
+      gridSize,
+      basePoints: difficultyPoints[difficulty],
+    }
+  }
+
 export default function MobileWordSearchGame(): ReactElement {
     return (
         <div>
