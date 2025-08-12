@@ -95,6 +95,259 @@ interface GridCell {
     icon: React.ComponentType<{ className?: string }>
   }
 
+  // Sound effects class
+class SoundManager {
+    private audioContext: AudioContext | null = null
+    private sounds: { [key: string]: AudioBuffer } = {}
+    private isEnabled = true
+    private volume = 0.3
+  
+    constructor() {
+      this.initializeAudioContext()
+    }
+  
+    private async initializeAudioContext() {
+      try {
+        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+        await this.generateSounds()
+      } catch (error) {
+        console.warn("Audio not supported:", error)
+      }
+    }
+  
+    private async generateSounds() {
+      if (!this.audioContext) return
+  
+      // Generate different sound effects
+      this.sounds.wordFound = this.createWordFoundSound()
+      this.sounds.puzzleComplete = this.createPuzzleCompleteSound()
+      this.sounds.tick = this.createTickSound()
+      this.sounds.swipe = this.createSwipeSound()
+      this.sounds.hint = this.createHintSound()
+      this.sounds.error = this.createErrorSound()
+      this.sounds.button = this.createButtonSound()
+      this.sounds.selection = this.createSelectionSound()
+      this.sounds.speedBonus = this.createSpeedBonusSound()
+    }
+  
+    private createWordFoundSound(): AudioBuffer {
+      if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
+  
+      const sampleRate = this.audioContext.sampleRate
+      const duration = 0.3
+      const buffer = this.audioContext.createBuffer(1, sampleRate * duration, sampleRate)
+      const data = buffer.getChannelData(0)
+  
+      // Create a pleasant ascending chord
+      for (let i = 0; i < buffer.length; i++) {
+        const t = i / sampleRate
+        const envelope = Math.exp(-t * 3)
+  
+        const freq1 = 523.25 // C5
+        const freq2 = 659.25 // E5
+        const freq3 = 783.99 // G5
+  
+        data[i] =
+          envelope *
+          0.3 *
+          (Math.sin(2 * Math.PI * freq1 * t) +
+            Math.sin(2 * Math.PI * freq2 * t) * 0.7 +
+            Math.sin(2 * Math.PI * freq3 * t) * 0.5)
+      }
+  
+      return buffer
+    }
+  
+    private createPuzzleCompleteSound(): AudioBuffer {
+      if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
+  
+      const sampleRate = this.audioContext.sampleRate
+      const duration = 1.0
+      const buffer = this.audioContext.createBuffer(1, sampleRate * duration, sampleRate)
+      const data = buffer.getChannelData(0)
+  
+      // Victory fanfare
+      const notes = [523.25, 659.25, 783.99, 1046.5] // C5, E5, G5, C6
+  
+      for (let i = 0; i < buffer.length; i++) {
+        const t = i / sampleRate
+        const noteIndex = Math.floor(t * 4)
+        const envelope = Math.exp(-t * 2) * (1 - t * 0.5)
+  
+        if (noteIndex < notes.length) {
+          data[i] = envelope * 0.4 * Math.sin(2 * Math.PI * notes[noteIndex] * t)
+        }
+      }
+  
+      return buffer
+    }
+  
+    private createTickSound(): AudioBuffer {
+      if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
+  
+      const sampleRate = this.audioContext.sampleRate
+      const duration = 0.1
+      const buffer = this.audioContext.createBuffer(1, sampleRate * duration, sampleRate)
+      const data = buffer.getChannelData(0)
+  
+      // Short tick sound
+      for (let i = 0; i < buffer.length; i++) {
+        const t = i / sampleRate
+        const envelope = Math.exp(-t * 50)
+        data[i] = envelope * 0.2 * Math.sin(2 * Math.PI * 800 * t)
+      }
+  
+      return buffer
+    }
+  
+    private createSwipeSound(): AudioBuffer {
+      if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
+  
+      const sampleRate = this.audioContext.sampleRate
+      const duration = 0.2
+      const buffer = this.audioContext.createBuffer(1, sampleRate * duration, sampleRate)
+      const data = buffer.getChannelData(0)
+  
+      // Swoosh sound
+      for (let i = 0; i < buffer.length; i++) {
+        const t = i / sampleRate
+        const envelope = Math.exp(-t * 8)
+        const frequency = 400 + t * 200
+        data[i] = envelope * 0.15 * Math.sin(2 * Math.PI * frequency * t)
+      }
+  
+      return buffer
+    }
+  
+    private createHintSound(): AudioBuffer {
+      if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
+  
+      const sampleRate = this.audioContext.sampleRate
+      const duration = 0.4
+      const buffer = this.audioContext.createBuffer(1, sampleRate * duration, sampleRate)
+      const data = buffer.getChannelData(0)
+  
+      // Magical hint sound
+      for (let i = 0; i < buffer.length; i++) {
+        const t = i / sampleRate
+        const envelope = Math.exp(-t * 4)
+        const frequency = 440 + Math.sin(t * 10) * 100
+        data[i] = envelope * 0.25 * Math.sin(2 * Math.PI * frequency * t)
+      }
+  
+      return buffer
+    }
+  
+    private createErrorSound(): AudioBuffer {
+      if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
+  
+      const sampleRate = this.audioContext.sampleRate
+      const duration = 0.3
+      const buffer = this.audioContext.createBuffer(1, sampleRate * duration, sampleRate)
+      const data = buffer.getChannelData(0)
+  
+      // Error buzz
+      for (let i = 0; i < buffer.length; i++) {
+        const t = i / sampleRate
+        const envelope = Math.exp(-t * 5)
+        data[i] = envelope * 0.2 * Math.sin(2 * Math.PI * 150 * t)
+      }
+  
+      return buffer
+    }
+  
+    private createButtonSound(): AudioBuffer {
+      if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
+  
+      const sampleRate = this.audioContext.sampleRate
+      const duration = 0.1
+      const buffer = this.audioContext.createBuffer(1, sampleRate * duration, sampleRate)
+      const data = buffer.getChannelData(0)
+  
+      // Button click
+      for (let i = 0; i < buffer.length; i++) {
+        const t = i / sampleRate
+        const envelope = Math.exp(-t * 30)
+        data[i] = envelope * 0.15 * Math.sin(2 * Math.PI * 1000 * t)
+      }
+  
+      return buffer
+    }
+  
+    private createSelectionSound(): AudioBuffer {
+      if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
+  
+      const sampleRate = this.audioContext.sampleRate
+      const duration = 0.05
+      const buffer = this.audioContext.createBuffer(1, sampleRate * duration, sampleRate)
+      const data = buffer.getChannelData(0)
+  
+      // Soft selection sound
+      for (let i = 0; i < buffer.length; i++) {
+        const t = i / sampleRate
+        const envelope = Math.exp(-t * 20)
+        data[i] = envelope * 0.1 * Math.sin(2 * Math.PI * 600 * t)
+      }
+  
+      return buffer
+    }
+  
+    private createSpeedBonusSound(): AudioBuffer {
+      if (!this.audioContext) return new AudioBuffer({ length: 1, sampleRate: 44100 })
+  
+      const sampleRate = this.audioContext.sampleRate
+      const duration = 0.6
+      const buffer = this.audioContext.createBuffer(1, sampleRate * duration, sampleRate)
+      const data = buffer.getChannelData(0)
+  
+      // Speed bonus celebration
+      for (let i = 0; i < buffer.length; i++) {
+        const t = i / sampleRate
+        const envelope = Math.exp(-t * 3)
+        const frequency = 880 + Math.sin(t * 15) * 200
+        data[i] = envelope * 0.3 * Math.sin(2 * Math.PI * frequency * t)
+      }
+  
+      return buffer
+    }
+  
+    async playSound(soundName: string) {
+      if (!this.audioContext || !this.isEnabled || !this.sounds[soundName]) return
+  
+      try {
+        // Resume audio context if suspended (required by some browsers)
+        if (this.audioContext.state === "suspended") {
+          await this.audioContext.resume()
+        }
+  
+        const source = this.audioContext.createBufferSource()
+        const gainNode = this.audioContext.createGain()
+  
+        source.buffer = this.sounds[soundName]
+        gainNode.gain.value = this.volume
+  
+        source.connect(gainNode)
+        gainNode.connect(this.audioContext.destination)
+  
+        source.start()
+      } catch (error) {
+        console.warn("Error playing sound:", error)
+      }
+    }
+  
+    setEnabled(enabled: boolean) {
+      this.isEnabled = enabled
+    }
+  
+    setVolume(volume: number) {
+      this.volume = Math.max(0, Math.min(1, volume))
+    }
+  
+    isAudioEnabled(): boolean {
+      return this.isEnabled
+    }
+  }
+
 export default function MobileWordSearchGame(): ReactElement {
     return (
         <div>
