@@ -860,6 +860,30 @@ export default function MobileWordSearchGame(): ReactElement {
         </Sheet>
       </div>
 
+      {/* Bottom Action Bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 p-4 safe-area-pb transition-colors duration-300">
+        <div className="flex gap-3">
+          <Button
+            onClick={() => {
+              setShowHintDialog(true)
+              playSound("button")
+            }}
+            disabled={gameStats.hintsRemaining + gameStats.purchasedHints <= 0}
+            className="flex-1 h-12 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700"
+          >
+            <Lightbulb className="w-4 h-4 mr-2" />
+            Hint
+          </Button>
+          <Button
+            variant="outline"
+            onClick={initializePuzzle}
+            className="h-12 px-6 bg-transparent dark:bg-gray-800 dark:text-white"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
         </div>
     )
 }
