@@ -687,7 +687,7 @@ export default function MobileWordSearchGame(): ReactElement {
           </div>
         </div>
       </div>
-      
+
  {/* Mobile Stats Bar */}
  <div className="px-4 py-3 bg-white/50 dark:bg-gray-800/50 transition-colors duration-300">
         <div className="grid grid-cols-4 gap-2">
@@ -718,6 +718,19 @@ export default function MobileWordSearchGame(): ReactElement {
         </div>
       </div>
 
+ {/* Progress Bar */}
+ <div className="px-4 pb-4" id="progress">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Progress</span>
+          <span className="text-sm text-gray-600 dark:text-gray-400">
+            {currentPuzzle.words.filter((w) => w.found).length}/{currentPuzzle.words.length}
+          </span>
+        </div>
+        <Progress
+          value={(currentPuzzle.words.filter((w) => w.found).length / currentPuzzle.words.length) * 100}
+          className="h-2"
+        />
+      </div>
 
 
         </div>
