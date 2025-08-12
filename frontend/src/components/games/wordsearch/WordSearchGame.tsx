@@ -884,6 +884,49 @@ export default function MobileWordSearchGame(): ReactElement {
         </div>
       </div>
 
+      {/* Tutorial Overlay */}
+      {showTutorial && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full transition-colors duration-300">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                {React.createElement(tutorialSteps[currentTutorialStep].icon, {
+                  className: "w-8 h-8 text-blue-600 dark:text-blue-400",
+                })}
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                {tutorialSteps[currentTutorialStep].title}
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300 mb-6">{tutorialSteps[currentTutorialStep].description}</p>
+
+              <div className="flex items-center justify-center gap-2 mb-6">
+                {tutorialSteps.map((_, index) => (
+                  <div
+                    key={index}
+                    className={`w-2 h-2 rounded-full transition-colors ${
+                      index === currentTutorialStep ? "bg-blue-600 dark:bg-blue-400" : "bg-gray-300 dark:bg-gray-600"
+                    }`}
+                  />
+                ))}
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={skipTutorial}
+                  className="flex-1 dark:bg-gray-700 dark:text-white bg-transparent"
+                >
+                  Skip
+                </Button>
+                <Button onClick={nextTutorialStep} className="flex-1">
+                  {currentTutorialStep === tutorialSteps.length - 1 ? "Start Playing!" : "Next"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
         </div>
     )
 }
