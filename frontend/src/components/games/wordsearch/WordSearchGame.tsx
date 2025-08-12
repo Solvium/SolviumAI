@@ -86,6 +86,15 @@ interface GridCell {
     basePoints: number
   }
 
+  interface TutorialStep {
+    id: number
+    title: string
+    description: string
+    target?: string
+    action?: string
+    icon: React.ComponentType<{ className?: string }>
+  }
+
 export default function MobileWordSearchGame(): ReactElement {
     return (
         <div>
