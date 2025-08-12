@@ -398,6 +398,37 @@ class SoundManager {
     },
   ]
 
+  const wordThemes = {
+    1: {
+      easy: {
+        theme: "Animals",
+        words: ["CAT", "DOG", "BIRD", "FISH", "BEAR"],
+      },
+      medium: {
+        theme: "Colors",
+        words: ["RED", "BLUE", "GREEN", "YELLOW", "PURPLE", "ORANGE"],
+      },
+      hard: {
+        theme: "Food",
+        words: ["PIZZA", "BURGER", "PASTA", "SALAD", "BREAD", "FRUIT", "CHEESE"],
+      },
+    },
+    2: {
+      easy: {
+        theme: "Sports",
+        words: ["BALL", "GAME", "RUN", "JUMP", "SWIM"],
+      },
+      medium: {
+        theme: "Nature",
+        words: ["TREE", "FLOWER", "RIVER", "MOUNTAIN", "OCEAN", "FOREST"],
+      },
+      hard: {
+        theme: "Technology",
+        words: ["PHONE", "COMPUTER", "INTERNET", "SOFTWARE", "DIGITAL", "MOBILE"],
+      },
+    },
+  }
+
 export default function MobileWordSearchGame(): ReactElement {
     return (
         <div>
