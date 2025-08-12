@@ -57,6 +57,25 @@ interface GridCell {
     isReversed: boolean
   }
 
+  interface GameStats {
+    level: number
+    difficulty: "easy" | "medium" | "hard"
+    puzzle: number
+    score: number
+    totalScore: number
+    hintsUsed: number
+    hintsRemaining: number
+    purchasedHints: number
+    points: number
+    tokens: number
+    badges: string[]
+    completedPuzzles: Set<string>
+    perfectSolves: number
+    speedBonuses: number
+    currentStreak: number
+    wordsFound: number
+  }
+
 export default function MobileWordSearchGame(): ReactElement {
     return (
         <div>
