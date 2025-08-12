@@ -2888,56 +2888,87 @@ You answered {total_answered} questions:
                 f"Removed 'started' record for user {user_id} in quiz {quiz.id}"
             )
 
+        # Debug logging to understand the data
+        logger.info(f"QuizSession results for user {user_id}: {results}")
+        logger.info(f"Answers to save: {results['answers']}")
+        logger.info(f"Total questions reported: {results.get('total_questions', 'Unknown')}")
+        logger.info(f"Correct answers: {results.get('correct', 'Unknown')}")
+        
         # Save individual answers in the correct format for reward distribution
+        saved_answers = 0
         for question_index, answer_data in results["answers"].items():
-            user_answer = answer_data.get("answer", "No answer")
-            is_correct = answer_data.get("correct", False)
-            answered_at = answer_data.get("answered_at", datetime.utcnow())
+            try:
+                user_answer = answer_data.get("answer", "No answer")
+                is_correct = answer_data.get("correct", False)
+                answered_at = answer_data.get("answered_at", datetime.utcnow())
+                
+                logger.info(f"Processing answer for question {question_index}: {answer_data}")
 
-            # Check if answer already exists for this user/quiz/question
-            existing_answer = (
-                session.query(QuizAnswer)
-                .filter(
-                    QuizAnswer.user_id == user_id,
-                    QuizAnswer.quiz_id == quiz.id,
-                    QuizAnswer.question_index == int(question_index),
-                )
-                .first()
-            )
-
-            if existing_answer:
-                # Update existing answer if it's different
-                if (
-                    existing_answer.answer != user_answer
-                    or existing_answer.is_correct != ("True" if is_correct else "False")
-                ):
-                    existing_answer.answer = user_answer
-                    existing_answer.is_correct = "True" if is_correct else "False"
-                    existing_answer.answered_at = answered_at
-                    existing_answer.username = username
-                    logger.info(
-                        f"Updated existing answer for user {user_id}, quiz {quiz.id}, question {question_index}"
+                # Check if answer already exists for this user/quiz/question
+                existing_answer = (
+                    session.query(QuizAnswer)
+                    .filter(
+                        QuizAnswer.user_id == user_id,
+                        QuizAnswer.quiz_id == quiz.id,
+                        QuizAnswer.question_index == int(question_index),
                     )
-            else:
-                # Create new quiz answer record
-                quiz_answer = QuizAnswer(
-                    user_id=user_id,
-                    quiz_id=quiz.id,
-                    username=username,
-                    answer=user_answer,
-                    is_correct="True" if is_correct else "False",
-                    answered_at=answered_at,
-                    question_index=int(question_index),
+                    .first()
                 )
-                session.add(quiz_answer)
-                logger.info(
-                    f"Created new answer for user {user_id}, quiz {quiz.id}, question {question_index}"
-                )
+
+                if existing_answer:
+                    # Update existing answer if it's different
+                    if (
+                        existing_answer.answer != user_answer
+                        or existing_answer.is_correct != ("True" if is_correct else "False")
+                    ):
+                        existing_answer.answer = user_answer
+                        existing_answer.is_correct = "True" if is_correct else "False"
+                        existing_answer.answered_at = answered_at
+                        existing_answer.username = username
+                        logger.info(
+                            f"Updated existing answer for user {user_id}, quiz {quiz.id}, question {question_index}"
+                        )
+                        saved_answers += 1
+                    else:
+                        logger.info(f"Answer for question {question_index} unchanged, skipping update")
+                        saved_answers += 1
+                else:
+                    # Create new quiz answer record
+                    quiz_answer = QuizAnswer(
+                        user_id=user_id,
+                        quiz_id=quiz.id,
+                        username=username,
+                        answer=user_answer,
+                        is_correct="True" if is_correct else "False",
+                        answered_at=answered_at,
+                        question_index=int(question_index),
+                    )
+                    session.add(quiz_answer)
+                    logger.info(
+                        f"Created new answer for user {user_id}, quiz {quiz.id}, question {question_index}"
+                    )
+                    saved_answers += 1
+                    
+            except Exception as answer_error:
+                logger.error(f"Failed to save answer for question {question_index}: {answer_error}")
+                # Continue with other answers even if one fails
 
         session.commit()
         logger.info(
-            f"Saved {len(results['answers'])} answers for user {user_id} in quiz {quiz.id}"
+            f"Successfully saved {saved_answers}/{len(results['answers'])} answers for user {user_id} in quiz {quiz.id}"
         )
+        
+        # Verify database consistency - count actual saved answers
+        actual_saved_count = session.query(QuizAnswer).filter(
+            QuizAnswer.user_id == user_id,
+            QuizAnswer.quiz_id == quiz.id,
+            QuizAnswer.answer != ""  # Exclude empty "started" records
+        ).count()
+        
+        logger.info(f"Database verification: {actual_saved_count} answers saved vs {len(results['answers'])} from session")
+        
+        if actual_saved_count != len(results['answers']):
+            logger.error(f"MISMATCH: Expected {len(results['answers'])} answers but database has {actual_saved_count}")
 
         # Add leaderboard info
         results_text += (

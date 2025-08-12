@@ -4,7 +4,6 @@ from typing import List, Optional
 def create_main_menu_keyboard() -> ReplyKeyboardMarkup:
     """
     Creates the main 2x2 grid menu that appears directly below the keyboard input.
-    This mimics the interface shown in the reference image using ReplyKeyboardMarkup.
     """
     return ReplyKeyboardMarkup([
         [
@@ -15,8 +14,8 @@ def create_main_menu_keyboard() -> ReplyKeyboardMarkup:
             KeyboardButton("🏆 Leaderboards"),
             KeyboardButton("💰 My Rewards")
         ],
-        
-    ], 
+
+    ],
     resize_keyboard=True,  # Makes buttons smaller to fit better
     one_time_keyboard=False,  # Keeps keyboard visible
     input_field_placeholder="Choose an option..."  # Placeholder in input field
@@ -254,21 +253,21 @@ def create_inline_main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "🎯 Create Quiz", 
+                "🎯 Create Quiz",
                 callback_data="menu:create_quiz"
             ),
             InlineKeyboardButton(
-                "🎲 Play Quiz", 
+                "🎲 Play Quiz",
                 callback_data="menu:play_quiz"
             )
         ],
         [
             InlineKeyboardButton(
-                "🏆 Leaderboards", 
+                "🏆 Leaderboards",
                 callback_data="menu:leaderboards"
             ),
             InlineKeyboardButton(
-                "💰 My Rewards", 
+                "💰 My Rewards",
                 callback_data="menu:rewards"
             )
         ]
@@ -281,27 +280,27 @@ def create_inline_game_selection_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "🎯 Create Quiz", 
+                "🎯 Create Quiz",
                 callback_data="game:create_quiz"
             ),
             InlineKeyboardButton(
-                "🎲 Play Quiz", 
+                "🎲 Play Quiz",
                 callback_data="game:play_quiz"
             )
         ],
         [
             InlineKeyboardButton(
-                "🏆 Leaderboards", 
+                "🏆 Leaderboards",
                 callback_data="game:leaderboards"
             ),
             InlineKeyboardButton(
-                "💰 My Rewards", 
+                "💰 My Rewards",
                 callback_data="game:rewards"
             )
         ],
         [
             InlineKeyboardButton(
-                "⬅️ Back to Main Menu", 
+                "⬅️ Back to Main Menu",
                 callback_data="menu:main"
             )
         ]
@@ -314,27 +313,27 @@ def create_inline_challenge_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "👥 Challenge Group", 
+                "👥 Challenge Group",
                 callback_data="challenge:group"
             ),
             InlineKeyboardButton(
-                "👤 Challenge Friend", 
+                "👤 Challenge Friend",
                 callback_data="challenge:friend"
             )
         ],
         [
             InlineKeyboardButton(
-                "🏅 My Challenges", 
+                "🏅 My Challenges",
                 callback_data="challenge:my_challenges"
             ),
             InlineKeyboardButton(
-                "📊 Challenge Stats", 
+                "📊 Challenge Stats",
                 callback_data="challenge:stats"
             )
         ],
         [
             InlineKeyboardButton(
-                "⬅️ Back to Main Menu", 
+                "⬅️ Back to Main Menu",
                 callback_data="menu:main"
             )
         ]
@@ -347,27 +346,27 @@ def create_inline_community_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "📢 Join Announcements", 
+                "📢 Join Announcements",
                 url="https://t.me/solvium_announcements"
             ),
             InlineKeyboardButton(
-                "💬 Join Discussion", 
+                "💬 Join Discussion",
                 url="https://t.me/solvium_community"
             )
         ],
         [
             InlineKeyboardButton(
-                "🎮 Join Gaming", 
+                "🎮 Join Gaming",
                 url="https://t.me/solvium_gaming"
             ),
             InlineKeyboardButton(
-                "📈 Join Trading", 
+                "📈 Join Trading",
                 url="https://t.me/solvium_trading"
             )
         ],
         [
             InlineKeyboardButton(
-                "⬅️ Back to Main Menu", 
+                "⬅️ Back to Main Menu",
                 callback_data="menu:main"
             )
         ]
@@ -380,27 +379,27 @@ def create_inline_app_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "🌐 Open Web App", 
+                "🌐 Open Web App",
                 web_app={"url": "https://solvium.ai"}
             ),
             InlineKeyboardButton(
-                "📱 Download Mobile", 
+                "📱 Download Mobile",
                 url="https://play.google.com/store/apps/solvium"
             )
         ],
         [
             InlineKeyboardButton(
-                "💳 Connect Wallet", 
+                "💳 Connect Wallet",
                 callback_data="app:connect_wallet"
             ),
             InlineKeyboardButton(
-                "💰 View Rewards", 
+                "💰 View Rewards",
                 callback_data="app:rewards"
             )
         ],
         [
             InlineKeyboardButton(
-                "⬅️ Back to Main Menu", 
+                "⬅️ Back to Main Menu",
                 callback_data="menu:main"
             )
         ]
@@ -413,27 +412,27 @@ def create_inline_quiz_creation_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "📝 Quick Quiz", 
+                "📝 Quick Quiz",
                 callback_data="quiz:quick_create"
             ),
             InlineKeyboardButton(
-                "⚙️ Custom Quiz", 
+                "⚙️ Custom Quiz",
                 callback_data="quiz:custom_create"
             )
         ],
         [
             InlineKeyboardButton(
-                "📊 Quiz Templates", 
+                "📊 Quiz Templates",
                 callback_data="quiz:templates"
             ),
             InlineKeyboardButton(
-                "📈 My Quizzes", 
+                "📈 My Quizzes",
                 callback_data="quiz:my_quizzes"
             )
         ],
         [
             InlineKeyboardButton(
-                "⬅️ Back to Main Menu", 
+                "⬅️ Back to Main Menu",
                 callback_data="menu:main"
             )
         ]
@@ -446,27 +445,27 @@ def create_inline_quiz_play_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "🎯 Active Quizzes", 
+                "🎯 Active Quizzes",
                 callback_data="quiz:active"
             ),
             InlineKeyboardButton(
-                "🏆 My Results", 
+                "🏆 My Results",
                 callback_data="quiz:results"
             )
         ],
         [
             InlineKeyboardButton(
-                "📊 Quiz History", 
+                "📊 Quiz History",
                 callback_data="quiz:history"
             ),
             InlineKeyboardButton(
-                "🎖️ Achievements", 
+                "🎖️ Achievements",
                 callback_data="quiz:achievements"
             )
         ],
         [
             InlineKeyboardButton(
-                "⬅️ Back to Main Menu", 
+                "⬅️ Back to Main Menu",
                 callback_data="menu:main"
             )
         ]
@@ -479,27 +478,27 @@ def create_inline_leaderboards_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "🏆 Global Leaderboard", 
+                "🏆 Global Leaderboard",
                 callback_data="leaderboard:global"
             ),
             InlineKeyboardButton(
-                "👥 Group Leaderboard", 
+                "👥 Group Leaderboard",
                 callback_data="leaderboard:group"
             )
         ],
         [
             InlineKeyboardButton(
-                "📊 Weekly Top", 
+                "📊 Weekly Top",
                 callback_data="leaderboard:weekly"
             ),
             InlineKeyboardButton(
-                "🎖️ All Time Best", 
+                "🎖️ All Time Best",
                 callback_data="leaderboard:alltime"
             )
         ],
         [
             InlineKeyboardButton(
-                "⬅️ Back to Main Menu", 
+                "⬅️ Back to Main Menu",
                 callback_data="menu:main"
             )
         ]
@@ -512,27 +511,27 @@ def create_inline_rewards_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "💳 Connect Wallet", 
+                "💳 Connect Wallet",
                 callback_data="rewards:connect_wallet"
             ),
             InlineKeyboardButton(
-                "💰 View Balance", 
+                "💰 View Balance",
                 callback_data="rewards:balance"
             )
         ],
         [
             InlineKeyboardButton(
-                "🏆 Claim Rewards", 
+                "🏆 Claim Rewards",
                 callback_data="rewards:claim"
             ),
             InlineKeyboardButton(
-                "📈 Transaction History", 
+                "📈 Transaction History",
                 callback_data="rewards:history"
             )
         ],
         [
             InlineKeyboardButton(
-                "⬅️ Back to Main Menu", 
+                "⬅️ Back to Main Menu",
                 callback_data="menu:main"
             )
         ]
@@ -545,12 +544,12 @@ def create_inline_cancel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "❌ Cancel", 
+                "❌ Cancel",
                 callback_data="cancel"
             ),
             InlineKeyboardButton(
-                "⬅️ Back", 
+                "⬅️ Back",
                 callback_data="back"
             )
         ]
-    ]) 
+    ])

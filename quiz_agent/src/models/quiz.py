@@ -153,6 +153,7 @@ class QuizAnswer(Base):
         all_answers = (
             session.query(QuizAnswer)
             .filter(QuizAnswer.quiz_id == quiz_id)
+            .filter(QuizAnswer.answer != "")  # Exclude empty "started" records
             .order_by(QuizAnswer.user_id, QuizAnswer.answered_at)
             .all()
         )
