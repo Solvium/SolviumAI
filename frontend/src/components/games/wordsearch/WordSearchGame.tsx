@@ -767,6 +767,49 @@ export default function MobileWordSearchGame(): ReactElement {
         </div>
       </div>
 
+       {/* Word Search Grid */}
+       <div className="px-4 mb-6" id="grid">
+        <Card className="shadow-lg dark:bg-gray-800 transition-colors duration-300">
+          <CardContent className="p-4">
+            <div className="flex justify-center">
+              <div
+                ref={gridRef}
+                className="grid gap-1 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg touch-none select-none transition-colors duration-300"
+                style={{
+                  gridTemplateColumns: `repeat(${currentPuzzle.gridSize}, 1fr)`,
+                  maxWidth: "320px",
+                  aspectRatio: "1",
+                }}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
+                {currentPuzzle.grid.map((row, rowIndex) =>
+                  row.map((cell, colIndex) => (
+                    <div
+                      key={`${rowIndex}-${colIndex}`}
+                      className={`
+                        flex items-center justify-center text-sm font-bold rounded transition-all duration-200 border border-gray-300 dark:border-gray-600 aspect-square
+                        ${
+                          cell.isHighlighted
+                            ? "bg-green-200 dark:bg-green-800 border-green-400 dark:border-green-600 text-green-800 dark:text-green-200"
+                            : cell.isSelected
+                              ? "bg-blue-200 dark:bg-blue-800 border-blue-400 dark:border-blue-600 text-blue-800 dark:text-blue-200"
+                              : "bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100"
+                        }
+                      `}
+                      onTouchStart={(e) => handleTouchStart(rowIndex, colIndex, e)}
+                      style={{ minHeight: "28px", fontSize: "12px" }}
+                    >
+                      {cell.letter}
+                    </div>
+                  )),
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
         </div>
     )
 }
