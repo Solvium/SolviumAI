@@ -45,6 +45,18 @@ interface GridCell {
     isSelected: boolean
   }
 
+  interface WordToFind {
+    id: number
+    word: string
+    found: boolean
+    startRow: number
+    startCol: number
+    endRow: number
+    endCol: number
+    direction: "horizontal" | "vertical" | "diagonal-down" | "diagonal-up"
+    isReversed: boolean
+  }
+
 export default function MobileWordSearchGame(): ReactElement {
     return (
         <div>
