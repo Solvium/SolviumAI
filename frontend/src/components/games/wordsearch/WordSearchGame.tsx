@@ -927,6 +927,44 @@ export default function MobileWordSearchGame(): ReactElement {
         </div>
       )}
 
+      {/* Mobile Hint Dialog */}
+      <Dialog open={showHintDialog} onOpenChange={setShowHintDialog}>
+        <DialogContent className="w-[90vw] max-w-md dark:bg-gray-800">
+          <DialogHeader>
+            <DialogTitle className="dark:text-white">Choose Your Hint</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Remaining words: <strong>{currentPuzzle.words.filter((w) => !w.found).length}</strong>
+            </p>
+
+            <div className="space-y-3">
+              <Button
+                onClick={() => useHint("highlight")}
+                className="w-full h-16 justify-start dark:bg-gray-700 dark:text-white"
+                variant="outline"
+              >
+                <div className="text-left">
+                  <div className="font-semibold">Highlight Word - 100 points</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Briefly show a word location</div>
+                </div>
+              </Button>
+
+              <Button
+                onClick={() => useHint("reveal")}
+                className="w-full h-16 justify-start dark:bg-gray-700 dark:text-white"
+                variant="outline"
+              >
+                <div className="text-left">
+                  <div className="font-semibold">Reveal Word - 200 points</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Completely reveal a random word</div>
+                </div>
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
         </div>
     )
 }
