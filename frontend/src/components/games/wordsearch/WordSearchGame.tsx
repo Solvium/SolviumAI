@@ -810,6 +810,56 @@ export default function MobileWordSearchGame(): ReactElement {
         </Card>
       </div>
 
+       {/* Words to Find Button */}
+       <div className="px-4 mb-6">
+        <Sheet open={showWordsSheet} onOpenChange={setShowWordsSheet}>
+          <SheetTrigger asChild>
+            <Button
+              variant="outline"
+              className="w-full h-12 text-base bg-transparent dark:bg-gray-800 dark:text-white"
+              onClick={() => playSound("button")}
+            >
+              <Search className="w-4 h-4 mr-2" />
+              Words to Find ({currentPuzzle.words.filter((w) => !w.found).length} remaining)
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="h-[60vh] dark:bg-gray-900">
+            <SheetHeader>
+              <SheetTitle className="flex items-center justify-between dark:text-white">
+                <span>Find These Words</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowWordsSheet(false)
+                    playSound("button")
+                  }}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </SheetTitle>
+            </SheetHeader>
+            <div className="grid grid-cols-2 gap-3 mt-6 overflow-y-auto">
+              {currentPuzzle.words.map((word) => (
+                <div
+                  key={word.id}
+                  className={`p-3 rounded-lg transition-all duration-200 ${
+                    word.found
+                      ? "bg-green-100 dark:bg-green-900 border border-green-300 dark:border-green-700 text-green-800 dark:text-green-200"
+                      : "bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`font-medium ${word.found ? "line-through" : ""}`}>{word.word}</span>
+                    {word.found && <CheckCircle className="w-4 h-4 text-green-500" />}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
         </div>
     )
 }
