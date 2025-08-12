@@ -731,7 +731,41 @@ export default function MobileWordSearchGame(): ReactElement {
           className="h-2"
         />
       </div>
-
+ {/* Difficulty Selector with Swipe Indicators */}
+ <div className="px-4 mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <ChevronLeft className="w-4 h-4 text-gray-400" />
+          <span className="text-xs text-gray-500 dark:text-gray-400 flex-1 text-center">
+            Swipe left/right to change difficulty
+          </span>
+          <ChevronRight className="w-4 h-4 text-gray-400" />
+        </div>
+        <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1 transition-colors duration-300">
+          {["easy", "medium", "hard"].map((diff) => (
+            <button
+              key={diff}
+              onClick={() => {
+                setGameStats((prev) => ({ ...prev, difficulty: diff as "easy" | "medium" | "hard", puzzle: 0 }))
+                playSound("button")
+              }}
+              className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+                gameStats.difficulty === diff
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+              }`}
+            >
+              {diff.charAt(0).toUpperCase() + diff.slice(1)}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 mt-2">
+          <ArrowUp className="w-4 h-4 text-gray-400" />
+          <span className="text-xs text-gray-500 dark:text-gray-400 flex-1 text-center">
+            Swipe up/down to change level
+          </span>
+          <ArrowDown className="w-4 h-4 text-gray-400" />
+        </div>
+      </div>
 
         </div>
     )
