@@ -594,8 +594,19 @@ const generateWordSearch = (words: string[], gridSize: number, difficulty: strin
 
 export default function MobileWordSearchGame(): ReactElement {
     return (
-        <div>
-            <h1>MobileWordSearchGame</h1>
+        <div
+      ref={containerRef}
+      className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-900 dark:to-gray-800 pb-20 transition-colors duration-300"
+      onTouchStart={handleSwipeStart}
+      onTouchEnd={handleSwipeEnd}
+    >
+
+              {/* Swipe Hint */}
+      {showSwipeHint && (
+        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-black/80 text-white px-4 py-2 rounded-lg text-sm font-medium">
+          {showSwipeHint}
+        </div>
+      )}
         </div>
     )
 }
