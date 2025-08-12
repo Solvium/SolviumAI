@@ -36,6 +36,14 @@ import {
   VolumeX,
 } from "lucide-react"
 
+// Types
+interface GridCell {
+    letter: string
+    isPartOfWord: boolean
+    foundWordIds: number[]
+    isHighlighted: boolean
+    isSelected: boolean
+  }
 
 export default function MobileWordSearchGame(): ReactElement {
     return (
