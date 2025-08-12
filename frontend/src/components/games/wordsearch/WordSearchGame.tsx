@@ -607,6 +607,90 @@ export default function MobileWordSearchGame(): ReactElement {
           {showSwipeHint}
         </div>
       )}
+
+       {/* Mobile Header */}
+       <div className="sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 transition-colors duration-300">
+        <div className="flex items-center justify-between p-4">
+          <div className="flex items-center gap-3">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => playSound("button")}>
+                  <Menu className="w-5 h-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-80 dark:bg-gray-900">
+                <SheetHeader>
+                  <SheetTitle className="dark:text-white">Game Menu</SheetTitle>
+                </SheetHeader>
+                <div className="space-y-4 mt-6">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start dark:text-gray-300"
+                    onClick={() => playSound("button")}
+                  >
+                    <Home className="w-4 h-4 mr-2" />
+                    Home
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start dark:text-gray-300"
+                    onClick={() => playSound("button")}
+                  >
+                    <Trophy className="w-4 h-4 mr-2" />
+                    Achievements
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start dark:text-gray-300"
+                    onClick={() => {
+                      setShowTutorial(true)
+                      playSound("button")
+                    }}
+                  >
+                    <Target className="w-4 h-4 mr-2" />
+                    Tutorial
+                  </Button>
+                  <Button variant="ghost" className="w-full justify-start dark:text-gray-300" onClick={toggleDarkMode}>
+                    {isDarkMode ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
+                    {isDarkMode ? "Light Mode" : "Dark Mode"}
+                  </Button>
+                  <Button variant="ghost" className="w-full justify-start dark:text-gray-300" onClick={toggleSound}>
+                    {isSoundEnabled ? <Volume2 className="w-4 h-4 mr-2" /> : <VolumeX className="w-4 h-4 mr-2" />}
+                    {isSoundEnabled ? "Sound On" : "Sound Off"}
+                  </Button>
+                </div>
+              </SheetContent>
+            </Sheet>
+            <div>
+              <h1 className="text-lg font-bold text-gray-900 dark:text-white">Word Hunt</h1>
+              <p className="text-xs text-gray-600 dark:text-gray-400">{currentPuzzle.theme}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={toggleSound}>
+              {isSoundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={toggleDarkMode}>
+              {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setIsPaused(!isPaused)
+                playSound("button")
+              }}
+              disabled={!isGameActive}
+            >
+              {isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+
+
+      
         </div>
     )
 }
