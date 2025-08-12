@@ -348,6 +348,56 @@ class SoundManager {
     }
   }
 
+  const tutorialSteps: TutorialStep[] = [
+    {
+      id: 1,
+      title: "Welcome to Word Hunt!",
+      description: "Let's learn how to play this exciting word search game.",
+      icon: Trophy,
+    },
+    {
+      id: 2,
+      title: "Find Hidden Words",
+      description: "Words are hidden in the grid horizontally, vertically, and diagonally.",
+      target: "grid",
+      icon: Search,
+    },
+    {
+      id: 3,
+      title: "Drag to Select",
+      description: "Touch and drag across letters to select words. Try it now!",
+      target: "grid",
+      action: "drag",
+      icon: Hand,
+    },
+    {
+      id: 4,
+      title: "Check Your Progress",
+      description: "Found words turn green. Track your progress at the top.",
+      target: "progress",
+      icon: Target,
+    },
+    {
+      id: 5,
+      title: "Beat the Clock",
+      description: "Complete puzzles quickly for bonus points!",
+      target: "timer",
+      icon: Clock,
+    },
+    {
+      id: 6,
+      title: "Swipe to Navigate",
+      description: "Swipe left/right to change difficulty, up/down to change levels.",
+      icon: ArrowUp,
+    },
+    {
+      id: 7,
+      title: "Ready to Play!",
+      description: "You're all set! Have fun finding words!",
+      icon: Zap,
+    },
+  ]
+
 export default function MobileWordSearchGame(): ReactElement {
     return (
         <div>
