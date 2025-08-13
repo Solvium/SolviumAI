@@ -1257,6 +1257,7 @@ async def handle_play_quiz(update, context, quiz_id):
     try:
         from store.database import SessionLocal
         from models.quiz import Quiz, QuizStatus
+        from datetime import datetime
 
         session = SessionLocal()
         try:
@@ -1269,6 +1270,13 @@ async def handle_play_quiz(update, context, quiz_id):
             if not quiz:
                 await context.bot.send_message(
                     chat_id=chat_id, text="❌ Quiz not found or no longer active."
+                )
+                return
+
+            # Check if quiz has ended based on end_time
+            if quiz.end_time and quiz.end_time <= datetime.utcnow():
+                await context.bot.send_message(
+                    chat_id=chat_id, text="❌ This quiz has already ended. Check the final results!"
                 )
                 return
 
@@ -1319,14 +1327,17 @@ async def handle_show_leaderboard(update, context, quiz_id):
             # Convert to the format expected by create_leaderboard_card
             for participant in leaderboard_info.get("participants", [])[:10]:  # Top 10
                 score = participant.get("score", 0)
+                questions_answered = participant.get("questions_answered", 0)
                 username = participant.get("username", "UnknownUser")
-                logger.info(f"Leaderboard participant: {username}, score: {score}")
+                logger.info(
+                    f"Leaderboard participant: {username}, score: {score}, questions_answered: {questions_answered}"
+                )
                 leaderboard_data.append(
                     {
                         "username": username,
                         "score": score,
                         "correct_answers": score,
-                        "total_questions": len(quiz.questions) if quiz.questions else 0,
+                        "total_questions": questions_answered,
                     }
                 )
 
@@ -1338,7 +1349,7 @@ async def handle_show_leaderboard(update, context, quiz_id):
                 quiz_end_time = quiz.end_time
                 if quiz_end_time.tzinfo is None:
                     quiz_end_time = quiz_end_time.replace(tzinfo=timezone.utc)
-                
+
                 if quiz_end_time > now:
                     time_remaining = int((quiz_end_time - now).total_seconds())
 
@@ -1575,15 +1586,19 @@ async def start_quiz_for_user(update, context, quiz):
 Send /stop to stop it."""
 
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        keyboard = [[InlineKeyboardButton("🚀 Start Quiz", callback_data=f"enhanced_quiz_start:{quiz.id}")]]
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "🚀 Start Quiz", callback_data=f"enhanced_quiz_start:{quiz.id}"
+                )
+            ]
+        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         # Send DM to user
         await safe_send_message(
-            context.bot,
-            user_id,
-            intro_text,
-            reply_markup=reply_markup
+            context.bot, user_id, intro_text, reply_markup=reply_markup
         )
 
         # Acknowledge button click in group chat if it was from a group
@@ -1595,13 +1610,15 @@ Send /stop to stop it."""
             await safe_send_message(
                 context.bot,
                 chat_id,
-                f"🎮 **{quiz.topic}** Quiz Ready! �\n\n📱 @{update.effective_user.username or update.effective_user.first_name}, check your DMs to start the quiz!"
+                f"🎮 **{quiz.topic}** Quiz Ready! �\n\n📱 @{update.effective_user.username or update.effective_user.first_name}, check your DMs to start the quiz!",
             )
 
     except Exception as e:
         logger.error(f"Error starting quiz {quiz.id} for user {user_id}: {e}")
         if update.callback_query:
-            await update.callback_query.answer("❌ Error starting quiz. Please try again.", show_alert=True)
+            await update.callback_query.answer(
+                "❌ Error starting quiz. Please try again.", show_alert=True
+            )
         else:
             await context.bot.send_message(
                 chat_id=chat_id, text="❌ Error starting quiz. Please try again."
@@ -1903,25 +1920,33 @@ async def process_questions_with_payment(
             session.commit()
             quiz_id = quiz.id
             logger.info(f"Created active quiz with ID: {quiz_id} for user {user_id}")
-            
+
             # Set activation time and end time for all quizzes (free and paid)
             from datetime import datetime, timedelta, timezone
+
             quiz.activated_at = datetime.now(timezone.utc)
-            
+
             if duration_seconds and duration_seconds > 0:
                 quiz.end_time = quiz.activated_at + timedelta(seconds=duration_seconds)
-                logger.info(f"Quiz {quiz_id} end time set to: {quiz.end_time} (duration: {duration_seconds}s)")
-            
+                logger.info(
+                    f"Quiz {quiz_id} end time set to: {quiz.end_time} (duration: {duration_seconds}s)"
+                )
+
             session.commit()
-            
+
         finally:
             session.close()
 
         # Schedule quiz end announcement for all quizzes with duration
         if duration_seconds and duration_seconds > 0:
             from services.quiz_service import schedule_quiz_end_announcement
-            logger.info(f"Scheduling end announcement for quiz {quiz_id} in {duration_seconds} seconds")
-            await schedule_quiz_end_announcement(context.application, str(quiz_id), duration_seconds)
+
+            logger.info(
+                f"Scheduling end announcement for quiz {quiz_id} in {duration_seconds} seconds"
+            )
+            await schedule_quiz_end_announcement(
+                context.application, str(quiz_id), duration_seconds
+            )
 
         # Store payment information
         if reward_amount and float(reward_amount) > 0:
@@ -2981,6 +3006,15 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
         quiz = db_session.query(Quiz).filter(Quiz.id == quiz_id).first()
         if not quiz:
             await safe_send_message(context.bot, user_id, "❌ Quiz not found.")
+            return
+
+        # Check if quiz is still active and not ended
+        if quiz.status != QuizStatus.ACTIVE:
+            await safe_send_message(context.bot, user_id, "❌ This quiz is no longer active.")
+            return
+
+        if quiz.end_time and quiz.end_time <= datetime.utcnow():
+            await safe_send_message(context.bot, user_id, "❌ This quiz has already ended. Check the final results!")
             return
 
         # Create quiz session directly (don't call start_enhanced_quiz to avoid duplicate intro)

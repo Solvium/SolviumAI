@@ -2033,15 +2033,19 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         if not quiz.group_chat_id:
             logger.info(f"Quiz {quiz_id} has no group_chat_id, skipping announcement")
             return
-        
+
         # For DM quizzes, we need to send to the creator instead of group
-        is_dm_quiz = quiz.group_chat_id > 0  # DM chat IDs are positive, group IDs are negative
+        is_dm_quiz = (
+            quiz.group_chat_id > 0
+        )  # DM chat IDs are positive, group IDs are negative
         announcement_chat_id = quiz.group_chat_id
-        
+
         if is_dm_quiz:
             # For DM quizzes, send announcement to the quiz creator
             announcement_chat_id = quiz.creator_user_id
-            logger.info(f"Quiz {quiz_id} is a DM quiz, sending announcement to creator {quiz.creator_user_id}")
+            logger.info(
+                f"Quiz {quiz_id} is a DM quiz, sending announcement to creator {quiz.creator_user_id}"
+            )
 
         # Get all participants and their scores
         all_participants = QuizAnswer.get_quiz_participants_ranking(session, quiz_id)
@@ -2055,6 +2059,9 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
 👥 <b>Total Participants:</b> {len(all_participants)}"""
 
         if all_participants:
+            # Get the actual number of questions in the quiz
+            num_questions_in_quiz = len(quiz.questions) if quiz.questions else 0
+            
             # Add leaderboard
             announcement += "\n\n🏆 <b>FINAL LEADERBOARD:</b>\n"
             for i, participant in enumerate(all_participants[:10]):  # Show top 10
@@ -2063,22 +2070,22 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                     "username", f"User_{participant.get('user_id', 'Unknown')[:8]}"
                 )
                 correct_count = participant.get("correct_count", 0)
-                total_questions = participant.get("total_questions", 0)
+                # Use the total questions in quiz instead of questions_answered
                 accuracy = (
-                    (correct_count / total_questions * 100)
-                    if total_questions > 0
+                    (correct_count / num_questions_in_quiz * 100)
+                    if num_questions_in_quiz > 0
                     else 0
                 )
 
                 announcement += f"{medal} <b>{i+1}.</b> @{username}\n"
                 announcement += (
-                    f"   📊 {correct_count}/{total_questions} ({accuracy:.1f}%)\n"
+                    f"   📊 {correct_count}/{num_questions_in_quiz} ({accuracy:.1f}%)\n"
                 )
 
             # Add participation stats
             total_correct = sum(p.get("correct_count", 0) for p in all_participants)
             total_questions_answered = sum(
-                p.get("total_questions", 0) for p in all_participants
+                p.get("questions_answered", 0) for p in all_participants
             )
             avg_accuracy = (
                 (total_correct / total_questions_answered * 100)
@@ -2086,10 +2093,13 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                 else 0
             )
 
+            # Get the actual number of questions in the quiz
+            num_questions_in_quiz = len(quiz.questions) if quiz.questions else 0
+
             announcement += f"\n📈 <b>Quiz Statistics:</b>\n"
             announcement += f"• Total correct answers: {total_correct}\n"
             announcement += f"• Average accuracy: {avg_accuracy:.1f}%\n"
-            announcement += f"• Questions answered: {total_questions_answered}\n"
+            announcement += f"• Questions in quiz: {num_questions_in_quiz}\n"
         else:
             announcement += "\n\n📊 No participants found for this quiz."
 
@@ -2104,6 +2114,11 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                 announcement += "\n💰 <b>Reward Type:</b> Custom Rewards"
 
         announcement += "\n\n🎯 <b>Thanks to all participants!</b> 🎯"
+
+        # Update quiz status to CLOSED when it ends
+        quiz.status = QuizStatus.CLOSED
+        session.commit()
+        logger.info(f"Quiz {quiz_id} status updated to CLOSED after quiz ended")
 
         # Send announcement to appropriate chat (group or DM)
         await safe_send_message(
@@ -2431,10 +2446,11 @@ async def _generate_leaderboard_data_for_quiz(
     ranked_participants = []
     for idx, stats in enumerate(participant_stats, start=1):
         score = stats.get("correct_count", 0)
+        questions_answered = stats.get("questions_answered", 0)
         username = stats.get("username", "UnknownUser")
         user_id = stats["user_id"]
         logger.info(
-            f"Database participant: {username} (user_id: {user_id}), correct_count: {score}"
+            f"Database participant: {username} (user_id: {user_id}), correct_count: {score}, questions_answered: {questions_answered}"
         )
         ranked_participants.append(
             {
@@ -2442,6 +2458,7 @@ async def _generate_leaderboard_data_for_quiz(
                 "user_id": user_id,
                 "username": username,
                 "score": score,
+                "questions_answered": questions_answered,
                 "time_taken": None,
                 "is_winner": False,
             }
@@ -2882,56 +2899,218 @@ You answered {total_answered} questions:
                 f"Removed 'started' record for user {user_id} in quiz {quiz.id}"
             )
 
-        # Save individual answers in the correct format for reward distribution
-        for question_index, answer_data in results["answers"].items():
-            user_answer = answer_data.get("answer", "No answer")
-            is_correct = answer_data.get("correct", False)
-            answered_at = answer_data.get("answered_at", datetime.utcnow())
+        # Debug logging to understand the data
+        logger.info(
+            f"QuizSession results for user {user_id}: correct={results.get('correct')}, wrong={results.get('wrong')}, missed={results.get('missed')}"
+        )
+        logger.info(
+            f"Total questions in session: {results.get('total_questions', 'Unknown')}"
+        )
+        logger.info(f"Answer keys in session: {list(results['answers'].keys())}")
 
-            # Check if answer already exists for this user/quiz/question
-            existing_answer = (
-                session.query(QuizAnswer)
-                .filter(
-                    QuizAnswer.user_id == user_id,
-                    QuizAnswer.quiz_id == quiz.id,
-                    QuizAnswer.question_index == int(question_index),
-                )
-                .first()
+        # Log each answer from session for debugging
+        for idx, (q_idx, ans_data) in enumerate(results["answers"].items()):
+            is_correct = ans_data.get("correct", False)
+            answer = ans_data.get("answer", "No answer")
+            logger.info(
+                f"Session Answer Q{q_idx}: correct={is_correct}, answer='{answer[:50]}...'"
             )
 
-            if existing_answer:
-                # Update existing answer if it's different
-                if (
-                    existing_answer.answer != user_answer
-                    or existing_answer.is_correct != ("True" if is_correct else "False")
-                ):
-                    existing_answer.answer = user_answer
-                    existing_answer.is_correct = "True" if is_correct else "False"
-                    existing_answer.answered_at = answered_at
-                    existing_answer.username = username
-                    logger.info(
-                        f"Updated existing answer for user {user_id}, quiz {quiz.id}, question {question_index}"
-                    )
-            else:
-                # Create new quiz answer record
-                quiz_answer = QuizAnswer(
-                    user_id=user_id,
-                    quiz_id=quiz.id,
-                    username=username,
-                    answer=user_answer,
-                    is_correct="True" if is_correct else "False",
-                    answered_at=answered_at,
-                    question_index=int(question_index),
-                )
-                session.add(quiz_answer)
+        # Save individual answers in the correct format for reward distribution
+        saved_answers = 0
+        failed_saves = []
+
+        for question_index, answer_data in results["answers"].items():
+            try:
+                # Ensure question_index is consistently handled as integer
+                question_idx = int(question_index)
+                user_answer = answer_data.get("answer", "No answer")
+                is_correct = answer_data.get("correct", False)
+                answered_at = answer_data.get("answered_at", datetime.utcnow())
+
                 logger.info(
-                    f"Created new answer for user {user_id}, quiz {quiz.id}, question {question_index}"
+                    f"Processing answer for question {question_idx}: correct={is_correct}, answer='{user_answer[:50]}...'"
                 )
 
-        session.commit()
+                # Check if answer already exists for this user/quiz/question
+                existing_answer = (
+                    session.query(QuizAnswer)
+                    .filter(
+                        QuizAnswer.user_id == user_id,
+                        QuizAnswer.quiz_id == quiz.id,
+                        QuizAnswer.question_index == question_idx,
+                    )
+                    .first()
+                )
+
+                if existing_answer:
+                    # Update existing answer if it's different
+                    if (
+                        existing_answer.answer != user_answer
+                        or existing_answer.is_correct
+                        != ("True" if is_correct else "False")
+                    ):
+                        existing_answer.answer = user_answer
+                        existing_answer.is_correct = "True" if is_correct else "False"
+                        existing_answer.answered_at = answered_at
+                        existing_answer.username = username
+                        logger.info(
+                            f"Updated existing answer for user {user_id}, quiz {quiz.id}, question {question_idx}"
+                        )
+                    else:
+                        logger.info(
+                            f"Answer for question {question_idx} unchanged, skipping update"
+                        )
+                else:
+                    # Create new quiz answer record
+                    quiz_answer = QuizAnswer(
+                        user_id=user_id,
+                        quiz_id=quiz.id,
+                        username=username,
+                        answer=user_answer,
+                        is_correct="True" if is_correct else "False",
+                        answered_at=answered_at,
+                        question_index=question_idx,
+                    )
+                    session.add(quiz_answer)
+                    logger.info(
+                        f"Created new answer for user {user_id}, quiz {quiz.id}, question {question_idx}"
+                    )
+
+                # Commit each answer individually to prevent partial rollbacks
+                session.commit()
+                saved_answers += 1
+                logger.info(
+                    f"Successfully committed answer for question {question_idx}"
+                )
+
+            except Exception as answer_error:
+                logger.error(
+                    f"Failed to save answer for question {question_index}: {answer_error}"
+                )
+                failed_saves.append(question_index)
+                session.rollback()
+
+                # Try to re-establish session state for next iteration
+                try:
+                    # Refresh the quiz object to ensure session consistency
+                    session.refresh(quiz)
+                except Exception as refresh_error:
+                    logger.error(
+                        f"Failed to refresh session after rollback: {refresh_error}"
+                    )
+
         logger.info(
-            f"Saved {len(results['answers'])} answers for user {user_id} in quiz {quiz.id}"
+            f"Initial save completed: {saved_answers}/{len(results['answers'])} answers for user {user_id}"
         )
+
+        # Retry failed saves with a different approach
+        if failed_saves:
+            logger.warning(f"Retrying {len(failed_saves)} failed saves: {failed_saves}")
+            for question_index in failed_saves:
+                try:
+                    question_idx = int(question_index)
+                    answer_data = results["answers"][question_index]
+                    user_answer = answer_data.get("answer", "No answer")
+                    is_correct = answer_data.get("correct", False)
+                    answered_at = answer_data.get("answered_at", datetime.utcnow())
+
+                    # Simple insert without checking existing (since first attempt failed)
+                    quiz_answer = QuizAnswer(
+                        user_id=user_id,
+                        quiz_id=quiz.id,
+                        username=username,
+                        answer=user_answer,
+                        is_correct="True" if is_correct else "False",
+                        answered_at=answered_at,
+                        question_index=question_idx,
+                    )
+                    session.add(quiz_answer)
+                    session.commit()
+                    saved_answers += 1
+                    logger.info(f"Retry successful for question {question_idx}")
+
+                except Exception as retry_error:
+                    logger.error(
+                        f"Retry failed for question {question_index}: {retry_error}"
+                    )
+                    session.rollback()
+
+        logger.info(
+            f"Final save result: {saved_answers}/{len(results['answers'])} answers for user {user_id} in quiz {quiz.id}"
+        )
+
+        # Verify database consistency - count actual saved answers with detailed diagnostics
+        actual_saved_answers = (
+            session.query(QuizAnswer)
+            .filter(
+                QuizAnswer.user_id == user_id,
+                QuizAnswer.quiz_id == quiz.id,
+                QuizAnswer.answer != "",  # Exclude empty "started" records
+            )
+            .all()
+        )
+
+        actual_saved_count = len(actual_saved_answers)
+        expected_count = len(results["answers"])
+
+        logger.info(
+            f"Database verification: {actual_saved_count} answers saved vs {expected_count} from session"
+        )
+
+        # Log details of what was actually saved
+        for answer in actual_saved_answers:
+            logger.info(
+                f"DB Answer Q{answer.question_index}: correct={answer.is_correct}, answer='{answer.answer[:50]}...'"
+            )
+
+        if actual_saved_count != expected_count:
+            logger.error(
+                f"MISMATCH: Expected {expected_count} answers but database has {actual_saved_count}"
+            )
+
+            # Find which questions are missing
+            saved_question_indices = {
+                answer.question_index for answer in actual_saved_answers
+            }
+            expected_question_indices = {int(idx) for idx in results["answers"].keys()}
+            missing_indices = expected_question_indices - saved_question_indices
+
+            if missing_indices:
+                logger.error(
+                    f"Missing question indices in database: {sorted(missing_indices)}"
+                )
+
+            # Attempt one final save for missing questions
+            for missing_idx in missing_indices:
+                try:
+                    answer_data = results["answers"][str(missing_idx)]
+                    user_answer = answer_data.get("answer", "No answer")
+                    is_correct = answer_data.get("correct", False)
+                    answered_at = answer_data.get("answered_at", datetime.utcnow())
+
+                    final_answer = QuizAnswer(
+                        user_id=user_id,
+                        quiz_id=quiz.id,
+                        username=username,
+                        answer=user_answer,
+                        is_correct="True" if is_correct else "False",
+                        answered_at=answered_at,
+                        question_index=missing_idx,
+                    )
+                    session.add(final_answer)
+                    session.commit()
+                    logger.info(
+                        f"Final recovery save successful for question {missing_idx}"
+                    )
+
+                except Exception as final_error:
+                    logger.error(
+                        f"Final recovery save failed for question {missing_idx}: {final_error}"
+                    )
+                    session.rollback()
+        else:
+            logger.info("✅ Database verification passed - all answers saved correctly")
 
         # Add leaderboard info
         results_text += (
