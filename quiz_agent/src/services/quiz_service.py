@@ -2059,6 +2059,9 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
 👥 <b>Total Participants:</b> {len(all_participants)}"""
 
         if all_participants:
+            # Get the actual number of questions in the quiz
+            num_questions_in_quiz = len(quiz.questions) if quiz.questions else 0
+            
             # Add leaderboard
             announcement += "\n\n🏆 <b>FINAL LEADERBOARD:</b>\n"
             for i, participant in enumerate(all_participants[:10]):  # Show top 10
@@ -2067,16 +2070,16 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                     "username", f"User_{participant.get('user_id', 'Unknown')[:8]}"
                 )
                 correct_count = participant.get("correct_count", 0)
-                questions_answered = participant.get("questions_answered", 0)
+                # Use the total questions in quiz instead of questions_answered
                 accuracy = (
-                    (correct_count / questions_answered * 100)
-                    if questions_answered > 0
+                    (correct_count / num_questions_in_quiz * 100)
+                    if num_questions_in_quiz > 0
                     else 0
                 )
 
                 announcement += f"{medal} <b>{i+1}.</b> @{username}\n"
                 announcement += (
-                    f"   📊 {correct_count}/{questions_answered} ({accuracy:.1f}%)\n"
+                    f"   📊 {correct_count}/{num_questions_in_quiz} ({accuracy:.1f}%)\n"
                 )
 
             # Add participation stats
