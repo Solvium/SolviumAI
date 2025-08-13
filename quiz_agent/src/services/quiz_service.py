@@ -2090,10 +2090,13 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                 else 0
             )
 
+            # Get the actual number of questions in the quiz
+            num_questions_in_quiz = len(quiz.questions) if quiz.questions else 0
+
             announcement += f"\n📈 <b>Quiz Statistics:</b>\n"
             announcement += f"• Total correct answers: {total_correct}\n"
             announcement += f"• Average accuracy: {avg_accuracy:.1f}%\n"
-            announcement += f"• Questions answered: {total_questions_answered}\n"
+            announcement += f"• Questions in quiz: {num_questions_in_quiz}\n"
         else:
             announcement += "\n\n📊 No participants found for this quiz."
 
