@@ -2109,6 +2109,11 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
 
         announcement += "\n\n🎯 <b>Thanks to all participants!</b> 🎯"
 
+        # Update quiz status to CLOSED when it ends
+        quiz.status = QuizStatus.CLOSED
+        session.commit()
+        logger.info(f"Quiz {quiz_id} status updated to CLOSED after quiz ended")
+
         # Send announcement to appropriate chat (group or DM)
         await safe_send_message(
             application.bot, announcement_chat_id, announcement, parse_mode="HTML"
@@ -2889,20 +2894,26 @@ You answered {total_answered} questions:
             )
 
         # Debug logging to understand the data
-        logger.info(f"QuizSession results for user {user_id}: correct={results.get('correct')}, wrong={results.get('wrong')}, missed={results.get('missed')}")
-        logger.info(f"Total questions in session: {results.get('total_questions', 'Unknown')}")
+        logger.info(
+            f"QuizSession results for user {user_id}: correct={results.get('correct')}, wrong={results.get('wrong')}, missed={results.get('missed')}"
+        )
+        logger.info(
+            f"Total questions in session: {results.get('total_questions', 'Unknown')}"
+        )
         logger.info(f"Answer keys in session: {list(results['answers'].keys())}")
-        
+
         # Log each answer from session for debugging
         for idx, (q_idx, ans_data) in enumerate(results["answers"].items()):
             is_correct = ans_data.get("correct", False)
             answer = ans_data.get("answer", "No answer")
-            logger.info(f"Session Answer Q{q_idx}: correct={is_correct}, answer='{answer[:50]}...'")
-        
+            logger.info(
+                f"Session Answer Q{q_idx}: correct={is_correct}, answer='{answer[:50]}...'"
+            )
+
         # Save individual answers in the correct format for reward distribution
         saved_answers = 0
         failed_saves = []
-        
+
         for question_index, answer_data in results["answers"].items():
             try:
                 # Ensure question_index is consistently handled as integer
@@ -2910,8 +2921,10 @@ You answered {total_answered} questions:
                 user_answer = answer_data.get("answer", "No answer")
                 is_correct = answer_data.get("correct", False)
                 answered_at = answer_data.get("answered_at", datetime.utcnow())
-                
-                logger.info(f"Processing answer for question {question_idx}: correct={is_correct}, answer='{user_answer[:50]}...'")
+
+                logger.info(
+                    f"Processing answer for question {question_idx}: correct={is_correct}, answer='{user_answer[:50]}...'"
+                )
 
                 # Check if answer already exists for this user/quiz/question
                 existing_answer = (
@@ -2928,7 +2941,8 @@ You answered {total_answered} questions:
                     # Update existing answer if it's different
                     if (
                         existing_answer.answer != user_answer
-                        or existing_answer.is_correct != ("True" if is_correct else "False")
+                        or existing_answer.is_correct
+                        != ("True" if is_correct else "False")
                     ):
                         existing_answer.answer = user_answer
                         existing_answer.is_correct = "True" if is_correct else "False"
@@ -2938,7 +2952,9 @@ You answered {total_answered} questions:
                             f"Updated existing answer for user {user_id}, quiz {quiz.id}, question {question_idx}"
                         )
                     else:
-                        logger.info(f"Answer for question {question_idx} unchanged, skipping update")
+                        logger.info(
+                            f"Answer for question {question_idx} unchanged, skipping update"
+                        )
                 else:
                     # Create new quiz answer record
                     quiz_answer = QuizAnswer(
@@ -2954,26 +2970,34 @@ You answered {total_answered} questions:
                     logger.info(
                         f"Created new answer for user {user_id}, quiz {quiz.id}, question {question_idx}"
                     )
-                
+
                 # Commit each answer individually to prevent partial rollbacks
                 session.commit()
                 saved_answers += 1
-                logger.info(f"Successfully committed answer for question {question_idx}")
-                    
+                logger.info(
+                    f"Successfully committed answer for question {question_idx}"
+                )
+
             except Exception as answer_error:
-                logger.error(f"Failed to save answer for question {question_index}: {answer_error}")
+                logger.error(
+                    f"Failed to save answer for question {question_index}: {answer_error}"
+                )
                 failed_saves.append(question_index)
                 session.rollback()
-                
+
                 # Try to re-establish session state for next iteration
                 try:
                     # Refresh the quiz object to ensure session consistency
                     session.refresh(quiz)
                 except Exception as refresh_error:
-                    logger.error(f"Failed to refresh session after rollback: {refresh_error}")
+                    logger.error(
+                        f"Failed to refresh session after rollback: {refresh_error}"
+                    )
 
-        logger.info(f"Initial save completed: {saved_answers}/{len(results['answers'])} answers for user {user_id}")
-        
+        logger.info(
+            f"Initial save completed: {saved_answers}/{len(results['answers'])} answers for user {user_id}"
+        )
+
         # Retry failed saves with a different approach
         if failed_saves:
             logger.warning(f"Retrying {len(failed_saves)} failed saves: {failed_saves}")
@@ -2984,7 +3008,7 @@ You answered {total_answered} questions:
                     user_answer = answer_data.get("answer", "No answer")
                     is_correct = answer_data.get("correct", False)
                     answered_at = answer_data.get("answered_at", datetime.utcnow())
-                    
+
                     # Simple insert without checking existing (since first attempt failed)
                     quiz_answer = QuizAnswer(
                         user_id=user_id,
@@ -2999,42 +3023,58 @@ You answered {total_answered} questions:
                     session.commit()
                     saved_answers += 1
                     logger.info(f"Retry successful for question {question_idx}")
-                    
+
                 except Exception as retry_error:
-                    logger.error(f"Retry failed for question {question_index}: {retry_error}")
+                    logger.error(
+                        f"Retry failed for question {question_index}: {retry_error}"
+                    )
                     session.rollback()
 
         logger.info(
             f"Final save result: {saved_answers}/{len(results['answers'])} answers for user {user_id} in quiz {quiz.id}"
         )
-        
+
         # Verify database consistency - count actual saved answers with detailed diagnostics
-        actual_saved_answers = session.query(QuizAnswer).filter(
-            QuizAnswer.user_id == user_id,
-            QuizAnswer.quiz_id == quiz.id,
-            QuizAnswer.answer != ""  # Exclude empty "started" records
-        ).all()
-        
+        actual_saved_answers = (
+            session.query(QuizAnswer)
+            .filter(
+                QuizAnswer.user_id == user_id,
+                QuizAnswer.quiz_id == quiz.id,
+                QuizAnswer.answer != "",  # Exclude empty "started" records
+            )
+            .all()
+        )
+
         actual_saved_count = len(actual_saved_answers)
-        expected_count = len(results['answers'])
-        
-        logger.info(f"Database verification: {actual_saved_count} answers saved vs {expected_count} from session")
-        
+        expected_count = len(results["answers"])
+
+        logger.info(
+            f"Database verification: {actual_saved_count} answers saved vs {expected_count} from session"
+        )
+
         # Log details of what was actually saved
         for answer in actual_saved_answers:
-            logger.info(f"DB Answer Q{answer.question_index}: correct={answer.is_correct}, answer='{answer.answer[:50]}...'")
-        
+            logger.info(
+                f"DB Answer Q{answer.question_index}: correct={answer.is_correct}, answer='{answer.answer[:50]}...'"
+            )
+
         if actual_saved_count != expected_count:
-            logger.error(f"MISMATCH: Expected {expected_count} answers but database has {actual_saved_count}")
-            
+            logger.error(
+                f"MISMATCH: Expected {expected_count} answers but database has {actual_saved_count}"
+            )
+
             # Find which questions are missing
-            saved_question_indices = {answer.question_index for answer in actual_saved_answers}
-            expected_question_indices = {int(idx) for idx in results['answers'].keys()}
+            saved_question_indices = {
+                answer.question_index for answer in actual_saved_answers
+            }
+            expected_question_indices = {int(idx) for idx in results["answers"].keys()}
             missing_indices = expected_question_indices - saved_question_indices
-            
+
             if missing_indices:
-                logger.error(f"Missing question indices in database: {sorted(missing_indices)}")
-            
+                logger.error(
+                    f"Missing question indices in database: {sorted(missing_indices)}"
+                )
+
             # Attempt one final save for missing questions
             for missing_idx in missing_indices:
                 try:
@@ -3042,7 +3082,7 @@ You answered {total_answered} questions:
                     user_answer = answer_data.get("answer", "No answer")
                     is_correct = answer_data.get("correct", False)
                     answered_at = answer_data.get("answered_at", datetime.utcnow())
-                    
+
                     final_answer = QuizAnswer(
                         user_id=user_id,
                         quiz_id=quiz.id,
@@ -3054,10 +3094,14 @@ You answered {total_answered} questions:
                     )
                     session.add(final_answer)
                     session.commit()
-                    logger.info(f"Final recovery save successful for question {missing_idx}")
-                    
+                    logger.info(
+                        f"Final recovery save successful for question {missing_idx}"
+                    )
+
                 except Exception as final_error:
-                    logger.error(f"Final recovery save failed for question {missing_idx}: {final_error}")
+                    logger.error(
+                        f"Final recovery save failed for question {missing_idx}: {final_error}"
+                    )
                     session.rollback()
         else:
             logger.info("✅ Database verification passed - all answers saved correctly")

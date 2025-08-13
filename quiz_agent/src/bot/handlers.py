@@ -1257,6 +1257,7 @@ async def handle_play_quiz(update, context, quiz_id):
     try:
         from store.database import SessionLocal
         from models.quiz import Quiz, QuizStatus
+        from datetime import datetime
 
         session = SessionLocal()
         try:
@@ -1269,6 +1270,13 @@ async def handle_play_quiz(update, context, quiz_id):
             if not quiz:
                 await context.bot.send_message(
                     chat_id=chat_id, text="❌ Quiz not found or no longer active."
+                )
+                return
+
+            # Check if quiz has ended based on end_time
+            if quiz.end_time and quiz.end_time <= datetime.utcnow():
+                await context.bot.send_message(
+                    chat_id=chat_id, text="❌ This quiz has already ended. Check the final results!"
                 )
                 return
 
@@ -2998,6 +3006,15 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
         quiz = db_session.query(Quiz).filter(Quiz.id == quiz_id).first()
         if not quiz:
             await safe_send_message(context.bot, user_id, "❌ Quiz not found.")
+            return
+
+        # Check if quiz is still active and not ended
+        if quiz.status != QuizStatus.ACTIVE:
+            await safe_send_message(context.bot, user_id, "❌ This quiz is no longer active.")
+            return
+
+        if quiz.end_time and quiz.end_time <= datetime.utcnow():
+            await safe_send_message(context.bot, user_id, "❌ This quiz has already ended. Check the final results!")
             return
 
         # Create quiz session directly (don't call start_enhanced_quiz to avoid duplicate intro)
