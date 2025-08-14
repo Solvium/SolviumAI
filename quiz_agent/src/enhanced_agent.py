@@ -221,12 +221,11 @@ class QuestionDiversityEngine:
 
 
 class AdvancedQuizGenerator:
-    """Enhanced quiz generator with real-time search, caching, and diversity"""
+    """Enhanced quiz generator with real-time search and diversity"""
 
     def __init__(self):
         self.search_tool = SerperSearchTool()
         self.diversity_engine = QuestionDiversityEngine()
-        self.redis_client = None  # Will be initialized when needed
 
         # LLM configuration optimized for speed and quality
         self.llm = ChatGoogleGenerativeAI(
@@ -237,18 +236,6 @@ class AdvancedQuizGenerator:
             max_tokens=800,  # Reduced tokens for faster generation
             top_p=0.8,  # Focus on most likely tokens
         )
-
-        # Cache settings
-        self.cache_ttl = 3600  # 1 hour cache
-
-    async def _get_redis_client(self):
-        """Get Redis client instance with lazy initialization"""
-        if self.redis_client is None:
-            try:
-                self.redis_client = await RedisClient.get_instance()
-            except:
-                self.redis_client = None
-        return self.redis_client
 
     async def generate_quiz(
         self,
@@ -276,24 +263,7 @@ class AdvancedQuizGenerator:
             if context_text:
                 print(f"📄 Using additional context ({len(context_text)} chars)")
 
-            # 🚀 SPEED OPTIMIZATION 1: Check cache first for instant results
-            # Include context hash in cache key for context-specific caching
-            cache_suffix = ""
-            if context_text:
-                context_hash = hashlib.md5(context_text.encode()).hexdigest()[:8]
-                cache_suffix = f":{context_hash}"
-
-            if not force_refresh:
-                cached_questions = await self._get_cached_questions(
-                    topic, num_questions, difficulty, cache_suffix
-                )
-                if cached_questions and len(cached_questions) >= num_questions:
-                    print(
-                        f"⚡ Retrieved {len(cached_questions)} questions from cache (instant!)"
-                    )
-                    return cached_questions[:num_questions]
-
-            # 🚀 SPEED OPTIMIZATION 2: Parallel search + generation pipeline
+            # 🚀 SPEED OPTIMIZATION: Parallel search + generation pipeline
             start_time = asyncio.get_event_loop().time()
 
             # Start search immediately (always get fresh search results)
@@ -311,36 +281,77 @@ class AdvancedQuizGenerator:
             print(f"🏁 Generated {len(questions)} questions in {total_time:.2f}s")
             print(f"⚡ Speed: {len(questions)/total_time:.1f} questions/second")
 
-            # 🚀 SPEED OPTIMIZATION 3: Background caching (don't wait)
-            if questions:
-                asyncio.create_task(
-                    self._cache_questions(
-                        topic, num_questions, difficulty, questions, cache_suffix
-                    )
-                )
-
             return questions
 
-    def _preprocess_context_text(self, context_text: str) -> str:
-        """Preprocess additional context text for optimal use"""
-        if not context_text:
-            return ""
+    def _validate_and_trim_options(self, options: dict) -> dict:
+        """Ensure all options are within 90 characters"""
+        return {
+            key: value[:87] + "..." if len(value) > 90 else value
+            for key, value in options.items()
+        }
 
-        # Remove extra whitespace and normalize
-        context_text = " ".join(context_text.split())
+    async def _rephrase_options(
+        self, question: str, options: Dict[str, str]
+    ) -> Dict[str, str]:
+        """Rephrase options to be under 90 characters using an LLM call."""
+        options_list = list(options.values())
+        options_text = "\n".join([f"- {v}" for v in options_list])
 
-        # Limit size for speed (keep most relevant parts)
-        if len(context_text) > 2000:
-            # Try to find sentence boundaries for clean cuts
-            sentences = context_text.split(". ")
-            truncated = ""
-            for sentence in sentences:
-                if len(truncated + sentence) > 1800:
-                    break
-                truncated += sentence + ". "
-            context_text = truncated + "..."
+        rephrase_prompt = f"""The following quiz options are too long. Rephrase them to be a maximum of 90 characters each, while keeping the original meaning and the order of the options.
 
-        return context_text
+Original Question: {question}
+
+Original Options to Rephrase:
+{options_text}
+
+Return ONLY a JSON object with a single key "rephrased_options" which is an array of 4 strings, each under 90 characters. The order must be preserved.
+
+Example format:
+{{
+    "rephrased_options": [
+        "Rephrased option 1 (max 90 chars)",
+        "Rephrased option 2 (max 90 chars)",
+        "Rephrased option 3 (max 90 chars)",
+        "Rephrased option 4 (max 90 chars)"
+    ]
+}}
+"""
+        response = await self.llm.ainvoke([HumanMessage(content=rephrase_prompt)])
+        content = response.content.strip()
+
+        if "```json" in content:
+            start = content.find("```json") + 7
+            end = content.find("```", start)
+            content = content[start:end] if end > start else content[start:]
+        content = content.strip()
+
+        rephrased_data = json.loads(content)
+        rephrased_list = rephrased_data.get("rephrased_options", [])
+
+        if len(rephrased_list) == 4:
+            # Final check, if still too long, trim as a last resort.
+            if any(len(opt) > 90 for opt in rephrased_list):
+                print(
+                    "⚠️ Rephrasing failed to meet length constraint, trimming as fallback."
+                )
+                return self._validate_and_trim_options(
+                    {
+                        "A": rephrased_list[0],
+                        "B": rephrased_list[1],
+                        "C": rephrased_list[2],
+                        "D": rephrased_list[3],
+                    }
+                )
+
+            return {
+                "A": rephrased_list[0],
+                "B": rephrased_list[1],
+                "C": rephrased_list[2],
+                "D": rephrased_list[3],
+            }
+        else:
+            print("Rephrasing returned incorrect number of options. Trimming.")
+            return self._validate_and_trim_options(options)
 
     async def _get_enhanced_search_results(self, topic: str) -> List[SearchResult]:
         """Get comprehensive search results with parallel processing for speed"""
@@ -563,14 +574,25 @@ class AdvancedQuizGenerator:
                 return None
 
             # 🚀 SPEED: Direct construction with Telegram option length validation
-            options = self._validate_and_trim_options(
-                {
-                    "A": question_data["options"][0],
-                    "B": question_data["options"][1],
-                    "C": question_data["options"][2],
-                    "D": question_data["options"][3],
-                }
-            )
+            options = {
+                "A": question_data["options"][0],
+                "B": question_data["options"][1],
+                "C": question_data["options"][2],
+                "D": question_data["options"][3],
+            }
+
+            # Check if any option exceeds the character limit
+            if any(len(opt) > 90 for opt in options.values()):
+                print(
+                    f"⚠️ Question {question_number}: Options exceed 90 chars, rephrasing..."
+                )
+                try:
+                    options = await self._rephrase_options(
+                        question_data["question"], options
+                    )
+                except Exception as e:
+                    print(f"Rephrasing failed: {e}. Trimming as fallback.")
+                    options = self._validate_and_trim_options(options)
 
             return QuizQuestion(
                 question=question_data["question"],
@@ -654,13 +676,6 @@ class AdvancedQuizGenerator:
             question_type=question_type,
             sources=[],
         )
-
-    def _validate_and_trim_options(self, options: dict) -> dict:
-        """Ensure all options are within Telegram's 100 character limit"""
-        return {
-            key: value[:95] + "..." if len(value) > 95 else value
-            for key, value in options.items()
-        }
 
     def _build_search_context(self, search_results: List[SearchResult]) -> str:
         """Build comprehensive context from at least 3 search results"""
@@ -821,7 +836,9 @@ INSTRUCTIONS:
 - Create a comprehensive question that tests understanding
 - Ensure the question is accurate and well-informed
 - Make distractors plausible but clearly wrong
-- CRITICAL: Each option must be 90 characters or less (Telegram limit)
+- Each option must be phrased in such a way that it is succinct and has a character limit of 90
+- IMPORTANT: Each option has a limit of 90 characters. Create options that fit into that.
+- CRITICAL: Each option must be exactly 90 characters or less (no trimming or ellipses)
 
 IMPORTANT: Return ONLY valid JSON:
 {{
@@ -833,70 +850,12 @@ IMPORTANT: Return ONLY valid JSON:
 
         return [HumanMessage(content=system_prompt)]
 
-    async def _get_cached_questions(
-        self, topic: str, num_questions: int, difficulty: str, cache_suffix: str = ""
-    ) -> Optional[List[QuizQuestion]]:
-        """Retrieve cached questions if available"""
-        redis_client = await self._get_redis_client()
-        if not redis_client:
-            return None
-
-        cache_key = f"quiz:{hashlib.md5(f'{topic}:{num_questions}:{difficulty}{cache_suffix}'.encode()).hexdigest()}"
-
-        try:
-            cached_data = await redis_client.get(cache_key)
-            if cached_data:
-                questions_data = json.loads(cached_data)
-                # Validate and trim options for cached questions too
-                validated_questions = []
-                for q_data in questions_data:
-                    if "options" in q_data:
-                        q_data["options"] = self._validate_and_trim_options(
-                            q_data["options"]
-                        )
-                    validated_questions.append(QuizQuestion(**q_data))
-                return validated_questions
-        except Exception as e:
-            print(f"Cache retrieval failed: {e}")
-
-        return None
-
-    async def _cache_questions(
-        self,
-        topic: str,
-        num_questions: int,
-        difficulty: str,
-        questions: List[QuizQuestion],
-        cache_suffix: str = "",
-    ):
-        """Cache generated questions"""
-        redis_client = await self._get_redis_client()
-        if not redis_client:
-            return
-
-        cache_key = f"quiz:{hashlib.md5(f'{topic}:{num_questions}:{difficulty}{cache_suffix}'.encode()).hexdigest()}"
-
-        try:
-            # Convert to serializable format
-            questions_data = []
-            for q in questions:
-                questions_data.append(
-                    {
-                        "question": q.question,
-                        "options": q.options,
-                        "correct_answer": q.correct_answer,
-                        "explanation": q.explanation,
-                        "difficulty": q.difficulty,
-                        "question_type": q.question_type.value,
-                        "sources": q.sources,
-                    }
-                )
-
-            await redis_client.setex(
-                cache_key, self.cache_ttl, json.dumps(questions_data)
-            )
-        except Exception as e:
-            print(f"Cache storage failed: {e}")
+    def _validate_and_trim_options(self, options: dict) -> dict:
+        """Ensure all options are within 90 characters"""
+        return {
+            key: value[:87] + "..." if len(value) > 90 else value
+            for key, value in options.items()
+        }
 
 
 # Convenience function for backward compatibility

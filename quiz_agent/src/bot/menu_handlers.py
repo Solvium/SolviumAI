@@ -122,39 +122,40 @@ async def handle_silent_wallet_creation(
         return False
 
 
-async def show_main_menu(update: Update, context: CallbackContext) -> None:
-    """
-    Shows the main menu with the 2x2 grid of buttons directly below the keyboard input.
-    This is the primary interface users will see using ReplyKeyboardMarkup.
-    """
-    user_id = update.effective_user.id
-    user_name = update.effective_user.first_name
+# Main Button - Show main menu - Work on it
+# async def show_main_menu(update: Update, context: CallbackContext) -> None:
+#     """
+#     Shows the main menu with the 2x2 grid of buttons directly below the keyboard input.
+#     This is the primary interface users will see using ReplyKeyboardMarkup.
+#     """
+#     user_id = update.effective_user.id
+#     user_name = update.effective_user.first_name
 
-    welcome_text = (
-        f"🎉 Welcome to SolviumAI, {user_name}!\n\nWhat would you like to do today?"
-    )
+#     welcome_text = (
+#         f"🎉 Welcome to SolviumAI, {user_name}!\n\nWhat would you like to do today?"
+#     )
 
-    # Store user state in Redis
-    redis_client = RedisClient()
-    await redis_client.set_user_data_key(user_id, "current_menu", "main")
+#     # Store user state in Redis
+#     redis_client = RedisClient()
+#     await redis_client.set_user_data_key(user_id, "current_menu", "main")
 
-    # Send message with reply keyboard that appears directly below the input field
-    # Handle both message updates and callback queries
-    if update.callback_query:
-        # From inline keyboard - delete the old message and send new one with reply keyboard
-        await update.callback_query.answer()
-        await update.callback_query.delete_message()
+#     # Send message with reply keyboard that appears directly below the input field
+#     # Handle both message updates and callback queries
+#     if update.callback_query:
+#         # From inline keyboard - delete the old message and send new one with reply keyboard
+#         await update.callback_query.answer()
+#         await update.callback_query.delete_message()
 
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=welcome_text,
-            reply_markup=create_main_menu_keyboard(),
-        )
-    else:
-        # From regular message or command
-        await update.message.reply_text(
-            welcome_text, reply_markup=create_main_menu_keyboard()
-        )
+#         await context.bot.send_message(
+#             chat_id=update.effective_chat.id,
+#             text=welcome_text,
+#             reply_markup=create_main_menu_keyboard(),
+#         )
+#     else:
+#         # From regular message or command
+#         await update.message.reply_text(
+#             welcome_text, reply_markup=create_main_menu_keyboard()
+#         )
 
 
 async def handle_text_message(update: Update, context: CallbackContext) -> None:
