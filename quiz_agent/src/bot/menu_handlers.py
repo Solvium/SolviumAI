@@ -966,10 +966,43 @@ async def handle_quiz_deep_link(
 
     # Start the specific quiz immediately without additional messages
     try:
-        from services.quiz_service import quiz
+        from services.quiz_service import start_enhanced_quiz, get_quiz_details
+        from store.database import SessionLocal
+        from models.quiz import Quiz
 
-        await start_specific_quiz(update, context, quiz_id)
-    except ImportError:
+        # Get the quiz object from database
+        session = SessionLocal()
+        try:
+            quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
+            if not quiz:
+                await update.message.reply_text(
+                    "❌ **Quiz not found**\n\nThis quiz may have been removed or expired.",
+                    parse_mode="Markdown",
+                    reply_markup=create_main_menu_keyboard(),
+                )
+                return
+
+            # Start the enhanced quiz directly
+            application = context.application
+            await start_enhanced_quiz(
+                application=application,
+                user_id=str(user_id),
+                quiz=quiz,
+                shuffle_questions=True,
+                shuffle_answers=True,
+            )
+        except Exception as e:
+            logger.error(f"Error starting quiz {quiz_id}: {e}")
+            await update.message.reply_text(
+                "❌ **Error starting quiz**\n\nPlease try again later.",
+                parse_mode="Markdown",
+                reply_markup=create_main_menu_keyboard(),
+            )
+        finally:
+            session.close()
+
+    except ImportError as e:
+        logger.error(f"Import error in deep link handler: {e}")
         # Fallback to existing play quiz functionality
         from services.quiz_service import play_quiz
 

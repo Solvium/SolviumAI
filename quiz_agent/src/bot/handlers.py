@@ -51,9 +51,20 @@ logger = logging.getLogger(__name__)
 
 
 async def start_handler(update, context):
-    """Handle /start command - shows the main menu interface"""
+    """Handle /start command - shows the main menu interface or handles deep links"""
     user = update.effective_user
     chat_type = update.effective_chat.type
+
+    # Handle deep linking for quiz redirects (only in private chats)
+    if chat_type == "private" and context.args:
+        start_param = context.args[0]
+        
+        # Handle quiz deep linking
+        if start_param.startswith("quiz_"):
+            quiz_id = start_param[5:]  # Remove "quiz_" prefix
+            from .menu_handlers import handle_quiz_deep_link
+            await handle_quiz_deep_link(update, context, quiz_id)
+            return
 
     if chat_type == "private":
         # In private chat, show the main menu
@@ -1976,7 +1987,7 @@ async def process_questions_with_payment(
 
         # Get bot username from config
         from utils.config import Config
-        
+
         # Create rich announcement card
         announcement_msg, announcement_keyboard = create_quiz_announcement_card(
             topic=topic,
