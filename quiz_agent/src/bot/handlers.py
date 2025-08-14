@@ -52,10 +52,26 @@ logger = logging.getLogger(__name__)
 # Initialize the quiz generator
 quiz_generator = AdvancedQuizGenerator()
 
-async def generate_quiz_questions(topic: str, num_questions: int, context_text: str = "") -> str:
+
+async def generate_quiz_questions(
+    topic: str, num_questions: int, context_text: str = ""
+) -> str:
     """Wrapper function for backward compatibility with the quiz service"""
-    result = await quiz_generator.generate_quiz(topic, num_questions, context_text)
-    return result['quiz_text']
+    questions = await quiz_generator.generate_quiz(
+        topic, num_questions, context_text=context_text
+    )
+
+    # Format as string for backward compatibility
+    formatted_questions = []
+    for i, q in enumerate(questions, 1):
+        options_text = "\n".join(
+            [f"{key}) {value}" for key, value in q.options.items()]
+        )
+        formatted_questions.append(
+            f"Question {i}: {q.question}\n{options_text}\nCorrect Answer: {q.correct_answer}"
+        )
+
+    return "\n\n".join(formatted_questions)
 
 
 async def start_handler(update, context):

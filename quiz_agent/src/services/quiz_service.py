@@ -52,16 +52,16 @@ async def generate_quiz_questions(
     try:
         # Initialize the enhanced quiz generator
         generator = AdvancedQuizGenerator()
-        
+
         # Generate questions using the enhanced agent
         quiz_questions = await generator.generate_quiz(
             topic=topic,
             num_questions=num_questions,
             difficulty="medium",
             force_refresh=False,
-            context_text=context_text
+            context_text=context_text,
         )
-        
+
         # Convert QuizQuestion objects to the format expected by quiz service
         formatted_questions = []
         for i, question in enumerate(quiz_questions, 1):
@@ -73,17 +73,17 @@ C) {question.options['C']}
 D) {question.options['D']}
 Correct Answer: {question.correct_answer}"""
             formatted_questions.append(formatted_question)
-        
+
         # Join all questions with double newlines
         return "\n\n".join(formatted_questions)
-        
+
     except Exception as e:
         logger.error(f"Error generating quiz with enhanced agent: {e}", exc_info=True)
         # Fallback to simple format in case of error
         return f"""Question 1: What is the main topic of {topic}?
 A) {topic} related concept
 B) Unrelated concept
-C) Another unrelated concept  
+C) Another unrelated concept
 D) Yet another unrelated concept
 Correct Answer: A"""
 
@@ -395,7 +395,9 @@ async def create_quiz(update: Update, context: CallbackContext):
                 f"Generating {num_questions} quiz question(s) about '{topic}' based on the provided text. This may take a moment...",
             )
             try:
-                questions_raw = await generate_quiz_questions(topic, num_questions, large_text)
+                questions_raw = await generate_quiz_questions(
+                    topic, num_questions, large_text
+                )
                 await process_questions(
                     update,
                     context,
@@ -422,7 +424,9 @@ async def create_quiz(update: Update, context: CallbackContext):
             f"Generating {num_questions} quiz question(s) on '{topic}' based on the provided text. This may take a moment...",
         )
         try:
-            questions_raw = await generate_quiz_questions(topic, num_questions, context_text)
+            questions_raw = await generate_quiz_questions(
+                topic, num_questions, context_text
+            )
             await process_questions(
                 update,
                 context,
