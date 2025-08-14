@@ -97,6 +97,31 @@ async def handle_first_time_wallet_creation(
         )
 
 
+async def handle_silent_wallet_creation(
+    update: Update, context: CallbackContext
+) -> bool:
+    """
+    Handles wallet creation for first-time users silently (for quiz deep links)
+    Returns True if successful, False otherwise
+    """
+    user_id = update.effective_user.id
+    user_name = update.effective_user.first_name
+
+    try:
+        # Create wallet service and generate demo wallet silently
+        wallet_service = WalletService()
+        wallet_info = await wallet_service.create_demo_wallet(user_id, user_name)
+
+        # Store user state in Redis
+        redis_client = RedisClient()
+        await redis_client.set_user_data_key(user_id, "current_menu", "main")
+
+        return True
+    except Exception as e:
+        logger.error(f"Error creating wallet for user {user_id}: {e}")
+        return False
+
+
 async def show_main_menu(update: Update, context: CallbackContext) -> None:
     """
     Shows the main menu with the 2x2 grid of buttons directly below the keyboard input.
@@ -882,3 +907,71 @@ async def show_menu_in_group(update: Update, context: CallbackContext) -> None:
         "For the best experience, please DM me to access all features!",
         reply_markup=create_main_menu_keyboard(),
     )
+
+
+async def handle_start_command(update: Update, context: CallbackContext) -> None:
+    """
+    Handle /start command with optional deep link parameters
+    """
+    user_id = update.effective_user.id
+    user_name = update.effective_user.first_name
+
+    # Check if there are start parameters for deep linking
+    if context.args:
+        start_param = context.args[0]
+
+        # Handle quiz deep linking
+        if start_param.startswith("quiz_"):
+            quiz_id = start_param[5:]  # Remove "quiz_" prefix
+            await handle_quiz_deep_link(update, context, quiz_id)
+            return
+
+    # Check if user has a wallet - if not, create one first
+    wallet_service = WalletService()
+    has_wallet = await wallet_service.has_wallet_robust(user_id)
+
+    if not has_wallet:
+        # Create wallet for first-time user
+        await handle_first_time_wallet_creation(update, context)
+        return
+
+    # Show normal main menu
+    await show_main_menu(update, context)
+
+
+async def handle_quiz_deep_link(
+    update: Update, context: CallbackContext, quiz_id: str
+) -> None:
+    """
+    Handle quiz deep link from group announcement
+    Seamlessly starts the quiz without intermediate messages
+    """
+    user_id = update.effective_user.id
+    user_name = update.effective_user.first_name
+
+    # Check if user has a wallet - if not, create one first
+    wallet_service = WalletService()
+    has_wallet = await wallet_service.has_wallet_robust(user_id)
+
+    if not has_wallet:
+        # Create wallet silently in background
+        wallet_created = await handle_silent_wallet_creation(update, context)
+        if not wallet_created:
+            await update.message.reply_text(
+                "❌ **Error setting up your account**\n\nPlease try again later or use the main menu.",
+                parse_mode="Markdown",
+                reply_markup=create_main_menu_keyboard(),
+            )
+            return
+
+    # Start the specific quiz immediately without additional messages
+    try:
+        from services.quiz_service import quiz
+
+        await start_specific_quiz(update, context, quiz_id)
+    except ImportError:
+        # Fallback to existing play quiz functionality
+        from services.quiz_service import play_quiz
+
+        context.args = [quiz_id]
+        await play_quiz(update, context)

@@ -1974,6 +1974,9 @@ async def process_questions_with_payment(
         # Calculate duration in minutes
         duration_minutes = duration_seconds // 60 if duration_seconds else 0
 
+        # Get bot username from config
+        from utils.config import Config
+        
         # Create rich announcement card
         announcement_msg, announcement_keyboard = create_quiz_announcement_card(
             topic=topic,
@@ -1983,6 +1986,7 @@ async def process_questions_with_payment(
             reward_structure=reward_structure if reward_structure else "Free Quiz",
             quiz_id=str(quiz_id),
             is_free=not (reward_amount and float(reward_amount) > 0),
+            bot_username=Config.BOT_USERNAME,
         )
 
         # Send rich announcement to group
