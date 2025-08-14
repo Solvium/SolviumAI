@@ -37,7 +37,7 @@ from enhanced_agent import AdvancedQuizGenerator
 import logging
 import re  # Import re for duration_input and potentially wallet validation
 import asyncio  # Add asyncio import
-from typing import Optional  # Added for type hinting
+from typing import Optional, Dict, List  # Added for type hinting
 from utils.config import Config  # Added to access DEPOSIT_ADDRESS
 from store.database import SessionLocal
 from models.quiz import Quiz, QuizStatus, QuizAnswer
@@ -51,6 +51,145 @@ logger = logging.getLogger(__name__)
 
 # Initialize the quiz generator
 quiz_generator = AdvancedQuizGenerator()
+
+
+# Token service functions
+async def get_user_token_inventory(account_id: str) -> Dict:
+    """Get user's token inventory from NEAR Blocks API"""
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            url = f"https://api.nearblocks.io/v1/account/{account_id}/inventory"
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("inventory", {"fts": [], "nfts": []})
+                else:
+                    logger.warning(f"Failed to fetch token inventory for {account_id}: {response.status}")
+                    return {"fts": [], "nfts": []}
+    except Exception as e:
+        logger.error(f"Error fetching token inventory for {account_id}: {e}")
+        return {"fts": [], "nfts": []}
+
+
+async def get_token_metadata(contract_address: str) -> Dict:
+    """Get token metadata from contract"""
+    # Well-known token mappings for quick lookup
+    known_tokens = {
+        "wrap.near": {"symbol": "wNEAR", "decimals": 24, "name": "Wrapped NEAR"},
+        "usdc.tether-token.near": {"symbol": "USDC", "decimals": 6, "name": "USD Coin"},
+        "usdt.tether-token.near": {"symbol": "USDT", "decimals": 6, "name": "Tether USD"},
+        "token.burrow.near": {"symbol": "BRRR", "decimals": 18, "name": "Burrow Token"},
+        "aurora": {"symbol": "AURORA", "decimals": 18, "name": "Aurora Token"},
+    }
+    
+    if contract_address in known_tokens:
+        return known_tokens[contract_address]
+    
+    # For unknown tokens, try to fetch metadata from contract
+    try:
+        from services.near_wallet_service import NearWalletService
+        near_service = NearWalletService()
+        
+        # Try to call ft_metadata on the contract
+        result = await near_service.view_function(
+            contract_address,
+            "ft_metadata",
+            {}
+        )
+        
+        if result:
+            return {
+                "symbol": result.get("symbol", contract_address.split(".")[0].upper()),
+                "decimals": result.get("decimals", 24),
+                "name": result.get("name", contract_address)
+            }
+    except Exception as e:
+        logger.debug(f"Could not fetch metadata for {contract_address}: {e}")
+    
+    # Fallback for unknown tokens
+    return {
+        "symbol": contract_address.split(".")[0].upper()[:8],
+        "decimals": 24,  # Default NEAR standard
+        "name": contract_address
+    }
+
+
+def format_token_balance(amount: str, decimals: int) -> str:
+    """Format raw token amount to human readable"""
+    try:
+        amount_int = int(amount)
+        formatted = amount_int / (10 ** decimals)
+        
+        # Format based on amount size
+        if formatted >= 1000000:
+            return f"{formatted/1000000:.2f}M"
+        elif formatted >= 1000:
+            return f"{formatted/1000:.2f}K"
+        elif formatted >= 1:
+            return f"{formatted:.4f}"
+        else:
+            return f"{formatted:.6f}"
+    except:
+        return "0"
+
+
+async def process_token_inventory(account_id: str) -> List[Dict]:
+    """Process and format user's token inventory"""
+    inventory = await get_user_token_inventory(account_id)
+    processed_tokens = []
+    
+    # Always include NEAR as first option
+    try:
+        from services.wallet_service import WalletService
+        wallet_service = WalletService()
+        near_balance = await wallet_service.get_wallet_balance(account_id, force_refresh=True)
+        
+        # Parse NEAR balance
+        near_amount = "0"
+        if near_balance:
+            balance_match = re.search(r"(\d+\.?\d*)", near_balance)
+            if balance_match:
+                near_amount = balance_match.group(1)
+        
+        processed_tokens.append({
+            "contract": "near",
+            "symbol": "NEAR",
+            "decimals": 24,
+            "name": "NEAR Protocol",
+            "balance": near_amount,
+            "display_balance": f"{near_amount} NEAR",
+            "is_native": True
+        })
+    except Exception as e:
+        logger.error(f"Error getting NEAR balance: {e}")
+    
+    # Process FT tokens
+    for ft in inventory.get("fts", []):
+        try:
+            contract = ft.get("contract")
+            amount = ft.get("amount", "0")
+            
+            if not contract or amount == "0":
+                continue
+                
+            metadata = await get_token_metadata(contract)
+            formatted_balance = format_token_balance(amount, metadata["decimals"])
+            
+            processed_tokens.append({
+                "contract": contract,
+                "symbol": metadata["symbol"],
+                "decimals": metadata["decimals"],
+                "name": metadata["name"],
+                "balance": amount,
+                "display_balance": f"{formatted_balance} {metadata['symbol']}",
+                "is_native": False
+            })
+        except Exception as e:
+            logger.error(f"Error processing token {ft}: {e}")
+            continue
+    
+    return processed_tokens
 
 
 async def generate_quiz_questions(
@@ -138,21 +277,22 @@ def _escape_markdown_v2_specials(text: str) -> str:
     CONTEXT_INPUT,
     DURATION_CHOICE,
     DURATION_INPUT,
+    CURRENCY_CHOICE,
     REWARD_CHOICE,
     REWARD_CUSTOM_INPUT,
     REWARD_STRUCTURE_CHOICE,
+    REWARD_CUSTOM_STRUCTURE_INPUT,
     PAYMENT_VERIFICATION,
     CONFIRM,
-) = range(13)
+) = range(15)
 
 # States for reward configuration
 (
     REWARD_METHOD_CHOICE,
     REWARD_WTA_INPUT,
     REWARD_TOP3_INPUT,
-    REWARD_CUSTOM_INPUT,
     REWARD_MANUAL_INPUT,
-) = range(7, 12)
+) = range(7, 11)
 
 
 # Helper function to parse reward details
@@ -679,23 +819,18 @@ async def duration_choice(update, context):
         else:
             progress_text += f"⏱ Duration: No limit\n"
 
-        progress_text += f"💰 Step 4 of 4: Reward Setup"
+        progress_text += f"💰 Step 4 of 5: Payment Currency"
 
-        # Note: Wallet balance check moved to reward_choice function for paid options only
-
+        # Show currency selection - redirect to new currency choice
         buttons = [
-            [
-                InlineKeyboardButton("Free Quiz", callback_data="reward_free"),
-                InlineKeyboardButton("0.1 NEAR", callback_data="reward_0.1"),
-                InlineKeyboardButton("0.5 NEAR", callback_data="reward_0.5"),
-            ],
-            [InlineKeyboardButton("Custom amount", callback_data="reward_custom")],
+            [InlineKeyboardButton("💰 Choose Payment Currency", callback_data="select_currency")],
+            [InlineKeyboardButton("🆓 Free Quiz", callback_data="currency_free")],
         ]
 
         await update.callback_query.message.reply_text(
             progress_text, reply_markup=InlineKeyboardMarkup(buttons)
         )
-        return REWARD_CHOICE
+        return CURRENCY_CHOICE
 
     elif choice == "set_duration":
         # Set a special flag to identify duration input messages
@@ -796,38 +931,245 @@ async def duration_input(update, context):
         return DURATION_INPUT
 
 
+async def currency_choice(update, context):
+    """Handle currency selection for paid quizzes"""
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    choice = update.callback_query.data
+    await update.callback_query.answer()
+
+    if choice == "currency_free":
+        # Handle free quiz selection
+        await redis_client.set_user_data_key(user_id, "reward_amount", 0)
+        await redis_client.set_user_data_key(user_id, "reward_structure", "free")
+        await redis_client.set_user_data_key(user_id, "total_cost", 0)
+        await redis_client.set_user_data_key(user_id, "payment_status", "not_required")
+        await redis_client.set_user_data_key(user_id, "selected_currency", {
+            "contract": "near",
+            "symbol": "NEAR", 
+            "decimals": 24,
+            "is_native": True
+        })
+        return await confirm_prompt(update, context)
+
+    elif choice == "select_currency":
+        # Show available currencies
+        try:
+            # Get user's wallet info
+            from services.wallet_service import WalletService
+            wallet_service = WalletService()
+            wallet = await wallet_service.get_user_wallet(user_id)
+            
+            if not wallet or not wallet.get("account_id"):
+                await update.callback_query.message.reply_text(
+                    "❌ Error: Could not find your wallet. Please try again."
+                )
+                return CURRENCY_CHOICE
+            
+            account_id = wallet["account_id"]
+            
+            # Show loading message
+            loading_msg = await update.callback_query.message.reply_text(
+                "🔍 Loading your available tokens...\n\n⏳ Please wait while we fetch your token balances..."
+            )
+            
+            # Get user's token inventory
+            tokens = await process_token_inventory(account_id)
+            
+            if not tokens:
+                await loading_msg.edit_text(
+                    "⚠️ No tokens found in your wallet.\n\nDefaulting to NEAR for payments."
+                )
+                # Set NEAR as default
+                await redis_client.set_user_data_key(user_id, "selected_currency", {
+                    "contract": "near",
+                    "symbol": "NEAR",
+                    "decimals": 24,
+                    "is_native": True
+                })
+                return await show_reward_amounts(update, context)
+            
+            # Create currency selection buttons
+            buttons = []
+            currency_text = "💰 **Choose Payment Currency**\n\n"
+            currency_text += "Available tokens in your wallet:\n\n"
+            
+            for i, token in enumerate(tokens[:8]):  # Limit to 8 tokens to avoid button limit
+                symbol = token["symbol"]
+                balance = token["display_balance"]
+                currency_text += f"🔸 **{symbol}**: {balance}\n"
+                
+                # Create callback data
+                callback_data = f"currency_{i}"
+                button_text = f"{symbol} ({token['display_balance'].split()[0]})"
+                buttons.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+                
+                # Store token data in Redis for later retrieval
+                await redis_client.set_user_data_key(user_id, f"currency_option_{i}", token)
+            
+            currency_text += f"\n💡 Select your preferred payment currency:"
+            
+            await loading_msg.edit_text(
+                currency_text,
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+            
+            return CURRENCY_CHOICE
+            
+        except Exception as e:
+            logger.error(f"Error loading currencies for user {user_id}: {e}")
+            await update.callback_query.message.reply_text(
+                "❌ Error loading your tokens. Defaulting to NEAR payments."
+            )
+            # Set NEAR as fallback
+            await redis_client.set_user_data_key(user_id, "selected_currency", {
+                "contract": "near",
+                "symbol": "NEAR",
+                "decimals": 24,
+                "is_native": True
+            })
+            return await show_reward_amounts(update, context)
+
+    elif choice.startswith("currency_"):
+        # Handle specific currency selection
+        try:
+            currency_index = int(choice.replace("currency_", ""))
+            selected_currency = await redis_client.get_user_data_key(user_id, f"currency_option_{currency_index}")
+            
+            if not selected_currency:
+                await update.callback_query.message.reply_text(
+                    "❌ Error: Currency selection invalid. Please try again."
+                )
+                return CURRENCY_CHOICE
+            
+            # Store selected currency
+            await redis_client.set_user_data_key(user_id, "selected_currency", selected_currency)
+            
+            # Clean up temporary currency options
+            for i in range(8):
+                await redis_client.delete_user_data_key(user_id, f"currency_option_{i}")
+            
+            await update.callback_query.message.reply_text(
+                f"✅ Selected currency: **{selected_currency['symbol']}**\n\n"
+                f"💰 Balance: {selected_currency['display_balance']}\n\n"
+                f"Now let's set the reward amount...",
+                parse_mode="Markdown"
+            )
+            
+            return await show_reward_amounts(update, context)
+            
+        except (ValueError, TypeError) as e:
+            logger.error(f"Error processing currency selection for user {user_id}: {e}")
+            await update.callback_query.message.reply_text(
+                "❌ Error: Invalid currency selection. Please try again."
+            )
+            return CURRENCY_CHOICE
+
+
+async def show_reward_amounts(update, context):
+    """Show reward amount options based on selected currency"""
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    
+    # Get selected currency and quiz details
+    selected_currency = await redis_client.get_user_data_key(user_id, "selected_currency")
+    topic = await redis_client.get_user_data_key(user_id, "topic")
+    num_questions = await redis_client.get_user_data_key(user_id, "num_questions")
+    context_text = await redis_client.get_user_data_key(user_id, "context_text")
+    duration_seconds = await redis_client.get_user_data_key(user_id, "duration_seconds")
+    
+    if not selected_currency:
+        await update.callback_query.message.reply_text(
+            "❌ Error: No currency selected. Please start over."
+        )
+        return ConversationHandler.END
+    
+    currency_symbol = selected_currency["symbol"]
+    
+    # Build progress text
+    progress_text = f"✅ Topic: {topic}\n"
+    if context_text:
+        progress_text += f"📝 Notes: {context_text[:50]}{'...' if len(context_text) > 50 else ''}\n"
+    else:
+        progress_text += f"📝 Notes: None\n"
+    progress_text += f"❓ Questions: {num_questions}\n"
+    
+    if duration_seconds:
+        progress_text += f"⏱ Duration: {duration_seconds//60} minutes\n"
+    else:
+        progress_text += f"⏱ Duration: No limit\n"
+    
+    progress_text += f"💰 Currency: {currency_symbol}\n"
+    progress_text += f"💵 Step 5 of 6: Reward Amount"
+    
+    # Create reward amount buttons based on currency
+    if currency_symbol == "NEAR":
+        buttons = [
+            [
+                InlineKeyboardButton(f"0.1 {currency_symbol}", callback_data="reward_0.1"),
+                InlineKeyboardButton(f"0.5 {currency_symbol}", callback_data="reward_0.5"),
+                InlineKeyboardButton(f"1.0 {currency_symbol}", callback_data="reward_1.0"),
+            ],
+            [InlineKeyboardButton(f"Custom amount", callback_data="reward_custom")],
+        ]
+    elif currency_symbol in ["USDC", "USDT"]:
+        buttons = [
+            [
+                InlineKeyboardButton(f"1 {currency_symbol}", callback_data="reward_1"),
+                InlineKeyboardButton(f"5 {currency_symbol}", callback_data="reward_5"),
+                InlineKeyboardButton(f"10 {currency_symbol}", callback_data="reward_10"),
+            ],
+            [InlineKeyboardButton(f"Custom amount", callback_data="reward_custom")],
+        ]
+    else:
+        # For other tokens, show generic options
+        buttons = [
+            [
+                InlineKeyboardButton(f"10 {currency_symbol}", callback_data="reward_10"),
+                InlineKeyboardButton(f"50 {currency_symbol}", callback_data="reward_50"),
+                InlineKeyboardButton(f"100 {currency_symbol}", callback_data="reward_100"),
+            ],
+            [InlineKeyboardButton(f"Custom amount", callback_data="reward_custom")],
+        ]
+    
+    await update.callback_query.message.reply_text(
+        progress_text, reply_markup=InlineKeyboardMarkup(buttons)
+    )
+    
+    return REWARD_CHOICE
+
+
 async def reward_choice(update, context):
     user_id = update.effective_user.id
     redis_client = RedisClient()
     choice = update.callback_query.data
     await update.callback_query.answer()
 
+    # Get selected currency
+    selected_currency = await redis_client.get_user_data_key(user_id, "selected_currency")
+    if not selected_currency:
+        await update.callback_query.message.reply_text(
+            "❌ Error: No currency selected. Please start over."
+        )
+        return ConversationHandler.END
+
     # Handle reward amount selection
     if choice.startswith("reward_"):
         reward_type = choice.replace("reward_", "")
 
-        if reward_type == "free":
-            await redis_client.set_user_data_key(user_id, "reward_amount", 0)
-            await redis_client.set_user_data_key(user_id, "reward_structure", "free")
-            await redis_client.set_user_data_key(user_id, "total_cost", 0)
-            await redis_client.set_user_data_key(
-                user_id, "payment_status", "not_required"
-            )
-            return await confirm_prompt(update, context)
-
-        elif reward_type == "custom":
+        if reward_type == "custom":
+            currency_symbol = selected_currency["symbol"]
             await update.callback_query.message.reply_text(
-                "Enter custom reward amount in NEAR:"
+                f"Enter custom reward amount in {currency_symbol}:"
             )
             return REWARD_CUSTOM_INPUT
 
         else:
-            # Handle 0.1 or 0.5 NEAR rewards
+            # Handle fixed amount rewards (0.1, 0.5, 1.0, etc.)
             try:
                 reward_amount = float(reward_type)
-                await redis_client.set_user_data_key(
-                    user_id, "reward_amount", reward_amount
-                )
+                await redis_client.set_user_data_key(user_id, "reward_amount", reward_amount)
 
                 # Show reward structure options
                 await show_reward_structure_options(update, context, reward_amount)
@@ -847,9 +1189,53 @@ async def reward_choice(update, context):
         return REWARD_STRUCTURE_CHOICE
     except ValueError:
         await update.callback_query.message.reply_text(
-            "Please enter a valid reward amount in NEAR or use the buttons above."
+            "Please enter a valid reward amount or use the buttons above."
         )
         return REWARD_CHOICE
+
+
+async def custom_structure_input(update, context):
+    """Handle custom reward structure input"""
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    custom_structure = update.message.text.strip()
+
+    # Get selected currency
+    selected_currency = await redis_client.get_user_data_key(user_id, "selected_currency")
+    if not selected_currency:
+        await update.message.reply_text(
+            "❌ Error: No currency selected. Please start over."
+        )
+        return ConversationHandler.END
+
+    currency_symbol = selected_currency["symbol"]
+
+    try:
+        # Parse the custom structure and calculate total
+        total_cost = _parse_reward_details_for_total(custom_structure, "custom_details")
+        
+        if total_cost is None or total_cost <= 0:
+            await update.message.reply_text(
+                f"❌ Invalid format. Please provide a valid custom structure.\n\n"
+                f"Example: '0.5 {currency_symbol} for 1st, 0.3 {currency_symbol} for 2nd, 0.2 {currency_symbol} for 3rd'"
+            )
+            return REWARD_CUSTOM_STRUCTURE_INPUT
+
+        # Store the custom structure details
+        await redis_client.set_user_data_key(user_id, "reward_structure", "custom")
+        await redis_client.set_user_data_key(user_id, "custom_structure_details", custom_structure)
+        await redis_client.set_user_data_key(user_id, "total_cost", total_cost)
+
+        # Proceed to payment verification
+        return await payment_verification(update, context)
+
+    except Exception as e:
+        logger.error(f"Error parsing custom structure for user {user_id}: {e}")
+        await update.message.reply_text(
+            f"❌ Error parsing custom structure. Please try again.\n\n"
+            f"Example: '0.5 {currency_symbol} for 1st, 0.3 {currency_symbol} for 2nd, 0.2 {currency_symbol} for 3rd'"
+        )
+        return REWARD_CUSTOM_STRUCTURE_INPUT
 
 
 async def show_reward_structure_options(update, context, reward_amount):
@@ -857,18 +1243,34 @@ async def show_reward_structure_options(update, context, reward_amount):
     user_id = update.effective_user.id
     redis_client = RedisClient()
 
+    # Get selected currency
+    selected_currency = await redis_client.get_user_data_key(user_id, "selected_currency")
+    if not selected_currency:
+        await update.callback_query.message.reply_text(
+            "❌ Error: No currency selected. Please start over."
+        )
+        return ConversationHandler.END
+
+    currency_symbol = selected_currency["symbol"]
+    is_near = selected_currency.get("symbol", "").upper() == "NEAR"
+
     # Get current quiz details for display
     topic = await redis_client.get_user_data_key(user_id, "topic")
     num_questions = await redis_client.get_user_data_key(user_id, "num_questions")
     context_text = await redis_client.get_user_data_key(user_id, "context_text")
     duration_seconds = await redis_client.get_user_data_key(user_id, "duration_seconds")
 
-    # Get wallet info and balance for display
+    # Get wallet info and balance for display (check balance for selected currency)
     from services.wallet_service import WalletService
 
     wallet_service = WalletService()
     wallet = await wallet_service.get_user_wallet(user_id)
-    wallet_balance = await wallet_service.get_wallet_balance(user_id)
+    
+    if is_near:
+        wallet_balance = await wallet_service.get_wallet_balance(user_id)
+    else:
+        # For tokens, get token balance from selected currency data
+        wallet_balance = f"{selected_currency.get('balance', '0')} {currency_symbol}"
 
     progress_text = f"✅ Topic: {topic}\n"
     if context_text:
@@ -884,7 +1286,8 @@ async def show_reward_structure_options(update, context, reward_amount):
     else:
         progress_text += f"⏱ Duration: No limit\n"
 
-    progress_text += f"💰 Reward Amount: {reward_amount} NEAR\n"
+    progress_text += f"💰 Reward Amount: {reward_amount} {currency_symbol}\n"
+    progress_text += f"💱 Currency: {currency_symbol}\n"
     progress_text += f"📊 Step 4b of 4: Reward Structure"
 
     # Add wallet information
@@ -901,19 +1304,19 @@ async def show_reward_structure_options(update, context, reward_amount):
     custom_total = reward_amount  # Base amount, can be modified
 
     progress_text += f"\n\n💡 Total Cost Options:\n"
-    progress_text += f"• Winner-takes-all: {wta_total} NEAR\n"
-    progress_text += f"• Top 3 winners: {top3_total} NEAR\n"
-    progress_text += f"• Custom structure: {custom_total} NEAR"
+    progress_text += f"• Winner-takes-all: {wta_total} {currency_symbol}\n"
+    progress_text += f"• Top 3 winners: {top3_total} {currency_symbol}\n"
+    progress_text += f"• Custom structure: {custom_total} {currency_symbol}"
 
     buttons = [
         [
             InlineKeyboardButton(
-                f"Winner-takes-all ({wta_total} NEAR)", callback_data="structure_wta"
+                f"Winner-takes-all ({wta_total} {currency_symbol})", callback_data="structure_wta"
             )
         ],
         [
             InlineKeyboardButton(
-                f"Top 3 winners ({top3_total} NEAR)", callback_data="structure_top3"
+                f"Top 3 winners ({top3_total} {currency_symbol})", callback_data="structure_top3"
             )
         ],
         [InlineKeyboardButton(f"Custom structure", callback_data="structure_custom")],
@@ -966,6 +1369,17 @@ async def payment_verification(update, context):
     user_id = update.effective_user.id
     redis_client = RedisClient()
 
+    # Get selected currency
+    selected_currency = await redis_client.get_user_data_key(user_id, "selected_currency")
+    if not selected_currency:
+        await update.callback_query.message.reply_text(
+            "❌ Error: No currency selected. Please start over."
+        )
+        return ConversationHandler.END
+
+    currency_symbol = selected_currency["symbol"]
+    is_near = selected_currency.get("symbol", "").upper() == "NEAR"
+
     # Get quiz details and cost
     total_cost = await redis_client.get_user_data_key(user_id, "total_cost")
     reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
@@ -976,24 +1390,36 @@ async def payment_verification(update, context):
         await redis_client.set_user_data_key(user_id, "payment_status", "not_required")
         return await confirm_prompt(update, context)
 
-    # Get wallet balance (force refresh for payment verification)
+    # Get wallet balance based on currency type
     from services.wallet_service import WalletService
 
     wallet_service = WalletService()
-    wallet_balance_str = await wallet_service.get_wallet_balance(
-        user_id, force_refresh=True
-    )
-
-    # Parse balance (e.g., "0.5000 NEAR" -> 0.5)
-    try:
-        balance_match = re.search(r"(\d+\.?\d*)", wallet_balance_str)
-        wallet_balance = float(balance_match.group(1)) if balance_match else 0.0
-        logger.debug(
-            f"Parsed wallet balance for user {user_id}: {wallet_balance} NEAR (from: {wallet_balance_str})"
+    
+    if is_near:
+        # For NEAR, get balance from wallet service
+        wallet_balance_str = await wallet_service.get_wallet_balance(
+            user_id, force_refresh=True
         )
-    except Exception as e:
-        logger.error(f"Error parsing wallet balance for user {user_id}: {e}")
-        wallet_balance = 0.0
+        # Parse balance (e.g., "0.5000 NEAR" -> 0.5)
+        try:
+            balance_match = re.search(r"(\d+\.?\d*)", wallet_balance_str)
+            wallet_balance = float(balance_match.group(1)) if balance_match else 0.0
+            logger.debug(
+                f"Parsed NEAR balance for user {user_id}: {wallet_balance} NEAR (from: {wallet_balance_str})"
+            )
+        except Exception as e:
+            logger.error(f"Error parsing NEAR balance for user {user_id}: {e}")
+            wallet_balance = 0.0
+    else:
+        # For tokens, get balance from selected currency data
+        try:
+            wallet_balance = float(selected_currency.get("balance", "0"))
+            logger.debug(
+                f"Token balance for user {user_id}: {wallet_balance} {currency_symbol}"
+            )
+        except Exception as e:
+            logger.error(f"Error parsing token balance for user {user_id}: {e}")
+            wallet_balance = 0.0
 
     total_cost_float = float(total_cost)
 
@@ -1013,6 +1439,17 @@ async def process_payment(update, context, total_cost):
     user_id = update.effective_user.id
     redis_client = RedisClient()
 
+    # Get selected currency
+    selected_currency = await redis_client.get_user_data_key(user_id, "selected_currency")
+    if not selected_currency:
+        await update.callback_query.message.reply_text(
+            "❌ Error: No currency selected. Please start over."
+        )
+        return ConversationHandler.END
+
+    currency_symbol = selected_currency["symbol"]
+    is_near = selected_currency.get("symbol", "").upper() == "NEAR"
+
     try:
         # Get wallet info
         from services.wallet_service import WalletService
@@ -1028,7 +1465,7 @@ async def process_payment(update, context, total_cost):
 
         # Show payment processing message
         processing_msg = await update.callback_query.message.reply_text(
-            f"💳 Processing payment of {total_cost} NEAR...\n\n⏳ Please wait while we process the transaction..."
+            f"💳 Processing payment of {total_cost} {currency_symbol}...\n\n⏳ Please wait while we process the transaction..."
         )
 
         # Calculate payment with 1% charge
@@ -1036,23 +1473,41 @@ async def process_payment(update, context, total_cost):
         service_charge = base_amount * 0.01  # 1% charge
         total_amount = base_amount + service_charge
 
-        # Convert to yoctoNEAR
-        total_yocto = int(total_amount * (10**24))
-
         # Get main account address from config
         from utils.config import Config
-
         main_account_address = Config.NEAR_WALLET_ADDRESS
 
-        # Process real NEAR transaction
-        transaction_result = await process_real_near_payment(
-            wallet, main_account_address, total_yocto, user_id
-        )
+        if is_near:
+            # Process NEAR payment
+            # Convert to yoctoNEAR
+            total_yocto = int(total_amount * (10**24))
+
+            transaction_result = await process_real_near_payment(
+                wallet, main_account_address, total_yocto, user_id
+            )
+        else:
+            # Process token payment using storage deposit + ft_transfer pattern
+            token_contract = selected_currency.get("contract")
+            if not token_contract:
+                await processing_msg.edit_text(
+                    f"❌ Error: Token contract not found for {currency_symbol}"
+                )
+                return ConversationHandler.END
+
+            # Convert amount to token's smallest unit (considering decimals)
+            token_decimals = selected_currency.get("decimals", 18)
+            total_amount_units = int(total_amount * (10**token_decimals))
+
+            transaction_result = await process_token_payment(
+                wallet, main_account_address, token_contract, 
+                total_amount_units, currency_symbol, user_id
+            )
 
         if transaction_result["success"]:
             # Store payment info
             await redis_client.set_user_data_key(user_id, "payment_status", "completed")
             await redis_client.set_user_data_key(user_id, "payment_amount", total_cost)
+            await redis_client.set_user_data_key(user_id, "payment_currency", currency_symbol)
             await redis_client.set_user_data_key(
                 user_id, "service_charge", service_charge
             )
@@ -1067,9 +1522,9 @@ async def process_payment(update, context, total_cost):
             # Update processing message
             await processing_msg.edit_text(
                 f"✅ Payment successful!\n\n"
-                f"💳 Amount: {total_cost} NEAR\n"
-                f"💰 Service Charge: {service_charge:.4f} NEAR\n"
-                f"💸 Total Paid: {total_amount:.4f} NEAR\n"
+                f"💳 Amount: {total_cost} {currency_symbol}\n"
+                f"💰 Service Charge: {service_charge:.4f} {currency_symbol}\n"
+                f"💸 Total Paid: {total_amount:.4f} {currency_symbol}\n"
                 f"🔗 Transaction: {transaction_result['transaction_hash'][:20]}...\n"
                 f"📊 Status: Confirmed\n\n"
                 f"🛠 Generating your quiz..."
@@ -1081,9 +1536,9 @@ async def process_payment(update, context, total_cost):
             # Payment failed - show retry option
             await processing_msg.edit_text(
                 f"❌ Payment failed!\n\n"
-                f"💳 Amount: {total_cost} NEAR\n"
-                f"💰 Service Charge: {service_charge:.4f} NEAR\n"
-                f"💸 Total: {total_amount:.4f} NEAR\n"
+                f"💳 Amount: {total_cost} {currency_symbol}\n"
+                f"💰 Service Charge: {service_charge:.4f} {currency_symbol}\n"
+                f"💸 Total: {total_amount:.4f} {currency_symbol}\n"
                 f"❌ Error: {transaction_result['error']}\n\n"
                 f"Please check your balance and try again."
             )
@@ -1909,6 +2364,91 @@ async def process_real_near_payment(
         return {"success": False, "error": str(e), "transaction_hash": None}
 
 
+async def process_token_payment(
+    wallet: dict, receiver_address: str, token_contract: str, 
+    amount_units: int, currency_symbol: str, user_id: int
+) -> dict:
+    """
+    Process token payment using storage deposit + ft_transfer pattern
+    """
+    try:
+        from py_near.account import Account
+        from utils.config import Config
+        from services.near_wallet_service import NEARWalletService
+
+        # Decrypt user's private key
+        near_wallet_service = NEARWalletService()
+        private_key = await near_wallet_service.decrypt_private_key(
+            wallet["encrypted_private_key"]
+        )
+
+        # Set up account
+        account = Account(
+            account_id=wallet["account_id"],
+            private_key=private_key,
+            rpc_url=Config.NEAR_RPC_URL,
+        )
+
+        logger.info(
+            f"Processing token payment for user {user_id}: "
+            f"{amount_units} units of {currency_symbol} via {token_contract}"
+        )
+
+        # Step 1: Storage deposit for receiver if needed
+        try:
+            storage_deposit_result = await account.function_call(
+                contract_id=token_contract,
+                method_name="storage_deposit",
+                args={
+                    "account_id": receiver_address,
+                    "registration_only": True
+                },
+                gas=30_000_000_000_000,  # 30 TGas
+                deposit=1250000000000000000000000  # 0.00125 NEAR for storage
+            )
+            logger.info(f"Storage deposit transaction hash: {storage_deposit_result.transaction.hash}")
+        except Exception as storage_error:
+            # Storage deposit might fail if already registered - that's okay
+            logger.info(f"Storage deposit may have failed (likely already registered): {storage_error}")
+
+        # Step 2: Transfer tokens
+        transfer_result = await account.function_call(
+            contract_id=token_contract,
+            method_name="ft_transfer",
+            args={
+                "receiver_id": receiver_address,
+                "amount": str(amount_units),
+                "memo": f"Quiz payment by user {user_id}"
+            },
+            gas=30_000_000_000_000,  # 30 TGas
+            deposit=1  # 1 yoctoNEAR required for ft_transfer
+        )
+
+        transaction_hash = transfer_result.transaction.hash
+        logger.info(
+            f"Token payment successful for user {user_id}: "
+            f"Hash: {transaction_hash}, Amount: {amount_units} {currency_symbol}"
+        )
+
+        # Clear private key from memory for security
+        private_key = None
+
+        return {
+            "success": True,
+            "transaction_hash": transaction_hash,
+            "transfer_result": transfer_result,
+        }
+
+    except Exception as e:
+        logger.error(f"Token payment failed for user {user_id}: {e}")
+
+        # Clear private key from memory for security
+        if "private_key" in locals():
+            private_key = None
+
+        return {"success": False, "error": str(e), "transaction_hash": None}
+
+
 async def process_questions_with_payment(
     update,
     context,
@@ -2285,6 +2825,7 @@ async def play_quiz_handler(update: Update, context: CallbackContext):
     """Handler for /playquiz command - now uses enhanced quiz system."""
     user_id = update.effective_user.id
     user_username = update.effective_user.username or update.effective_user.first_name
+    chat_type = update.effective_chat.type
 
     # Check if user has a wallet - if not, create one first
     from services.wallet_service import WalletService

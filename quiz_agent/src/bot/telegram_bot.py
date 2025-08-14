@@ -136,10 +136,13 @@ class TelegramBot:
             context_input,
             duration_choice,
             duration_input,
+            currency_choice,  # New currency selection handler
+            show_reward_amounts,  # New reward amounts handler
             reward_choice,
             reward_custom_input,
             show_reward_structure_options,
             reward_structure_choice,
+            custom_structure_input,  # New custom structure handler
             payment_verification,
             process_payment,
             show_funding_instructions,
@@ -156,9 +159,11 @@ class TelegramBot:
             CONTEXT_INPUT,
             DURATION_CHOICE,
             DURATION_INPUT,
+            CURRENCY_CHOICE,  # New currency choice state
             REWARD_CHOICE,
             REWARD_CUSTOM_INPUT,
             REWARD_STRUCTURE_CHOICE,
+            REWARD_CUSTOM_STRUCTURE_INPUT,  # New custom structure state
             PAYMENT_VERIFICATION,
             CONFIRM,
             link_wallet_handler,
@@ -251,11 +256,18 @@ class TelegramBot:
                         duration_input,
                     )
                 ],
+                # Currency choice state - NEW: choose between NEAR and tokens
+                CURRENCY_CHOICE: [
+                    CallbackQueryHandler(
+                        currency_choice,
+                        pattern="^(currency_near|currency_token:|show_tokens)$",
+                    )
+                ],
                 # Reward choice state - callback queries for reward options
                 REWARD_CHOICE: [
                     CallbackQueryHandler(
-                        reward_choice,
-                        pattern="^(reward_free|reward_0\\.1|reward_0\\.5|reward_custom)$",
+                        show_reward_amounts,  # Updated to use show_reward_amounts
+                        pattern="^(reward_free|reward_0\\.1|reward_0\\.5|reward_1\\.0|reward_custom)$",
                     ),
                     MessageHandler(
                         filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
@@ -274,6 +286,13 @@ class TelegramBot:
                     CallbackQueryHandler(
                         reward_structure_choice,
                         pattern="^(structure_wta|structure_top3|structure_custom)$",
+                    )
+                ],
+                # Custom reward structure input state - NEW
+                REWARD_CUSTOM_STRUCTURE_INPUT: [
+                    MessageHandler(
+                        filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
+                        custom_structure_input,
                     )
                 ],
                 # Payment verification state

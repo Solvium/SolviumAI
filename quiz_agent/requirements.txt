@@ -169,3 +169,5 @@ websockets==15.0.1
 wikipedia==1.4.0
 yarl==1.18.3
 zstandard==0.23.0
+aiohttp==3.11.13  # For Serper API calls (already included above)
+serper-dev==0.1.0  # Alternative Serper client (optional)
