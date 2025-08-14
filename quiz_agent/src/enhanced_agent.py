@@ -562,15 +562,19 @@ class AdvancedQuizGenerator:
                 )
                 return None
 
-            # 🚀 SPEED: Direct construction without validation overhead
-            return QuizQuestion(
-                question=question_data["question"],
-                options={
+            # 🚀 SPEED: Direct construction with Telegram option length validation
+            options = self._validate_and_trim_options(
+                {
                     "A": question_data["options"][0],
                     "B": question_data["options"][1],
                     "C": question_data["options"][2],
                     "D": question_data["options"][3],
-                },
+                }
+            )
+
+            return QuizQuestion(
+                question=question_data["question"],
+                options=options,
                 correct_answer=question_data["correct_answer"],
                 explanation=question_data.get("explanation", ""),
                 difficulty=difficulty,
@@ -632,20 +636,31 @@ class AdvancedQuizGenerator:
             ]
             correct_answer = "A"
 
-        return QuizQuestion(
-            question=question,
-            options={
+        options = self._validate_and_trim_options(
+            {
                 "A": options[0],
                 "B": options[1],
                 "C": options[2],
                 "D": options[3],
-            },
+            }
+        )
+
+        return QuizQuestion(
+            question=question,
+            options=options,
             correct_answer=correct_answer,
             explanation=f"This is a fallback answer about {topic}.",
             difficulty=difficulty,
             question_type=question_type,
             sources=[],
         )
+
+    def _validate_and_trim_options(self, options: dict) -> dict:
+        """Ensure all options are within Telegram's 100 character limit"""
+        return {
+            key: value[:95] + "..." if len(value) > 95 else value
+            for key, value in options.items()
+        }
 
     def _build_search_context(self, search_results: List[SearchResult]) -> str:
         """Build comprehensive context from at least 3 search results"""
@@ -806,11 +821,12 @@ INSTRUCTIONS:
 - Create a comprehensive question that tests understanding
 - Ensure the question is accurate and well-informed
 - Make distractors plausible but clearly wrong
+- CRITICAL: Each option must be 90 characters or less (Telegram limit)
 
 IMPORTANT: Return ONLY valid JSON:
 {{
     "question": "Direct, comprehensive question about {topic}?",
-    "options": ["Correct answer based on sources + knowledge", "Plausible wrong option 1", "Plausible wrong option 2", "Plausible wrong option 3"],
+    "options": ["Correct answer (max 90 chars)", "Wrong option 1 (max 90 chars)", "Wrong option 2 (max 90 chars)", "Wrong option 3 (max 90 chars)"],
     "correct_answer": "A",
     "explanation": "Why this is correct, referencing sources and general knowledge"
 }}"""
@@ -831,7 +847,15 @@ IMPORTANT: Return ONLY valid JSON:
             cached_data = await redis_client.get(cache_key)
             if cached_data:
                 questions_data = json.loads(cached_data)
-                return [QuizQuestion(**q) for q in questions_data]
+                # Validate and trim options for cached questions too
+                validated_questions = []
+                for q_data in questions_data:
+                    if "options" in q_data:
+                        q_data["options"] = self._validate_and_trim_options(
+                            q_data["options"]
+                        )
+                    validated_questions.append(QuizQuestion(**q_data))
+                return validated_questions
         except Exception as e:
             print(f"Cache retrieval failed: {e}")
 

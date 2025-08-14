@@ -3152,30 +3152,26 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
             active_quiz_sessions.pop(key, None)
             logger.info(f"Removed stale session: {key}")
 
+        # Check if session already exists for this quiz
         if session_key in active_quiz_sessions:
-            logger.warning(
-                f"Found existing session for {session_key}, preventing duplicate start"
+            logger.info(
+                f"Found existing session for {session_key}, using it to start quiz"
             )
-            await safe_send_message(
-                context.bot,
-                user_id,
-                f"❌ You already have an active session for the quiz '{quiz.topic}'.\n\n💡 Use /stop to cancel your current session, then try again.",
+            quiz_session = active_quiz_sessions[session_key]
+        else:
+            # Create new quiz session
+            quiz_session = QuizSession(
+                user_id=user_id,
+                quiz_id=quiz.id,
+                questions=questions_list,
+                shuffle_questions=True,
+                shuffle_answers=True,
             )
-            return
 
-        # Create quiz session
-        quiz_session = QuizSession(
-            user_id=user_id,
-            quiz_id=quiz.id,
-            questions=questions_list,
-            shuffle_questions=True,
-            shuffle_answers=True,
-        )
-
-        active_quiz_sessions[session_key] = quiz_session
-        logger.info(
-            f"Enhanced quiz session created: {session_key}, total_sessions={len(active_quiz_sessions)}"
-        )
+            active_quiz_sessions[session_key] = quiz_session
+            logger.info(
+                f"Enhanced quiz session created: {session_key}, total_sessions={len(active_quiz_sessions)}"
+            )
 
         # Create a record that the user has started this quiz (prevents restarting if abandoned)
         try:

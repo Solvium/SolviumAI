@@ -966,9 +966,26 @@ async def handle_quiz_deep_link(
 
     # Start the specific quiz immediately without additional messages
     try:
-        from services.quiz_service import start_enhanced_quiz, get_quiz_details
+        from services.quiz_service import (
+            start_enhanced_quiz,
+            get_quiz_details,
+            active_quiz_sessions,
+        )
         from store.database import SessionLocal
         from models.quiz import Quiz
+
+        # Clear any existing active sessions for this user to allow fresh start
+        user_id_str = str(user_id)
+        removed_sessions = []
+        for key in list(active_quiz_sessions.keys()):
+            if key.startswith(f"{user_id_str}:"):
+                removed_sessions.append(key)
+                active_quiz_sessions.pop(key, None)
+
+        if removed_sessions:
+            logger.info(
+                f"Cleared {len(removed_sessions)} existing sessions for user {user_id} in deep link"
+            )
 
         # Get the quiz object from database
         session = SessionLocal()
@@ -986,7 +1003,7 @@ async def handle_quiz_deep_link(
             application = context.application
             await start_enhanced_quiz(
                 application=application,
-                user_id=str(user_id),
+                user_id=user_id_str,
                 quiz=quiz,
                 shuffle_questions=True,
                 shuffle_answers=True,
