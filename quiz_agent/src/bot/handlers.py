@@ -58,11 +58,12 @@ async def start_handler(update, context):
     # Handle deep linking for quiz redirects (only in private chats)
     if chat_type == "private" and context.args:
         start_param = context.args[0]
-        
+
         # Handle quiz deep linking
         if start_param.startswith("quiz_"):
             quiz_id = start_param[5:]  # Remove "quiz_" prefix
             from .menu_handlers import handle_quiz_deep_link
+
             await handle_quiz_deep_link(update, context, quiz_id)
             return
 
