@@ -277,4 +277,5 @@ if __name__ == "__main__":
     topic = input("Enter a topic for the quiz: ")
     quiz = asyncio.run(generate_quiz(topic))
     print("\nGenerated Quiz:")
-    print(quiz)
+    result = quiz
+    print(result)
