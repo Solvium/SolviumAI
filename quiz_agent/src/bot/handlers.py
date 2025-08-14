@@ -1276,7 +1276,8 @@ async def handle_play_quiz(update, context, quiz_id):
             # Check if quiz has ended based on end_time
             if quiz.end_time and quiz.end_time <= datetime.utcnow():
                 await context.bot.send_message(
-                    chat_id=chat_id, text="❌ This quiz has already ended. Check the final results!"
+                    chat_id=chat_id,
+                    text="❌ This quiz has already ended. Check the final results!",
                 )
                 return
 
@@ -3010,11 +3011,17 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
 
         # Check if quiz is still active and not ended
         if quiz.status != QuizStatus.ACTIVE:
-            await safe_send_message(context.bot, user_id, "❌ This quiz is no longer active.")
+            await safe_send_message(
+                context.bot, user_id, "❌ This quiz is no longer active."
+            )
             return
 
         if quiz.end_time and quiz.end_time <= datetime.utcnow():
-            await safe_send_message(context.bot, user_id, "❌ This quiz has already ended. Check the final results!")
+            await safe_send_message(
+                context.bot,
+                user_id,
+                "❌ This quiz has already ended. Check the final results!",
+            )
             return
 
         # Create quiz session directly (don't call start_enhanced_quiz to avoid duplicate intro)

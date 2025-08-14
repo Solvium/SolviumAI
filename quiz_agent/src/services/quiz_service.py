@@ -2061,7 +2061,7 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         if all_participants:
             # Get the actual number of questions in the quiz
             num_questions_in_quiz = len(quiz.questions) if quiz.questions else 0
-            
+
             # Add leaderboard
             announcement += "\n\n🏆 <b>FINAL LEADERBOARD:</b>\n"
             for i, participant in enumerate(all_participants[:10]):  # Show top 10
