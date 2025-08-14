@@ -33,7 +33,7 @@ from services.user_service import (
     handle_wallet_address as service_handle_wallet_address,  # Renamed import
     check_wallet_linked,  # Add this import
 )
-from agent import generate_quiz
+from enhanced_agent import AdvancedQuizGenerator
 import logging
 import re  # Import re for duration_input and potentially wallet validation
 import asyncio  # Add asyncio import
@@ -48,6 +48,14 @@ from datetime import datetime, timezone, timedelta  # Add this import
 
 # Configure logger
 logger = logging.getLogger(__name__)
+
+# Initialize the quiz generator
+quiz_generator = AdvancedQuizGenerator()
+
+async def generate_quiz_questions(topic: str, num_questions: int, context_text: str = "") -> str:
+    """Wrapper function for backward compatibility with the quiz service"""
+    result = await quiz_generator.generate_quiz(topic, num_questions, context_text)
+    return result['quiz_text']
 
 
 async def start_handler(update, context):
@@ -1785,7 +1793,7 @@ async def confirm_choice(update, context):
         await redis_client.clear_user_data(user_id)
         return ConversationHandler.END
 
-    quiz_text = await generate_quiz(topic, num_questions, context_text)
+    quiz_text = await generate_quiz_questions(topic, num_questions, context_text)
 
     group_chat_id_to_use = group_chat_id if group_chat_id else update.effective_chat.id
 

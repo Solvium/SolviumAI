@@ -2,7 +2,7 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, Poll
 from telegram.ext import CallbackContext, ContextTypes, Application
 from models.quiz import Quiz, QuizStatus, QuizAnswer
 from store.database import SessionLocal
-from agent import generate_quiz
+from enhanced_agent import AdvancedQuizGenerator
 from services.user_service import check_wallet_linked
 from utils.telegram_helpers import safe_send_message, safe_edit_message_text
 import re
@@ -11,6 +11,7 @@ import json
 import asyncio
 import logging
 import time
+import random
 from datetime import datetime, timedelta, timezone
 import traceback
 from utils.config import Config
@@ -38,6 +39,53 @@ scheduled_tasks: Dict[str, asyncio.Task] = {}
 # Dictionary to keep track of active question timers
 # Key: (user_id, quiz_id, question_index), Value: asyncio.Task
 active_question_timers: Dict[Tuple[str, str, int], asyncio.Task] = {}
+
+
+# Enhanced quiz generator wrapper function
+async def generate_quiz_questions(
+    topic: str, num_questions: int = 1, context_text: str = None
+) -> str:
+    """
+    Generate quiz questions using the enhanced agent and return formatted string
+    compatible with the existing quiz service expectations.
+    """
+    try:
+        # Initialize the enhanced quiz generator
+        generator = AdvancedQuizGenerator()
+        
+        # Generate questions using the enhanced agent
+        quiz_questions = await generator.generate_quiz(
+            topic=topic,
+            num_questions=num_questions,
+            difficulty="medium",
+            force_refresh=False,
+            context_text=context_text
+        )
+        
+        # Convert QuizQuestion objects to the format expected by quiz service
+        formatted_questions = []
+        for i, question in enumerate(quiz_questions, 1):
+            # Format each question as expected by the existing parser
+            formatted_question = f"""Question {i}: {question.question}
+A) {question.options['A']}
+B) {question.options['B']}
+C) {question.options['C']}
+D) {question.options['D']}
+Correct Answer: {question.correct_answer}"""
+            formatted_questions.append(formatted_question)
+        
+        # Join all questions with double newlines
+        return "\n\n".join(formatted_questions)
+        
+    except Exception as e:
+        logger.error(f"Error generating quiz with enhanced agent: {e}", exc_info=True)
+        # Fallback to simple format in case of error
+        return f"""Question 1: What is the main topic of {topic}?
+A) {topic} related concept
+B) Unrelated concept
+C) Another unrelated concept  
+D) Yet another unrelated concept
+Correct Answer: A"""
 
 
 # Enhanced quiz session management
@@ -347,7 +395,7 @@ async def create_quiz(update: Update, context: CallbackContext):
                 f"Generating {num_questions} quiz question(s) about '{topic}' based on the provided text. This may take a moment...",
             )
             try:
-                questions_raw = await generate_quiz(topic, num_questions, large_text)
+                questions_raw = await generate_quiz_questions(topic, num_questions, large_text)
                 await process_questions(
                     update,
                     context,
@@ -374,7 +422,7 @@ async def create_quiz(update: Update, context: CallbackContext):
             f"Generating {num_questions} quiz question(s) on '{topic}' based on the provided text. This may take a moment...",
         )
         try:
-            questions_raw = await generate_quiz(topic, num_questions, context_text)
+            questions_raw = await generate_quiz_questions(topic, num_questions, context_text)
             await process_questions(
                 update,
                 context,
@@ -399,7 +447,7 @@ async def create_quiz(update: Update, context: CallbackContext):
             f"Generating {num_questions} quiz question(s) for topic: {topic}",
         )
         try:
-            questions_raw = await generate_quiz(topic, num_questions)
+            questions_raw = await generate_quiz_questions(topic, num_questions)
             await process_questions(
                 update,
                 context,

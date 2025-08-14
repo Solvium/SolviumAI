@@ -899,22 +899,3 @@ async def generate_quiz(
         )
 
     return "\n\n".join(formatted_questions)
-
-
-# Example usage
-if __name__ == "__main__":
-
-    async def main():
-        generator = AdvancedQuizGenerator()
-        topic = input("Enter a topic for the quiz: ")
-        num_questions = int(input("Number of questions (default 3): ") or "3")
-        difficulty = (
-            input("Difficulty (easy/medium/hard, default medium): ") or "medium"
-        )
-
-        print(f"\n🔍 Generating {num_questions} diverse questions about '{topic}'...")
-
-        questions = await generator.generate_quiz(topic, num_questions, difficulty)
-        print(questions)
-
-    asyncio.run(main())
