@@ -681,19 +681,7 @@ async def duration_choice(update, context):
 
         progress_text += f"💰 Step 4 of 4: Reward Setup"
 
-        # Get wallet info and balance for user
-        from services.wallet_service import WalletService
-
-        wallet_service = WalletService()
-        wallet = await wallet_service.get_user_wallet(user_id)
-        wallet_balance = await wallet_service.get_wallet_balance(user_id)
-
-        if wallet and wallet.get("account_id"):
-            progress_text += (
-                f"\n\n💳 Wallet: `{wallet['account_id']}`\n💰 Balance: {wallet_balance}"
-            )
-        else:
-            progress_text += f"\n\n💳 Wallet Balance: {wallet_balance}"
+        # Note: Wallet balance check moved to reward_choice function for paid options only
 
         buttons = [
             [
@@ -875,6 +863,13 @@ async def show_reward_structure_options(update, context, reward_amount):
     context_text = await redis_client.get_user_data_key(user_id, "context_text")
     duration_seconds = await redis_client.get_user_data_key(user_id, "duration_seconds")
 
+    # Get wallet info and balance for display
+    from services.wallet_service import WalletService
+
+    wallet_service = WalletService()
+    wallet = await wallet_service.get_user_wallet(user_id)
+    wallet_balance = await wallet_service.get_wallet_balance(user_id)
+
     progress_text = f"✅ Topic: {topic}\n"
     if context_text:
         progress_text += (
@@ -891,6 +886,14 @@ async def show_reward_structure_options(update, context, reward_amount):
 
     progress_text += f"💰 Reward Amount: {reward_amount} NEAR\n"
     progress_text += f"📊 Step 4b of 4: Reward Structure"
+
+    # Add wallet information
+    if wallet and wallet.get("account_id"):
+        progress_text += (
+            f"\n\n💳 Wallet: `{wallet['account_id']}`\n💰 Balance: {wallet_balance}"
+        )
+    else:
+        progress_text += f"\n\n💳 Wallet Balance: {wallet_balance}"
 
     # Calculate total costs for different structures
     wta_total = reward_amount
