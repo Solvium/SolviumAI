@@ -1891,158 +1891,50 @@ async def distribute_quiz_rewards(
 
             if success:
                 # Blockchain distribution was successful
-                if quiz.group_chat_id and bot_to_use:
-                    all_participants = QuizAnswer.get_quiz_participants_ranking(
-                        session, quiz_id
-                    )
-                    # For winner announcements, only consider participants with correct answers
-                    winners = [
-                        p for p in all_participants if p.get("correct_count", 0) > 0
-                    ]
-                    reward_schedule = quiz.reward_schedule or {}
-                    reward_type = reward_schedule.get("type", "")
-
-                    final_message_to_group = ""
-                    if winners:
-                        # Create a more engaging and detailed winner announcement
-                        final_message_to_group = (
-                            f'🎉 Quiz "{quiz.topic}" is officially complete!\n\n'
-                        )
-                        final_message_to_group += "🏆 **WINNERS ANNOUNCED** 🏆\n\n"
-
-                        # Handle different reward types for appropriate winner announcements
-                        if reward_type == "wta_amount" and len(winners) >= 1:
-                            # Winner Takes All - announce single winner
-                            winner = winners[0]
-                            winner_username = winner.get("username")
-                            if not winner_username:
-                                winner_user_id = winner.get("user_id", "UnknownUser")
-                                winner_username = f"User_{winner_user_id[:8]}"
-
-                            correct_count = winner.get("correct_count", 0)
-                            final_message_to_group += (
-                                f"🥇 Champion: @{winner_username}\n"
-                            )
-                            final_message_to_group += (
-                                f"📊 Score: {correct_count} correct answers\n"
-                            )
-                            final_message_to_group += (
-                                f"💰 Takes the entire prize pool!\n\n"
-                            )
-
-                        elif reward_type in ["top3_details", "custom_details"]:
-                            # Top 3 or custom rewards - announce multiple winners
-                            final_message_to_group += (
-                                "🏅 **Leaderboard Champions:**\n\n"
-                            )
-                            for i, winner in enumerate(winners[:3]):  # Show top 3
-                                rank_emoji = ["🥇", "🥈", "🥉"][i] if i < 3 else "🏅"
-                                winner_username = winner.get("username")
-                                if not winner_username:
-                                    winner_user_id = winner.get(
-                                        "user_id", "UnknownUser"
-                                    )
-                                    winner_username = f"User_{winner_user_id[:8]}"
-
-                                correct_count = winner.get("correct_count", 0)
-                                final_message_to_group += f"{rank_emoji} {i+1}. @{winner_username} - {correct_count} correct\n"
-                            final_message_to_group += (
-                                "\n💰 Prizes distributed according to rankings!\n\n"
-                            )
-
-                        else:
-                            # Default announcement for other reward types
-                            winner = winners[0]
-                            winner_username = winner.get("username")
-                            if not winner_username:
-                                winner_user_id = winner.get("user_id", "UnknownUser")
-                                winner_username = f"User_{winner_user_id[:8]}"
-
-                            correct_count = winner.get("correct_count", 0)
-                            final_message_to_group += (
-                                f"🥇 Champion: @{winner_username}\n"
-                            )
-                            final_message_to_group += (
-                                f"📊 Score: {correct_count} correct answers\n\n"
-                            )
-
-                        final_message_to_group += (
-                            "🎯 Thanks to all participants for playing!\n"
-                        )
-                        final_message_to_group += (
-                            "💎 NEAR rewards have been sent to winners' wallets."
-                        )
-
-                        # If blockchain monitor returned detailed transfer info (list of dicts),
-                        # DM each winner their tx link and append to group announcement
-                        try:
-                            explorer_tx_template = "https://explorer.testnet.near.org/transactions/{tx_hash}"
-                            # If the blockchain monitor returned a list of transfers, attach them
-                            if isinstance(success, list) and success:
-                                tx_lines = []
-                                for transfer in success:
-                                    tx_hash = transfer.get("tx_hash")
-                                    user_id = transfer.get("user_id")
-                                    username = transfer.get("username") or (
-                                        f"User_{str(user_id)[:8]}"
-                                    )
-                                    wallet = transfer.get("wallet_address")
-                                    amount = transfer.get("amount_near")
-                                    tx_url = (
-                                        explorer_tx_template.format(tx_hash=tx_hash)
-                                        if tx_hash
-                                        else None
-                                    )
-
-                                    if tx_url:
-                                        tx_lines.append(
-                                            f"{username}: {amount} NEAR — {tx_url}"
-                                        )
-
-                                    # Send DM to winner with transaction URL where possible
-                                    try:
-                                        if user_id and tx_url and bot_to_use:
-                                            dm_text = (
-                                                f"✅ Hi @{username}, you just received {amount} NEAR as a quiz reward for '{quiz.topic}'.\n"
-                                                f"🔗 Transaction: {tx_url}\n"
-                                                f"📥 Wallet: {wallet}\n"
-                                                f"Thank you for playing!"
-                                            )
-                                            await safe_send_message(
-                                                bot_to_use, user_id, dm_text
-                                            )
-                                    except Exception as e_dm:
-                                        logger.warning(
-                                            f"Failed to DM user {user_id} about tx {tx_hash}: {e_dm}"
-                                        )
-
-                                if tx_lines:
-                                    final_message_to_group += (
-                                        "\n\nTransaction receipts:\n"
-                                    )
-                                    final_message_to_group += "\n".join(tx_lines)
-                        except Exception as e_attach:
-                            logger.warning(
-                                f"Could not attach transaction links to announcement: {e_attach}"
-                            )
+                # Focus only on DMing winners with transaction details
+                try:
+                    # Choose NEAR explorer URL based on network (testnet or mainnet)
+                    network = getattr(Config, "NEAR_NETWORK", "testnet").lower()
+                    if network == "mainnet":
+                        explorer_tx_template = "https://explorer.near.org/transactions/{tx_hash}"
                     else:
-                        final_message_to_group = (
-                            f'🎯 Quiz "{quiz.topic}" is officially complete!\n\n'
-                        )
-                        final_message_to_group += (
-                            "📊 Unfortunately, there were no winners this time.\n"
-                        )
-                        final_message_to_group += (
-                            "🎯 Thanks to all participants for playing!\n"
-                        )
-                        final_message_to_group += "💪 Better luck in the next quiz!"
+                        explorer_tx_template = "https://explorer.testnet.near.org/transactions/{tx_hash}"
+                    # If the blockchain monitor returned a list of transfers, DM each winner
+                    if isinstance(success, list) and success:
+                        for transfer in success:
+                            tx_hash = transfer.get("tx_hash")
+                            user_id = transfer.get("user_id")
+                            username = transfer.get("username") or (
+                                f"User_{str(user_id)[:8]}"
+                            )
+                            wallet = transfer.get("wallet_address")
+                            amount = transfer.get("amount_near")
+                            tx_url = (
+                                explorer_tx_template.format(tx_hash=tx_hash)
+                                if tx_hash
+                                else None
+                            )
 
-                    await bot_to_use.send_message(
-                        chat_id=quiz.group_chat_id, text=final_message_to_group
-                    )
-                else:
-                    logger.info(
-                        f"Quiz {quiz_id} has no group_chat_id or bot_to_use is unavailable; custom winner message not sent to group."
+                            # Send DM to winner with transaction URL
+                            try:
+                                if user_id and tx_url and bot_to_use:
+                                    dm_text = (
+                                        f"✅ Hi @{username}, you just received {amount} NEAR as a quiz reward for '{quiz.topic}'.\n"
+                                        f"🔗 Transaction: {tx_url}\n"
+                                        f"📥 Wallet: {wallet}\n"
+                                        f"Thank you for playing!"
+                                    )
+                                    await safe_send_message(
+                                        bot_to_use, user_id, dm_text
+                                    )
+                                    logger.info(f"Sent reward DM to user {user_id} for {amount} NEAR")
+                            except Exception as e_dm:
+                                logger.warning(
+                                    f"Failed to DM user {user_id} about tx {tx_hash}: {e_dm}"
+                                )
+                except Exception as e_dm_process:
+                    logger.warning(
+                        f"Error processing DMs for reward distribution: {e_dm_process}"
                     )
 
                 # Confirmation to user if command was from DM or a different chat than the quiz group
@@ -2054,7 +1946,7 @@ async def distribute_quiz_rewards(
                     await safe_send_message(
                         bot_to_use,
                         chat_id_to_reply,
-                        f"✅ Rewards for quiz '{quiz.topic}' (ID: {quiz_id}) processed. Announcement made in the group.",
+                        f"✅ Rewards for quiz '{quiz.topic}' (ID: {quiz_id}) have been distributed successfully.",
                     )
 
                 quiz.winners_announced = True
