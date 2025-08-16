@@ -1972,6 +1972,59 @@ async def distribute_quiz_rewards(
                         final_message_to_group += (
                             "💎 NEAR rewards have been sent to winners' wallets."
                         )
+
+                        # If blockchain monitor returned detailed transfer info (list of dicts),
+                        # DM each winner their tx link and append to group announcement
+                        try:
+                            explorer_tx_template = "https://explorer.testnet.near.org/transactions/{tx_hash}"
+                            # If the blockchain monitor returned a list of transfers, attach them
+                            if isinstance(success, list) and success:
+                                tx_lines = []
+                                for transfer in success:
+                                    tx_hash = transfer.get("tx_hash")
+                                    user_id = transfer.get("user_id")
+                                    username = transfer.get("username") or (
+                                        f"User_{str(user_id)[:8]}"
+                                    )
+                                    wallet = transfer.get("wallet_address")
+                                    amount = transfer.get("amount_near")
+                                    tx_url = (
+                                        explorer_tx_template.format(tx_hash=tx_hash)
+                                        if tx_hash
+                                        else None
+                                    )
+
+                                    if tx_url:
+                                        tx_lines.append(
+                                            f"{username}: {amount} NEAR — {tx_url}"
+                                        )
+
+                                    # Send DM to winner with transaction URL where possible
+                                    try:
+                                        if user_id and tx_url and bot_to_use:
+                                            dm_text = (
+                                                f"✅ Hi @{username}, you just received {amount} NEAR as a quiz reward for '{quiz.topic}'.\n"
+                                                f"🔗 Transaction: {tx_url}\n"
+                                                f"📥 Wallet: {wallet}\n"
+                                                f"Thank you for playing!"
+                                            )
+                                            await safe_send_message(
+                                                bot_to_use, user_id, dm_text
+                                            )
+                                    except Exception as e_dm:
+                                        logger.warning(
+                                            f"Failed to DM user {user_id} about tx {tx_hash}: {e_dm}"
+                                        )
+
+                                if tx_lines:
+                                    final_message_to_group += (
+                                        "\n\nTransaction receipts:\n"
+                                    )
+                                    final_message_to_group += "\n".join(tx_lines)
+                        except Exception as e_attach:
+                            logger.warning(
+                                f"Could not attach transaction links to announcement: {e_attach}"
+                            )
                     else:
                         final_message_to_group = (
                             f'🎯 Quiz "{quiz.topic}" is officially complete!\n\n'
@@ -2018,7 +2071,8 @@ async def distribute_quiz_rewards(
                 finally:
                     await redis_client.close()
 
-            else:  # Blockchain distribution failed
+            else:
+                # Blockchain distribution failed
                 target_chat_for_failure = chat_id_to_reply
                 if not target_chat_for_failure and quiz:
                     target_chat_for_failure = quiz.group_chat_id
@@ -2040,8 +2094,11 @@ async def distribute_quiz_rewards(
                 f"DB/notification error for quiz {quiz_id} post-distribution: {e_db_ops}",
                 exc_info=True,
             )
-            if "session" in locals() and session.is_active:
-                session.rollback()
+            try:
+                if "session" in locals() and session and session.is_active:
+                    session.rollback()
+            except Exception:
+                pass
             if chat_id_to_reply and bot_to_use:
                 await safe_send_message(
                     bot_to_use,
@@ -2167,17 +2224,35 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
 
         announcement += "\n\n🎯 <b>Thanks to all participants!</b> 🎯"
 
-        # Update quiz status to CLOSED when it ends
-        quiz.status = QuizStatus.CLOSED
-        session.commit()
-        logger.info(f"Quiz {quiz_id} status updated to CLOSED after quiz ended")
-
         # Send announcement to appropriate chat (group or DM)
         await safe_send_message(
             application.bot, announcement_chat_id, announcement, parse_mode="HTML"
         )
 
         logger.info(f"Quiz end announcement sent for quiz {quiz_id}")
+
+        # If a reward schedule exists and winners haven't been announced yet,
+        # trigger automatic distribution now (while quiz is still ACTIVE in DB)
+        try:
+            if quiz.reward_schedule and not quiz.winners_announced:
+                # Call distribute_quiz_rewards with application and quiz_id so it can
+                # use the bot instance from the application/job context.
+                # We don't await here in case announcement flow should not block;
+                # however awaiting ensures we attempt distribution immediately.
+                await distribute_quiz_rewards(application, quiz_id)
+        except Exception as e_dist:
+            logger.error(
+                f"Error auto-distributing rewards for quiz {quiz_id} from announcement: {e_dist}",
+                exc_info=True,
+            )
+
+        # If there is no reward schedule, simply mark the quiz closed and commit
+        if not quiz.reward_schedule:
+            quiz.status = QuizStatus.CLOSED
+            session.commit()
+            logger.info(
+                f"Quiz {quiz_id} status updated to CLOSED after quiz ended (no rewards)"
+            )
 
     except Exception as e:
         logger.error(f"Error announcing quiz end for {quiz_id}: {e}")
