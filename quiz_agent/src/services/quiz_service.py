@@ -1896,9 +1896,13 @@ async def distribute_quiz_rewards(
                     # Choose NEAR explorer URL based on network (testnet or mainnet)
                     network = getattr(Config, "NEAR_NETWORK", "testnet").lower()
                     if network == "mainnet":
-                        explorer_tx_template = "https://explorer.near.org/transactions/{tx_hash}"
+                        explorer_tx_template = (
+                            "https://explorer.near.org/transactions/{tx_hash}"
+                        )
                     else:
-                        explorer_tx_template = "https://explorer.testnet.near.org/transactions/{tx_hash}"
+                        explorer_tx_template = (
+                            "https://explorer.testnet.near.org/transactions/{tx_hash}"
+                        )
                     # If the blockchain monitor returned a list of transfers, DM each winner
                     if isinstance(success, list) and success:
                         for transfer in success:
@@ -1927,7 +1931,9 @@ async def distribute_quiz_rewards(
                                     await safe_send_message(
                                         bot_to_use, user_id, dm_text
                                     )
-                                    logger.info(f"Sent reward DM to user {user_id} for {amount} NEAR")
+                                    logger.info(
+                                        f"Sent reward DM to user {user_id} for {amount} NEAR"
+                                    )
                             except Exception as e_dm:
                                 logger.warning(
                                     f"Failed to DM user {user_id} about tx {tx_hash}: {e_dm}"
@@ -2031,6 +2037,11 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
             logger.error(f"Quiz {quiz_id} not found for end announcement")
             return
 
+        # Debug: Log full quiz details for troubleshooting
+        logger.info(
+            f"Quiz {quiz_id} full object - topic: {quiz.topic}, status: {quiz.status}, reward_schedule type: {type(quiz.reward_schedule)}, reward_schedule: {quiz.reward_schedule}"
+        )
+
         if not quiz.group_chat_id:
             logger.info(f"Quiz {quiz_id} has no group_chat_id, skipping announcement")
             return
@@ -2123,15 +2134,48 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
 
         logger.info(f"Quiz end announcement sent for quiz {quiz_id}")
 
+        # Debug logging to diagnose reward distribution issue
+        logger.info(f"Quiz {quiz_id} reward_schedule: {quiz.reward_schedule}")
+        logger.info(f"Quiz {quiz_id} winners_announced: {quiz.winners_announced}")
+        logger.info(f"Quiz {quiz_id} status: {quiz.status}")
+
         # If a reward schedule exists and winners haven't been announced yet,
         # trigger automatic distribution now (while quiz is still ACTIVE in DB)
         try:
-            if quiz.reward_schedule and not quiz.winners_announced:
+            # Check if reward_schedule contains actual reward information
+            has_rewards = (
+                quiz.reward_schedule
+                and isinstance(quiz.reward_schedule, dict)
+                and (
+                    # Either has a valid type with details
+                    (
+                        quiz.reward_schedule.get("type")
+                        in ["wta_amount", "top3_details", "custom_details"]
+                        and quiz.reward_schedule.get("details_text")
+                    )
+                    # Or has direct rank-based rewards (like {1: 2, 2: 1})
+                    or any(
+                        isinstance(k, (int, str)) and str(k).isdigit()
+                        for k in quiz.reward_schedule.keys()
+                    )
+                )
+            )
+
+            logger.info(
+                f"Quiz {quiz_id} reward evaluation - has_rewards: {has_rewards}, winners_announced: {quiz.winners_announced}"
+            )
+
+            if has_rewards and not quiz.winners_announced:
+                logger.info(f"Triggering reward distribution for quiz {quiz_id}")
                 # Call distribute_quiz_rewards with application and quiz_id so it can
                 # use the bot instance from the application/job context.
                 # We don't await here in case announcement flow should not block;
                 # however awaiting ensures we attempt distribution immediately.
                 await distribute_quiz_rewards(application, quiz_id)
+            else:
+                logger.info(
+                    f"Skipping reward distribution for quiz {quiz_id} - reward_schedule: {bool(quiz.reward_schedule)}, winners_announced: {quiz.winners_announced}"
+                )
         except Exception as e_dist:
             logger.error(
                 f"Error auto-distributing rewards for quiz {quiz_id} from announcement: {e_dist}",

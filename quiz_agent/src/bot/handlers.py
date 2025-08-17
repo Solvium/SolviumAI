@@ -2101,12 +2101,55 @@ async def store_payment_info_in_quiz(user_id: int, payment_info: dict):
     Store payment information in the quiz record
     """
     try:
-        # TODO: Implement actual database storage for payment info
-        # For now, log the payment information
         logger.info(f"Payment info for user {user_id}: {payment_info}")
 
-        # In the future, this would store payment info in the quiz table
-        # await db_service.update_quiz_payment_info(quiz_id, payment_info)
+        quiz_id = payment_info.get("quiz_id")
+        reward_amount = payment_info.get("reward_amount")
+        reward_structure = payment_info.get("reward_structure")
+
+        if not quiz_id:
+            logger.error(f"No quiz_id in payment_info for user {user_id}")
+            return
+
+        # Store reward information in the database
+        from store.database import SessionLocal
+        from models.quiz import Quiz
+
+        session = SessionLocal()
+        try:
+            quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
+            if not quiz:
+                logger.error(f"Quiz {quiz_id} not found when storing payment info")
+                return
+
+            # Create proper reward_schedule based on structure
+            if reward_structure == "winner_takes_all" and reward_amount:
+                quiz.reward_schedule = {
+                    "type": "wta_amount",
+                    "details_text": f"{reward_amount} NEAR",
+                }
+                logger.info(
+                    f"Set reward_schedule for quiz {quiz_id}: {quiz.reward_schedule}"
+                )
+            elif reward_structure == "top_3" and reward_amount:
+                # Handle top 3 structure if needed
+                quiz.reward_schedule = {
+                    "type": "top3_details",
+                    "details_text": f"{reward_amount} NEAR",
+                }
+                logger.info(
+                    f"Set reward_schedule for quiz {quiz_id}: {quiz.reward_schedule}"
+                )
+            else:
+                logger.warning(
+                    f"Unknown reward structure '{reward_structure}' for quiz {quiz_id}"
+                )
+
+            session.commit()
+            logger.info(f"Successfully stored payment info for quiz {quiz_id}")
+
+        finally:
+            session.close()
 
     except Exception as e:
         logger.error(f"Error storing payment info for user {user_id}: {e}")

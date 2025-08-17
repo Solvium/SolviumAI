@@ -359,6 +359,7 @@ class BlockchainMonitor:
 
             # Get wallet addresses for winners
             from models.user import User  # Already imported but good to note
+            from models.wallet import UserWallet  # Import for new wallet system
 
             reward_schedule = quiz.reward_schedule
             logger.debug(
@@ -383,7 +384,21 @@ class BlockchainMonitor:
                     user_id = winner_data["user_id"]
                     user = session.query(User).filter(User.id == user_id).first()
 
-                    if not user or not user.wallet_address:
+                    # Check for wallet in both legacy and new systems
+                    wallet_address = None
+                    if user:
+                        # Check legacy wallet_address field
+                        if user.wallet_address:
+                            wallet_address = user.wallet_address
+                        # Check new UserWallet system
+                        elif user.wallets:
+                            active_wallet = next(
+                                (w for w in user.wallets if w.is_active), None
+                            )
+                            if active_wallet:
+                                wallet_address = active_wallet.account_id
+
+                    if not user or not wallet_address:
                         logger.warning(
                             f"[distribute_rewards] WTA: Top winner User {user_id} (Username: {winner_data.get('username', 'N/A')}) has no wallet linked or user not found. No reward distributed for WTA."
                         )
@@ -420,7 +435,7 @@ class BlockchainMonitor:
                             )
 
                             if reward_amount_yoctonear_final > 0:
-                                recipient_wallet = user.wallet_address
+                                recipient_wallet = wallet_address
                                 logger.info(
                                     f"[distribute_rewards] WTA: Attempting to send {reward_amount_near_str_final} NEAR ({reward_amount_yoctonear_final} yoctoNEAR) to {recipient_wallet} (User: {winner_data.get('username', 'N/A')})"
                                 )
@@ -475,8 +490,22 @@ class BlockchainMonitor:
                     user_id = winner_data["user_id"]
                     user = session.query(User).filter(User.id == user_id).first()
 
+                    # Check for wallet in both legacy and new systems
+                    wallet_address = None
+                    if user:
+                        # Check legacy wallet_address field
+                        if user.wallet_address:
+                            wallet_address = user.wallet_address
+                        # Check new UserWallet system
+                        elif user.wallets:
+                            active_wallet = next(
+                                (w for w in user.wallets if w.is_active), None
+                            )
+                            if active_wallet:
+                                wallet_address = active_wallet.account_id
+
                     # Skip if no wallet linked
-                    if not user or not user.wallet_address:
+                    if not user or not wallet_address:
                         logger.warning(
                             f"[distribute_rewards] User {user_id} (Username: {winner_data.get('username', 'N/A')}) has no wallet linked or user not found, skipping."
                         )
@@ -564,7 +593,7 @@ class BlockchainMonitor:
                         )
                         continue
 
-                    recipient_wallet = user.wallet_address
+                    recipient_wallet = wallet_address
                     logger.info(
                         f"[distribute_rewards] Attempting to send {reward_amount_near_str_final} NEAR ({reward_amount_yoctonear_final} yoctoNEAR) to {recipient_wallet} (User: {winner_data.get('username', 'N/A')}, Rank: {rank})"
                     )
