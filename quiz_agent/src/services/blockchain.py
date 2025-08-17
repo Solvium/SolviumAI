@@ -12,7 +12,6 @@ from typing import Dict, List, Optional, Any
 from py_near.account import Account
 
 # Import py-near components
-# from pynear.account import Account
 from py_near.dapps.core import NEAR
 import httpx
 from tenacity import (
@@ -440,19 +439,21 @@ class BlockchainMonitor:
                                     f"[distribute_rewards] WTA: Attempting to send {reward_amount_near_str_final} NEAR ({reward_amount_yoctonear_final} yoctoNEAR) to {recipient_wallet} (User: {winner_data.get('username', 'N/A')})"
                                 )
                                 try:
-                                    tx_result = await self.near_account.send_money(
-                                        recipient_wallet, reward_amount_yoctonear_final
+                                    # Use nowait=True to get transaction hash directly as string
+                                    tx_hash_str = await self.near_account.send_money(
+                                        recipient_wallet,
+                                        reward_amount_yoctonear_final,
+                                        nowait=True,
                                     )
-                                    tx_hash_str = str(
-                                        tx_result.get("transaction_outcome", {}).get(
-                                            "id", "N/A"
-                                        )
-                                        if isinstance(tx_result, dict)
-                                        else tx_result
-                                    )
+
+                                    # tx_hash_str is now directly the transaction hash string
+                                    if not tx_hash_str or tx_hash_str == "N/A":
+                                        tx_hash_str = "UNKNOWN_HASH"
+
                                     logger.info(
-                                        f"[distribute_rewards] WTA: Successfully sent {reward_amount_near_str_final} NEAR to {recipient_wallet}. Tx details: {tx_hash_str}"
+                                        f"[distribute_rewards] WTA: Successfully sent {reward_amount_near_str_final} NEAR to {recipient_wallet}. Tx hash: {tx_hash_str}"
                                     )
+
                                     successful_transfers.append(
                                         {
                                             "user_id": user_id,
@@ -600,21 +601,17 @@ class BlockchainMonitor:
 
                     try:
                         # THE ACTUAL TRANSFER CALL
-                        tx_result = await self.near_account.send_money(
-                            recipient_wallet, reward_amount_yoctonear_final
-                        )
-                        # py-near send_money usually returns a dict with transaction outcome or raises error.
-                        # Let's assume tx_result contains a hash or success indicator.
-                        # For robust check, one might inspect tx_result structure based on py-near documentation.
-                        # Simplified: if it doesn't raise, assume success for now and log what we get.
-                        tx_hash_str = str(
-                            tx_result.get("transaction_outcome", {}).get("id", "N/A")
-                            if isinstance(tx_result, dict)
-                            else tx_result
+                        # Use nowait=True to get transaction hash directly as string
+                        tx_hash_str = await self.near_account.send_money(
+                            recipient_wallet, reward_amount_yoctonear_final, nowait=True
                         )
 
+                        # tx_hash_str is now directly the transaction hash string
+                        if not tx_hash_str or tx_hash_str == "N/A":
+                            tx_hash_str = "UNKNOWN_HASH"
+
                         logger.info(
-                            f"[distribute_rewards] Successfully sent {reward_amount_near_str_final} NEAR to {recipient_wallet}. Tx details: {tx_hash_str}"
+                            f"[distribute_rewards] Successfully sent {reward_amount_near_str_final} NEAR to {recipient_wallet}. Tx hash: {tx_hash_str}"
                         )
                         successful_transfers.append(
                             {
