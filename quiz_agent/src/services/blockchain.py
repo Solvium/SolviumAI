@@ -466,9 +466,18 @@ class BlockchainMonitor:
                                         }
                                     )
                                 except Exception as e:
-                                    logger.error(
-                                        f"[distribute_rewards] WTA: Failed to send reward to {recipient_wallet}: {e}"
-                                    )
+                                    error_msg = str(e)
+                                    if "RPC not available" in error_msg:
+                                        logger.error(
+                                            f"[distribute_rewards] WTA: NEAR RPC connection failed. This is likely a temporary network issue. Reward distribution will be retried automatically."
+                                        )
+                                        logger.error(
+                                            f"[distribute_rewards] WTA: Failed to send reward to {recipient_wallet}: RPC not available"
+                                        )
+                                    else:
+                                        logger.error(
+                                            f"[distribute_rewards] WTA: Failed to send reward to {recipient_wallet}: {e}"
+                                        )
                                     traceback.print_exc()
                             else:
                                 logger.warning(

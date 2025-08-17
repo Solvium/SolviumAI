@@ -2070,7 +2070,45 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
             answers_announcement += f"\n\n� <b>The answers to the questions are:</b>\n"
             for i, question_data in enumerate(quiz.questions, 1):
                 question_text = question_data.get("question", f"Question {i}")
-                correct_answer = question_data.get("correct_answer", "Unknown")
+                # Get correct answer - try multiple possible field names and structures
+                correct_answer = "Unknown"
+
+                # Method 1: Direct correct_answer field (if stored as processed text)
+                if "correct_answer" in question_data:
+                    correct_answer = question_data["correct_answer"]
+
+                # Method 2: correct field with original_options mapping
+                elif "correct" in question_data and "original_options" in question_data:
+                    correct_label = question_data["correct"]
+                    original_options = question_data["original_options"]
+                    correct_answer = original_options.get(correct_label, "Unknown")
+
+                # Method 3: correct field with shuffled_options mapping
+                elif "correct" in question_data and "shuffled_options" in question_data:
+                    correct_label = question_data["correct"]
+                    shuffled_options = question_data["shuffled_options"]
+                    correct_answer = shuffled_options.get(correct_label, "Unknown")
+
+                # Method 4: direct options mapping (A, B, C, D structure)
+                elif "correct" in question_data and any(key in question_data for key in ["A", "B", "C", "D"]):
+                    correct_label = question_data["correct"]
+                    correct_answer = question_data.get(correct_label, "Unknown")
+
+                # Method 5: options array structure
+                elif "correct" in question_data and "options" in question_data:
+                    correct_label = question_data["correct"]
+                    options = question_data["options"]
+                    if isinstance(options, dict):
+                        correct_answer = options.get(correct_label, "Unknown")
+                    elif isinstance(options, list) and correct_label.isdigit():
+                        idx = int(correct_label)
+                        if 0 <= idx < len(options):
+                            correct_answer = options[idx]
+
+                # Debug logging for troubleshooting
+                if correct_answer == "Unknown":
+                    logger.warning(f"Could not extract correct answer for question {i}. Question data keys: {list(question_data.keys())}")
+                    logger.debug(f"Question {i} data: {question_data}")
 
                 # Truncate long questions for readability
                 if len(question_text) > 80:
@@ -3219,10 +3257,6 @@ async def finish_enhanced_quiz(
         else:
             logger.info("✅ Database verification passed - all answers saved correctly")
 
-        # Add leaderboard info
-        results_text += (
-            f"\n\n🏆 Your score: {results['correct']}/{results['total_questions']}"
-        )
 
     except Exception as e:
         logger.error(f"Error saving enhanced quiz results: {e}")
