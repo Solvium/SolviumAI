@@ -482,9 +482,6 @@ async def process_questions(
     duration_seconds: int | None = None,  # Changed parameters
 ):
     """Process multiple questions from raw text and save them as a quiz."""
-    logger.info(
-        f"Processing questions for topic: {topic} with duration_seconds: {duration_seconds}"
-    )
 
     # Parse multiple questions
     questions_list = parse_multiple_questions(questions_raw)
@@ -2027,7 +2024,7 @@ async def distribute_quiz_rewards(
 
 
 async def announce_quiz_end(application: "Application", quiz_id: str):
-    """Announce quiz end with final leaderboard and results"""
+    """Announce quiz end with answers first, then winners - two-part flow"""
     logger.info(f"Announcing quiz end for quiz_id: {quiz_id}")
 
     session = SessionLocal()
@@ -2062,20 +2059,50 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         # Get all participants and their scores
         all_participants = QuizAnswer.get_quiz_participants_ranking(session, quiz_id)
 
-        # Create comprehensive end announcement with HTML formatting
-        announcement = f"""🏁 <b>QUIZ ENDED: {quiz.topic}</b> 🏁
+        # PART 1: Quiz ended announcement with answers
+        answers_announcement = f"""� <b>Hurray! The quiz "{quiz.topic}" has officially ended!</b> �
 
-⏰ The quiz period has officially ended!
-📊 Final results are now available.
-
+⏰ The quiz period is now complete.
 👥 <b>Total Participants:</b> {len(all_participants)}"""
+
+        # Add quiz answers review
+        if quiz.questions and len(quiz.questions) > 0:
+            answers_announcement += f"\n\n� <b>The answers to the questions are:</b>\n"
+            for i, question_data in enumerate(quiz.questions, 1):
+                question_text = question_data.get("question", f"Question {i}")
+                correct_answer = question_data.get("correct_answer", "Unknown")
+
+                # Truncate long questions for readability
+                if len(question_text) > 80:
+                    question_text = question_text[:77] + "..."
+
+                answers_announcement += f"✅ <b>Q{i}:</b> {question_text}\n"
+                answers_announcement += f"   � <b>Answer:</b> {correct_answer}\n"
+
+        answers_announcement += "\n\n⏳ <i>Winners announcement coming up next...</i>"
+
+        # Send first announcement (answers)
+        await safe_send_message(
+            application.bot, announcement_chat_id, answers_announcement, parse_mode="HTML"
+        )
+
+        logger.info(f"Quiz answers announcement sent for quiz {quiz_id}")
+
+        # Small delay before second announcement
+        import asyncio
+        await asyncio.sleep(3)
+
+        # PART 2: Winners and leaderboard announcement
+        winners_announcement = f"""🏆 <b>QUIZ WINNERS - {quiz.topic}</b> 🏆
+
+📊 Final results and leaderboard:"""
 
         if all_participants:
             # Get the actual number of questions in the quiz
             num_questions_in_quiz = len(quiz.questions) if quiz.questions else 0
 
             # Add leaderboard
-            announcement += "\n\n🏆 <b>FINAL LEADERBOARD:</b>\n"
+            winners_announcement += "\n\n🏆 <b>FINAL LEADERBOARD:</b>\n"
             for i, participant in enumerate(all_participants[:10]):  # Show top 10
                 medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "🏅"
                 username = participant.get(
@@ -2089,8 +2116,8 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                     else 0
                 )
 
-                announcement += f"{medal} <b>{i+1}.</b> @{username}\n"
-                announcement += (
+                winners_announcement += f"{medal} <b>{i+1}.</b> @{username}\n"
+                winners_announcement += (
                     f"   📊 {correct_count}/{num_questions_in_quiz} ({accuracy:.1f}%)\n"
                 )
 
@@ -2105,25 +2132,22 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                 else 0
             )
 
-            # Get the actual number of questions in the quiz
-            num_questions_in_quiz = len(quiz.questions) if quiz.questions else 0
-
-            announcement += f"\n📈 <b>Quiz Statistics:</b>\n"
-            announcement += f"• Total correct answers: {total_correct}\n"
-            announcement += f"• Average accuracy: {avg_accuracy:.1f}%\n"
-            announcement += f"• Questions in quiz: {num_questions_in_quiz}\n"
+            winners_announcement += f"\n📈 <b>Quiz Statistics:</b>\n"
+            winners_announcement += f"• Total correct answers: {total_correct}\n"
+            winners_announcement += f"• Average accuracy: {avg_accuracy:.1f}%\n"
+            winners_announcement += f"• Questions in quiz: {num_questions_in_quiz}\n"
         else:
-            announcement += "\n\n📊 No participants found for this quiz."
+            winners_announcement += "\n\n📊 No participants found for this quiz."
 
         # Add reward information if applicable
         if quiz.reward_schedule:
             reward_type = quiz.reward_schedule.get("type", "")
             if reward_type == "wta_amount":
-                announcement += "\n💰 <b>Reward Type:</b> Winner Takes All"
+                winners_announcement += "\n💰 <b>Reward Type:</b> Winner Takes All"
             elif reward_type == "top3_details":
-                announcement += "\n💰 <b>Reward Type:</b> Top 3 Winners"
+                winners_announcement += "\n💰 <b>Reward Type:</b> Top 3 Winners"
             elif reward_type == "custom_details":
-                announcement += "\n💰 <b>Reward Type:</b> Custom Rewards"
+                winners_announcement += "\n💰 <b>Reward Type:</b> Custom Rewards"
 
             # Add DM notification for winners when there are rewards
             if all_participants:
@@ -2150,23 +2174,23 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
 
                 # Add DM notification message for winners
                 if winners_to_notify:
-                    announcement += "\n\n📧 <b>Reward Recipients:</b>"
+                    winners_announcement += "\n\n📧 <b>Reward Recipients:</b>"
                     for winner in winners_to_notify:
                         username = winner.get(
                             "username", f"User_{winner.get('user_id', 'Unknown')[:8]}"
                         )
-                        announcement += (
+                        winners_announcement += (
                             f"\n🎁 @{username}, check your DM for reward details!"
                         )
 
-        announcement += "\n\n🎯 <b>Thanks to all participants!</b> 🎯"
+        winners_announcement += "\n\n🎯 <b>Thanks to all participants!</b> 🎯"
 
-        # Send announcement to appropriate chat (group or DM)
+        # Send second announcement (winners)
         await safe_send_message(
-            application.bot, announcement_chat_id, announcement, parse_mode="HTML"
+            application.bot, announcement_chat_id, winners_announcement, parse_mode="HTML"
         )
 
-        logger.info(f"Quiz end announcement sent for quiz {quiz_id}")
+        logger.info(f"Quiz end announcements (both parts) sent for quiz {quiz_id}")
 
         # Debug logging to diagnose reward distribution issue
         logger.info(f"Quiz {quiz_id} reward_schedule: {quiz.reward_schedule}")
@@ -2948,26 +2972,12 @@ async def finish_enhanced_quiz(
     total_answered = results["correct"] + results["wrong"]
     accuracy = (results["correct"] / total_answered * 100) if total_answered > 0 else 0
 
-    results_text = f"""🏁 The quiz '{quiz.topic}' has finished!
+    results_text = f"""🏁 Quiz '{quiz.topic}' completed!
 
-You answered {total_answered} questions:
+✅ You have finished answering the quiz.
+� Monitor the group chat to see results when the quiz period ends!
 
-✅ Correct – {results['correct']}
-❌ Wrong – {results['wrong']}
-⌛️ Missed – {results['missed']}
-📊 Accuracy – {accuracy:.1f}%
-
-📋 Question Review:"""
-
-    # Add question-by-question review
-    for i, answer_data in enumerate(results["answers"].values()):
-        question_num = i + 1
-        user_answer = answer_data.get("answer", "No answer")
-        correct_answer = answer_data.get("correct_answer", "Unknown")
-        is_correct = answer_data.get("correct", False)
-
-        status = "✅" if is_correct else "❌"
-        results_text += f"\n{status} Q{question_num}: Your answer: {user_answer} | Correct: {correct_answer}"
+🎯 Thank you for participating!"""
 
     # Save results to database
     session = SessionLocal()
@@ -3222,7 +3232,6 @@ You answered {total_answered} questions:
 
     # Clean up session and scheduled tasks
     session_key = f"{user_id}:{quiz.id}"
-    logger.info(f"Cleaning up enhanced quiz session: {session_key}")
     active_quiz_sessions.pop(session_key, None)
     logger.info(f"Session removed, remaining_sessions={len(active_quiz_sessions)}")
 
