@@ -2125,6 +2125,40 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
             elif reward_type == "custom_details":
                 announcement += "\n💰 <b>Reward Type:</b> Custom Rewards"
 
+            # Add DM notification for winners when there are rewards
+            if all_participants:
+                # Determine who gets rewards based on reward type
+                winners_to_notify = []
+
+                if reward_type == "wta_amount":
+                    # Winner takes all - only the top participant
+                    if all_participants:
+                        winners_to_notify = [all_participants[0]]
+                elif reward_type == "top3_details":
+                    # Top 3 winners
+                    winners_to_notify = all_participants[:3]
+                elif reward_type == "custom_details":
+                    # Custom rewards - assume all participants with correct answers
+                    winners_to_notify = [
+                        p for p in all_participants if p.get("correct_count", 0) > 0
+                    ]
+                else:
+                    # For other reward types, assume participants with correct answers
+                    winners_to_notify = [
+                        p for p in all_participants if p.get("correct_count", 0) > 0
+                    ]
+
+                # Add DM notification message for winners
+                if winners_to_notify:
+                    announcement += "\n\n📧 <b>Reward Recipients:</b>"
+                    for winner in winners_to_notify:
+                        username = winner.get(
+                            "username", f"User_{winner.get('user_id', 'Unknown')[:8]}"
+                        )
+                        announcement += (
+                            f"\n🎁 @{username}, check your DM for reward details!"
+                        )
+
         announcement += "\n\n🎯 <b>Thanks to all participants!</b> 🎯"
 
         # Send announcement to appropriate chat (group or DM)
