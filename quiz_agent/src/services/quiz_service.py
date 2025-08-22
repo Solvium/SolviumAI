@@ -1886,7 +1886,29 @@ async def distribute_quiz_rewards(
                     )
                 return  # Exit if quiz not found
 
-            if success:
+            # Check if there were no participants (success is None) vs actual failure (success is False)
+            if success is None:
+                # No participants found - this is normal, not an error
+                logger.info(
+                    f"No participants found for quiz {quiz_id} - no rewards to distribute"
+                )
+
+                # Update quiz status to closed since no rewards were distributed
+                quiz.winners_announced = True
+                quiz.status = QuizStatus.CLOSED
+                session.commit()
+                logger.info(f"Quiz {quiz_id} closed due to no participants")
+
+                # Send appropriate message to user
+                if chat_id_to_reply and bot_to_use:
+                    await safe_send_message(
+                        bot_to_use,
+                        chat_id_to_reply,
+                        f"ℹ️ Quiz '{quiz.topic}' ended with no participants. No rewards to distribute.",
+                    )
+                return
+
+            elif success:
                 # Blockchain distribution was successful
                 # Focus only on DMing winners with transaction details
                 try:
@@ -2090,7 +2112,9 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                     correct_answer = shuffled_options.get(correct_label, "Unknown")
 
                 # Method 4: direct options mapping (A, B, C, D structure)
-                elif "correct" in question_data and any(key in question_data for key in ["A", "B", "C", "D"]):
+                elif "correct" in question_data and any(
+                    key in question_data for key in ["A", "B", "C", "D"]
+                ):
                     correct_label = question_data["correct"]
                     correct_answer = question_data.get(correct_label, "Unknown")
 
@@ -2107,7 +2131,9 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
 
                 # Debug logging for troubleshooting
                 if correct_answer == "Unknown":
-                    logger.warning(f"Could not extract correct answer for question {i}. Question data keys: {list(question_data.keys())}")
+                    logger.warning(
+                        f"Could not extract correct answer for question {i}. Question data keys: {list(question_data.keys())}"
+                    )
                     logger.debug(f"Question {i} data: {question_data}")
 
                 # Truncate long questions for readability
@@ -2121,13 +2147,17 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
 
         # Send first announcement (answers)
         await safe_send_message(
-            application.bot, announcement_chat_id, answers_announcement, parse_mode="HTML"
+            application.bot,
+            announcement_chat_id,
+            answers_announcement,
+            parse_mode="HTML",
         )
 
         logger.info(f"Quiz answers announcement sent for quiz {quiz_id}")
 
         # Small delay before second announcement
         import asyncio
+
         await asyncio.sleep(3)
 
         # PART 2: Winners and leaderboard announcement
@@ -2225,7 +2255,10 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
 
         # Send second announcement (winners)
         await safe_send_message(
-            application.bot, announcement_chat_id, winners_announcement, parse_mode="HTML"
+            application.bot,
+            announcement_chat_id,
+            winners_announcement,
+            parse_mode="HTML",
         )
 
         logger.info(f"Quiz end announcements (both parts) sent for quiz {quiz_id}")
@@ -3089,23 +3122,14 @@ async def finish_enhanced_quiz(
                 )
 
                 if existing_answer:
-                    # Update existing answer if it's different
-                    if (
-                        existing_answer.answer != user_answer
-                        or existing_answer.is_correct
-                        != ("True" if is_correct else "False")
-                    ):
-                        existing_answer.answer = user_answer
-                        existing_answer.is_correct = "True" if is_correct else "False"
-                        existing_answer.answered_at = answered_at
-                        existing_answer.username = username
-                        logger.info(
-                            f"Updated existing answer for user {user_id}, quiz {quiz.id}, question {question_idx}"
-                        )
-                    else:
-                        logger.info(
-                            f"Answer for question {question_idx} unchanged, skipping update"
-                        )
+                    # Update existing answer (including empty "started" records)
+                    existing_answer.answer = user_answer
+                    existing_answer.is_correct = "True" if is_correct else "False"
+                    existing_answer.answered_at = answered_at
+                    existing_answer.username = username
+                    logger.info(
+                        f"Updated existing answer for user {user_id}, quiz {quiz.id}, question {question_idx}"
+                    )
                 else:
                     # Create new quiz answer record
                     quiz_answer = QuizAnswer(
@@ -3256,7 +3280,6 @@ async def finish_enhanced_quiz(
                     session.rollback()
         else:
             logger.info("✅ Database verification passed - all answers saved correctly")
-
 
     except Exception as e:
         logger.error(f"Error saving enhanced quiz results: {e}")

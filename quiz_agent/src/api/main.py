@@ -107,9 +107,8 @@ async def preload_resources():
             await RedisClient.set_value(f"response_{key}", value, ttl_seconds=7200)
 
         # Initialize database connection pool
-        from services.database_service import DatabaseService
+        from services.database_service import db_service
 
-        db_service = DatabaseService()
         if db_service.async_session:
             logger.info("Database connection pool initialized")
 
