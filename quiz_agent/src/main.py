@@ -35,7 +35,7 @@ async def initialize_optimized_services():
         if "postgresql" in Config.DATABASE_URL or "postgres" in Config.DATABASE_URL:
             logger.info("Attempting to migrate database schema for PostgreSQL...")
             # migrate_schema()
-        init_db()
+        # init_db()
 
         # Initialize Redis connection
         logger.info("📡 Initializing Redis connection...")

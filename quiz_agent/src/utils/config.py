@@ -75,7 +75,9 @@ class Config:
     # Remote Redis (production)
     REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
     REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-    REDIS_SSL = os.getenv("REDIS_SSL", True)
+    REDIS_SSL = (
+        os.getenv("REDIS_SSL", "false").lower() == "true"
+    )  # Default to False for local development
     # REDIS_DB = int(os.getenv("REDIS_DB", 0))
     REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
 
