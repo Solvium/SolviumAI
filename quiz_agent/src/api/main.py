@@ -286,6 +286,22 @@ def get_app_cache() -> Dict[str, Any]:
 if FASTAPI_AVAILABLE:
     app = create_app()
 
+    # Add root endpoint
+    @app.get("/")
+    async def root():
+        """Root endpoint for the SolviumAI Quiz Bot API."""
+        return {
+            "message": "SolviumAI Quiz Bot API",
+            "status": "running",
+            "version": "1.0.0",
+            "endpoints": {
+                "health": "/health",
+                "webhook": "/webhook",
+                "monitoring": "/monitoring",
+                "metrics": "/metrics/performance",
+            },
+        }
+
     # Add performance monitoring endpoints
     @app.get("/metrics/performance")
     async def get_performance_metrics():
