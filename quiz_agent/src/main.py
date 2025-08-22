@@ -166,7 +166,7 @@ async def start_fastapi_mode():
         server_task = asyncio.create_task(server.serve())
 
         # Wait for both tasks
-        await asyncio.gather(bot_start_task, server_task)
+        await asyncio.gather(bot_start_task, server_task, return_exceptions=True)
 
     except ImportError as e:
         logger.error(f"❌ FastAPI dependencies not available: {e}")
