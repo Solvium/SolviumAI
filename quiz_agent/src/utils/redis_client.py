@@ -4,6 +4,14 @@ import logging
 from typing import Optional, Any, Dict
 from utils.config import Config
 
+# Handle Redis exceptions
+try:
+    from redis.exceptions import ConnectionError, RedisError
+except ImportError:
+    # Fallback for older Redis versions
+    ConnectionError = Exception
+    RedisError = Exception
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,25 +34,57 @@ class RedisClient:
                         decode_responses=False,
                     )
                 else:
-                    # Use remote Redis for production
-                    cls._instance = redis.Redis(
-                        host=Config.REDIS_HOST,
-                        port=Config.REDIS_PORT,
-                        ssl=Config.REDIS_SSL,
-                        # db=Config.REDIS_DB,
-                        password=Config.REDIS_PASSWORD,
-                        decode_responses=False,
-                    )
+                    # Use remote Redis for production (Upstash)
+                    # Check if REDIS_HOST is a URL (Upstash format)
+                    if Config.REDIS_HOST and (
+                        "://" in Config.REDIS_HOST
+                        or Config.REDIS_HOST.startswith("https://")
+                    ):
+                        # Parse Upstash URL format
+                        redis_url = Config.REDIS_HOST
+                        if redis_url.startswith("https://"):
+                            # Convert https:// to rediss:// for SSL
+                            redis_url = redis_url.replace("https://", "rediss://")
+
+                        # Add password to URL if provided
+                        if Config.REDIS_PASSWORD:
+                            if "@" in redis_url:
+                                # URL already has credentials, replace them
+                                parts = redis_url.split("@")
+                                redis_url = (
+                                    f"rediss://:{Config.REDIS_PASSWORD}@{parts[1]}"
+                                )
+                            else:
+                                # Add password to URL
+                                redis_url = redis_url.replace(
+                                    "rediss://", f"rediss://:{Config.REDIS_PASSWORD}@"
+                                )
+
+                        cls._instance = redis.from_url(
+                            redis_url,
+                            decode_responses=False,
+                            socket_connect_timeout=10,
+                            socket_timeout=10,
+                        )
+                    else:
+                        # Use traditional host/port configuration
+                        cls._instance = redis.Redis(
+                            host=Config.REDIS_HOST,
+                            port=Config.REDIS_PORT,
+                            ssl=Config.REDIS_SSL,
+                            password=Config.REDIS_PASSWORD,
+                            decode_responses=False,
+                        )
                 await cls._instance.ping()  # await ping
                 if Config.is_development():
                     logger.info(
-                        f"Successfully connected to Local Async Redis at {Config.REDIS_HOST_LOCAL}:{Config.REDIS_PORT_LOCAL}"
+                        f"Successfully connected to Local Async Redis at {getattr(Config, 'REDIS_HOST_LOCAL', 'localhost')}:{getattr(Config, 'REDIS_PORT_LOCAL', 6379)}"
                     )
                 else:
                     logger.info(
-                        f"Successfully connected to Remote Async Redis at {Config.REDIS_HOST}:{Config.REDIS_PORT}"
+                        f"Successfully connected to Remote Async Redis at {Config.REDIS_HOST}"
                     )
-            except redis.exceptions.ConnectionError as e:
+            except ConnectionError as e:
                 logger.error(f"Could not connect to Async Redis: {e}")
                 cls._instance = None  # Ensure instance is None on failure
                 raise  # Re-raise the connection error
@@ -74,7 +114,7 @@ class RedisClient:
                 await r.set(key, serialized_value)  # await set
             logger.debug(f"Set value for key '{key}' with TTL {ttl_seconds}s")
             return True
-        except (redis.exceptions.RedisError, TypeError) as e:
+        except (RedisError, TypeError) as e:
             logger.error(f"Error setting value in Async Redis for key '{key}': {e}")
             return False
         except Exception as e:  # Catch unexpected errors
@@ -103,7 +143,7 @@ class RedisClient:
                 return json.loads(serialized_value)
             logger.debug(f"No value found for key '{key}'")
             return None
-        except (redis.exceptions.RedisError, TypeError) as e:
+        except (RedisError, TypeError) as e:
             logger.error(f"Error getting value from Async Redis for key '{key}': {e}")
             return None
         except Exception as e:  # Catch unexpected errors
