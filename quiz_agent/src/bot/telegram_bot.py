@@ -471,17 +471,12 @@ class TelegramBot:
                 # In FastAPI mode, we don't start the updater here
                 # The FastAPI server will handle webhook requests
                 logger.info(
-                    "Bot initialized for FastAPI webhook mode - waiting for FastAPI to handle requests"
+                    "Bot initialized for FastAPI webhook mode - FastAPI will handle webhook requests"
                 )
 
-                try:
-                    await self._stop_signal  # Wait for stop signal
-                except asyncio.CancelledError:
-                    logger.info(
-                        "FastAPI webhook stop signal received via CancelledError."
-                    )
-                finally:
-                    logger.info("FastAPI webhook mode ended.")
+                # In FastAPI mode, we don't wait for a stop signal
+                # The bot should stay active to handle webhook requests through FastAPI
+                # The stop signal will be handled when the FastAPI application shuts down
 
             else:
                 # Original webhook implementation using python-telegram-bot's built-in server
