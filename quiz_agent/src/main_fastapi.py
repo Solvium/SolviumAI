@@ -38,10 +38,10 @@ async def initialize_services():
     logger.info("Initializing services for FastAPI mode...")
 
     # Initialize database if needed
-    # if "postgresql" in Config.DATABASE_URL or "postgres" in Config.DATABASE_URL:
-    #     logger.info("Attempting to migrate database schema for PostgreSQL...")
-    #     migrate_schema()
-    # init_db()
+    if "postgresql" in Config.DATABASE_URL or "postgres" in Config.DATABASE_URL:
+        logger.info("Attempting to migrate database schema for PostgreSQL...")
+        migrate_schema()
+    init_db()
 
     # Initialize Redis
     try:

@@ -12,7 +12,6 @@ from typing import Dict, List, Optional, Any
 from py_near.account import Account
 
 # Import py-near components
-# from pynear.account import Account
 from py_near.dapps.core import NEAR
 import httpx
 from tenacity import (
@@ -359,6 +358,7 @@ class BlockchainMonitor:
 
             # Get wallet addresses for winners
             from models.user import User  # Already imported but good to note
+            from models.wallet import UserWallet  # Import for new wallet system
 
             reward_schedule = quiz.reward_schedule
             logger.debug(
@@ -383,7 +383,21 @@ class BlockchainMonitor:
                     user_id = winner_data["user_id"]
                     user = session.query(User).filter(User.id == user_id).first()
 
-                    if not user or not user.wallet_address:
+                    # Check for wallet in both legacy and new systems
+                    wallet_address = None
+                    if user:
+                        # Check legacy wallet_address field
+                        if user.wallet_address:
+                            wallet_address = user.wallet_address
+                        # Check new UserWallet system
+                        elif user.wallets:
+                            active_wallet = next(
+                                (w for w in user.wallets if w.is_active), None
+                            )
+                            if active_wallet:
+                                wallet_address = active_wallet.account_id
+
+                    if not user or not wallet_address:
                         logger.warning(
                             f"[distribute_rewards] WTA: Top winner User {user_id} (Username: {winner_data.get('username', 'N/A')}) has no wallet linked or user not found. No reward distributed for WTA."
                         )
@@ -420,24 +434,26 @@ class BlockchainMonitor:
                             )
 
                             if reward_amount_yoctonear_final > 0:
-                                recipient_wallet = user.wallet_address
+                                recipient_wallet = wallet_address
                                 logger.info(
                                     f"[distribute_rewards] WTA: Attempting to send {reward_amount_near_str_final} NEAR ({reward_amount_yoctonear_final} yoctoNEAR) to {recipient_wallet} (User: {winner_data.get('username', 'N/A')})"
                                 )
                                 try:
-                                    tx_result = await self.near_account.send_money(
-                                        recipient_wallet, reward_amount_yoctonear_final
+                                    # Use nowait=True to get transaction hash directly as string
+                                    tx_hash_str = await self.near_account.send_money(
+                                        recipient_wallet,
+                                        reward_amount_yoctonear_final,
+                                        nowait=True,
                                     )
-                                    tx_hash_str = str(
-                                        tx_result.get("transaction_outcome", {}).get(
-                                            "id", "N/A"
-                                        )
-                                        if isinstance(tx_result, dict)
-                                        else tx_result
-                                    )
+
+                                    # tx_hash_str is now directly the transaction hash string
+                                    if not tx_hash_str or tx_hash_str == "N/A":
+                                        tx_hash_str = "UNKNOWN_HASH"
+
                                     logger.info(
-                                        f"[distribute_rewards] WTA: Successfully sent {reward_amount_near_str_final} NEAR to {recipient_wallet}. Tx details: {tx_hash_str}"
+                                        f"[distribute_rewards] WTA: Successfully sent {reward_amount_near_str_final} NEAR to {recipient_wallet}. Tx hash: {tx_hash_str}"
                                     )
+
                                     successful_transfers.append(
                                         {
                                             "user_id": user_id,
@@ -450,9 +466,18 @@ class BlockchainMonitor:
                                         }
                                     )
                                 except Exception as e:
-                                    logger.error(
-                                        f"[distribute_rewards] WTA: Failed to send reward to {recipient_wallet}: {e}"
-                                    )
+                                    error_msg = str(e)
+                                    if "RPC not available" in error_msg:
+                                        logger.error(
+                                            f"[distribute_rewards] WTA: NEAR RPC connection failed. This is likely a temporary network issue. Reward distribution will be retried automatically."
+                                        )
+                                        logger.error(
+                                            f"[distribute_rewards] WTA: Failed to send reward to {recipient_wallet}: RPC not available"
+                                        )
+                                    else:
+                                        logger.error(
+                                            f"[distribute_rewards] WTA: Failed to send reward to {recipient_wallet}: {e}"
+                                        )
                                     traceback.print_exc()
                             else:
                                 logger.warning(
@@ -475,8 +500,22 @@ class BlockchainMonitor:
                     user_id = winner_data["user_id"]
                     user = session.query(User).filter(User.id == user_id).first()
 
+                    # Check for wallet in both legacy and new systems
+                    wallet_address = None
+                    if user:
+                        # Check legacy wallet_address field
+                        if user.wallet_address:
+                            wallet_address = user.wallet_address
+                        # Check new UserWallet system
+                        elif user.wallets:
+                            active_wallet = next(
+                                (w for w in user.wallets if w.is_active), None
+                            )
+                            if active_wallet:
+                                wallet_address = active_wallet.account_id
+
                     # Skip if no wallet linked
-                    if not user or not user.wallet_address:
+                    if not user or not wallet_address:
                         logger.warning(
                             f"[distribute_rewards] User {user_id} (Username: {winner_data.get('username', 'N/A')}) has no wallet linked or user not found, skipping."
                         )
@@ -564,28 +603,24 @@ class BlockchainMonitor:
                         )
                         continue
 
-                    recipient_wallet = user.wallet_address
+                    recipient_wallet = wallet_address
                     logger.info(
                         f"[distribute_rewards] Attempting to send {reward_amount_near_str_final} NEAR ({reward_amount_yoctonear_final} yoctoNEAR) to {recipient_wallet} (User: {winner_data.get('username', 'N/A')}, Rank: {rank})"
                     )
 
                     try:
                         # THE ACTUAL TRANSFER CALL
-                        tx_result = await self.near_account.send_money(
-                            recipient_wallet, reward_amount_yoctonear_final
-                        )
-                        # py-near send_money usually returns a dict with transaction outcome or raises error.
-                        # Let's assume tx_result contains a hash or success indicator.
-                        # For robust check, one might inspect tx_result structure based on py-near documentation.
-                        # Simplified: if it doesn't raise, assume success for now and log what we get.
-                        tx_hash_str = str(
-                            tx_result.get("transaction_outcome", {}).get("id", "N/A")
-                            if isinstance(tx_result, dict)
-                            else tx_result
+                        # Use nowait=True to get transaction hash directly as string
+                        tx_hash_str = await self.near_account.send_money(
+                            recipient_wallet, reward_amount_yoctonear_final, nowait=True
                         )
 
+                        # tx_hash_str is now directly the transaction hash string
+                        if not tx_hash_str or tx_hash_str == "N/A":
+                            tx_hash_str = "UNKNOWN_HASH"
+
                         logger.info(
-                            f"[distribute_rewards] Successfully sent {reward_amount_near_str_final} NEAR to {recipient_wallet}. Tx details: {tx_hash_str}"
+                            f"[distribute_rewards] Successfully sent {reward_amount_near_str_final} NEAR to {recipient_wallet}. Tx hash: {tx_hash_str}"
                         )
                         successful_transfers.append(
                             {

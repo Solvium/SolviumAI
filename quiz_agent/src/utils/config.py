@@ -85,6 +85,8 @@ class Config:
     REDIS_SSL_LOCAL = os.getenv("REDIS_SSL_LOCAL", "false").lower() == "true"
     REDIS_PASSWORD_LOCAL = os.getenv("REDIS_PASSWORD_LOCAL", None)
 
+    BOT_USERNAME = os.getenv("BOT_USERNAME", "")  # Add this
+
     # Production check helper
     @classmethod
     def is_production(cls):

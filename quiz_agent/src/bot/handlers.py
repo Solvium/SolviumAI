@@ -33,7 +33,7 @@ from services.user_service import (
     handle_wallet_address as service_handle_wallet_address,  # Renamed import
     check_wallet_linked,  # Add this import
 )
-from agent import generate_quiz
+from enhanced_agent import AdvancedQuizGenerator
 import logging
 import re  # Import re for duration_input and potentially wallet validation
 import asyncio  # Add asyncio import
@@ -49,11 +49,47 @@ from datetime import datetime, timezone, timedelta  # Add this import
 # Configure logger
 logger = logging.getLogger(__name__)
 
+# Initialize the quiz generator
+quiz_generator = AdvancedQuizGenerator()
+
+
+async def generate_quiz_questions(
+    topic: str, num_questions: int, context_text: str = ""
+) -> str:
+    """Wrapper function for backward compatibility with the quiz service"""
+    questions = await quiz_generator.generate_quiz(
+        topic, num_questions, context_text=context_text
+    )
+
+    # Format as string for backward compatibility
+    formatted_questions = []
+    for i, q in enumerate(questions, 1):
+        options_text = "\n".join(
+            [f"{key}) {value}" for key, value in q.options.items()]
+        )
+        formatted_questions.append(
+            f"Question {i}: {q.question}\n{options_text}\nCorrect Answer: {q.correct_answer}"
+        )
+
+    return "\n\n".join(formatted_questions)
+
 
 async def start_handler(update, context):
-    """Handle /start command - shows the main menu interface"""
+    """Handle /start command - shows the main menu interface or handles deep links"""
     user = update.effective_user
     chat_type = update.effective_chat.type
+
+    # Handle deep linking for quiz redirects (only in private chats)
+    if chat_type == "private" and context.args:
+        start_param = context.args[0]
+
+        # Handle quiz deep linking
+        if start_param.startswith("quiz_"):
+            quiz_id = start_param[5:]  # Remove "quiz_" prefix
+            from .menu_handlers import handle_quiz_deep_link
+
+            await handle_quiz_deep_link(update, context, quiz_id)
+            return
 
     if chat_type == "private":
         # In private chat, show the main menu
@@ -645,19 +681,7 @@ async def duration_choice(update, context):
 
         progress_text += f"💰 Step 4 of 4: Reward Setup"
 
-        # Get wallet info and balance for user
-        from services.wallet_service import WalletService
-
-        wallet_service = WalletService()
-        wallet = await wallet_service.get_user_wallet(user_id)
-        wallet_balance = await wallet_service.get_wallet_balance(user_id)
-
-        if wallet and wallet.get("account_id"):
-            progress_text += (
-                f"\n\n💳 Wallet: `{wallet['account_id']}`\n💰 Balance: {wallet_balance}"
-            )
-        else:
-            progress_text += f"\n\n💳 Wallet Balance: {wallet_balance}"
+        # Note: Wallet balance check moved to reward_choice function for paid options only
 
         buttons = [
             [
@@ -839,6 +863,13 @@ async def show_reward_structure_options(update, context, reward_amount):
     context_text = await redis_client.get_user_data_key(user_id, "context_text")
     duration_seconds = await redis_client.get_user_data_key(user_id, "duration_seconds")
 
+    # Get wallet info and balance for display
+    from services.wallet_service import WalletService
+
+    wallet_service = WalletService()
+    wallet = await wallet_service.get_user_wallet(user_id)
+    wallet_balance = await wallet_service.get_wallet_balance(user_id)
+
     progress_text = f"✅ Topic: {topic}\n"
     if context_text:
         progress_text += (
@@ -855,6 +886,14 @@ async def show_reward_structure_options(update, context, reward_amount):
 
     progress_text += f"💰 Reward Amount: {reward_amount} NEAR\n"
     progress_text += f"📊 Step 4b of 4: Reward Structure"
+
+    # Add wallet information
+    if wallet and wallet.get("account_id"):
+        progress_text += (
+            f"\n\n💳 Wallet: `{wallet['account_id']}`\n💰 Balance: {wallet_balance}"
+        )
+    else:
+        progress_text += f"\n\n💳 Wallet Balance: {wallet_balance}"
 
     # Calculate total costs for different structures
     wta_total = reward_amount
@@ -1257,6 +1296,7 @@ async def handle_play_quiz(update, context, quiz_id):
     try:
         from store.database import SessionLocal
         from models.quiz import Quiz, QuizStatus
+        from datetime import datetime
 
         session = SessionLocal()
         try:
@@ -1269,6 +1309,14 @@ async def handle_play_quiz(update, context, quiz_id):
             if not quiz:
                 await context.bot.send_message(
                     chat_id=chat_id, text="❌ Quiz not found or no longer active."
+                )
+                return
+
+            # Check if quiz has ended based on end_time
+            if quiz.end_time and quiz.end_time <= datetime.utcnow():
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="❌ This quiz has already ended. Check the final results!",
                 )
                 return
 
@@ -1319,14 +1367,17 @@ async def handle_show_leaderboard(update, context, quiz_id):
             # Convert to the format expected by create_leaderboard_card
             for participant in leaderboard_info.get("participants", [])[:10]:  # Top 10
                 score = participant.get("score", 0)
+                questions_answered = participant.get("questions_answered", 0)
                 username = participant.get("username", "UnknownUser")
-                logger.info(f"Leaderboard participant: {username}, score: {score}")
+                logger.info(
+                    f"Leaderboard participant: {username}, score: {score}, questions_answered: {questions_answered}"
+                )
                 leaderboard_data.append(
                     {
                         "username": username,
                         "score": score,
                         "correct_answers": score,
-                        "total_questions": len(quiz.questions) if quiz.questions else 0,
+                        "total_questions": questions_answered,
                     }
                 )
 
@@ -1338,7 +1389,7 @@ async def handle_show_leaderboard(update, context, quiz_id):
                 quiz_end_time = quiz.end_time
                 if quiz_end_time.tzinfo is None:
                     quiz_end_time = quiz_end_time.replace(tzinfo=timezone.utc)
-                
+
                 if quiz_end_time > now:
                     time_remaining = int((quiz_end_time - now).total_seconds())
 
@@ -1575,15 +1626,19 @@ async def start_quiz_for_user(update, context, quiz):
 Send /stop to stop it."""
 
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        keyboard = [[InlineKeyboardButton("🚀 Start Quiz", callback_data=f"enhanced_quiz_start:{quiz.id}")]]
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "🚀 Start Quiz", callback_data=f"enhanced_quiz_start:{quiz.id}"
+                )
+            ]
+        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         # Send DM to user
         await safe_send_message(
-            context.bot,
-            user_id,
-            intro_text,
-            reply_markup=reply_markup
+            context.bot, user_id, intro_text, reply_markup=reply_markup
         )
 
         # Acknowledge button click in group chat if it was from a group
@@ -1595,13 +1650,15 @@ Send /stop to stop it."""
             await safe_send_message(
                 context.bot,
                 chat_id,
-                f"🎮 **{quiz.topic}** Quiz Ready! �\n\n📱 @{update.effective_user.username or update.effective_user.first_name}, check your DMs to start the quiz!"
+                f"🎮 **{quiz.topic}** Quiz Ready! �\n\n📱 @{update.effective_user.username or update.effective_user.first_name}, check your DMs to start the quiz!",
             )
 
     except Exception as e:
         logger.error(f"Error starting quiz {quiz.id} for user {user_id}: {e}")
         if update.callback_query:
-            await update.callback_query.answer("❌ Error starting quiz. Please try again.", show_alert=True)
+            await update.callback_query.answer(
+                "❌ Error starting quiz. Please try again.", show_alert=True
+            )
         else:
             await context.bot.send_message(
                 chat_id=chat_id, text="❌ Error starting quiz. Please try again."
@@ -1755,7 +1812,7 @@ async def confirm_choice(update, context):
         await redis_client.clear_user_data(user_id)
         return ConversationHandler.END
 
-    quiz_text = await generate_quiz(topic, num_questions, context_text)
+    quiz_text = await generate_quiz_questions(topic, num_questions, context_text)
 
     group_chat_id_to_use = group_chat_id if group_chat_id else update.effective_chat.id
 
@@ -1903,25 +1960,33 @@ async def process_questions_with_payment(
             session.commit()
             quiz_id = quiz.id
             logger.info(f"Created active quiz with ID: {quiz_id} for user {user_id}")
-            
+
             # Set activation time and end time for all quizzes (free and paid)
             from datetime import datetime, timedelta, timezone
+
             quiz.activated_at = datetime.now(timezone.utc)
-            
+
             if duration_seconds and duration_seconds > 0:
                 quiz.end_time = quiz.activated_at + timedelta(seconds=duration_seconds)
-                logger.info(f"Quiz {quiz_id} end time set to: {quiz.end_time} (duration: {duration_seconds}s)")
-            
+                logger.info(
+                    f"Quiz {quiz_id} end time set to: {quiz.end_time} (duration: {duration_seconds}s)"
+                )
+
             session.commit()
-            
+
         finally:
             session.close()
 
         # Schedule quiz end announcement for all quizzes with duration
         if duration_seconds and duration_seconds > 0:
             from services.quiz_service import schedule_quiz_end_announcement
-            logger.info(f"Scheduling end announcement for quiz {quiz_id} in {duration_seconds} seconds")
-            await schedule_quiz_end_announcement(context.application, str(quiz_id), duration_seconds)
+
+            logger.info(
+                f"Scheduling end announcement for quiz {quiz_id} in {duration_seconds} seconds"
+            )
+            await schedule_quiz_end_announcement(
+                context.application, str(quiz_id), duration_seconds
+            )
 
         # Store payment information
         if reward_amount and float(reward_amount) > 0:
@@ -1948,6 +2013,9 @@ async def process_questions_with_payment(
         # Calculate duration in minutes
         duration_minutes = duration_seconds // 60 if duration_seconds else 0
 
+        # Get bot username from config
+        from utils.config import Config
+
         # Create rich announcement card
         announcement_msg, announcement_keyboard = create_quiz_announcement_card(
             topic=topic,
@@ -1957,6 +2025,7 @@ async def process_questions_with_payment(
             reward_structure=reward_structure if reward_structure else "Free Quiz",
             quiz_id=str(quiz_id),
             is_free=not (reward_amount and float(reward_amount) > 0),
+            bot_username=Config.BOT_USERNAME,
         )
 
         # Send rich announcement to group
@@ -2032,12 +2101,55 @@ async def store_payment_info_in_quiz(user_id: int, payment_info: dict):
     Store payment information in the quiz record
     """
     try:
-        # TODO: Implement actual database storage for payment info
-        # For now, log the payment information
         logger.info(f"Payment info for user {user_id}: {payment_info}")
 
-        # In the future, this would store payment info in the quiz table
-        # await db_service.update_quiz_payment_info(quiz_id, payment_info)
+        quiz_id = payment_info.get("quiz_id")
+        reward_amount = payment_info.get("reward_amount")
+        reward_structure = payment_info.get("reward_structure")
+
+        if not quiz_id:
+            logger.error(f"No quiz_id in payment_info for user {user_id}")
+            return
+
+        # Store reward information in the database
+        from store.database import SessionLocal
+        from models.quiz import Quiz
+
+        session = SessionLocal()
+        try:
+            quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
+            if not quiz:
+                logger.error(f"Quiz {quiz_id} not found when storing payment info")
+                return
+
+            # Create proper reward_schedule based on structure
+            if reward_structure == "winner_takes_all" and reward_amount:
+                quiz.reward_schedule = {
+                    "type": "wta_amount",
+                    "details_text": f"{reward_amount} NEAR",
+                }
+                logger.info(
+                    f"Set reward_schedule for quiz {quiz_id}: {quiz.reward_schedule}"
+                )
+            elif reward_structure == "top_3" and reward_amount:
+                # Handle top 3 structure if needed
+                quiz.reward_schedule = {
+                    "type": "top3_details",
+                    "details_text": f"{reward_amount} NEAR",
+                }
+                logger.info(
+                    f"Set reward_schedule for quiz {quiz_id}: {quiz.reward_schedule}"
+                )
+            else:
+                logger.warning(
+                    f"Unknown reward structure '{reward_structure}' for quiz {quiz_id}"
+                )
+
+            session.commit()
+            logger.info(f"Successfully stored payment info for quiz {quiz_id}")
+
+        finally:
+            session.close()
 
     except Exception as e:
         logger.error(f"Error storing payment info for user {user_id}: {e}")
@@ -2983,6 +3095,21 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
             await safe_send_message(context.bot, user_id, "❌ Quiz not found.")
             return
 
+        # Check if quiz is still active and not ended
+        if quiz.status != QuizStatus.ACTIVE:
+            await safe_send_message(
+                context.bot, user_id, "❌ This quiz is no longer active."
+            )
+            return
+
+        if quiz.end_time and quiz.end_time <= datetime.utcnow():
+            await safe_send_message(
+                context.bot,
+                user_id,
+                "❌ This quiz has already ended. Check the final results!",
+            )
+            return
+
         # Create quiz session directly (don't call start_enhanced_quiz to avoid duplicate intro)
         # Parse questions
         questions_list = quiz.questions
@@ -3071,30 +3198,26 @@ async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackC
             active_quiz_sessions.pop(key, None)
             logger.info(f"Removed stale session: {key}")
 
+        # Check if session already exists for this quiz
         if session_key in active_quiz_sessions:
-            logger.warning(
-                f"Found existing session for {session_key}, preventing duplicate start"
+            logger.info(
+                f"Found existing session for {session_key}, using it to start quiz"
             )
-            await safe_send_message(
-                context.bot,
-                user_id,
-                f"❌ You already have an active session for the quiz '{quiz.topic}'.\n\n💡 Use /stop to cancel your current session, then try again.",
+            quiz_session = active_quiz_sessions[session_key]
+        else:
+            # Create new quiz session
+            quiz_session = QuizSession(
+                user_id=user_id,
+                quiz_id=quiz.id,
+                questions=questions_list,
+                shuffle_questions=True,
+                shuffle_answers=True,
             )
-            return
 
-        # Create quiz session
-        quiz_session = QuizSession(
-            user_id=user_id,
-            quiz_id=quiz.id,
-            questions=questions_list,
-            shuffle_questions=True,
-            shuffle_answers=True,
-        )
-
-        active_quiz_sessions[session_key] = quiz_session
-        logger.info(
-            f"Enhanced quiz session created: {session_key}, total_sessions={len(active_quiz_sessions)}"
-        )
+            active_quiz_sessions[session_key] = quiz_session
+            logger.info(
+                f"Enhanced quiz session created: {session_key}, total_sessions={len(active_quiz_sessions)}"
+            )
 
         # Create a record that the user has started this quiz (prevents restarting if abandoned)
         try:

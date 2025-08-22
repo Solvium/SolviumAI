@@ -16,6 +16,7 @@ from utils.config import Config, ENVIRONMENT
 from utils.logger import setup_logger
 from utils.redis_client import RedisClient
 from services.performance_service import performance_service, bulk_manager
+from store.database import init_db, migrate_schema
 
 # Set up logging
 logger = setup_logger(__name__)
@@ -29,6 +30,12 @@ async def initialize_optimized_services():
     """Initialize all services with performance optimizations."""
     try:
         logger.info("🚀 Starting SolviumAI Quiz Bot with performance optimizations...")
+
+        # Initialize database if needed
+        if "postgresql" in Config.DATABASE_URL or "postgres" in Config.DATABASE_URL:
+            logger.info("Attempting to migrate database schema for PostgreSQL...")
+            # migrate_schema()
+        init_db()
 
         # Initialize Redis connection
         logger.info("📡 Initializing Redis connection...")
@@ -52,9 +59,8 @@ async def initialize_optimized_services():
         # Initialize database service
         logger.info("🗄️ Initializing database service...")
         try:
-            from services.database_service import DatabaseService
+            from services.database_service import db_service
 
-            db_service = DatabaseService()
             if db_service.async_session:
                 logger.info("✅ Database service initialized successfully")
             else:

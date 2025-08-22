@@ -2,8 +2,10 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError, DBAPIError
 from utils.config import Config
-from models.user import Base as UserBase
-from models.quiz import Base as QuizBase
+from models import Base
+from models.user import User
+from models.quiz import Quiz, QuizAnswer
+from models.wallet import UserWallet, WalletSecurity
 import logging
 import os
 import time
@@ -157,15 +159,13 @@ def init_db():
             "Development environment detected. Creating tables if they don't exist..."
         )
         # Only create tables that don't exist - don't drop existing ones
-        UserBase.metadata.create_all(bind=engine)
-        QuizBase.metadata.create_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
     else:
         logger.info(
             "Production environment detected. Creating tables if they don't exist..."
         )
         # Only create tables that don't exist
-        UserBase.metadata.create_all(bind=engine)
-        QuizBase.metadata.create_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
 
 
 def migrate_schema():
@@ -202,10 +202,95 @@ def migrate_schema():
                     WalletSecurity.__table__.create(engine, checkfirst=True)
                     logger.info("Created wallet_security table")
 
-        # Check if users table needs wallet_created column
+        # Check if users table needs missing columns
         if "users" in existing_tables:
             try:
                 with engine.connect() as conn:
+                    # Check if quiz_answers table exists and drop unique constraint if needed
+                    quiz_answers_exists = conn.execute(
+                        text(
+                            "SELECT 1 FROM information_schema.tables WHERE table_name = 'quiz_answers'"
+                        )
+                    ).fetchone()
+
+                    if quiz_answers_exists:
+                        # Check if the unique constraint exists
+                        constraint_exists = conn.execute(
+                            text(
+                                """
+                                SELECT 1 FROM pg_constraint
+                                WHERE conname = 'idx_unique_user_quiz_question'
+                                AND conrelid = 'quiz_answers'::regclass
+                            """
+                            )
+                        ).fetchone()
+
+                        if constraint_exists:
+                            logger.info(
+                                "Dropping unique constraint from quiz_answers table"
+                            )
+                            conn.execute(
+                                text(
+                                    "ALTER TABLE quiz_answers DROP CONSTRAINT idx_unique_user_quiz_question"
+                                )
+                            )
+                            conn.commit()
+                            logger.info(
+                                "Successfully dropped unique constraint from quiz_answers"
+                            )
+
+                    # Check if username column exists
+                    # Check if username column exists
+                    result = conn.execute(
+                        text(
+                            """
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_name = 'users' AND column_name = 'username'
+                    """
+                        )
+                    )
+                    if not result.fetchone():
+                        logger.info("Adding username column to users table")
+                        conn.execute(
+                            text("ALTER TABLE users ADD COLUMN username VARCHAR")
+                        )
+                        conn.commit()
+                        logger.info("Added username column successfully")
+
+                    # Check if first_name column exists
+                    result = conn.execute(
+                        text(
+                            """
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_name = 'users' AND column_name = 'first_name'
+                    """
+                        )
+                    )
+                    if not result.fetchone():
+                        logger.info("Adding first_name column to users table")
+                        conn.execute(
+                            text("ALTER TABLE users ADD COLUMN first_name VARCHAR")
+                        )
+                        conn.commit()
+                        logger.info("Added first_name column successfully")
+
+                    # Check if last_name column exists
+                    result = conn.execute(
+                        text(
+                            """
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_name = 'users' AND column_name = 'last_name'
+                    """
+                        )
+                    )
+                    if not result.fetchone():
+                        logger.info("Adding last_name column to users table")
+                        conn.execute(
+                            text("ALTER TABLE users ADD COLUMN last_name VARCHAR")
+                        )
+                        conn.commit()
+                        logger.info("Added last_name column successfully")
+
                     # Check if wallet_created column exists
                     result = conn.execute(
                         text(
@@ -225,7 +310,7 @@ def migrate_schema():
                         conn.commit()
                         logger.info("Added wallet_created column successfully")
             except Exception as e:
-                logger.warning(f"Could not check/add wallet_created column: {e}")
+                logger.warning(f"Could not check/add missing columns: {e}")
 
         logger.info("Schema migration completed successfully")
         return True

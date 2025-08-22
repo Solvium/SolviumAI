@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # Main application
+  quiz-agent:
+    build: .
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - GOOGLE_GEMINI_API_KEY=${GOOGLE_GEMINI_API_KEY}
+      - NEAR_WALLET_PRIVATE_KEY=${NEAR_WALLET_PRIVATE_KEY}
+      - NEAR_WALLET_ADDRESS=${NEAR_WALLET_ADDRESS}
+      - WALLET_ENCRYPTION_KEY=${WALLET_ENCRYPTION_KEY}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - quiz-network
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_this_password}
+      - POSTGRES_DB=${POSTGRES_DB:-quiz_agent}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - quiz-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - quiz-network
+
+  # Nginx Reverse Proxy (optional)
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - quiz-agent
+    networks:
+      - quiz-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  quiz-network:
+    driver: bridge

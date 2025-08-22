@@ -88,18 +88,12 @@ class QuizAnswer(Base):
 
     # Add composite indexes for common query patterns
     __table_args__ = (
-        # Prevent duplicate answers for same user/quiz/question
-        Index(
-            "idx_unique_user_quiz_question",
-            "user_id",
-            "quiz_id",
-            "question_index",
-            unique=True,
-        ),
         # Optimize leaderboard queries
         Index("idx_quiz_correct_time", "quiz_id", "is_correct", "answered_at"),
         # Optimize user participation checks
         Index("idx_user_quiz_lookup", "user_id", "quiz_id"),
+        # Optimize question-specific queries
+        Index("idx_user_quiz_question", "user_id", "quiz_id", "question_index"),
     )
 
     quiz = relationship("Quiz", back_populates="answers")  # Add relationship
@@ -153,6 +147,7 @@ class QuizAnswer(Base):
         all_answers = (
             session.query(QuizAnswer)
             .filter(QuizAnswer.quiz_id == quiz_id)
+            .filter(QuizAnswer.answer != "")  # Exclude empty "started" records
             .order_by(QuizAnswer.user_id, QuizAnswer.answered_at)
             .all()
         )
