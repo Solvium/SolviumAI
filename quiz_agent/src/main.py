@@ -132,6 +132,7 @@ async def start_fastapi_mode():
         set_bot_instance(bot_instance)
 
         # Start the bot (this will set up webhook with Telegram)
+        # In FastAPI mode, the bot should run in the background and not block
         bot_start_task = asyncio.create_task(bot_instance.start())
 
         # Start FastAPI server with optimized settings
@@ -165,8 +166,9 @@ async def start_fastapi_mode():
         # Start FastAPI server
         # server_task = asyncio.create_task(server.serve())
 
-        # Wait for both tasks
-        await asyncio.gather(bot_start_task, server.serve(), return_exceptions=True)
+        # In FastAPI mode, only wait for the server to serve
+        # The bot task will run in the background and handle webhook requests
+        await server.serve()
 
     except ImportError as e:
         logger.error(f"❌ FastAPI dependencies not available: {e}")
