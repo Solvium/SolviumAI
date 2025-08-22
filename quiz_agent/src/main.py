@@ -139,7 +139,7 @@ async def start_fastapi_mode():
             app=app,
             host=Config.FASTAPI_HOST,
             port=Config.FASTAPI_PORT,
-            reload=Config.is_development() and Config.FASTAPI_RELOAD,
+            # reload=Config.is_development() and Config.FASTAPI_RELOAD,
             workers=1,  # Use 1 worker for development, scale in production
             loop="uvloop" if Config.is_development() else "asyncio",
             http="httptools" if Config.is_development() else "h11",
@@ -163,10 +163,10 @@ async def start_fastapi_mode():
         logger.info("⚡ Real-time metrics at /monitoring/metrics/realtime")
 
         # Start FastAPI server
-        server_task = asyncio.create_task(server.serve())
+        # server_task = asyncio.create_task(server.serve())
 
         # Wait for both tasks
-        await asyncio.gather(bot_start_task, server_task, return_exceptions=True)
+        await asyncio.gather(bot_start_task, server.serve(), return_exceptions=True)
 
     except ImportError as e:
         logger.error(f"❌ FastAPI dependencies not available: {e}")
