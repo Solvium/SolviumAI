@@ -3104,11 +3104,11 @@ async def finish_enhanced_quiz(
     # Save results to database
     session = SessionLocal()
     try:
-        # Get user info for username
+        # Get user info for username - always get current username
         from models.user import User
 
         user = session.query(User).filter(User.id == user_id).first()
-        username = user.username if user else None
+        username = user.username if user and user.username else f"user_{user_id[:8]}"
 
         # First, remove the "started" record if it exists (empty answer record)
         existing_started = (

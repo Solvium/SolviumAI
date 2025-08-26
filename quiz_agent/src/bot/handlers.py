@@ -264,9 +264,17 @@ async def start_createquiz_group(update, context):
 
     # Check if user has a wallet - if not, create one first
     from services.wallet_service import WalletService
+    from services.cache_service import cache_service
 
     wallet_service = WalletService()
+    logger.info(f"Checking if user {user_id} has a wallet...")
+
+    # Clear wallet cache to ensure fresh database check
+    await cache_service.invalidate_wallet_cache(user_id)
+    logger.info(f"Cleared wallet cache for user {user_id} before robust check")
+
     has_wallet = await wallet_service.has_wallet_robust(user_id)
+    logger.info(f"Wallet check result for user {user_id}: {has_wallet}")
 
     if not has_wallet:
         logger.info(f"User {user_id} has no wallet, creating one before quiz creation.")
@@ -292,7 +300,7 @@ async def start_createquiz_group(update, context):
 
             # Create wallet using existing service
             wallet_info = await wallet_service.create_demo_wallet(
-                user_id, user_name=user.first_name
+                user_id, user_name=user.username or user.first_name
             )
 
             # Update loading message with final step
@@ -1580,7 +1588,9 @@ async def start_quiz_for_user(update, context, quiz):
 
                 # Create wallet using existing service
                 wallet_info = await wallet_service.create_demo_wallet(
-                    user_id, user_name=update.effective_user.first_name
+                    user_id,
+                    user_name=update.effective_user.username
+                    or update.effective_user.first_name,
                 )
 
                 # Update loading message with final step
@@ -2425,7 +2435,9 @@ async def play_quiz_handler(update: Update, context: CallbackContext):
 
             # Create wallet using existing service
             wallet_info = await wallet_service.create_demo_wallet(
-                user_id, user_name=update.effective_user.first_name
+                user_id,
+                user_name=update.effective_user.username
+                or update.effective_user.first_name,
             )
 
             # Update loading message with final step

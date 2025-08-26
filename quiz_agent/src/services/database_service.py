@@ -255,7 +255,7 @@ class DatabaseService:
                 logger.info(f"Successfully saved wallet to database for user {user_id}")
 
         except Exception as e:
-            logger.error(f"Failed to save wallet to database for user {user_id}: {e}")
+            logger.error(f"Failed to save wallet to database for user {user_id}:")
             if session:
                 try:
                     if hasattr(session, "rollback") and asyncio.iscoroutinefunction(

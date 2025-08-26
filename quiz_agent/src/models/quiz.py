@@ -121,10 +121,12 @@ class QuizAnswer(Base):
         user_scores = {}
         for answer in correct_answers:
             if answer.user_id not in user_scores:
-                # Get the actual username from the User table
+                # Always get the current username from the User table
                 user = session.query(User).filter(User.id == answer.user_id).first()
                 actual_username = (
-                    user.username if user and user.username else answer.username
+                    user.username
+                    if user and user.username
+                    else f"user_{answer.user_id[:8]}"
                 )
 
                 user_scores[answer.user_id] = {
@@ -167,10 +169,12 @@ class QuizAnswer(Base):
         user_stats = {}
         for ans in all_answers:
             if ans.user_id not in user_stats:
-                # Get the actual username from the User table
+                # Always get the current username from the User table
                 user = session.query(User).filter(User.id == ans.user_id).first()
                 actual_username = (
-                    user.username if user and user.username else ans.username
+                    user.username
+                    if user and user.username
+                    else f"user_{ans.user_id[:8]}"
                 )
 
                 user_stats[ans.user_id] = {

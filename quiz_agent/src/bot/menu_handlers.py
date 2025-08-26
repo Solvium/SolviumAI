@@ -34,7 +34,7 @@ async def handle_first_time_wallet_creation(
     Handles wallet creation for first-time users
     """
     user_id = update.effective_user.id
-    user_name = update.effective_user.first_name
+    user_name = update.effective_user.username or update.effective_user.first_name
 
     # Send initial loading message
     loading_message = await update.message.reply_text(
@@ -51,7 +51,9 @@ async def handle_first_time_wallet_creation(
 
         # Create wallet service and generate demo wallet
         wallet_service = WalletService()
-        wallet_info = await wallet_service.create_demo_wallet(user_id, user_name=user_name)
+        wallet_info = await wallet_service.create_demo_wallet(
+            user_id, user_name=user_name
+        )
 
         # Update loading message with final step
         await loading_message.edit_text(
@@ -105,12 +107,14 @@ async def handle_silent_wallet_creation(
     Returns True if successful, False otherwise
     """
     user_id = update.effective_user.id
-    user_name = update.effective_user.first_name
+    user_name = update.effective_user.username or update.effective_user.first_name
 
     try:
         # Create wallet service and generate demo wallet silently
         wallet_service = WalletService()
-        wallet_info = await wallet_service.create_demo_wallet(user_id, user_name=user_name)
+        wallet_info = await wallet_service.create_demo_wallet(
+            user_id, user_name=user_name
+        )
 
         # Store user state in Redis
         redis_client = RedisClient()
@@ -129,7 +133,7 @@ async def show_main_menu(update: Update, context: CallbackContext) -> None:
     This is the primary interface users will see using ReplyKeyboardMarkup.
     """
     user_id = update.effective_user.id
-    user_name = update.effective_user.first_name
+    user_name = update.effective_user.username or update.effective_user.first_name
 
     welcome_text = (
         f"🎉 Welcome to SolviumAI, {user_name}!\n\nWhat would you like to do today?"
@@ -901,7 +905,7 @@ async def show_menu_in_group(update: Update, context: CallbackContext) -> None:
     """
     Shows the main menu in group chats with a note about DM functionality
     """
-    user_name = update.effective_user.first_name
+    user_name = update.effective_user.username or update.effective_user.first_name
 
     await update.message.reply_text(
         f"🎉 Hi {user_name}! I'm SolviumAI bot.\n\n"
@@ -915,7 +919,7 @@ async def handle_start_command(update: Update, context: CallbackContext) -> None
     Handle /start command with optional deep link parameters
     """
     user_id = update.effective_user.id
-    user_name = update.effective_user.first_name
+    user_name = update.effective_user.username or update.effective_user.first_name
 
     # Check if there are start parameters for deep linking
     if context.args:
@@ -948,7 +952,7 @@ async def handle_quiz_deep_link(
     Seamlessly starts the quiz without intermediate messages
     """
     user_id = update.effective_user.id
-    user_name = update.effective_user.first_name
+    user_name = update.effective_user.username or update.effective_user.first_name
 
     # Check if user has a wallet - if not, create one first
     wallet_service = WalletService()
