@@ -51,7 +51,7 @@ async def handle_first_time_wallet_creation(
 
         # Create wallet service and generate demo wallet
         wallet_service = WalletService()
-        wallet_info = await wallet_service.create_demo_wallet(user_id, user_name)
+        wallet_info = await wallet_service.create_demo_wallet(user_id, user_name=user_name)
 
         # Update loading message with final step
         await loading_message.edit_text(
@@ -110,7 +110,7 @@ async def handle_silent_wallet_creation(
     try:
         # Create wallet service and generate demo wallet silently
         wallet_service = WalletService()
-        wallet_info = await wallet_service.create_demo_wallet(user_id, user_name)
+        wallet_info = await wallet_service.create_demo_wallet(user_id, user_name=user_name)
 
         # Store user state in Redis
         redis_client = RedisClient()

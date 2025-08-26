@@ -24,14 +24,60 @@ def create_quiz_announcement_card(
         tuple: (formatted_message, inline_keyboard)
     """
 
+    # Sanitize content for Markdown
+    def sanitize_markdown(text):
+        """Sanitize text to prevent Markdown parsing errors"""
+        if not text:
+            return ""
+        # Escape special Markdown characters
+        text = (
+            str(text)
+            .replace("*", "\\*")
+            .replace("_", "\\_")
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+            .replace("(", "\\(")
+            .replace(")", "\\)")
+            .replace("~", "\\~")
+            .replace("`", "\\`")
+            .replace(">", "\\>")
+            .replace("#", "\\#")
+            .replace("+", "\\+")
+            .replace("-", "\\-")
+            .replace("=", "\\=")
+            .replace("|", "\\|")
+            .replace("{", "\\{")
+            .replace("}", "\\}")
+            .replace(".", "\\.")
+            .replace("!", "\\!")
+        )
+        return text
+
     # Create the card border and content
+    # Sanitize all content to avoid Markdown parsing issues
+    safe_topic = sanitize_markdown(topic)
+    safe_reward_structure = reward_structure
+    if "Top 3 winners" in reward_structure:
+        safe_reward_structure = "Top 3 Winners"
+    elif "Winner-takes-all" in reward_structure:
+        safe_reward_structure = "Winner Takes All"
+
+    # Sanitize the reward structure
+    safe_reward_structure = sanitize_markdown(safe_reward_structure)
+
+    # Sanitize quiz_id for callback data
+    safe_quiz_id = sanitize_markdown(quiz_id)
+
+    # Sanitize bot_username if provided
+    safe_bot_username = sanitize_markdown(bot_username) if bot_username else None
+
     card = f"""
 ┌─────────────────────────────────────────────────┐
-│  🎯 **{topic.upper()} QUIZ** 🎯                    │
+│  🎯 **{safe_topic.upper()} QUIZ** 🎯                    │
 │                                                 │
 │  📝 **{num_questions} Questions** • ⏱ **{duration_minutes} minutes**  │
 │  💰 **{reward_amount} NEAR** Prize Pool              │
-│  🏆 **{reward_structure}**                           │
+│  🏆 **{safe_reward_structure}**                           │
 │                                                 │
 │  🎮 **Ready to test your knowledge?**           │
 └─────────────────────────────────────────────────┘
@@ -43,7 +89,8 @@ def create_quiz_announcement_card(
     if bot_username:
         # Use deep linking for seamless DM redirection
         play_button = InlineKeyboardButton(
-            "🎮 Play Quiz", url=f"https://t.me/{bot_username}?start=quiz_{quiz_id}"
+            "🎮 Play Quiz",
+            url=f"https://t.me/{bot_username}?start=quiz_{quiz_id}",
         )
     else:
         # Fallback to callback data if no bot username provided
@@ -77,21 +124,54 @@ def create_question_display_card(
         tuple: (formatted_message, inline_keyboard)
     """
 
+    # Sanitize content for Markdown
+    def sanitize_markdown(text):
+        """Sanitize text to prevent Markdown parsing errors"""
+        if not text:
+            return ""
+        # Escape special Markdown characters
+        text = (
+            str(text)
+            .replace("*", "\\*")
+            .replace("_", "\\_")
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+            .replace("(", "\\(")
+            .replace(")", "\\)")
+            .replace("~", "\\~")
+            .replace("`", "\\`")
+            .replace(">", "\\>")
+            .replace("#", "\\#")
+            .replace("+", "\\+")
+            .replace("-", "\\-")
+            .replace("=", "\\=")
+            .replace("|", "\\|")
+            .replace("{", "\\{")
+            .replace("}", "\\}")
+            .replace(".", "\\.")
+            .replace("!", "\\!")
+        )
+        return text
+
+    # Sanitize question text and options
+    safe_question_text = sanitize_markdown(question_text)
+    safe_options = [sanitize_markdown(option) for option in options]
+
     # Create question card
     card = f"""
 🎯 **Question {question_num} of {total_questions}**
 ⏱ **{time_remaining}s remaining** • 🏆 **{current_score} points**
 
-**{question_text}**
+**{safe_question_text}**
 
 """
 
     # Add options with letter indicators
     option_letters = ["A", "B", "C", "D"]
-    for i, option in enumerate(options):
+    for i, option in enumerate(safe_options):
         card += f"{option_letters[i]}) {option}\n"
 
-    card += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    card += "\n══════════════════════════════════════════"
 
     # Create answer buttons
     answer_buttons = []
@@ -127,10 +207,39 @@ def create_leaderboard_card(
         tuple: (formatted_message, inline_keyboard)
     """
 
+    # Sanitize content for Markdown
+    def sanitize_markdown(text):
+        """Sanitize text to prevent Markdown parsing errors"""
+        if not text:
+            return ""
+        # Escape special Markdown characters
+        text = (
+            str(text)
+            .replace("*", "\\*")
+            .replace("_", "\\_")
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+            .replace("(", "\\(")
+            .replace(")", "\\)")
+            .replace("~", "\\~")
+            .replace("`", "\\`")
+            .replace(">", "\\>")
+            .replace("#", "\\#")
+            .replace("+", "\\+")
+            .replace("-", "\\-")
+            .replace("=", "\\=")
+            .replace("|", "\\|")
+            .replace("{", "\\{")
+            .replace("}", "\\}")
+            .replace(".", "\\.")
+            .replace("!", "\\!")
+        )
+        return text
+
     # Create leaderboard header
     card = f"""
 🏆 **LEADERBOARD** 🏆
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+══════════════════════════════════════════
 
 """
 
@@ -148,7 +257,7 @@ def create_leaderboard_card(
 
     # Add footer
     card += f"""
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+══════════════════════════════════════════
 ⏱ **{time_remaining}s remaining** • 👥 **{total_participants} players active**
 """
 
@@ -192,7 +301,7 @@ def create_progress_card(
 
     card = f"""
 📊 **YOUR PROGRESS**
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+══════════════════════════════════════════
 
 🎯 Question: {current_question}/{total_questions}
 ⏱ Time: {time_remaining}s remaining
@@ -227,7 +336,7 @@ def create_achievement_card(
 
     card = f"""
 {emoji} **ACHIEVEMENT UNLOCKED!** {emoji}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+══════════════════════════════════════════
 
 🏆 **{achievement_name}**
 📝 {description}

@@ -105,6 +105,9 @@ class QuizAnswer(Base):
     @staticmethod
     def compute_quiz_winners(session, quiz_id):
         """Compute winners for a quiz based on correct answers and timing"""
+        # Import User model here to avoid circular imports
+        from models.user import User
+
         # Get all correct answers for this quiz
         # Fix: Use string 'True' instead of boolean True for comparison
         correct_answers = (
@@ -118,9 +121,15 @@ class QuizAnswer(Base):
         user_scores = {}
         for answer in correct_answers:
             if answer.user_id not in user_scores:
+                # Get the actual username from the User table
+                user = session.query(User).filter(User.id == answer.user_id).first()
+                actual_username = (
+                    user.username if user and user.username else answer.username
+                )
+
                 user_scores[answer.user_id] = {
                     "user_id": answer.user_id,
-                    "username": answer.username,
+                    "username": actual_username,
                     "correct_count": 1,
                     "first_answer_time": answer.answered_at,
                 }
@@ -144,6 +153,9 @@ class QuizAnswer(Base):
         2. Time of first correct answer (ascending, for those with >0 correct answers)
         3. Time of earliest answer (ascending, for those with 0 correct answers or as tie-breaker)
         """
+        # Import User model here to avoid circular imports
+        from models.user import User
+
         all_answers = (
             session.query(QuizAnswer)
             .filter(QuizAnswer.quiz_id == quiz_id)
@@ -155,9 +167,15 @@ class QuizAnswer(Base):
         user_stats = {}
         for ans in all_answers:
             if ans.user_id not in user_stats:
+                # Get the actual username from the User table
+                user = session.query(User).filter(User.id == ans.user_id).first()
+                actual_username = (
+                    user.username if user and user.username else ans.username
+                )
+
                 user_stats[ans.user_id] = {
                     "user_id": ans.user_id,
-                    "username": ans.username,
+                    "username": actual_username,
                     "correct_count": 0,
                     "questions_answered": 0,
                     "first_correct_answer_time": None,

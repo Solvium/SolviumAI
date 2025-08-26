@@ -292,7 +292,7 @@ async def start_createquiz_group(update, context):
 
             # Create wallet using existing service
             wallet_info = await wallet_service.create_demo_wallet(
-                user_id, user.first_name
+                user_id, user_name=user.first_name
             )
 
             # Update loading message with final step
@@ -1580,7 +1580,7 @@ async def start_quiz_for_user(update, context, quiz):
 
                 # Create wallet using existing service
                 wallet_info = await wallet_service.create_demo_wallet(
-                    user_id, update.effective_user.first_name
+                    user_id, user_name=update.effective_user.first_name
                 )
 
                 # Update loading message with final step
@@ -2028,6 +2028,11 @@ async def process_questions_with_payment(
             bot_username=Config.BOT_USERNAME,
         )
 
+        # Debug: Log the announcement message
+        logger.info(
+            f"Sending announcement to group {group_chat_id}: {announcement_msg}"
+        )
+
         # Send rich announcement to group
         await context.bot.send_message(
             chat_id=group_chat_id,
@@ -2036,29 +2041,78 @@ async def process_questions_with_payment(
             reply_markup=announcement_keyboard,
         )
 
+        # Sanitize content for Markdown
+        def sanitize_markdown(text):
+            """Sanitize text to prevent Markdown parsing errors"""
+            if not text:
+                return ""
+            # Escape special Markdown characters
+            text = (
+                str(text)
+                .replace("*", "\\*")
+                .replace("_", "\\_")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+                .replace("(", "\\(")
+                .replace(")", "\\)")
+                .replace("~", "\\~")
+                .replace("`", "\\`")
+                .replace(">", "\\>")
+                .replace("#", "\\#")
+                .replace("+", "\\+")
+                .replace("-", "\\-")
+                .replace("=", "\\=")
+                .replace("|", "\\|")
+                .replace("{", "\\{")
+                .replace("}", "\\}")
+                .replace(".", "\\.")
+                .replace("!", "\\!")
+            )
+            return text
+
         # Send confirmation to user with rich formatting
+        safe_topic = sanitize_markdown(topic)
+        safe_quiz_id = sanitize_markdown(quiz_id)
+        safe_payment_status = (
+            sanitize_markdown(payment_status) if payment_status else ""
+        )
+
         user_msg = f"""
 ✅ **QUIZ CREATED SUCCESSFULLY!** ✅
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+══════════════════════════════════════════
 
-🎯 **Topic:** {topic}
+🎯 **Topic:** {safe_topic}
 ❓ **Questions:** {len(questions_list)}
 ⏱ **Duration:** {duration_seconds // 60 if duration_seconds else 'No limit'} minutes
-🆔 **Quiz ID:** {quiz_id}
+🆔 **Quiz ID:** {safe_quiz_id}
 
 """
 
         if reward_amount and float(reward_amount) > 0:
+            # Debug: Log the original reward structure
+            logger.info(f"Original reward_structure: '{reward_structure}'")
+
+            # Sanitize reward_structure for Markdown
+            safe_reward_structure = reward_structure
+            if "Top 3 winners" in reward_structure:
+                safe_reward_structure = "Top 3 Winners"
+            elif "Winner-takes-all" in reward_structure:
+                safe_reward_structure = "Winner Takes All"
+
+            # Sanitize the reward structure
+            safe_reward_structure = sanitize_markdown(safe_reward_structure)
+            logger.info(f"Sanitized reward_structure: '{safe_reward_structure}'")
+
             user_msg += f"""
 💰 **Reward:** {reward_amount} NEAR
-📊 **Structure:** {reward_structure}
-💳 **Payment:** {payment_status}
+📊 **Structure:** {safe_reward_structure}
+💳 **Payment:** {safe_payment_status}
 """
         else:
             user_msg += f"💰 **Reward:** Free Quiz\n"
 
         user_msg += f"""
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+══════════════════════════════════════════
 🎮 **Your quiz is now active and ready to play!**
 """
 
@@ -2078,9 +2132,13 @@ async def process_questions_with_payment(
 
         user_keyboard = InlineKeyboardMarkup(user_buttons)
 
+        # Debug: Log the message to see what's being sent
+        final_message = user_msg.strip()
+        logger.info(f"Sending message to user {user_id}: {final_message}")
+
         await context.bot.send_message(
             chat_id=user_id,
-            text=user_msg.strip(),
+            text=final_message,
             parse_mode="Markdown",
             reply_markup=user_keyboard,
         )
@@ -2132,10 +2190,16 @@ async def store_payment_info_in_quiz(user_id: int, payment_info: dict):
                     f"Set reward_schedule for quiz {quiz_id}: {quiz.reward_schedule}"
                 )
             elif reward_structure == "top_3" and reward_amount:
-                # Handle top 3 structure if needed
+                # Handle top 3 structure - create proper rank-based distribution
+                # For top 3, we'll distribute the total amount as: 50% for 1st, 30% for 2nd, 20% for 3rd
+                total_amount = float(reward_amount)
+                first_place = round(total_amount * 0.5, 6)
+                second_place = round(total_amount * 0.3, 6)
+                third_place = round(total_amount * 0.2, 6)
+
                 quiz.reward_schedule = {
                     "type": "top3_details",
-                    "details_text": f"{reward_amount} NEAR",
+                    "details_text": f"{first_place} NEAR for 1st, {second_place} NEAR for 2nd, {third_place} NEAR for 3rd",
                 }
                 logger.info(
                     f"Set reward_schedule for quiz {quiz_id}: {quiz.reward_schedule}"
@@ -2361,7 +2425,7 @@ async def play_quiz_handler(update: Update, context: CallbackContext):
 
             # Create wallet using existing service
             wallet_info = await wallet_service.create_demo_wallet(
-                user_id, update.effective_user.first_name
+                user_id, user_name=update.effective_user.first_name
             )
 
             # Update loading message with final step
@@ -3312,6 +3376,47 @@ async def handle_poll_answer(update: Update, context: CallbackContext):
         f"Processing answer: {selected_answer} for question {quiz_session.current_question_index}"
     )
 
+    # IMMEDIATELY delete the poll message when answer is received
+    try:
+        from utils.redis_client import RedisClient
+        from telegram.error import BadRequest
+
+        redis_client = RedisClient()
+        current_question_index = quiz_session.current_question_index
+        poll_message_id = await redis_client.get_user_quiz_data(
+            user_id, quiz_session.quiz_id, f"poll_message_{current_question_index}"
+        )
+        await redis_client.close()
+
+        if poll_message_id:
+            # Delete the poll message immediately
+            await context.application.bot.delete_message(
+                chat_id=user_id, message_id=int(poll_message_id)
+            )
+            logger.info(
+                f"Immediately deleted poll message {poll_message_id} for user {user_id}"
+            )
+
+    except BadRequest as e:
+        if "message to delete not found" in str(e).lower():
+            logger.info(f"Poll message {poll_message_id} already deleted")
+        elif "message can't be deleted" in str(e).lower():
+            # Fallback: Stop the poll if deletion fails
+            logger.warning(
+                f"Cannot delete poll message {poll_message_id}, falling back to stop_poll"
+            )
+            try:
+                await context.application.bot.stop_poll(
+                    chat_id=user_id, message_id=int(poll_message_id)
+                )
+                logger.info(f"Successfully stopped poll {poll_message_id} as fallback")
+            except Exception as stop_error:
+                logger.error(f"Failed to stop poll as fallback: {stop_error}")
+        else:
+            logger.error(f"BadRequest when deleting poll message: {e}")
+    except Exception as e:
+        logger.error(f"Error deleting poll message: {e}")
+
     # Handle the answer
     logger.info(
         f"Calling handle_enhanced_quiz_answer for user {user_id}, quiz {quiz_session.quiz_id}"
@@ -3347,15 +3452,53 @@ async def stop_enhanced_quiz(update: Update, context: CallbackContext):
             finally:
                 scheduled_tasks.pop(task_key, None)
 
-    # Clean up Redis data for this user
+    # Clean up Redis data and delete any active poll messages for this user
     try:
         from utils.redis_client import RedisClient
+        from telegram.error import BadRequest
 
         redis_client = RedisClient()
         # Get all quiz data for this user and clean it up
         user_quiz_keys = await redis_client.get_user_quiz_keys(user_id)
+
+        # Delete any active poll messages before cleaning up Redis data
         for quiz_key in user_quiz_keys:
+            # Try to find and delete poll messages for this quiz
+            try:
+                # Get all poll message IDs for this quiz
+                for i in range(20):  # Check up to 20 questions
+                    poll_message_id = await redis_client.get_user_quiz_data(
+                        user_id, quiz_key, f"poll_message_{i}"
+                    )
+                    if poll_message_id:
+                        try:
+                            await context.bot.delete_message(
+                                chat_id=user_id, message_id=int(poll_message_id)
+                            )
+                            logger.info(
+                                f"Deleted poll message {poll_message_id} during quiz stop"
+                            )
+                        except BadRequest as e:
+                            if "message to delete not found" in str(e).lower():
+                                logger.info(
+                                    f"Poll message {poll_message_id} already deleted"
+                                )
+                            else:
+                                logger.warning(
+                                    f"Could not delete poll message {poll_message_id}: {e}"
+                                )
+                        except Exception as e:
+                            logger.warning(
+                                f"Error deleting poll message {poll_message_id}: {e}"
+                            )
+            except Exception as e:
+                logger.warning(
+                    f"Error processing poll messages for quiz {quiz_key}: {e}"
+                )
+
+            # Clean up the Redis data
             await redis_client.delete_user_quiz_data(user_id, quiz_key)
+
         await redis_client.close()
     except Exception as e:
         logger.error(f"Error cleaning up Redis data for user {user_id}: {e}")

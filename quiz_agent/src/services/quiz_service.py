@@ -1,5 +1,6 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, Poll
 from telegram.ext import CallbackContext, ContextTypes, Application
+from telegram.error import BadRequest
 from models.quiz import Quiz, QuizStatus, QuizAnswer
 from store.database import SessionLocal
 from enhanced_agent import AdvancedQuizGenerator
@@ -1912,9 +1913,8 @@ async def distribute_quiz_rewards(
                 # Blockchain distribution was successful
                 # Focus only on DMing winners with transaction details
                 try:
-                    # Choose NEAR explorer URL based on network (testnet or mainnet)
-                    network = getattr(Config, "NEAR_NETWORK", "testnet").lower()
-                    if network == "mainnet":
+                    # Choose NEAR explorer URL based on environment (production = mainnet, development = testnet)
+                    if Config.is_production():
                         explorer_tx_template = (
                             "https://explorer.near.org/transactions/{tx_hash}"
                         )
@@ -2296,6 +2296,11 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
 
             if has_rewards and not quiz.winners_announced:
                 logger.info(f"Triggering reward distribution for quiz {quiz_id}")
+                # Close the current session before calling distribute_quiz_rewards
+                # to avoid session conflicts
+                session.close()
+                session = None
+
                 # Call distribute_quiz_rewards with application and quiz_id so it can
                 # use the bot instance from the application/job context.
                 # We don't await here in case announcement flow should not block;
@@ -2322,7 +2327,8 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
     except Exception as e:
         logger.error(f"Error announcing quiz end for {quiz_id}: {e}")
     finally:
-        session.close()
+        if session:
+            session.close()
 
 
 async def schedule_auto_distribution(
@@ -2809,7 +2815,8 @@ async def start_enhanced_quiz(
 
 🖊 {total_questions} questions
 ⏱ {timer_seconds} seconds per question
-{'🔀 Questions and answers shuffled' if shuffle_questions or shuffle_answers else '📝 Questions in order'}
+🔀 Questions and answers shuffled
+🗑️ Polls disappear after answering
 
 🏁 Press the button below when you are ready.
 Send /stop to stop it."""
@@ -2851,22 +2858,54 @@ async def send_enhanced_question(
     # Create poll options
     poll_options = list(shuffled_options.values())
 
+    # Find the correct answer index for quiz mode
+    correct_answer_label = current_q.get("correct", "")
+    correct_option_index = None
+
+    if correct_answer_label:
+        # Find the index of the correct answer in the shuffled options
+        for i, (label, value) in enumerate(shuffled_options.items()):
+            if label == correct_answer_label:
+                correct_option_index = i
+                break
+
     # Send the question as a poll
     try:
         logger.info(
-            f"Sending poll: question='{question_text[:50]}...', options={len(poll_options)}"
+            f"Sending poll: question='{question_text[:50]}...', options={len(poll_options)}, correct_index={correct_option_index}"
         )
-        poll_message = await application.bot.send_poll(
-            chat_id=user_id,
-            question=f"[{current_num}/{total_questions}] {question_text}",
-            options=poll_options,
-            is_anonymous=False,
-            allows_multiple_answers=False,
-            explanation="",
-            open_period=Config.QUESTION_TIMER_SECONDS,
-            close_date=datetime.now(timezone.utc)
-            + timedelta(seconds=Config.QUESTION_TIMER_SECONDS + 1),
-        )
+
+        # Use quiz mode if we have a correct answer, otherwise use regular poll
+        if correct_option_index is not None:
+            poll_message = await application.bot.send_poll(
+                chat_id=user_id,
+                question=f"[{current_num}/{total_questions}] {question_text}",
+                options=poll_options,
+                is_anonymous=False,
+                allows_multiple_answers=False,
+                type="quiz",  # Enable quiz mode to hide results and prevent sharing
+                correct_option_id=correct_option_index,  # Specify the correct answer
+                explanation="",
+                open_period=Config.QUESTION_TIMER_SECONDS,
+                close_date=datetime.now(timezone.utc)
+                + timedelta(seconds=Config.QUESTION_TIMER_SECONDS + 1),
+            )
+        else:
+            # Fallback to regular poll if no correct answer found
+            logger.warning(
+                f"No correct answer found for question, using regular poll mode"
+            )
+            poll_message = await application.bot.send_poll(
+                chat_id=user_id,
+                question=f"[{current_num}/{total_questions}] {question_text}",
+                options=poll_options,
+                is_anonymous=False,
+                allows_multiple_answers=False,
+                explanation="",
+                open_period=Config.QUESTION_TIMER_SECONDS,
+                close_date=datetime.now(timezone.utc)
+                + timedelta(seconds=Config.QUESTION_TIMER_SECONDS + 1),
+            )
         logger.info(f"Poll sent successfully: message_id={poll_message.message_id}")
 
         # Store poll message ID for tracking
@@ -2914,21 +2953,47 @@ async def schedule_next_question(
             del scheduled_tasks[session_key]
         return
 
-    # Mark current question as missed if no answer was given
-    if quiz_session.current_question_index not in quiz_session.answers:
-        quiz_session.answers[quiz_session.current_question_index] = {
-            "answer": "TIMEOUT",
-            "correct": False,
-            "correct_answer": quiz_session.get_current_question().get(
-                "correct_answer", ""
-            ),
-        }
-        quiz_session.missed_questions += 1
+        # Mark current question as missed if no answer was given
+        if quiz_session.current_question_index not in quiz_session.answers:
+            quiz_session.answers[quiz_session.current_question_index] = {
+                "answer": "TIMEOUT",
+                "correct": False,
+                "correct_answer": quiz_session.get_current_question().get(
+                    "correct_answer", ""
+                ),
+            }
+            quiz_session.missed_questions += 1
 
-        # Send timeout message
-        await safe_send_message(
-            application.bot, user_id, f"⏰ Time's up for question {current_num}!"
-        )
+            # Delete the poll message on timeout as well
+            try:
+                redis_client = RedisClient()
+                poll_message_id = await redis_client.get_user_quiz_data(
+                    user_id, quiz.id, f"poll_message_{current_num-1}"
+                )
+                await redis_client.close()
+
+                if poll_message_id:
+                    # Delete the poll message on timeout
+                    await application.bot.delete_message(
+                        chat_id=user_id, message_id=int(poll_message_id)
+                    )
+                    logger.info(
+                        f"Deleted poll message {poll_message_id} on timeout for user {user_id}"
+                    )
+            except BadRequest as e:
+                if "message to delete not found" in str(e).lower():
+                    logger.info(
+                        f"Poll message {poll_message_id} already deleted on timeout"
+                    )
+                else:
+                    logger.error(f"Error deleting poll message on timeout: {e}")
+            except Exception as e:
+                logger.error(f"Error deleting poll message on timeout: {e}")
+
+            # Send timeout message
+            await safe_send_message(
+                application.bot, user_id, f"⏰ Time's up for question {current_num}!"
+            )
 
         # Move to next question or finish
         if quiz_session.next_question():
@@ -2944,7 +3009,12 @@ async def schedule_next_question(
 async def handle_enhanced_quiz_answer(
     application: "Application", user_id: str, quiz_id: str, answer: str
 ) -> bool:
-    """Handle answer submission for enhanced quiz"""
+    """Handle answer submission for enhanced quiz
+
+    This function processes user answers and immediately deletes the poll message
+    to prevent answer retractions and sharing. The poll is completely removed
+    from the chat, ensuring users cannot change their answers after submission.
+    """
 
     logger.info(
         f"handle_enhanced_quiz_answer called: user={user_id}, quiz={quiz_id}, answer={answer}"
@@ -2968,31 +3038,12 @@ async def handle_enhanced_quiz_answer(
         except Exception as e:
             logger.error(f"Error cancelling scheduled task: {e}")
 
-    # Close the current poll to prevent sharing
-    try:
-        redis_client = RedisClient()
-        poll_message_id = await redis_client.get_user_quiz_data(
-            user_id, quiz_id, f"poll_message_{quiz_session.current_question_index-1}"
-        )
-        await redis_client.close()
-
-        if poll_message_id:
-            # Close the poll
-            await application.bot.stop_poll(
-                chat_id=user_id, message_id=int(poll_message_id)
-            )
-    except Exception as e:
-        logger.error(f"Error closing poll: {e}")
-
-    # Submit answer
+        # Submit answer
     logger.info(f"Submitting answer: {answer}")
     is_correct = quiz_session.submit_answer(answer)
     logger.info(f"Answer submitted, correct: {is_correct}")
 
-    # Don't send immediate feedback - wait until the end
-    # The user will see their results at the end of the quiz
-
-    # Move to next question or finish
+    # Move to next question or finish immediately
     logger.info(
         f"Moving to next question. Current index: {quiz_session.current_question_index}"
     )
@@ -3098,6 +3149,12 @@ async def finish_enhanced_quiz(
         saved_answers = 0
         failed_saves = []
 
+        # Log the session state before starting saves
+        logger.info(
+            f"Starting to save {len(results['answers'])} answers for user {user_id}"
+        )
+        logger.info(f"Session state - quiz_id: {quiz.id}, username: {username}")
+
         for question_index, answer_data in results["answers"].items():
             try:
                 # Ensure question_index is consistently handled as integer
@@ -3120,6 +3177,13 @@ async def finish_enhanced_quiz(
                     )
                     .first()
                 )
+
+                if existing_answer:
+                    logger.info(
+                        f"Found existing answer for question {question_idx}: id={existing_answer.id}, answer='{existing_answer.answer[:50]}...'"
+                    )
+                else:
+                    logger.info(f"No existing answer found for question {question_idx}")
 
                 if existing_answer:
                     # Update existing answer (including empty "started" records)
@@ -3155,18 +3219,29 @@ async def finish_enhanced_quiz(
 
             except Exception as answer_error:
                 logger.error(
-                    f"Failed to save answer for question {question_index}: {answer_error}"
+                    f"Failed to save answer for question {question_index}: {str(answer_error)}"
                 )
+                logger.error(f"Error type: {type(answer_error)}")
+                logger.error(f"Error details: {repr(answer_error)}")
+
+                # Log additional database error information if available
+                if hasattr(answer_error, "orig"):
+                    logger.error(f"Database error: {answer_error.orig}")
+                if hasattr(answer_error, "params"):
+                    logger.error(f"Error params: {answer_error.params}")
+
                 failed_saves.append(question_index)
                 session.rollback()
 
                 # Try to re-establish session state for next iteration
                 try:
-                    # Refresh the quiz object to ensure session consistency
-                    session.refresh(quiz)
+                    # Clear any pending changes to ensure clean state
+                    session.expunge_all()
+                    # Re-add the quiz object to the session
+                    session.add(quiz)
                 except Exception as refresh_error:
                     logger.error(
-                        f"Failed to refresh session after rollback: {refresh_error}"
+                        f"Failed to clean session after rollback: {str(refresh_error)}"
                     )
 
         logger.info(
@@ -3184,25 +3259,62 @@ async def finish_enhanced_quiz(
                     is_correct = answer_data.get("correct", False)
                     answered_at = answer_data.get("answered_at", datetime.utcnow())
 
-                    # Simple insert without checking existing (since first attempt failed)
-                    quiz_answer = QuizAnswer(
-                        user_id=user_id,
-                        quiz_id=quiz.id,
-                        username=username,
-                        answer=user_answer,
-                        is_correct="True" if is_correct else "False",
-                        answered_at=answered_at,
-                        question_index=question_idx,
+                    # Check if answer already exists before trying to create
+                    existing_answer = (
+                        session.query(QuizAnswer)
+                        .filter(
+                            QuizAnswer.user_id == user_id,
+                            QuizAnswer.quiz_id == quiz.id,
+                            QuizAnswer.question_index == question_idx,
+                        )
+                        .first()
                     )
-                    session.add(quiz_answer)
+
+                    if existing_answer:
+                        # Update existing answer
+                        existing_answer.answer = user_answer
+                        existing_answer.is_correct = "True" if is_correct else "False"
+                        existing_answer.answered_at = answered_at
+                        existing_answer.username = username
+                        logger.info(
+                            f"Retry: Updated existing answer for question {question_idx}"
+                        )
+                    else:
+                        # Create new answer
+                        quiz_answer = QuizAnswer(
+                            user_id=user_id,
+                            quiz_id=quiz.id,
+                            username=username,
+                            answer=user_answer,
+                            is_correct="True" if is_correct else "False",
+                            answered_at=answered_at,
+                            question_index=question_idx,
+                        )
+                        session.add(quiz_answer)
+                        logger.info(
+                            f"Retry: Creating new answer for question {question_idx}"
+                        )
+
                     session.commit()
                     saved_answers += 1
                     logger.info(f"Retry successful for question {question_idx}")
 
+                    # Refresh session after successful commit
+                    session.refresh(quiz)
+
                 except Exception as retry_error:
                     logger.error(
-                        f"Retry failed for question {question_index}: {retry_error}"
+                        f"Retry failed for question {question_index}: {str(retry_error)}"
                     )
+                    logger.error(f"Retry error type: {type(retry_error)}")
+                    logger.error(f"Retry error details: {repr(retry_error)}")
+
+                    # Log additional database error information if available
+                    if hasattr(retry_error, "orig"):
+                        logger.error(f"Retry database error: {retry_error.orig}")
+                    if hasattr(retry_error, "params"):
+                        logger.error(f"Retry error params: {retry_error.params}")
+
                     session.rollback()
 
         logger.info(
@@ -3253,30 +3365,72 @@ async def finish_enhanced_quiz(
             # Attempt one final save for missing questions
             for missing_idx in missing_indices:
                 try:
-                    answer_data = results["answers"][str(missing_idx)]
+                    answer_data = results["answers"][missing_idx]
                     user_answer = answer_data.get("answer", "No answer")
                     is_correct = answer_data.get("correct", False)
                     answered_at = answer_data.get("answered_at", datetime.utcnow())
 
-                    final_answer = QuizAnswer(
-                        user_id=user_id,
-                        quiz_id=quiz.id,
-                        username=username,
-                        answer=user_answer,
-                        is_correct="True" if is_correct else "False",
-                        answered_at=answered_at,
-                        question_index=missing_idx,
+                    # Check if answer already exists before trying to create
+                    existing_answer = (
+                        session.query(QuizAnswer)
+                        .filter(
+                            QuizAnswer.user_id == user_id,
+                            QuizAnswer.quiz_id == quiz.id,
+                            QuizAnswer.question_index == missing_idx,
+                        )
+                        .first()
                     )
-                    session.add(final_answer)
+
+                    if existing_answer:
+                        # Update existing answer
+                        existing_answer.answer = user_answer
+                        existing_answer.is_correct = "True" if is_correct else "False"
+                        existing_answer.answered_at = answered_at
+                        existing_answer.username = username
+                        logger.info(
+                            f"Final recovery: Updated existing answer for question {missing_idx}"
+                        )
+                    else:
+                        # Create new answer
+                        final_answer = QuizAnswer(
+                            user_id=user_id,
+                            quiz_id=quiz.id,
+                            username=username,
+                            answer=user_answer,
+                            is_correct="True" if is_correct else "False",
+                            answered_at=answered_at,
+                            question_index=missing_idx,
+                        )
+                        session.add(final_answer)
+                        logger.info(
+                            f"Final recovery: Creating new answer for question {missing_idx}"
+                        )
+
                     session.commit()
                     logger.info(
                         f"Final recovery save successful for question {missing_idx}"
                     )
 
+                    # Refresh session after successful commit
+                    session.refresh(quiz)
+
                 except Exception as final_error:
                     logger.error(
-                        f"Final recovery save failed for question {missing_idx}: {final_error}"
+                        f"Final recovery save failed for question {missing_idx}: {str(final_error)}"
                     )
+                    logger.error(f"Error type: {type(final_error)}")
+                    logger.error(f"Error details: {repr(final_error)}")
+
+                    # Log additional database error information if available
+                    if hasattr(final_error, "orig"):
+                        logger.error(
+                            f"Final recovery database error: {final_error.orig}"
+                        )
+                    if hasattr(final_error, "params"):
+                        logger.error(
+                            f"Final recovery error params: {final_error.params}"
+                        )
+
                     session.rollback()
         else:
             logger.info("✅ Database verification passed - all answers saved correctly")
