@@ -33,6 +33,10 @@ class NEARWalletService:
         self.main_account: Optional[Account] = None
         self._init_main_account()
 
+        # Collision tracking for monitoring
+        self.collision_count = 0
+        self.total_attempts = 0
+
     def _init_main_account(self):
         """Initialize the main NEAR account for creating sub-accounts"""
         try:
@@ -114,6 +118,68 @@ class NEARWalletService:
         near_private_key_bytes = private_key_bytes + public_key_bytes
 
         return near_private_key_bytes, public_key_bytes
+
+    async def _create_unique_account_id(
+        self, user_id: int, is_mainnet: bool = False, max_retries: int = 5
+    ) -> str:
+        """
+        Create a unique account ID with retry logic to handle collisions
+        """
+        from services.database_service import db_service
+
+        for attempt in range(max_retries):
+            self.total_attempts += 1
+
+            # Generate account ID
+            if is_mainnet:
+                account_id = self._create_mainnet_sub_account_id(user_id)
+            else:
+                account_id = self._create_sub_account_id(user_id)
+
+            # Check if account ID is available in database
+            is_available = await db_service.is_account_id_available(account_id)
+
+            if is_available:
+                logger.debug(
+                    f"Generated unique account ID: {account_id} (attempt {attempt + 1})"
+                )
+                return account_id
+            else:
+                self.collision_count += 1
+                collision_rate = (
+                    (self.collision_count / self.total_attempts) * 100
+                    if self.total_attempts > 0
+                    else 0
+                )
+                logger.warning(
+                    f"Account ID collision detected: {account_id} (attempt {attempt + 1}/{max_retries}) "
+                    f"Collision rate: {collision_rate:.2f}%"
+                )
+                if attempt == max_retries - 1:
+                    logger.error(
+                        f"Failed to generate unique account ID after {max_retries} attempts for user {user_id}"
+                    )
+                    raise Exception(
+                        f"Unable to generate unique account ID after {max_retries} attempts"
+                    )
+
+        # This should never be reached, but just in case
+        raise Exception("Failed to generate unique account ID")
+
+    def get_collision_stats(self) -> Dict[str, float]:
+        """
+        Get collision statistics for monitoring
+        """
+        collision_rate = (
+            (self.collision_count / self.total_attempts) * 100
+            if self.total_attempts > 0
+            else 0
+        )
+        return {
+            "total_attempts": self.total_attempts,
+            "collision_count": self.collision_count,
+            "collision_rate_percent": collision_rate,
+        }
 
     def _create_sub_account_id(self, user_id: int) -> str:
         """Create a human-readable sub-account ID under our main testnet account"""
@@ -215,8 +281,8 @@ class NEARWalletService:
             # Generate secure keypair in NEAR format
             near_private_key_bytes, public_key_bytes = self._generate_secure_keypair()
 
-            # Create sub-account ID
-            account_id = self._create_sub_account_id(user_id)
+            # Create unique sub-account ID with collision handling
+            account_id = await self._create_unique_account_id(user_id, is_mainnet=False)
 
             # Format keys for NEAR using base58 encoding
             near_private_key = (
@@ -287,8 +353,8 @@ class NEARWalletService:
             # Generate secure keypair in NEAR format
             near_private_key_bytes, public_key_bytes = self._generate_secure_keypair()
 
-            # Create mainnet sub-account ID
-            account_id = self._create_mainnet_sub_account_id(user_id)
+            # Create unique mainnet sub-account ID with collision handling
+            account_id = await self._create_unique_account_id(user_id, is_mainnet=True)
 
             # Format keys for NEAR using base58 encoding
             near_private_key = (

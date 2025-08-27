@@ -615,10 +615,36 @@ async def save_quiz_reward_details(
             )
             return False
 
-        quiz.reward_schedule = {
-            "type": reward_type,
-            "details_text": reward_text,
-        }
+        # Handle top3_total_amount by automatically generating distribution details
+        if reward_type == "top3_total_amount":
+            # Parse the total amount from the reward text
+            import re
+
+            match = re.search(r"(\d+\.?\d*)\s*([A-Za-z]{3,})\b", reward_text)
+            if match:
+                total_amount = float(match.group(1))
+                currency = match.group(2).upper()
+
+                # Calculate distribution
+                first_place = round(total_amount * 0.5, 6)
+                second_place = round(total_amount * 0.3, 6)
+                third_place = round(total_amount * 0.2, 6)
+
+                quiz.reward_schedule = {
+                    "type": "top3_details",
+                    "details_text": f"{first_place} {currency} for 1st, {second_place} {currency} for 2nd, {third_place} {currency} for 3rd",
+                }
+            else:
+                # Fallback to original text if parsing fails
+                quiz.reward_schedule = {
+                    "type": reward_type,
+                    "details_text": reward_text,
+                }
+        else:
+            quiz.reward_schedule = {
+                "type": reward_type,
+                "details_text": reward_text,
+            }
 
         if quiz.status == QuizStatus.DRAFT:
             quiz.status = QuizStatus.FUNDING

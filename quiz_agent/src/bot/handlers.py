@@ -189,6 +189,15 @@ def _parse_reward_details_for_total(
             currency = parsed_currency
             return total_amount, currency
 
+        elif reward_type == "top3_total_amount":
+            # e.g., "0.1 NEAR", "5 USDT" - simple total amount input
+            match = re.search(r"(\d+\.?\d*)\s*([A-Za-z]{3,})\b", reward_text)
+            if match:
+                total_amount = float(match.group(1))
+                currency = match.group(2).upper()
+                return total_amount, currency
+            return None, None
+
         elif reward_type == "custom_details":
             # Basic sum for custom_details, sums all "X CURRENCY" found if currency is consistent (ignore ordinals)
             matches = re.findall(r"(\d+\.?\d*)\s*([A-Za-z]{3,})\b", reward_text)
@@ -905,12 +914,12 @@ async def show_reward_structure_options(update, context, reward_amount):
 
     # Calculate total costs for different structures
     wta_total = reward_amount
-    top3_total = reward_amount * 3  # 1st, 2nd, 3rd place
+    top3_total = reward_amount  # Total amount is the base, not multiplied by 3
     custom_total = reward_amount  # Base amount, can be modified
 
     progress_text += f"\n\n💡 Total Cost Options:\n"
     progress_text += f"• Winner-takes-all: {wta_total} NEAR\n"
-    progress_text += f"• Top 3 winners: {top3_total} NEAR\n"
+    progress_text += f"• Top 3 winners: {top3_total} NEAR (50/30/20 distribution)\n"
     progress_text += f"• Custom structure: {custom_total} NEAR"
 
     buttons = [
@@ -921,7 +930,7 @@ async def show_reward_structure_options(update, context, reward_amount):
         ],
         [
             InlineKeyboardButton(
-                f"Top 3 winners ({top3_total} NEAR)", callback_data="structure_top3"
+                f"Top 3 winners (50/30/20)", callback_data="structure_top3"
             )
         ],
         [InlineKeyboardButton(f"Custom structure", callback_data="structure_custom")],
@@ -957,7 +966,9 @@ async def reward_structure_choice(update, context):
 
     elif choice == "structure_top3":
         reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
-        total_cost = float(reward_amount) * 3
+        total_cost = float(
+            reward_amount
+        )  # Total amount is the base, not multiplied by 3
         await redis_client.set_user_data_key(user_id, "reward_structure", "top_3")
         await redis_client.set_user_data_key(user_id, "total_cost", total_cost)
         return await payment_verification(update, context)
@@ -1743,6 +1754,15 @@ async def confirm_prompt(update, context):
                 "free": "Free quiz",
             }.get(reward_structure, reward_structure)
             text += f"📊 Structure: {structure_display}\n"
+
+            # Show distribution breakdown for Top 3
+            if reward_structure == "top_3":
+                first_place = round(float(reward_amount) * 0.5, 6)
+                second_place = round(float(reward_amount) * 0.3, 6)
+                third_place = round(float(reward_amount) * 0.2, 6)
+                text += f"🥇 1st place: {first_place} NEAR (50%)\n"
+                text += f"🥈 2nd place: {second_place} NEAR (30%)\n"
+                text += f"🥉 3rd place: {third_place} NEAR (20%)\n"
         if total_cost > 0:
             text += f"💳 Total Cost: {total_cost} NEAR\n"
             if service_charge:
@@ -2260,7 +2280,7 @@ async def start_reward_setup_callback(update: Update, context: CallbackContext):
         ],
         [
             InlineKeyboardButton(
-                "🥇🥈🥉 Reward Top 3", callback_data=f"reward_method:top3:{quiz_id}"
+                "🥇🥈🥉 Top 3 (50/30/20)", callback_data=f"reward_method:top3:{quiz_id}"
             )
         ],
         [
@@ -2318,10 +2338,10 @@ async def handle_reward_method_choice(update: Update, context: CallbackContext):
         )
     elif method == "top3":
         await redis_client.set_user_data_key(
-            user_id, "awaiting_reward_input_type", "top3_details"
+            user_id, "awaiting_reward_input_type", "top3_total_amount"
         )
         await query.edit_message_text(
-            f"🥇🥈🥉 Reward Top 3 selected for Quiz {quiz_id}.\nPlease describe the rewards for 1st, 2nd, and 3rd place (e.g., '3 NEAR for 1st, 2 NEAR for 2nd, 1 NEAR for 3rd')."
+            f"🥇🥈🥉 Top 3 (50/30/20) selected for Quiz {quiz_id}.\nPlease enter the total prize amount (e.g., '0.1 NEAR', '5 USDT').\n\nThe system will automatically distribute as:\n🥇 1st place: 50%\n🥈 2nd place: 30%\n🥉 3rd place: 20%"
         )
     elif method == "custom":
         await redis_client.set_user_data_key(
@@ -2854,15 +2874,31 @@ async def private_message_handler(update: Update, context: CallbackContext):
                     friendly_method_name = "Winner Takes All amount"
                 elif awaiting_reward_type == "top3_details":
                     friendly_method_name = "Top 3 reward details"
+                elif awaiting_reward_type == "top3_total_amount":
+                    friendly_method_name = "Top 3 total amount"
                 elif awaiting_reward_type == "custom_details":
                     friendly_method_name = "custom reward details"
                 elif awaiting_reward_type == "manual_free_text":
                     friendly_method_name = "manually entered reward text"
 
-                reward_confirmation_content = (
-                    f"✅ Got it! I\\'ve noted down {friendly_method_name} as: '{_escape_markdown_v2_specials(message_text)}' for Quiz ID {quiz_id_for_setup}.\\n"
-                    f"The rewards for this quiz are now set up."
-                )
+                # Generate confirmation content with distribution breakdown for Top 3
+                if awaiting_reward_type == "top3_total_amount":
+                    first_place = round(total_amount * 0.5, 6)
+                    second_place = round(total_amount * 0.3, 6)
+                    third_place = round(total_amount * 0.2, 6)
+                    reward_confirmation_content = (
+                        f"✅ Got it! Total prize: {total_amount} {currency}\\n"
+                        f"🥇 1st place: {first_place} {currency} (50%)\\n"
+                        f"🥈 2nd place: {second_place} {currency} (30%)\\n"
+                        f"🥉 3rd place: {third_place} {currency} (20%)\\n"
+                        f"for Quiz ID {quiz_id_for_setup}.\\n"
+                        f"The rewards for this quiz are now set up."
+                    )
+                else:
+                    reward_confirmation_content = (
+                        f"✅ Got it! I\\'ve noted down {friendly_method_name} as: '{_escape_markdown_v2_specials(message_text)}' for Quiz ID {quiz_id_for_setup}.\\n"
+                        f"The rewards for this quiz are now set up."
+                    )
                 logger.info(
                     f"Reward confirmation content prepared: {reward_confirmation_content}"
                 )

@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 from sqlalchemy import select, update, delete
+from sqlalchemy.exc import IntegrityError
 from models.user import User
 from models.wallet import UserWallet, WalletSecurity
 from utils.config import Config
@@ -182,12 +183,70 @@ class DatabaseService:
 
             # Fire and forget - don't await
             asyncio.create_task(
-                self._save_wallet_background(wallet_info, user_id, user_name)
+                self._save_wallet_background_with_retry(wallet_info, user_id, user_name)
             )
             return True
         except Exception as e:
             logger.error(f"Failed to queue wallet save operation: {e}")
             return False
+
+    async def is_account_id_available(self, account_id: str) -> bool:
+        """Check if account_id is already taken in the database"""
+        try:
+            async with self.async_session() as session:
+                if hasattr(session, "execute") and asyncio.iscoroutinefunction(
+                    session.execute
+                ):
+                    # Async session
+                    result = await session.execute(
+                        select(UserWallet.id).where(UserWallet.account_id == account_id)
+                    )
+                    return result.scalar_one_or_none() is None
+                else:
+                    # Sync session
+                    wallet = (
+                        session.query(UserWallet.id)
+                        .filter(UserWallet.account_id == account_id)
+                        .first()
+                    )
+                    return wallet is None
+        except Exception as e:
+            logger.error(f"Error checking account_id availability: {e}")
+            return False  # Assume unavailable on error to be safe
+
+    async def _save_wallet_background_with_retry(
+        self, wallet_info: Dict[str, str], user_id: int, user_name: str = None, max_retries: int = 3
+    ) -> None:
+        """
+        Background task to save wallet information with retry logic for account ID collisions
+        """
+        for attempt in range(max_retries):
+            try:
+                await self._save_wallet_background(wallet_info, user_id, user_name)
+                logger.info(f"Successfully saved wallet to database for user {user_id} (attempt {attempt + 1})")
+                return
+            except IntegrityError as e:
+                # Check if this is an account_id collision
+                if "account_id" in str(e) and attempt < max_retries - 1:
+                    logger.warning(
+                        f"Account ID collision detected for user {user_id}, "
+                        f"account_id: {wallet_info['account_id']}, "
+                        f"retrying... (attempt {attempt + 1}/{max_retries})"
+                    )
+                    # Note: We don't regenerate the account_id here because it's already been
+                    # created on the blockchain. The retry is mainly for handling race conditions
+                    # where the same account_id was generated simultaneously.
+                    continue
+                else:
+                    logger.error(
+                        f"IntegrityError saving wallet for user {user_id} after {attempt + 1} attempts: {e}"
+                    )
+                    raise
+            except Exception as e:
+                logger.error(f"Failed to save wallet to database for user {user_id} (attempt {attempt + 1}): {e}")
+                if attempt == max_retries - 1:
+                    raise
+                continue
 
     async def _save_wallet_background(
         self, wallet_info: Dict[str, str], user_id: int, user_name: str = None

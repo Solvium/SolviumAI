@@ -142,6 +142,30 @@ async def check_user_wallet(
         )
 
 
+@router.get("/collision-stats")
+async def get_collision_stats(
+    wallet_service: NEARWalletService = Depends(get_wallet_service),
+) -> JSONResponse:
+    """
+    Get collision statistics for wallet creation monitoring.
+    """
+    try:
+        stats = wallet_service.get_collision_stats()
+        return JSONResponse(
+            content={
+                "collision_stats": stats,
+                "message": "Collision statistics retrieved successfully",
+            },
+            status_code=200,
+        )
+    except Exception as e:
+        logger.error(f"Error getting collision stats: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error while getting collision stats: {str(e)}",
+        )
+
+
 @router.get("/status/{telegram_user_id}")
 async def get_wallet_status(
     telegram_user_id: int, db_service: DatabaseService = Depends(get_database_service)
