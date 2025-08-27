@@ -189,6 +189,15 @@ def _parse_reward_details_for_total(
             currency = parsed_currency
             return total_amount, currency
 
+        elif reward_type == "top3_total_amount":
+            # e.g., "0.1 NEAR", "5 USDT" - simple total amount input
+            match = re.search(r"(\d+\.?\d*)\s*([A-Za-z]{3,})\b", reward_text)
+            if match:
+                total_amount = float(match.group(1))
+                currency = match.group(2).upper()
+                return total_amount, currency
+            return None, None
+
         elif reward_type == "custom_details":
             # Basic sum for custom_details, sums all "X CURRENCY" found if currency is consistent (ignore ordinals)
             matches = re.findall(r"(\d+\.?\d*)\s*([A-Za-z]{3,})\b", reward_text)
@@ -264,9 +273,17 @@ async def start_createquiz_group(update, context):
 
     # Check if user has a wallet - if not, create one first
     from services.wallet_service import WalletService
+    from services.cache_service import cache_service
 
     wallet_service = WalletService()
+    logger.info(f"Checking if user {user_id} has a wallet...")
+
+    # Clear wallet cache to ensure fresh database check
+    await cache_service.invalidate_wallet_cache(user_id)
+    logger.info(f"Cleared wallet cache for user {user_id} before robust check")
+
     has_wallet = await wallet_service.has_wallet_robust(user_id)
+    logger.info(f"Wallet check result for user {user_id}: {has_wallet}")
 
     if not has_wallet:
         logger.info(f"User {user_id} has no wallet, creating one before quiz creation.")
@@ -292,7 +309,7 @@ async def start_createquiz_group(update, context):
 
             # Create wallet using existing service
             wallet_info = await wallet_service.create_demo_wallet(
-                user_id, user.first_name
+                user_id, user_name=user.username or user.first_name
             )
 
             # Update loading message with final step
@@ -897,12 +914,12 @@ async def show_reward_structure_options(update, context, reward_amount):
 
     # Calculate total costs for different structures
     wta_total = reward_amount
-    top3_total = reward_amount * 3  # 1st, 2nd, 3rd place
+    top3_total = reward_amount  # Total amount is the base, not multiplied by 3
     custom_total = reward_amount  # Base amount, can be modified
 
     progress_text += f"\n\n💡 Total Cost Options:\n"
     progress_text += f"• Winner-takes-all: {wta_total} NEAR\n"
-    progress_text += f"• Top 3 winners: {top3_total} NEAR\n"
+    progress_text += f"• Top 3 winners: {top3_total} NEAR (50/30/20 distribution)\n"
     progress_text += f"• Custom structure: {custom_total} NEAR"
 
     buttons = [
@@ -913,7 +930,7 @@ async def show_reward_structure_options(update, context, reward_amount):
         ],
         [
             InlineKeyboardButton(
-                f"Top 3 winners ({top3_total} NEAR)", callback_data="structure_top3"
+                f"Top 3 winners (50/30/20)", callback_data="structure_top3"
             )
         ],
         [InlineKeyboardButton(f"Custom structure", callback_data="structure_custom")],
@@ -949,7 +966,9 @@ async def reward_structure_choice(update, context):
 
     elif choice == "structure_top3":
         reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
-        total_cost = float(reward_amount) * 3
+        total_cost = float(
+            reward_amount
+        )  # Total amount is the base, not multiplied by 3
         await redis_client.set_user_data_key(user_id, "reward_structure", "top_3")
         await redis_client.set_user_data_key(user_id, "total_cost", total_cost)
         return await payment_verification(update, context)
@@ -1580,7 +1599,9 @@ async def start_quiz_for_user(update, context, quiz):
 
                 # Create wallet using existing service
                 wallet_info = await wallet_service.create_demo_wallet(
-                    user_id, update.effective_user.first_name
+                    user_id,
+                    user_name=update.effective_user.username
+                    or update.effective_user.first_name,
                 )
 
                 # Update loading message with final step
@@ -1733,6 +1754,15 @@ async def confirm_prompt(update, context):
                 "free": "Free quiz",
             }.get(reward_structure, reward_structure)
             text += f"📊 Structure: {structure_display}\n"
+
+            # Show distribution breakdown for Top 3
+            if reward_structure == "top_3":
+                first_place = round(float(reward_amount) * 0.5, 6)
+                second_place = round(float(reward_amount) * 0.3, 6)
+                third_place = round(float(reward_amount) * 0.2, 6)
+                text += f"🥇 1st place: {first_place} NEAR (50%)\n"
+                text += f"🥈 2nd place: {second_place} NEAR (30%)\n"
+                text += f"🥉 3rd place: {third_place} NEAR (20%)\n"
         if total_cost > 0:
             text += f"💳 Total Cost: {total_cost} NEAR\n"
             if service_charge:
@@ -2036,29 +2066,78 @@ async def process_questions_with_payment(
             reply_markup=announcement_keyboard,
         )
 
+        # Sanitize content for Markdown
+        def sanitize_markdown(text):
+            """Sanitize text to prevent Markdown parsing errors"""
+            if not text:
+                return ""
+            # Escape special Markdown characters
+            text = (
+                str(text)
+                .replace("*", "\\*")
+                .replace("_", "\\_")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+                .replace("(", "\\(")
+                .replace(")", "\\)")
+                .replace("~", "\\~")
+                .replace("`", "\\`")
+                .replace(">", "\\>")
+                .replace("#", "\\#")
+                .replace("+", "\\+")
+                .replace("-", "\\-")
+                .replace("=", "\\=")
+                .replace("|", "\\|")
+                .replace("{", "\\{")
+                .replace("}", "\\}")
+                .replace(".", "\\.")
+                .replace("!", "\\!")
+            )
+            return text
+
         # Send confirmation to user with rich formatting
+        safe_topic = sanitize_markdown(topic)
+        safe_quiz_id = sanitize_markdown(quiz_id)
+        safe_payment_status = (
+            sanitize_markdown(payment_status) if payment_status else ""
+        )
+
         user_msg = f"""
 ✅ **QUIZ CREATED SUCCESSFULLY!** ✅
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+══════════════════════════════════════════
 
-🎯 **Topic:** {topic}
+🎯 **Topic:** {safe_topic}
 ❓ **Questions:** {len(questions_list)}
 ⏱ **Duration:** {duration_seconds // 60 if duration_seconds else 'No limit'} minutes
-🆔 **Quiz ID:** {quiz_id}
+🆔 **Quiz ID:** {safe_quiz_id}
 
 """
 
         if reward_amount and float(reward_amount) > 0:
+            # Debug: Log the original reward structure
+            logger.info(f"Original reward_structure: '{reward_structure}'")
+
+            # Sanitize reward_structure for Markdown
+            safe_reward_structure = reward_structure
+            if "Top 3 winners" in reward_structure:
+                safe_reward_structure = "Top 3 Winners"
+            elif "Winner-takes-all" in reward_structure:
+                safe_reward_structure = "Winner Takes All"
+
+            # Sanitize the reward structure
+            safe_reward_structure = sanitize_markdown(safe_reward_structure)
+            logger.info(f"Sanitized reward_structure: '{safe_reward_structure}'")
+
             user_msg += f"""
 💰 **Reward:** {reward_amount} NEAR
-📊 **Structure:** {reward_structure}
-💳 **Payment:** {payment_status}
+📊 **Structure:** {safe_reward_structure}
+💳 **Payment:** {safe_payment_status}
 """
         else:
             user_msg += f"💰 **Reward:** Free Quiz\n"
 
         user_msg += f"""
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+══════════════════════════════════════════
 🎮 **Your quiz is now active and ready to play!**
 """
 
@@ -2078,9 +2157,11 @@ async def process_questions_with_payment(
 
         user_keyboard = InlineKeyboardMarkup(user_buttons)
 
+        final_message = user_msg.strip()
+
         await context.bot.send_message(
             chat_id=user_id,
-            text=user_msg.strip(),
+            text=final_message,
             parse_mode="Markdown",
             reply_markup=user_keyboard,
         )
@@ -2132,10 +2213,16 @@ async def store_payment_info_in_quiz(user_id: int, payment_info: dict):
                     f"Set reward_schedule for quiz {quiz_id}: {quiz.reward_schedule}"
                 )
             elif reward_structure == "top_3" and reward_amount:
-                # Handle top 3 structure if needed
+                # Handle top 3 structure - create proper rank-based distribution
+                # For top 3, we'll distribute the total amount as: 50% for 1st, 30% for 2nd, 20% for 3rd
+                total_amount = float(reward_amount)
+                first_place = round(total_amount * 0.5, 6)
+                second_place = round(total_amount * 0.3, 6)
+                third_place = round(total_amount * 0.2, 6)
+
                 quiz.reward_schedule = {
                     "type": "top3_details",
-                    "details_text": f"{reward_amount} NEAR",
+                    "details_text": f"{first_place} NEAR for 1st, {second_place} NEAR for 2nd, {third_place} NEAR for 3rd",
                 }
                 logger.info(
                     f"Set reward_schedule for quiz {quiz_id}: {quiz.reward_schedule}"
@@ -2193,7 +2280,7 @@ async def start_reward_setup_callback(update: Update, context: CallbackContext):
         ],
         [
             InlineKeyboardButton(
-                "🥇🥈🥉 Reward Top 3", callback_data=f"reward_method:top3:{quiz_id}"
+                "🥇🥈🥉 Top 3 (50/30/20)", callback_data=f"reward_method:top3:{quiz_id}"
             )
         ],
         [
@@ -2251,10 +2338,10 @@ async def handle_reward_method_choice(update: Update, context: CallbackContext):
         )
     elif method == "top3":
         await redis_client.set_user_data_key(
-            user_id, "awaiting_reward_input_type", "top3_details"
+            user_id, "awaiting_reward_input_type", "top3_total_amount"
         )
         await query.edit_message_text(
-            f"🥇🥈🥉 Reward Top 3 selected for Quiz {quiz_id}.\nPlease describe the rewards for 1st, 2nd, and 3rd place (e.g., '3 NEAR for 1st, 2 NEAR for 2nd, 1 NEAR for 3rd')."
+            f"🥇🥈🥉 Top 3 (50/30/20) selected for Quiz {quiz_id}.\nPlease enter the total prize amount (e.g., '0.1 NEAR', '5 USDT').\n\nThe system will automatically distribute as:\n🥇 1st place: 50%\n🥈 2nd place: 30%\n🥉 3rd place: 20%"
         )
     elif method == "custom":
         await redis_client.set_user_data_key(
@@ -2361,7 +2448,9 @@ async def play_quiz_handler(update: Update, context: CallbackContext):
 
             # Create wallet using existing service
             wallet_info = await wallet_service.create_demo_wallet(
-                user_id, update.effective_user.first_name
+                user_id,
+                user_name=update.effective_user.username
+                or update.effective_user.first_name,
             )
 
             # Update loading message with final step
@@ -2785,15 +2874,31 @@ async def private_message_handler(update: Update, context: CallbackContext):
                     friendly_method_name = "Winner Takes All amount"
                 elif awaiting_reward_type == "top3_details":
                     friendly_method_name = "Top 3 reward details"
+                elif awaiting_reward_type == "top3_total_amount":
+                    friendly_method_name = "Top 3 total amount"
                 elif awaiting_reward_type == "custom_details":
                     friendly_method_name = "custom reward details"
                 elif awaiting_reward_type == "manual_free_text":
                     friendly_method_name = "manually entered reward text"
 
-                reward_confirmation_content = (
-                    f"✅ Got it! I\\'ve noted down {friendly_method_name} as: '{_escape_markdown_v2_specials(message_text)}' for Quiz ID {quiz_id_for_setup}.\\n"
-                    f"The rewards for this quiz are now set up."
-                )
+                # Generate confirmation content with distribution breakdown for Top 3
+                if awaiting_reward_type == "top3_total_amount":
+                    first_place = round(total_amount * 0.5, 6)
+                    second_place = round(total_amount * 0.3, 6)
+                    third_place = round(total_amount * 0.2, 6)
+                    reward_confirmation_content = (
+                        f"✅ Got it! Total prize: {total_amount} {currency}\\n"
+                        f"🥇 1st place: {first_place} {currency} (50%)\\n"
+                        f"🥈 2nd place: {second_place} {currency} (30%)\\n"
+                        f"🥉 3rd place: {third_place} {currency} (20%)\\n"
+                        f"for Quiz ID {quiz_id_for_setup}.\\n"
+                        f"The rewards for this quiz are now set up."
+                    )
+                else:
+                    reward_confirmation_content = (
+                        f"✅ Got it! I\\'ve noted down {friendly_method_name} as: '{_escape_markdown_v2_specials(message_text)}' for Quiz ID {quiz_id_for_setup}.\\n"
+                        f"The rewards for this quiz are now set up."
+                    )
                 logger.info(
                     f"Reward confirmation content prepared: {reward_confirmation_content}"
                 )
@@ -3312,6 +3417,47 @@ async def handle_poll_answer(update: Update, context: CallbackContext):
         f"Processing answer: {selected_answer} for question {quiz_session.current_question_index}"
     )
 
+    # IMMEDIATELY delete the poll message when answer is received
+    try:
+        from utils.redis_client import RedisClient
+        from telegram.error import BadRequest
+
+        redis_client = RedisClient()
+        current_question_index = quiz_session.current_question_index
+        poll_message_id = await redis_client.get_user_quiz_data(
+            user_id, quiz_session.quiz_id, f"poll_message_{current_question_index}"
+        )
+        await redis_client.close()
+
+        if poll_message_id:
+            # Delete the poll message immediately
+            await context.application.bot.delete_message(
+                chat_id=user_id, message_id=int(poll_message_id)
+            )
+            logger.info(
+                f"Immediately deleted poll message {poll_message_id} for user {user_id}"
+            )
+
+    except BadRequest as e:
+        if "message to delete not found" in str(e).lower():
+            logger.info(f"Poll message {poll_message_id} already deleted")
+        elif "message can't be deleted" in str(e).lower():
+            # Fallback: Stop the poll if deletion fails
+            logger.warning(
+                f"Cannot delete poll message {poll_message_id}, falling back to stop_poll"
+            )
+            try:
+                await context.application.bot.stop_poll(
+                    chat_id=user_id, message_id=int(poll_message_id)
+                )
+                logger.info(f"Successfully stopped poll {poll_message_id} as fallback")
+            except Exception as stop_error:
+                logger.error(f"Failed to stop poll as fallback: {stop_error}")
+        else:
+            logger.error(f"BadRequest when deleting poll message: {e}")
+    except Exception as e:
+        logger.error(f"Error deleting poll message: {e}")
+
     # Handle the answer
     logger.info(
         f"Calling handle_enhanced_quiz_answer for user {user_id}, quiz {quiz_session.quiz_id}"
@@ -3347,15 +3493,53 @@ async def stop_enhanced_quiz(update: Update, context: CallbackContext):
             finally:
                 scheduled_tasks.pop(task_key, None)
 
-    # Clean up Redis data for this user
+    # Clean up Redis data and delete any active poll messages for this user
     try:
         from utils.redis_client import RedisClient
+        from telegram.error import BadRequest
 
         redis_client = RedisClient()
         # Get all quiz data for this user and clean it up
         user_quiz_keys = await redis_client.get_user_quiz_keys(user_id)
+
+        # Delete any active poll messages before cleaning up Redis data
         for quiz_key in user_quiz_keys:
+            # Try to find and delete poll messages for this quiz
+            try:
+                # Get all poll message IDs for this quiz
+                for i in range(20):  # Check up to 20 questions
+                    poll_message_id = await redis_client.get_user_quiz_data(
+                        user_id, quiz_key, f"poll_message_{i}"
+                    )
+                    if poll_message_id:
+                        try:
+                            await context.bot.delete_message(
+                                chat_id=user_id, message_id=int(poll_message_id)
+                            )
+                            logger.info(
+                                f"Deleted poll message {poll_message_id} during quiz stop"
+                            )
+                        except BadRequest as e:
+                            if "message to delete not found" in str(e).lower():
+                                logger.info(
+                                    f"Poll message {poll_message_id} already deleted"
+                                )
+                            else:
+                                logger.warning(
+                                    f"Could not delete poll message {poll_message_id}: {e}"
+                                )
+                        except Exception as e:
+                            logger.warning(
+                                f"Error deleting poll message {poll_message_id}: {e}"
+                            )
+            except Exception as e:
+                logger.warning(
+                    f"Error processing poll messages for quiz {quiz_key}: {e}"
+                )
+
+            # Clean up the Redis data
             await redis_client.delete_user_quiz_data(user_id, quiz_key)
+
         await redis_client.close()
     except Exception as e:
         logger.error(f"Error cleaning up Redis data for user {user_id}: {e}")

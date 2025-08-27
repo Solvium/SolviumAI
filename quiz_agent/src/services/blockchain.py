@@ -325,15 +325,36 @@ class BlockchainMonitor:
                 session, quiz_id
             )
 
-            # For reward distribution, you can choose one of these strategies:
-            # Option 1: Only participants with correct answers (current behavior)
-            winners = [p for p in all_participants if p.get("correct_count", 0) > 0]
+            # For reward distribution, filter participants with correct answers first
+            eligible_participants = [
+                p for p in all_participants if p.get("correct_count", 0) > 0
+            ]
+
+            # Determine winners based on reward schedule type
+            reward_schedule = quiz.reward_schedule
+            if (
+                reward_schedule
+                and isinstance(reward_schedule, dict)
+                and reward_schedule.get("type") == "wta_amount"
+            ):
+                # Winner Takes All - only the top participant
+                winners = eligible_participants[:1] if eligible_participants else []
+            elif (
+                reward_schedule
+                and isinstance(reward_schedule, dict)
+                and reward_schedule.get("type") == "top3_details"
+            ):
+                # Top 3 Winners - only the top 3 participants
+                winners = eligible_participants[:3] if eligible_participants else []
+            else:
+                # Default: all participants with correct answers
+                winners = eligible_participants
 
             logger.info(
-                f"[distribute_rewards] Found {len(all_participants)} total participants, {len(winners)} eligible for rewards"
+                f"[distribute_rewards] Found {len(all_participants)} total participants, {len(eligible_participants)} with correct answers, {len(winners)} selected for rewards"
             )
 
-            if len(all_participants) > 0 and len(winners) == 0:
+            if len(all_participants) > 0 and len(eligible_participants) == 0:
                 logger.info(
                     f"[distribute_rewards] All {len(all_participants)} participants had 0 correct answers - no rewards distributed"
                 )
@@ -343,7 +364,7 @@ class BlockchainMonitor:
                 )
             else:
                 logger.info(
-                    f"[distribute_rewards] Distributing rewards to {len(winners)} participants with correct answers"
+                    f"[distribute_rewards] Distributing rewards to {len(winners)} participants"
                 )
                 logger.debug(f"[distribute_rewards] Winner details: {winners}")
             if not winners:
@@ -360,7 +381,6 @@ class BlockchainMonitor:
             from models.user import User  # Already imported but good to note
             from models.wallet import UserWallet  # Import for new wallet system
 
-            reward_schedule = quiz.reward_schedule
             logger.debug(
                 f"[distribute_rewards] Using reward_schedule: {reward_schedule}"
             )
@@ -546,6 +566,73 @@ class BlockchainMonitor:
                             else:
                                 logger.error(
                                     f"[distribute_rewards] Could not parse reward amount from details_text: {amount_text} for quiz {quiz_id}"
+                                )
+                                continue
+                        elif schedule_type == "top3_details":  # Top 3 Winners
+                            amount_text = str(reward_schedule.get("details_text", ""))
+
+                            # First try to parse rank-specific format like "3 NEAR for 1st, 2 NEAR for 2nd, 1 NEAR for 3rd"
+                            rank_patterns = [
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*1st",  # 1st place
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*2nd",  # 2nd place
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*3rd",  # 3rd place
+                            ]
+
+                            if rank <= 3:  # Only process top 3 ranks
+                                pattern = rank_patterns[rank - 1]
+                                match = re.search(pattern, amount_text)
+                                if match:
+                                    reward_amount_near_str = match.group(1)
+                                    try:
+                                        reward_amount_yoctonear = int(
+                                            float(reward_amount_near_str) * NEAR
+                                        )
+                                    except ValueError:
+                                        logger.error(
+                                            f"[distribute_rewards] Invalid reward amount in details_text: {amount_text} for quiz {quiz_id}, rank {rank}"
+                                        )
+                                        continue
+                                else:
+                                    # Fallback: if no rank-specific format found, try to parse a single amount
+                                    # and distribute it according to a default ratio
+                                    fallback_match = re.search(
+                                        r"(\d+\.?\d*)\s*([A-Za-z]{3,})\b", amount_text
+                                    )
+                                    if fallback_match:
+                                        total_amount = float(fallback_match.group(1))
+                                        # Default distribution: 50% for 1st, 30% for 2nd, 20% for 3rd
+                                        rank_ratios = {1: 0.5, 2: 0.3, 3: 0.2}
+                                        if rank in rank_ratios:
+                                            reward_amount_near_str = str(
+                                                round(
+                                                    total_amount * rank_ratios[rank], 6
+                                                )
+                                            )
+                                            try:
+                                                reward_amount_yoctonear = int(
+                                                    float(reward_amount_near_str) * NEAR
+                                                )
+                                                logger.info(
+                                                    f"[distribute_rewards] Using fallback distribution for rank {rank}: {reward_amount_near_str} NEAR (from total {total_amount} NEAR)"
+                                                )
+                                            except ValueError:
+                                                logger.error(
+                                                    f"[distribute_rewards] Invalid fallback reward amount for rank {rank}: {reward_amount_near_str} for quiz {quiz_id}"
+                                                )
+                                                continue
+                                        else:
+                                            logger.error(
+                                                f"[distribute_rewards] Rank {rank} not supported in fallback distribution for quiz {quiz_id}"
+                                            )
+                                            continue
+                                    else:
+                                        logger.error(
+                                            f"[distribute_rewards] Could not parse reward amount for rank {rank} from details_text: {amount_text} for quiz {quiz_id}"
+                                        )
+                                        continue
+                            else:
+                                logger.warning(
+                                    f"[distribute_rewards] Rank {rank} is beyond top 3, skipping reward for quiz {quiz_id}"
                                 )
                                 continue
                         # Example for rank-based rewards (if you add this type later)

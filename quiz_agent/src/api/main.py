@@ -201,14 +201,29 @@ def create_app():
     # Include routers only if FastAPI is available
     try:
         from api.webhook import router as webhook_router
+
+        logger.info("Successfully imported webhook router")
+
         from api.routes.health import router as health_router
+
+        logger.info("Successfully imported health router")
+
         from api.routes.monitoring import router as monitoring_router
+
+        logger.info("Successfully imported monitoring router")
+
+        from api.routes.wallet import router as wallet_router
+
+        logger.info("Successfully imported wallet router")
 
         app.include_router(webhook_router, prefix="/webhook", tags=["webhook"])
         app.include_router(health_router, prefix="/health", tags=["health"])
         app.include_router(monitoring_router, prefix="/monitoring", tags=["monitoring"])
+        app.include_router(wallet_router, prefix="/wallet", tags=["wallet"])
+        logger.info("All routers included successfully")
     except ImportError as e:
         logger.error(f"Failed to import routers: {e}")
+        logger.error(f"Import error details: {type(e).__name__}: {str(e)}")
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
@@ -297,6 +312,7 @@ if FASTAPI_AVAILABLE:
             "endpoints": {
                 "health": "/health",
                 "webhook": "/webhook",
+                "wallet": "/wallet",
                 "monitoring": "/monitoring",
                 "metrics": "/metrics/performance",
             },
