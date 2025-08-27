@@ -175,7 +175,7 @@ class WalletService:
             wallet = await self.get_user_wallet(user_id)
             if wallet and wallet.get("account_id"):
                 account_id = wallet["account_id"]
-                network = wallet.get("network", "testnet")
+                network = wallet.get("network", "mainnet")
                 logger.info(
                     f"Getting balance for account: {account_id} on {network}, force_refresh: {force_refresh}"
                 )

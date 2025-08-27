@@ -2554,8 +2554,6 @@ def parse_questions(raw_questions):
                 result["options"][letter] = text
                 break
 
-    print(f"Parsed question structure: {result}")
-
     # If we don't have options or they're incomplete, create fallback options
     if not result["options"] or len(result["options"]) < 4:
         print("Warning: Missing options in quiz question. Using fallback options.")

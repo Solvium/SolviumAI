@@ -2038,11 +2038,6 @@ async def process_questions_with_payment(
             bot_username=Config.BOT_USERNAME,
         )
 
-        # Debug: Log the announcement message
-        logger.info(
-            f"Sending announcement to group {group_chat_id}: {announcement_msg}"
-        )
-
         # Send rich announcement to group
         await context.bot.send_message(
             chat_id=group_chat_id,
@@ -2142,9 +2137,7 @@ async def process_questions_with_payment(
 
         user_keyboard = InlineKeyboardMarkup(user_buttons)
 
-        # Debug: Log the message to see what's being sent
         final_message = user_msg.strip()
-        logger.info(f"Sending message to user {user_id}: {final_message}")
 
         await context.bot.send_message(
             chat_id=user_id,

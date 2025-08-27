@@ -831,7 +831,6 @@ CRITICAL REAL-TIME REQUIREMENTS:
 5. ENSURE CURRENCY: Make sure the question reflects the current state of {topic}, not outdated information
 6. USE SPECIFIC RECENT DETAILS: Include concrete recent examples, statistics, or developments
 7. Each option must be exactly 90 characters or less
-8. Shuffle the correct answer from A to D
 
 ADVANCED CURRENT-AWARENESS INSTRUCTIONS:
 - Question should test knowledge of recent developments, not just historical facts
@@ -862,7 +861,7 @@ OUTPUT FORMAT (JSON only):
         "Recent but wrong distractor 2 (max 90 chars)",
         "Recent but wrong distractor 3 (max 90 chars)"
     ],
-    "correct_answer": "A, B, C, or D" # Shuffle the correct answer from A to D
+    "correct_answer": "A",
     "explanation": "Detailed explanation referencing recent sources and current developments, explaining why other recent options are wrong",
     "confidence_score": 0.9
 }}"""
@@ -1065,3 +1064,81 @@ async def generate_quiz(
         )
 
     return "\n\n".join(formatted_questions)
+
+
+if __name__ == "__main__":
+    import asyncio
+
+    async def main():
+        print("🎯 Advanced Quiz Generator - Interactive Mode")
+        print("=" * 50)
+
+        # Get user input
+        topic = input("Enter topic for quiz questions: ").strip()
+        if not topic:
+            print("❌ Topic cannot be empty. Exiting.")
+            return
+
+        try:
+            num_questions = int(input("Enter number of questions (1-10): ").strip())
+            if num_questions < 1 or num_questions > 10:
+                print("❌ Number of questions must be between 1 and 10. Using default of 3.")
+                num_questions = 3
+        except ValueError:
+            print("❌ Invalid number. Using default of 3 questions.")
+            num_questions = 3
+
+        difficulty = input("Enter difficulty (easy/medium/hard) [default: medium]: ").strip().lower()
+        if difficulty not in ['easy', 'medium', 'hard']:
+            print("Using default difficulty: medium")
+            difficulty = "medium"
+
+        context_text = input("Enter additional context (optional, press Enter to skip): ").strip()
+        if not context_text:
+            context_text = None
+
+        print(f"\n🚀 Generating {num_questions} {difficulty} questions about '{topic}'...")
+        print("This may take a moment...\n")
+
+        # Initialize generator
+        generator = AdvancedQuizGenerator()
+
+        try:
+            # Generate questions
+            questions = await generator.generate_quiz(
+                topic=topic,
+                num_questions=num_questions,
+                difficulty=difficulty,
+                context_text=context_text,
+            )
+
+            # Display results
+            print("\n" + "=" * 50)
+            print("📝 GENERATED QUIZ QUESTIONS")
+            print("=" * 50)
+
+            for i, q in enumerate(questions, 1):
+                print(f"\nQuestion {i}:")
+                print(f"Type: {q.question_type.value} | Complexity: {q.complexity.value}")
+                print(f"Difficulty: {q.difficulty} | Confidence: {q.confidence_score:.1f}")
+                print(f"\n{q.question}")
+
+                for key, value in q.options.items():
+                    print(f"{key}) {value}")
+
+                print(f"\n✅ Correct Answer: {q.correct_answer}")
+                print(f"💡 Explanation: {q.explanation}")
+
+                if q.sources:
+                    print(f"📚 Sources: {', '.join(q.sources[:2])}")
+
+                print("-" * 40)
+
+            print(f"\n✅ Successfully generated {len(questions)} questions!")
+
+        except Exception as e:
+            print(f"❌ Error generating questions: {str(e)}")
+            print("Please check your API keys and internet connection.")
+
+    # Run the async main function
+    asyncio.run(main())
