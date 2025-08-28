@@ -103,17 +103,36 @@ async def handle_silent_wallet_creation(
     update: Update, context: CallbackContext
 ) -> bool:
     """
-    Handles wallet creation for first-time users silently (for quiz deep links)
+    Handles wallet creation for first-time users with wallet info messages
     Returns True if successful, False otherwise
     """
     user_id = update.effective_user.id
     user_name = update.effective_user.username or update.effective_user.first_name
 
     try:
-        # Create wallet service and generate demo wallet silently
+        # Send initial loading message
+        loading_message = await context.bot.send_message(
+            chat_id=user_id,
+            text="🔧 **Creating your NEAR wallet...**\n\n⏳ Please wait while we set up your account on the blockchain...",
+            parse_mode="Markdown",
+        )
+
+        # Create wallet service and generate demo wallet
         wallet_service = WalletService()
         wallet_info = await wallet_service.create_demo_wallet(
             user_id, user_name=user_name
+        )
+
+        # Format the wallet info message
+        wallet_message, mini_app_keyboard = (
+            await wallet_service.format_wallet_info_message(wallet_info)
+        )
+
+        # Send the wallet creation result
+        await loading_message.edit_text(
+            f"🎉 **Wallet Created Successfully!**\n\n{wallet_message}",
+            parse_mode="Markdown",
+            reply_markup=mini_app_keyboard,
         )
 
         # Store user state in Redis
@@ -123,6 +142,14 @@ async def handle_silent_wallet_creation(
         return True
     except Exception as e:
         logger.error(f"Error creating wallet for user {user_id}: {e}")
+        # Try to send error message if loading message was created
+        try:
+            await loading_message.edit_text(
+                "❌ **Wallet Creation Failed**\n\nSorry, there was an error creating your wallet. Please try again later.",
+                parse_mode="Markdown",
+            )
+        except:
+            pass
         return False
 
 
