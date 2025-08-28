@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Script from "next/script";
 import { useEffect } from "react";
 import { MultiLoginProvider } from "@/app/contexts/MultiLoginContext";
+import { SimpleWalletProvider } from "@/app/contexts/SimpleWalletContext";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false } },
@@ -54,9 +55,11 @@ export default function App({
         <head>
           <Script src="https://telegram.org/js/telegram-web-app.js"></Script>
         </head>
-        <MultiLoginProvider>
-          <body>{children}</body>
-        </MultiLoginProvider>
+        <SimpleWalletProvider>
+          <MultiLoginProvider>
+            <body>{children}</body>
+          </MultiLoginProvider>
+        </SimpleWalletProvider>
       </html>
     </QueryClientProvider>
   );

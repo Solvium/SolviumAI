@@ -1,13 +1,15 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@/app/contexts/AuthContext";
-import { useUserWallet } from "@/app/hooks/useUserWallet";
+import { providers, utils } from "near-api-js";
+import { CodeResult } from "near-api-js/lib/providers/provider";
 
 import dynamic from "next/dynamic";
 import { CONTRACTID, MEME_TOKEN_ADDRESS } from "./constants/contractId";
 import { Bounce, toast, ToastContainer } from "react-toastify";
 import BuySpin from "./BuySpin";
 import { useMultiLoginContext } from "@/app/contexts/MultiLoginContext";
+import { usePrivateKeyWallet } from "@/app/contexts/PrivateKeyWalletContext";
+import WalletConnect from "./WalletConnect";
 const Wheel = dynamic(
   () => import("react-custom-roulette").then((mod) => mod.Wheel),
   { ssr: false }
@@ -49,8 +51,13 @@ const CountdownTimer = ({ targetTime }: { targetTime: Date }) => {
 
 export const WheelOfFortune = () => {
   const { userData: user, claimPoints } = useMultiLoginContext();
-  const { user: authUser } = useAuth();
-  const { sendTransaction, balance } = useUserWallet();
+  const {
+    isConnected: nearConnected,
+    accountId: nearAddress,
+    signAndSendTransaction,
+    checkTokenRegistration,
+    registerToken,
+  } = usePrivateKeyWallet();
 
   const [mustSpin, setMustSpin] = useState(false);
   const [prizeNumber, setPrizeNumber] = useState(0);
@@ -84,16 +91,28 @@ export const WheelOfFortune = () => {
     // { option: "10000", style: { fontSize: 20, fontWeight: "bold" } },
   ];
 
-  // Simplified token registration check using user wallet
-  const checkTokenRegistration = useCallback(async () => {
-    // For now, assume token is registered since we're using database approach
-    return { total: "1" };
-  }, []);
+  const checkTokenRegistrationCallback = useCallback(async () => {
+    if (!nearAddress) return null;
 
-  const registerToken = async (tokenId: string) => {
-    // Token registration is handled by the backend
-    console.log("Token registration handled by backend");
-    return null;
+    try {
+      const result = await checkTokenRegistration(MEME_TOKEN_ADDRESS);
+      console.log("Token registration check result:", result);
+      return result;
+    } catch (error) {
+      console.error("Token registration check failed:", error);
+      return null;
+    }
+  }, [nearAddress, checkTokenRegistration]);
+
+  const registerTokenCallback = async (tokenId: string) => {
+    if (!nearAddress) return;
+
+    try {
+      return await registerToken(tokenId);
+    } catch (error) {
+      console.error("Token registration failed:", error);
+      throw error;
+    }
   };
 
   // console.log(user);
@@ -129,23 +148,64 @@ export const WheelOfFortune = () => {
     onSuccess,
     onError,
   }: ClaimProps) => {
-    if (!authUser?.id) {
-      const error = new Error("User not authenticated");
+    if (!nearAddress || !nearConnected) {
+      const error = new Error("Wallet not connected");
       onError?.(error);
       return;
     }
 
     try {
-      // Use the new user wallet approach
-      const transaction = await sendTransaction(
-        "deposit",
-        parseFloat(rewardAmount)
-      );
+      let isRegistered = await checkTokenRegistrationCallback();
+      console.log("isRegistered", isRegistered);
+
+      if (!isRegistered) {
+        await registerTokenCallback(MEME_TOKEN_ADDRESS);
+      }
+
+      console.log(rewardAmount, MEME_TOKEN_ADDRESS, "rewardAmount");
+
+      // Claim wheel transaction
+      const claimTransaction = await signAndSendTransaction(CONTRACTID!, [
+        {
+          type: "FunctionCall",
+          params: {
+            methodName: "claimWheel",
+            args: {
+              rewardAmount: rewardAmount,
+              tokenAddress: MEME_TOKEN_ADDRESS!,
+            },
+            gas: "300000000000000",
+            deposit: "0",
+          },
+        },
+      ]);
+
+      // Wait for transaction completion
+      await claimTransaction;
+
+      // Execute the transfer transaction immediately after claimWheel
+      const executeTransferTx = await signAndSendTransaction(CONTRACTID!, [
+        {
+          type: "FunctionCall",
+          params: {
+            methodName: "execute_transfer",
+            args: {},
+            gas: "300000000000000",
+            deposit: "0",
+          },
+        },
+      ]);
+
+      // Wait for the execute_transfer transaction to complete
+      await executeTransferTx;
 
       localStorage.setItem("lastClaimed", Date.now().toString());
-      localStorage.setItem("transaction", JSON.stringify({ transaction }));
+      localStorage.setItem(
+        "transaction",
+        JSON.stringify({ claimTransaction, executeTransferTx })
+      );
       onSuccess?.();
-      return { transaction };
+      return { claimTransaction, executeTransferTx };
     } catch (error: any) {
       console.error("Failed to claim reward:", error.message);
       onError?.(error as Error);
@@ -155,19 +215,17 @@ export const WheelOfFortune = () => {
 
   const handleSpinClick = () => {
     const now = Date.now();
-    // if (lastPlayed && now - lastPlayed < 24 * 60 * 60 * 1000) {
-    //   return;
-    // }
-    // if (!nearConnected) {
-    //   alert("Kindly connect your wallet to continue!!");
-    //   return;
-    // }
+
+    if (!nearConnected) {
+      toast.error("Please connect your NEAR wallet to continue!");
+      return;
+    }
+
     claimPoints("spin claim", setCanClaim);
     const newPrizeNumber = Math.floor(Math.random() * data.length);
     setPrizeNumber(newPrizeNumber);
     setMustSpin(true);
     spinningSound.play();
-    // setHasPlayed(true);
     setLastPlayed(now);
     setCooldownTime(new Date(now + 24 * 60 * 60 * 1000));
     localStorage.setItem("lastPlayedTime", now.toString());
@@ -247,6 +305,9 @@ export const WheelOfFortune = () => {
               ? user?.dailySpinCount
               : 2}
           </p>
+
+          {/* Wallet Connection */}
+          <WalletConnect />
 
           {/* Wheel Container */}
           <div className="relative flex justify-center mb-8">

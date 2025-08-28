@@ -37,6 +37,68 @@ export async function POST(req: NextRequest) {
       return NextResponse.json("error", { status: 404 });
     }
 
+    console.log("username", username);
+
+    const user = await prisma.user.findUnique({
+      where: {
+        username: username,
+      },
+    });
+
+    if (message) {
+      if (user) {
+        console.log(user);
+        await replyStart(message, user);
+        return NextResponse.json(user);
+      }
+      if (message.text?.startsWith("/start")) {
+        const id = message.text.split("/start ");
+
+        console.log(message);
+        console.log(id);
+
+        if (id.length > 1) {
+          if (!user) {
+            const user = await prisma.user.create({
+              data: {
+                referralCount: 0,
+                isPremium: message.from.is_premium ? true : false,
+                name: `${message.chat.first_name ?? ""} ${
+                  message.chat.last_name ?? ""
+                }`,
+                referredBy: id[1],
+                chatId: message.from.id?.toString(),
+                username: message.chat.username!,
+                totalPoints: 0,
+              },
+            });
+            await replyStart(message, user);
+            return NextResponse.json(user);
+          }
+        } else {
+          const user = await prisma.user.create({
+            data: {
+              referralCount: 0,
+              referredBy: "null",
+              name: `${message.chat.last_name ?? ""} ${
+                message.chat.first_name ?? ""
+              }`,
+              chatId: message.from.id?.toString(),
+              username: message.chat.username!,
+              totalPoints: 0,
+            },
+          });
+          await replyStart(message, user);
+
+          return NextResponse.json(user);
+        }
+      }
+
+      await replyStart(message, user);
+
+      return NextResponse.json(user);
+    }
+
     if (type == "updateWallet") {
       const updatedUser = await prisma.user.update({
         where: { username },
@@ -322,24 +384,38 @@ export async function GET(req: any) {
   }
 }
 
-const replyNoUsername = async (message: any, user: any) => {
-  const keyboard: InlineKeyboardMarkup = {
+const replyStart = async (message: any, user: any) => {
+  const reply_markup: InlineKeyboardMarkup = {
     inline_keyboard: [
       [
         {
-          text: "Set Username",
-          url: "https://t.me/SolviumBot",
+          text: "Launch WebApp",
+          web_app: {
+            url:
+              process.env.NODE_ENV == "production"
+                ? process.env.PROD_URL ?? ""
+                : process.env.TEST_URL ?? "",
+          },
         },
       ],
     ],
   };
 
-  await telegramClient.api.sendMessage(
+  await telegramClient.sendMessage(
     message.chat.id,
-    "Please set a username first",
-    {
-      reply_markup: keyboard,
-    }
+    `*Welcome to Solvium Task/Game Bot\\!*
+Start earning Solvium Points Now🚀 while enjoying our game`,
+    reply_markup
+  );
+};
+
+const replyNoUsername = async (message: any, user: any) => {
+  await telegramClient.sendMessage(
+    message.chat.id,
+    `*Welcome to Solvium Task/Game Bot\\!*
+Start earning Solvium Points Now🚀 while enjoying our game
+
+Kindly add a Username to your telegram account and try again\\!`
   );
 };
 
