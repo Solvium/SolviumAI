@@ -19,6 +19,7 @@ from .keyboard_markups import (
     create_inline_challenge_keyboard,
     create_inline_community_keyboard,
     create_inline_app_keyboard,
+    create_inline_quiz_creation_keyboard,
 )
 from utils.redis_client import RedisClient
 from services.wallet_service import WalletService
@@ -38,14 +39,14 @@ async def handle_first_time_wallet_creation(
 
     # Send initial loading message
     loading_message = await update.message.reply_text(
-        "🔧 **Creating your NEAR wallet...**\n\n⏳ Please wait while we set up your account on the blockchain...",
+        "🔧 **Creating your NEAR wallet...**\n⏳ Please wait while we set up your account on the blockchain...",
         parse_mode="Markdown",
     )
 
     try:
         # Update loading message with progress
         await loading_message.edit_text(
-            "🔧 **Creating your NEAR wallet...**\n\n⏳ Generating secure keys and creating your account...",
+            "🔧 **Creating your NEAR wallet...**\n⏳ Generating secure keys and creating your account...",
             parse_mode="Markdown",
         )
 
@@ -57,7 +58,7 @@ async def handle_first_time_wallet_creation(
 
         # Update loading message with final step
         await loading_message.edit_text(
-            "🔧 **Creating your NEAR wallet...**\n\n✅ Account created! Finalizing your wallet...",
+            "🔧 **Creating your NEAR wallet...**\n✅ Account created! Finalizing your wallet...",
             parse_mode="Markdown",
         )
 
@@ -73,7 +74,7 @@ async def handle_first_time_wallet_creation(
         # Update the loading message with the wallet creation result
         # Note: editMessageText only supports InlineKeyboardMarkup, not ReplyKeyboardMarkup
         await loading_message.edit_text(
-            f"🎉 Welcome to SolviumAI, {user_name}!\n\n{wallet_message}",
+            f"🎉 Welcome to SolviumAI, {user_name}!\n{wallet_message}",
             parse_mode="Markdown",
         )
 
@@ -87,7 +88,7 @@ async def handle_first_time_wallet_creation(
     except Exception as e:
         logger.error(f"Error creating wallet for user {user_id}: {e}")
         await loading_message.edit_text(
-            "❌ **Wallet Creation Failed**\n\nSorry, there was an error creating your wallet. Please try again.",
+            "❌ **Wallet Creation Failed**\nSorry, there was an error creating your wallet. Please try again.",
             parse_mode="Markdown",
         )
 
@@ -113,7 +114,7 @@ async def handle_silent_wallet_creation(
         # Send initial loading message
         loading_message = await context.bot.send_message(
             chat_id=user_id,
-            text="🔧 **Creating your NEAR wallet...**\n\n⏳ Please wait while we set up your account on the blockchain...",
+            text="🔧 **Creating your NEAR wallet...**\n⏳ Please wait while we set up your account on the blockchain...",
             parse_mode="Markdown",
         )
 
@@ -130,7 +131,7 @@ async def handle_silent_wallet_creation(
 
         # Send the wallet creation result
         await loading_message.edit_text(
-            f"🎉 **Wallet Created Successfully!**\n\n{wallet_message}",
+            f"🎉 **Wallet Created Successfully!**\n{wallet_message}",
             parse_mode="Markdown",
             reply_markup=mini_app_keyboard,
         )
@@ -145,7 +146,7 @@ async def handle_silent_wallet_creation(
         # Try to send error message if loading message was created
         try:
             await loading_message.edit_text(
-                "❌ **Wallet Creation Failed**\n\nSorry, there was an error creating your wallet. Please try again later.",
+                "❌ **Wallet Creation Failed**\nSorry, there was an error creating your wallet. Please try again later.",
                 parse_mode="Markdown",
             )
         except:
@@ -163,7 +164,7 @@ async def show_main_menu(update: Update, context: CallbackContext) -> None:
     user_name = update.effective_user.username or update.effective_user.first_name
 
     welcome_text = (
-        f"🎉 Welcome to SolviumAI, {user_name}!\n\nWhat would you like to do today?"
+        f"🎉 Welcome to SolviumAI, {user_name}!\nWhat would you like to do today?"
     )
 
     # Store user state in Redis
@@ -346,7 +347,7 @@ async def handle_leaderboards(update: Update, context: CallbackContext) -> None:
 async def handle_challenge_group(update: Update, context: CallbackContext) -> None:
     """Handle 'Challenge Group' button press"""
     await update.message.reply_text(
-        "👥 Group challenges coming soon!\n\nThis feature will allow you to challenge entire groups to compete in quizzes.",
+        "👥 Group challenges coming soon!\nThis feature will allow you to challenge entire groups to compete in quizzes.",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -354,7 +355,7 @@ async def handle_challenge_group(update: Update, context: CallbackContext) -> No
 async def handle_challenge_friend(update: Update, context: CallbackContext) -> None:
     """Handle 'Challenge Friend' button press"""
     await update.message.reply_text(
-        "👤 Friend challenges coming soon!\n\nThis feature will allow you to challenge individual friends to quiz battles.",
+        "👤 Friend challenges coming soon!\nThis feature will allow you to challenge individual friends to quiz battles.",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -362,7 +363,7 @@ async def handle_challenge_friend(update: Update, context: CallbackContext) -> N
 async def handle_my_challenges(update: Update, context: CallbackContext) -> None:
     """Handle 'My Challenges' button press"""
     await update.message.reply_text(
-        "🏅 Your challenge history:\n\nNo active challenges found.",
+        "🏅 Your challenge history:\nNo active challenges found.",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -370,7 +371,7 @@ async def handle_my_challenges(update: Update, context: CallbackContext) -> None
 async def handle_challenge_stats(update: Update, context: CallbackContext) -> None:
     """Handle 'Challenge Stats' button press"""
     await update.message.reply_text(
-        "📊 Your challenge statistics:\n\n• Total Challenges: 0\n• Wins: 0\n• Losses: 0\n• Win Rate: 0%",
+        "📊 Your challenge statistics:\n• Total Challenges: 0\n• Wins: 0\n• Losses: 0\n• Win Rate: 0%",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -434,7 +435,7 @@ async def handle_connect_wallet(update: Update, context: CallbackContext) -> Non
             wallet_message = await wallet_service.format_wallet_info_message(wallet)
 
             await update.message.reply_text(
-                f"💳 **Your Connected Wallet**\n\n{wallet_message}",
+                f"💳 **Your Connected Wallet**\n{wallet_message}",
                 parse_mode="Markdown",
                 reply_markup=create_cancel_keyboard(),
             )
@@ -454,7 +455,7 @@ async def handle_connect_wallet(update: Update, context: CallbackContext) -> Non
 async def handle_view_rewards(update: Update, context: CallbackContext) -> None:
     """Handle 'View Rewards' button press"""
     await update.message.reply_text(
-        "💰 Your rewards:\n\n• Available Balance: 0 SOLV\n• Pending Rewards: 0 SOLV\n• Total Earned: 0 SOLV",
+        "💰 Your rewards:\n• Available Balance: 0 SOLV\n• Pending Rewards: 0 SOLV\n• Total Earned: 0 SOLV",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -478,7 +479,7 @@ async def handle_custom_quiz(update: Update, context: CallbackContext) -> None:
 async def handle_quiz_templates(update: Update, context: CallbackContext) -> None:
     """Handle 'Quiz Templates' button press"""
     await update.message.reply_text(
-        "📊 Quiz templates:\n\n• General Knowledge\n• Science & Technology\n• History\n• Sports\n• Entertainment",
+        "📊 Quiz templates:\n• General Knowledge\n• Science & Technology\n• History\n• Sports\n• Entertainment",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -486,7 +487,7 @@ async def handle_quiz_templates(update: Update, context: CallbackContext) -> Non
 async def handle_my_quizzes(update: Update, context: CallbackContext) -> None:
     """Handle 'My Quizzes' button press"""
     await update.message.reply_text(
-        "📈 Your quizzes:\n\nNo quizzes created yet. Create your first quiz!",
+        "📈 Your quizzes:\nNo quizzes created yet. Create your first quiz!",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -504,7 +505,7 @@ async def handle_active_quizzes(update: Update, context: CallbackContext) -> Non
 async def handle_my_results(update: Update, context: CallbackContext) -> None:
     """Handle 'My Results' button press"""
     await update.message.reply_text(
-        "🏆 Your recent results:\n\n• Quiz: General Knowledge - Score: 85%\n• Quiz: Science - Score: 92%\n• Quiz: History - Score: 78%",
+        "🏆 Your recent results:\n• Quiz: General Knowledge - Score: 85%\n• Quiz: Science - Score: 92%\n• Quiz: History - Score: 78%",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -512,7 +513,7 @@ async def handle_my_results(update: Update, context: CallbackContext) -> None:
 async def handle_quiz_history(update: Update, context: CallbackContext) -> None:
     """Handle 'Quiz History' button press"""
     await update.message.reply_text(
-        "📊 Your quiz history:\n\n• Total Quizzes: 15\n• Average Score: 82%\n• Best Score: 95%\n• Total Rewards: 450 SOLV",
+        "📊 Your quiz history:\n• Total Quizzes: 15\n• Average Score: 82%\n• Best Score: 95%\n• Total Rewards: 450 SOLV",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -520,7 +521,7 @@ async def handle_quiz_history(update: Update, context: CallbackContext) -> None:
 async def handle_achievements(update: Update, context: CallbackContext) -> None:
     """Handle 'Achievements' button press"""
     await update.message.reply_text(
-        "🎖️ Your achievements:\n\n🏆 Quiz Master - Complete 10 quizzes\n🥇 Perfect Score - Get 100% on any quiz\n💰 Reward Collector - Earn 1000 SOLV\n📚 Knowledge Seeker - Play 5 different categories",
+        "🎖️ Your achievements:\n🏆 Quiz Master - Complete 10 quizzes\n🥇 Perfect Score - Get 100% on any quiz\n💰 Reward Collector - Earn 1000 SOLV\n📚 Knowledge Seeker - Play 5 different categories",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -533,13 +534,16 @@ async def handle_view_balance(update: Update, context: CallbackContext) -> None:
     try:
         wallet = await wallet_service.get_user_wallet(user_id)
         if wallet:
-            balance = await wallet_service.get_wallet_balance(user_id)
+            # Force refresh to get real-time balance
+            balance = await wallet_service.get_wallet_balance(
+                user_id, force_refresh=True
+            )
             account_id = wallet.get("account_id", "Unknown")
 
             await update.message.reply_text(
-                f"💰 **Your Wallet Balance**\n\n"
+                f"💰 **Your Wallet Balance**\n"
                 f"**Account:** `{account_id}`\n"
-                f"**Balance:** {balance}\n\n"
+                f"**Balance:** {balance}\n"
                 f"*This is a demo wallet for testing purposes*",
                 parse_mode="Markdown",
                 reply_markup=create_cancel_keyboard(),
@@ -560,7 +564,7 @@ async def handle_view_balance(update: Update, context: CallbackContext) -> None:
 async def handle_claim_rewards(update: Update, context: CallbackContext) -> None:
     """Handle 'Claim Rewards' button press"""
     await update.message.reply_text(
-        "🏆 Claiming rewards...\n\n✅ Successfully claimed 150 SOLV!\nNew balance: 1,400 SOLV",
+        "🏆 Claiming rewards...\n✅ Successfully claimed 150 SOLV!\nNew balance: 1,400 SOLV",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -568,7 +572,7 @@ async def handle_claim_rewards(update: Update, context: CallbackContext) -> None
 async def handle_transaction_history(update: Update, context: CallbackContext) -> None:
     """Handle 'Transaction History' button press"""
     await update.message.reply_text(
-        "📈 Recent transactions:\n\n• +150 SOLV - Quiz reward (2 hours ago)\n• +200 SOLV - Quiz reward (1 day ago)\n• +100 SOLV - Quiz reward (3 days ago)",
+        "📈 Recent transactions:\n• +150 SOLV - Quiz reward (2 hours ago)\n• +200 SOLV - Quiz reward (1 day ago)\n• +100 SOLV - Quiz reward (3 days ago)",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -576,7 +580,7 @@ async def handle_transaction_history(update: Update, context: CallbackContext) -
 async def handle_global_leaderboard(update: Update, context: CallbackContext) -> None:
     """Handle 'Global Leaderboard' button press"""
     await update.message.reply_text(
-        "🏆 Global Leaderboard:\n\n🥇 @user1 - 15,420 SOLV\n🥈 @user2 - 12,850 SOLV\n🥉 @user3 - 11,200 SOLV\n4. @user4 - 9,800 SOLV\n5. @user5 - 8,950 SOLV",
+        "🏆 Global Leaderboard:\n🥇 @user1 - 15,420 SOLV\n🥈 @user2 - 12,850 SOLV\n🥉 @user3 - 11,200 SOLV\n4. @user4 - 9,800 SOLV\n5. @user5 - 8,950 SOLV",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -584,7 +588,7 @@ async def handle_global_leaderboard(update: Update, context: CallbackContext) ->
 async def handle_group_leaderboard(update: Update, context: CallbackContext) -> None:
     """Handle 'Group Leaderboard' button press"""
     await update.message.reply_text(
-        "👥 Group Leaderboard:\n\n🥇 @user1 - 2,450 SOLV\n🥈 @user2 - 1,890 SOLV\n🥉 @user3 - 1,650 SOLV\n4. @user4 - 1,200 SOLV\n5. @user5 - 980 SOLV",
+        "👥 Group Leaderboard:\n🥇 @user1 - 2,450 SOLV\n🥈 @user2 - 1,890 SOLV\n🥉 @user3 - 1,650 SOLV\n4. @user4 - 1,200 SOLV\n5. @user5 - 980 SOLV",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -592,7 +596,7 @@ async def handle_group_leaderboard(update: Update, context: CallbackContext) -> 
 async def handle_weekly_top(update: Update, context: CallbackContext) -> None:
     """Handle 'Weekly Top' button press"""
     await update.message.reply_text(
-        "📊 Weekly Top Performers:\n\n🥇 @user1 - 850 SOLV\n🥈 @user2 - 720 SOLV\n🥉 @user3 - 680 SOLV\n4. @user4 - 550 SOLV\n5. @user5 - 480 SOLV",
+        "📊 Weekly Top Performers:\n🥇 @user1 - 850 SOLV\n🥈 @user2 - 720 SOLV\n🥉 @user3 - 680 SOLV\n4. @user4 - 550 SOLV\n5. @user5 - 480 SOLV",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -600,7 +604,7 @@ async def handle_weekly_top(update: Update, context: CallbackContext) -> None:
 async def handle_all_time_best(update: Update, context: CallbackContext) -> None:
     """Handle 'All Time Best' button press"""
     await update.message.reply_text(
-        "🎖️ All Time Best:\n\n🥇 @user1 - 25,420 SOLV\n🥈 @user2 - 22,850 SOLV\n🥉 @user3 - 21,200 SOLV\n4. @user4 - 19,800 SOLV\n5. @user5 - 18,950 SOLV",
+        "🎖️ All Time Best:\n🥇 @user1 - 25,420 SOLV\n🥈 @user2 - 22,850 SOLV\n🥉 @user3 - 21,200 SOLV\n4. @user4 - 19,800 SOLV\n5. @user5 - 18,950 SOLV",
         reply_markup=create_cancel_keyboard(),
     )
 
@@ -626,7 +630,7 @@ async def handle_reset_wallet(update: Update, context: CallbackContext) -> None:
     try:
         # Send initial message
         await update.message.reply_text(
-            "🔄 Resetting wallet state...\n\nThis will delete all wallet data from cache and database.",
+            "🔄 Resetting wallet state...\nThis will delete all wallet data from cache and database.",
             reply_markup=create_main_menu_keyboard(),
         )
 
@@ -647,19 +651,19 @@ async def handle_reset_wallet(update: Update, context: CallbackContext) -> None:
 
         if db_deleted:
             await update.message.reply_text(
-                "✅ Wallet state reset successfully!\n\n"
+                "✅ Wallet state reset successfully!\n"
                 "🗑️ Deleted from:\n"
                 "• Redis cache\n"
                 "• Database wallet records\n"
-                "• User wallet status\n\n"
+                "• User wallet status\n"
                 "You can now test wallet creation again by clicking any menu button.",
                 reply_markup=create_main_menu_keyboard(),
             )
         else:
             await update.message.reply_text(
-                "⚠️ Partial wallet reset completed!\n\n"
+                "⚠️ Partial wallet reset completed!\n"
                 "✅ Redis cache cleared\n"
-                "❌ Database cleanup failed\n\n"
+                "❌ Database cleanup failed\n"
                 "You can still test wallet creation, but old database records may remain.",
                 reply_markup=create_main_menu_keyboard(),
             )
@@ -723,7 +727,7 @@ async def handle_main_menu_callback(
 
     if callback_data == "menu:main":
         # Show main menu
-        welcome_text = f"🎉 Welcome to SolviumAI!\n\nWhat would you like to do today?"
+        welcome_text = f"🎉 Welcome to SolviumAI!\nWhat would you like to do today?"
         await query.edit_message_text(
             welcome_text, reply_markup=create_inline_main_menu_keyboard()
         )
@@ -810,25 +814,25 @@ async def handle_challenge_callback(
 
     if callback_data == "challenge:group":
         await query.edit_message_text(
-            "👥 Group challenges coming soon!\n\nThis feature will allow you to challenge entire groups to compete in quizzes.",
+            "👥 Group challenges coming soon!\nThis feature will allow you to challenge entire groups to compete in quizzes.",
             reply_markup=create_inline_cancel_keyboard(),
         )
 
     elif callback_data == "challenge:friend":
         await query.edit_message_text(
-            "👤 Friend challenges coming soon!\n\nThis feature will allow you to challenge individual friends to quiz battles.",
+            "👤 Friend challenges coming soon!\nThis feature will allow you to challenge individual friends to quiz battles.",
             reply_markup=create_inline_cancel_keyboard(),
         )
 
     elif callback_data == "challenge:my_challenges":
         await query.edit_message_text(
-            "🏅 Your challenge history:\n\nNo active challenges found.",
+            "🏅 Your challenge history:\nNo active challenges found.",
             reply_markup=create_inline_cancel_keyboard(),
         )
 
     elif callback_data == "challenge:stats":
         await query.edit_message_text(
-            "📊 Your challenge statistics:\n\n• Total Challenges: 0\n• Wins: 0\n• Losses: 0\n• Win Rate: 0%",
+            "📊 Your challenge statistics:\n• Total Challenges: 0\n• Wins: 0\n• Losses: 0\n• Win Rate: 0%",
             reply_markup=create_inline_cancel_keyboard(),
         )
 
@@ -850,7 +854,7 @@ async def handle_app_callback(
 
     elif callback_data == "app:rewards":
         await query.edit_message_text(
-            "💰 Your rewards:\n\n• Available Balance: 0 SOLV\n• Pending Rewards: 0 SOLV\n• Total Earned: 0 SOLV",
+            "💰 Your rewards:\n• Available Balance: 0 SOLV\n• Pending Rewards: 0 SOLV\n• Total Earned: 0 SOLV",
             reply_markup=create_inline_cancel_keyboard(),
         )
 
@@ -880,13 +884,13 @@ async def handle_quiz_callback(
 
     elif callback_data == "quiz:templates":
         await query.edit_message_text(
-            "📊 Quiz templates:\n\n• General Knowledge\n• Science & Technology\n• History\n• Sports\n• Entertainment",
+            "📊 Quiz templates:\n• General Knowledge\n• Science & Technology\n• History\n• Sports\n• Entertainment",
             reply_markup=create_inline_cancel_keyboard(),
         )
 
     elif callback_data == "quiz:my_quizzes":
         await query.edit_message_text(
-            "📈 Your quizzes:\n\nNo quizzes created yet. Create your first quiz!",
+            "📈 Your quizzes:\nNo quizzes created yet. Create your first quiz!",
             reply_markup=create_inline_cancel_keyboard(),
         )
 
@@ -904,7 +908,7 @@ async def handle_navigation_callback(
     if callback_data == "cancel":
         # Go back to main menu
         await query.edit_message_text(
-            "🎉 Welcome to SolviumAI!\n\nWhat would you like to do today?",
+            "🎉 Welcome to SolviumAI!\nWhat would you like to do today?",
             reply_markup=create_inline_main_menu_keyboard(),
         )
         await redis_client.set_user_data_key(user_id, "current_menu", "main")
@@ -915,14 +919,14 @@ async def handle_navigation_callback(
 
         if current_menu == "games":
             await query.edit_message_text(
-                "🎉 Welcome to SolviumAI!\n\nWhat would you like to do today?",
+                "🎉 Welcome to SolviumAI!\nWhat would you like to do today?",
                 reply_markup=create_inline_main_menu_keyboard(),
             )
             await redis_client.set_user_data_key(user_id, "current_menu", "main")
         else:
             # Default back to main menu
             await query.edit_message_text(
-                "🎉 Welcome to SolviumAI!\n\nWhat would you like to do today?",
+                "🎉 Welcome to SolviumAI!\nWhat would you like to do today?",
                 reply_markup=create_inline_main_menu_keyboard(),
             )
             await redis_client.set_user_data_key(user_id, "current_menu", "main")
@@ -935,7 +939,7 @@ async def show_menu_in_group(update: Update, context: CallbackContext) -> None:
     user_name = update.effective_user.username or update.effective_user.first_name
 
     await update.message.reply_text(
-        f"🎉 Hi {user_name}! I'm SolviumAI bot.\n\n"
+        f"🎉 Hi {user_name}! I'm SolviumAI bot.\n"
         "For the best experience, please DM me to access all features!",
         reply_markup=create_main_menu_keyboard(),
     )
@@ -990,7 +994,7 @@ async def handle_quiz_deep_link(
         wallet_created = await handle_silent_wallet_creation(update, context)
         if not wallet_created:
             await update.message.reply_text(
-                "❌ **Error setting up your account**\n\nPlease try again later or use the main menu.",
+                "❌ **Error setting up your account**\nPlease try again later or use the main menu.",
                 parse_mode="Markdown",
                 reply_markup=create_main_menu_keyboard(),
             )
@@ -1025,7 +1029,7 @@ async def handle_quiz_deep_link(
             quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
             if not quiz:
                 await update.message.reply_text(
-                    "❌ **Quiz not found**\n\nThis quiz may have been removed or expired.",
+                    "❌ **Quiz not found**\nThis quiz may have been removed or expired.",
                     parse_mode="Markdown",
                     reply_markup=create_main_menu_keyboard(),
                 )
@@ -1043,7 +1047,7 @@ async def handle_quiz_deep_link(
         except Exception as e:
             logger.error(f"Error starting quiz {quiz_id}: {e}")
             await update.message.reply_text(
-                "❌ **Error starting quiz**\n\nPlease try again later.",
+                "❌ **Error starting quiz**\nPlease try again later.",
                 parse_mode="Markdown",
                 reply_markup=create_main_menu_keyboard(),
             )

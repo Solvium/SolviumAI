@@ -5,6 +5,7 @@ Rich formatting for quiz announcements and displays
 
 from typing import List, Optional, Dict, Any
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from .telegram_helpers import sanitize_markdown
 
 
 def create_quiz_announcement_card(
@@ -16,51 +17,26 @@ def create_quiz_announcement_card(
     quiz_id: str,
     is_free: bool = False,
     bot_username: str = None,
-) -> tuple[str, InlineKeyboardMarkup]:
+) -> tuple[str, str, InlineKeyboardMarkup]:
     """
-    Create a rich announcement card for a new quiz
+    Create a rich announcement card for a new quiz with image
 
     Returns:
-        tuple: (formatted_message, inline_keyboard)
+        tuple: (image_path, formatted_message, inline_keyboard)
     """
-
-    # Sanitize content for Markdown
-    def sanitize_markdown(text):
-        """Sanitize text to prevent Markdown parsing errors"""
-        if not text:
-            return ""
-        # Escape special Markdown characters
-        text = (
-            str(text)
-            .replace("*", "\\*")
-            .replace("_", "\\_")
-            .replace("[", "\\[")
-            .replace("]", "\\]")
-            .replace("(", "\\(")
-            .replace(")", "\\)")
-            .replace("~", "\\~")
-            .replace("`", "\\`")
-            .replace(">", "\\>")
-            .replace("#", "\\#")
-            .replace("+", "\\+")
-            .replace("-", "\\-")
-            .replace("=", "\\=")
-            .replace("|", "\\|")
-            .replace("{", "\\{")
-            .replace("}", "\\}")
-            .replace(".", "\\.")
-            .replace("!", "\\!")
-        )
-        return text
 
     # Create the card border and content
     # Sanitize all content to avoid Markdown parsing issues
     safe_topic = sanitize_markdown(topic)
     safe_reward_structure = reward_structure
+
+    # Normalize reward structure text
     if "Top 3 winners" in reward_structure:
         safe_reward_structure = "Top 3 Winners"
     elif "Winner-takes-all" in reward_structure:
         safe_reward_structure = "Winner Takes All"
+    elif "Free Quiz" in reward_structure or reward_structure.lower() == "free":
+        safe_reward_structure = "Free Quiz"
 
     # Sanitize the reward structure
     safe_reward_structure = sanitize_markdown(safe_reward_structure)
@@ -72,15 +48,17 @@ def create_quiz_announcement_card(
     safe_bot_username = sanitize_markdown(bot_username) if bot_username else None
 
     card = f"""
-┌─────────────────────────────────────────────────┐
-│  🎯 **{safe_topic.upper()} QUIZ** 🎯                    │
-│                                                 │
-│  📝 **{num_questions} Questions** • ⏱ **{duration_minutes} minutes**  │
-│  💰 **{reward_amount} NEAR** Prize Pool              │
-│  🏆 **{safe_reward_structure}**                           │
-│                                                 │
-│  🎮 **Ready to test your knowledge?**           │
-└─────────────────────────────────────────────────┘
+🔥🎉 **WELCOME TO THE {safe_topic.upper()} QUIZ CHALLENGE!** 🎉🔥
+
+📚 **{num_questions} Mind-Bending Questions**
+⏳ **{duration_minutes} Minutes on the Clock**
+💰 **{reward_amount} NEAR** Up for Grabs!
+🏆 Reward Structure: **{safe_reward_structure}**
+
+⚡ Think you got what it takes?
+💡 Show off your knowledge, race against time, and claim your spot on the leaderboard!
+
+👉 **Are you in? Lets GO!** 🚀
 """
 
     # Create interactive buttons
@@ -105,7 +83,32 @@ def create_quiz_announcement_card(
     buttons.append([play_button, leaderboard_button])
     keyboard = InlineKeyboardMarkup(buttons)
 
-    return card.strip(), keyboard
+    # Return image path along with text and keyboard
+    # Use absolute path to ensure the file is found regardless of working directory
+    import os
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))  # utils directory
+        project_root = os.path.dirname(os.path.dirname(current_dir))  # project root
+        image_path = os.path.join(
+            project_root, "src", "assets", "templates", "Image_fx.jpg"
+        )
+
+        # Verify the file exists
+        if not os.path.exists(image_path):
+            logger.warning(f"Image file not found at {image_path}, using fallback")
+            # Fallback to relative path in case the absolute path calculation is wrong
+            image_path = "src/assets/templates/Image_fx.jpg"
+
+        return image_path, card.strip(), keyboard
+    except Exception as e:
+        logger.error(f"Error resolving image path: {e}")
+        # Fallback to relative path
+        image_path = "src/assets/templates/Image_fx.jpg"
+        return image_path, card.strip(), keyboard
 
 
 def create_question_display_card(
@@ -123,35 +126,6 @@ def create_question_display_card(
     Returns:
         tuple: (formatted_message, inline_keyboard)
     """
-
-    # Sanitize content for Markdown
-    def sanitize_markdown(text):
-        """Sanitize text to prevent Markdown parsing errors"""
-        if not text:
-            return ""
-        # Escape special Markdown characters
-        text = (
-            str(text)
-            .replace("*", "\\*")
-            .replace("_", "\\_")
-            .replace("[", "\\[")
-            .replace("]", "\\]")
-            .replace("(", "\\(")
-            .replace(")", "\\)")
-            .replace("~", "\\~")
-            .replace("`", "\\`")
-            .replace(">", "\\>")
-            .replace("#", "\\#")
-            .replace("+", "\\+")
-            .replace("-", "\\-")
-            .replace("=", "\\=")
-            .replace("|", "\\|")
-            .replace("{", "\\{")
-            .replace("}", "\\}")
-            .replace(".", "\\.")
-            .replace("!", "\\!")
-        )
-        return text
 
     # Sanitize question text and options
     safe_question_text = sanitize_markdown(question_text)
@@ -206,35 +180,6 @@ def create_leaderboard_card(
     Returns:
         tuple: (formatted_message, inline_keyboard)
     """
-
-    # Sanitize content for Markdown
-    def sanitize_markdown(text):
-        """Sanitize text to prevent Markdown parsing errors"""
-        if not text:
-            return ""
-        # Escape special Markdown characters
-        text = (
-            str(text)
-            .replace("*", "\\*")
-            .replace("_", "\\_")
-            .replace("[", "\\[")
-            .replace("]", "\\]")
-            .replace("(", "\\(")
-            .replace(")", "\\)")
-            .replace("~", "\\~")
-            .replace("`", "\\`")
-            .replace(">", "\\>")
-            .replace("#", "\\#")
-            .replace("+", "\\+")
-            .replace("-", "\\-")
-            .replace("=", "\\=")
-            .replace("|", "\\|")
-            .replace("{", "\\{")
-            .replace("}", "\\}")
-            .replace(".", "\\.")
-            .replace("!", "\\!")
-        )
-        return text
 
     # Create leaderboard header
     card = f"""

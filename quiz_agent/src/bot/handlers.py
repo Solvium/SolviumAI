@@ -42,7 +42,13 @@ from utils.config import Config  # Added to access DEPOSIT_ADDRESS
 from store.database import SessionLocal
 from models.quiz import Quiz, QuizStatus, QuizAnswer
 from utils.redis_client import RedisClient  # Added RedisClient import
-from utils.telegram_helpers import safe_send_message  # Ensure this is imported
+from utils.telegram_helpers import (
+    safe_send_message,
+    safe_send_photo,
+    safe_answer_callback_query,
+    safe_edit_message_text,
+    sanitize_markdown,
+)  # Ensure this is imported
 import html  # Add this import
 from datetime import datetime, timezone, timedelta  # Add this import
 
@@ -71,7 +77,7 @@ async def generate_quiz_questions(
             f"Question {i}: {q.question}\n{options_text}\nCorrect Answer: {q.correct_answer}"
         )
 
-    return "\n\n".join(formatted_questions)
+    return "\n".join(formatted_questions)
 
 
 async def start_handler(update, context):
@@ -296,14 +302,14 @@ async def start_createquiz_group(update, context):
         # Send initial loading message
         loading_message = await context.bot.send_message(
             chat_id=user_id,
-            text="🔧 **Creating your NEAR wallet...**\n\n⏳ Please wait while we set up your account on the blockchain...",
+            text="🔧 **Creating your NEAR wallet...**\n⏳ Please wait while we set up your account on the blockchain...",
             parse_mode="Markdown",
         )
 
         try:
             # Update loading message with progress
             await loading_message.edit_text(
-                "🔧 **Creating your NEAR wallet...**\n\n⏳ Generating secure keys and creating your account...",
+                "🔧 **Creating your NEAR wallet...**\n⏳ Generating secure keys and creating your account...",
                 parse_mode="Markdown",
             )
 
@@ -314,7 +320,7 @@ async def start_createquiz_group(update, context):
 
             # Update loading message with final step
             await loading_message.edit_text(
-                "🔧 **Creating your NEAR wallet...**\n\n✅ Account created! Finalizing your wallet...",
+                "🔧 **Creating your NEAR wallet...**\n✅ Account created! Finalizing your wallet...",
                 parse_mode="Markdown",
             )
 
@@ -325,7 +331,7 @@ async def start_createquiz_group(update, context):
 
             # Update the loading message with the wallet creation result
             await loading_message.edit_text(
-                f"🎉 **Wallet Created Successfully!**\n\n{wallet_message}\n\nNow let's create your quiz!",
+                f"🎉 **Wallet Created Successfully!**\n{wallet_message}\nNow let's create your quiz!",
                 parse_mode="Markdown",
             )
 
@@ -336,7 +342,7 @@ async def start_createquiz_group(update, context):
         except Exception as e:
             logger.error(f"Error creating wallet for user {user_id}: {e}")
             await loading_message.edit_text(
-                "❌ **Wallet Creation Failed**\n\nSorry, there was an error creating your wallet. Please try again later.",
+                "❌ **Wallet Creation Failed**\nSorry, there was an error creating your wallet. Please try again later.",
                 parse_mode="Markdown",
             )
             return ConversationHandler.END
@@ -350,7 +356,7 @@ async def start_createquiz_group(update, context):
         )
         await context.bot.send_message(
             chat_id=user_id,
-            text="🎯 Create Quiz - Step 1 of 4\n\nWhat's your quiz topic?\n\n[Quick Topics: Crypto | Gaming | Technology | Custom...]",
+            text="🎯 Create Quiz - Step 1 of 4\nWhat's your quiz topic?\n[Quick Topics: Crypto | Gaming | Technology | Custom...]",
         )
         await redis_client.set_user_data_key(
             user_id, "group_chat_id", update.effective_chat.id
@@ -362,7 +368,7 @@ async def start_createquiz_group(update, context):
     else:
         logger.info(f"User {user_id} started quiz creation directly in private chat.")
         await update.message.reply_text(
-            "🎯 Create Quiz - Step 1 of 4\n\nWhat's your quiz topic?\n\n[Quick Topics: Crypto | Gaming | Technology | Custom...]"
+            "🎯 Create Quiz - Step 1 of 4\nWhat's your quiz topic?\n[Quick Topics: Crypto | Gaming | Technology | Custom...]"
         )
         # Clear any potential leftover group_chat_id if starting fresh in DM
         await redis_client.delete_user_data_key(user_id, "group_chat_id")
@@ -384,7 +390,7 @@ async def topic_received(update, context):
     ]
 
     await update.message.reply_text(
-        f"✅ Topic set: {topic}\n\n"
+        f"✅ Topic set: {topic}\n"
         f"Would you like to add any notes or context for your quiz?\n"
         f"(This helps AI generate better questions)",
         reply_markup=InlineKeyboardMarkup(buttons),
@@ -400,13 +406,13 @@ async def notes_choice(update, context):
 
     if choice == "add_notes":
         await update.callback_query.message.reply_text(
-            "📝 Add Quiz Notes (Optional)\n\n"
-            "Share any additional information, context, or specific focus areas:\n\n"
+            "📝 Add Quiz Notes (Optional)\n"
+            "Share any additional information, context, or specific focus areas:\n"
             "Examples:\n"
             "• Focus on NEAR Protocol basics\n"
             "• Include questions about DeFi\n"
             "• Make it beginner-friendly\n"
-            "• Based on recent crypto news\n\n"
+            "• Based on recent crypto news\n"
             "💡 Tip: Keep notes concise (under 500 characters for best results)\n"
             "Type your notes or send 'skip' to continue:"
         )
@@ -706,7 +712,15 @@ async def duration_choice(update, context):
                 InlineKeyboardButton("0.1 NEAR", callback_data="reward_0.1"),
                 InlineKeyboardButton("0.5 NEAR", callback_data="reward_0.5"),
             ],
-            [InlineKeyboardButton("Custom amount", callback_data="reward_custom")],
+            [
+                InlineKeyboardButton("1 NEAR", callback_data="reward_1.0"),
+                InlineKeyboardButton("2 NEAR", callback_data="reward_2.0"),
+                InlineKeyboardButton("3 NEAR", callback_data="reward_3.0"),
+            ],
+            [
+                InlineKeyboardButton("5 NEAR", callback_data="reward_5.0"),
+                InlineKeyboardButton("Custom amount", callback_data="reward_custom"),
+            ],
         ]
 
         await update.callback_query.message.reply_text(
@@ -885,7 +899,10 @@ async def show_reward_structure_options(update, context, reward_amount):
 
     wallet_service = WalletService()
     wallet = await wallet_service.get_user_wallet(user_id)
-    wallet_balance = await wallet_service.get_wallet_balance(user_id)
+    # Force refresh to get real-time balance for quiz creation
+    wallet_balance = await wallet_service.get_wallet_balance(
+        user_id, force_refresh=True
+    )
 
     progress_text = f"✅ Topic: {topic}\n"
     if context_text:
@@ -907,17 +924,17 @@ async def show_reward_structure_options(update, context, reward_amount):
     # Add wallet information
     if wallet and wallet.get("account_id"):
         progress_text += (
-            f"\n\n💳 Wallet: `{wallet['account_id']}`\n💰 Balance: {wallet_balance}"
+            f"\n💳 Wallet: `{wallet['account_id']}`\n💰 Balance: {wallet_balance}"
         )
     else:
-        progress_text += f"\n\n💳 Wallet Balance: {wallet_balance}"
+        progress_text += f"\n💳 Wallet Balance: {wallet_balance}"
 
     # Calculate total costs for different structures
     wta_total = reward_amount
     top3_total = reward_amount  # Total amount is the base, not multiplied by 3
     custom_total = reward_amount  # Base amount, can be modified
 
-    progress_text += f"\n\n💡 Total Cost Options:\n"
+    progress_text += f"\n💡 Total Cost Options:\n"
     progress_text += f"• Winner-takes-all: {wta_total} NEAR\n"
     progress_text += f"• Top 3 winners: {top3_total} NEAR (50/30/20 distribution)\n"
     progress_text += f"• Custom structure: {custom_total} NEAR"
@@ -1047,7 +1064,7 @@ async def process_payment(update, context, total_cost):
 
         # Show payment processing message
         processing_msg = await update.callback_query.message.reply_text(
-            f"💳 Processing payment of {total_cost} NEAR...\n\n⏳ Please wait while we process the transaction..."
+            f"💳 Processing payment of {total_cost} NEAR...\n⏳ Please wait while we process the transaction..."
         )
 
         # Calculate payment with 1% charge
@@ -1085,12 +1102,12 @@ async def process_payment(update, context, total_cost):
 
             # Update processing message
             await processing_msg.edit_text(
-                f"✅ Payment successful!\n\n"
+                f"✅ Payment successful!\n"
                 f"💳 Amount: {total_cost} NEAR\n"
                 f"💰 Service Charge: {service_charge:.4f} NEAR\n"
                 f"💸 Total Paid: {total_amount:.4f} NEAR\n"
                 f"🔗 Transaction: {transaction_result['transaction_hash'][:20]}...\n"
-                f"📊 Status: Confirmed\n\n"
+                f"📊 Status: Confirmed\n"
                 f"🛠 Generating your quiz..."
             )
 
@@ -1099,11 +1116,11 @@ async def process_payment(update, context, total_cost):
         else:
             # Payment failed - show retry option
             await processing_msg.edit_text(
-                f"❌ Payment failed!\n\n"
+                f"❌ Payment failed!\n"
                 f"💳 Amount: {total_cost} NEAR\n"
                 f"💰 Service Charge: {service_charge:.4f} NEAR\n"
                 f"💸 Total: {total_amount:.4f} NEAR\n"
-                f"❌ Error: {transaction_result['error']}\n\n"
+                f"❌ Error: {transaction_result['error']}\n"
                 f"Please check your balance and try again."
             )
 
@@ -1160,13 +1177,13 @@ async def show_funding_instructions(update, context, required_amount, current_ba
 
     shortfall = required_amount - current_balance
 
-    funding_text = f"💰 **Payment Required**\n\n"
+    funding_text = f"💰 **Payment Required**\n"
     funding_text += f"Required: {required_amount} NEAR\n"
     funding_text += f"Current Balance: {current_balance} NEAR\n"
-    funding_text += f"Shortfall: {shortfall} NEAR\n\n"
+    funding_text += f"Shortfall: {shortfall} NEAR\n"
 
     if wallet and wallet.get("account_id"):
-        funding_text += f"**Your Wallet Address:**\n`{wallet['account_id']}`\n\n"
+        funding_text += f"**Your Wallet Address:**\n`{wallet['account_id']}`\n"
         logger.info(
             f"Added wallet address to funding instructions: {wallet['account_id']}"
         )
@@ -1184,33 +1201,33 @@ async def show_funding_instructions(update, context, required_amount, current_ba
 
             if db_wallet and db_wallet.get("account_id"):
                 funding_text += (
-                    f"**Your Wallet Address:**\n`{db_wallet['account_id']}`\n\n"
+                    f"**Your Wallet Address:**\n`{db_wallet['account_id']}`\n"
                 )
                 logger.info(
                     f"Added DB wallet address to funding instructions: {db_wallet['account_id']}"
                 )
             else:
                 funding_text += (
-                    f"**Your Wallet Address:**\n*Unable to retrieve wallet address*\n\n"
+                    f"**Your Wallet Address:**\n*Unable to retrieve wallet address*\n"
                 )
         except Exception as db_error:
             logger.error(
                 f"Database fallback also failed for user {user_id}: {db_error}"
             )
             funding_text += (
-                f"**Your Wallet Address:**\n*Unable to retrieve wallet address*\n\n"
+                f"**Your Wallet Address:**\n*Unable to retrieve wallet address*\n"
             )
 
-    funding_text += f"To fund your wallet:\n\n"
+    funding_text += f"To fund your wallet:\n"
     funding_text += f"1️⃣ **Copy your wallet address** above\n"
     funding_text += f"2️⃣ **Send NEAR** to that address\n"
     funding_text += f"3️⃣ **Wait for confirmation** (usually 1-2 minutes)\n"
-    funding_text += f"4️⃣ **Click 'Check Balance'** below\n\n"
+    funding_text += f"4️⃣ **Click 'Check Balance'** below\n"
     funding_text += f"💡 **Quick Funding Options:**\n"
     funding_text += f"• Use a faucet for testnet NEAR\n"
     funding_text += f"• Buy from exchanges like Binance, Coinbase\n"
-    funding_text += f"• Transfer from another wallet\n\n"
-    funding_text += f"💡 **Note:** Your account was created with {Config.MINIMAL_ACCOUNT_BALANCE} NEAR for storage costs.\n\n"
+    funding_text += f"• Transfer from another wallet\n"
+    funding_text += f"💡 **Note:** Your account was created with {Config.MINIMAL_ACCOUNT_BALANCE} NEAR for storage costs.\n"
     funding_text += f"Once funded, click 'Check Balance' to continue."
 
     buttons = [
@@ -1260,7 +1277,7 @@ async def handle_payment_verification_callback(update, context):
 async def handle_quiz_interaction_callback(update, context):
     """Handle quiz interaction callbacks (play, leaderboard, share, etc.)"""
     query = update.callback_query
-    await query.answer()
+    await safe_answer_callback_query(context.bot, query.id)
 
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
@@ -1306,14 +1323,16 @@ async def handle_quiz_interaction_callback(update, context):
             await handle_join_quiz(update, context, quiz_id)
 
     except ValueError:
-        await context.bot.send_message(
-            chat_id=chat_id, text="❌ Invalid action. Please try again."
+        await safe_send_message(
+            context.bot, chat_id, "❌ Invalid action. Please try again."
         )
     except Exception as e:
         logger.error(f"Error handling quiz interaction callback: {e}")
-        await context.bot.send_message(
-            chat_id=chat_id, text="❌ An error occurred. Please try again."
-        )
+        # Don't send error messages during rate limiting to avoid cascading failures
+        if "Flood control" not in str(e) and "RetryAfter" not in str(e):
+            await safe_send_message(
+                context.bot, chat_id, "❌ An error occurred. Please try again."
+            )
 
 
 async def handle_play_quiz(update, context, quiz_id):
@@ -1344,9 +1363,7 @@ async def handle_play_quiz(update, context, quiz_id):
 
             if not quiz:
                 await safe_send_message(
-                    context.bot,
-                    chat_id=chat_id,
-                    text="❌ Quiz not found or no longer active.",
+                    context.bot, chat_id, "❌ Quiz not found or no longer active."
                 )
                 return
 
@@ -1354,8 +1371,8 @@ async def handle_play_quiz(update, context, quiz_id):
             if quiz.end_time and quiz.end_time <= datetime.utcnow():
                 await safe_send_message(
                     context.bot,
-                    chat_id=chat_id,
-                    text="❌ This quiz has already ended. Check the final results!",
+                    chat_id,
+                    "❌ This quiz has already ended. Check the final results!",
                 )
                 return
 
@@ -1373,9 +1390,7 @@ async def handle_play_quiz(update, context, quiz_id):
     except Exception as e:
         logger.error(f"Error starting quiz {quiz_id} for user {user_id}: {e}")
         await safe_send_message(
-            context.bot,
-            chat_id=chat_id,
-            text="❌ Error starting quiz. Please try again.",
+            context.bot, chat_id, "❌ Error starting quiz. Please try again."
         )
 
 
@@ -1394,9 +1409,7 @@ async def handle_show_leaderboard(update, context, quiz_id):
             quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
 
             if not quiz:
-                await context.bot.send_message(
-                    chat_id=chat_id, text="❌ Quiz not found."
-                )
+                await safe_send_message(context.bot, chat_id, "❌ Quiz not found.")
                 return
 
             # Get actual leaderboard data using the existing service
@@ -1444,9 +1457,10 @@ async def handle_show_leaderboard(update, context, quiz_id):
                 quiz_id, leaderboard_data, time_remaining, total_participants
             )
 
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=leaderboard_msg,
+            await safe_send_message(
+                context.bot,
+                chat_id,
+                leaderboard_msg,
                 parse_mode="Markdown",
                 reply_markup=leaderboard_keyboard,
             )
@@ -1456,8 +1470,8 @@ async def handle_show_leaderboard(update, context, quiz_id):
 
     except Exception as e:
         logger.error(f"Error showing leaderboard for quiz {quiz_id}: {e}")
-        await context.bot.send_message(
-            chat_id=chat_id, text="❌ Error loading leaderboard. Please try again."
+        await safe_send_message(
+            context.bot, chat_id, "❌ Error loading leaderboard. Please try again."
         )
 
 
@@ -1474,15 +1488,14 @@ async def handle_show_past_winners(update, context, quiz_id):
             quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
 
             if not quiz:
-                await context.bot.send_message(
-                    chat_id=chat_id, text="❌ Quiz not found."
-                )
+                await safe_send_message(context.bot, chat_id, "❌ Quiz not found.")
                 return
 
             # TODO: Implement past winners functionality
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"🏆 **Past Winners for: {quiz.topic}**\n\n"
+            await safe_send_message(
+                context.bot,
+                chat_id,
+                f"🏆 **Past Winners for: {quiz.topic}**\n"
                 f"📊 This feature is coming soon!\n"
                 f"🎯 We're working on tracking quiz winners and their achievements.",
             )
@@ -1492,8 +1505,8 @@ async def handle_show_past_winners(update, context, quiz_id):
 
     except Exception as e:
         logger.error(f"Error showing past winners for quiz {quiz_id}: {e}")
-        await context.bot.send_message(
-            chat_id=chat_id, text="❌ Error loading past winners. Please try again."
+        await safe_send_message(
+            context.bot, chat_id, "❌ Error loading past winners. Please try again."
         )
 
 
@@ -1511,9 +1524,7 @@ async def handle_share_quiz(update, context, quiz_id):
             quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
 
             if not quiz:
-                await context.bot.send_message(
-                    chat_id=chat_id, text="❌ Quiz not found."
-                )
+                await safe_send_message(context.bot, chat_id, "❌ Quiz not found.")
                 return
 
             # Create share message
@@ -1530,8 +1541,8 @@ Use /playquiz in this chat to start playing!
 #QuizTime #Knowledge #Fun
 """
 
-            await context.bot.send_message(
-                chat_id=chat_id, text=share_msg.strip(), parse_mode="Markdown"
+            await safe_send_message(
+                context.bot, chat_id, share_msg.strip(), parse_mode="Markdown"
             )
 
         finally:
@@ -1539,8 +1550,8 @@ Use /playquiz in this chat to start playing!
 
     except Exception as e:
         logger.error(f"Error sharing quiz {quiz_id}: {e}")
-        await context.bot.send_message(
-            chat_id=chat_id, text="❌ Error sharing quiz. Please try again."
+        await safe_send_message(
+            context.bot, chat_id, "❌ Error sharing quiz. Please try again."
         )
 
 
@@ -1549,9 +1560,10 @@ async def handle_quiz_hint(update, context, quiz_id):
     chat_id = update.effective_chat.id
 
     # TODO: Implement hint system
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text="💡 **Hint System**\n\n"
+    await safe_send_message(
+        context.bot,
+        chat_id,
+        "💡 **Hint System**\n"
         "🎯 This feature is coming soon!\n"
         "💡 Players will be able to get hints for difficult questions.",
     )
@@ -1562,9 +1574,10 @@ async def handle_skip_question(update, context, quiz_id):
     chat_id = update.effective_chat.id
 
     # TODO: Implement skip question functionality
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text="⏭ **Skip Question**\n\n"
+    await safe_send_message(
+        context.bot,
+        chat_id,
+        "⏭ **Skip Question**\n"
         "🎯 This feature is coming soon!\n"
         "⏭ Players will be able to skip questions they don't know.",
     )
@@ -1575,9 +1588,10 @@ async def handle_quiz_answer(update, context, quiz_id):
     chat_id = update.effective_chat.id
 
     # TODO: Implement answer processing
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text="✅ **Answer Submitted**\n\n"
+    await safe_send_message(
+        context.bot,
+        chat_id,
+        "✅ **Answer Submitted**\n"
         "🎯 This feature is coming soon!\n"
         "✅ Players will be able to submit answers and see results.",
     )
@@ -1620,7 +1634,7 @@ async def start_quiz_for_user(update, context, quiz):
             logger.info(f"DEBUG: Sending initial loading message to user_id: {user_id}")
             loading_message = await context.bot.send_message(
                 chat_id=user_id,
-                text="🔧 **Creating your NEAR wallet...**\n\n⏳ Please wait while we set up your account on the blockchain...",
+                text="🔧 **Creating your NEAR wallet...**\n⏳ Please wait while we set up your account on the blockchain...",
                 parse_mode="Markdown",
             )
             logger.info(f"DEBUG: Initial loading message sent successfully")
@@ -1629,7 +1643,7 @@ async def start_quiz_for_user(update, context, quiz):
                 # Update loading message with progress
                 logger.info(f"DEBUG: Updating loading message with progress")
                 await loading_message.edit_text(
-                    "🔧 **Creating your NEAR wallet...**\n\n⏳ Generating secure keys and creating your account...",
+                    "🔧 **Creating your NEAR wallet...**\n⏳ Generating secure keys and creating your account...",
                     parse_mode="Markdown",
                 )
 
@@ -1647,7 +1661,7 @@ async def start_quiz_for_user(update, context, quiz):
                 # Update loading message with final step
                 logger.info(f"DEBUG: Updating loading message with final step")
                 await loading_message.edit_text(
-                    "🔧 **Creating your NEAR wallet...**\n\n✅ Account created! Finalizing your wallet...",
+                    "🔧 **Creating your NEAR wallet...**\n✅ Account created! Finalizing your wallet...",
                     parse_mode="Markdown",
                 )
 
@@ -1665,7 +1679,7 @@ async def start_quiz_for_user(update, context, quiz):
                     f"DEBUG: Sending final wallet creation message to user_id: {user_id}"
                 )
                 await loading_message.edit_text(
-                    f"🎉 **Wallet Created Successfully!**\n\n{wallet_message}\n\nNow starting your quiz!",
+                    f"🎉 **Wallet Created Successfully!**\n{wallet_message}\nNow starting your quiz!",
                     parse_mode="Markdown",
                 )
                 logger.info(f"DEBUG: Final wallet creation message sent successfully")
@@ -1678,7 +1692,7 @@ async def start_quiz_for_user(update, context, quiz):
                 logger.error(f"Error creating wallet for user {user_id}: {e}")
                 logger.error(f"DEBUG: Exception details: {type(e).__name__}: {str(e)}")
                 await loading_message.edit_text(
-                    "❌ **Wallet Creation Failed**\n\nSorry, there was an error creating your wallet. Please try again later.",
+                    "❌ **Wallet Creation Failed**\nSorry, there was an error creating your wallet. Please try again later.",
                     parse_mode="Markdown",
                 )
                 return
@@ -1714,31 +1728,36 @@ Send /stop to stop it."""
 
         # Acknowledge button click in group chat if it was from a group
         if update.callback_query:
-            await update.callback_query.answer("📱 Quiz intro sent to your DMs!")
+            await safe_answer_callback_query(
+                context.bot, update.callback_query.id, "📱 Quiz intro sent to your DMs!"
+            )
 
         # Send confirmation to group chat if applicable
         if chat_id != int(user_id):  # If this was triggered from a group
             await safe_send_message(
                 context.bot,
                 chat_id,
-                f"🎮 **{quiz.topic}** Quiz Ready! 🎉\n\n📱 @{update.effective_user.username or update.effective_user.first_name}, check your DMs to start the quiz!",
+                f"🎮 **{quiz.topic}** Quiz Ready! 🎉\n📱 @{update.effective_user.username or update.effective_user.first_name}, check your DMs to start the quiz!",
             )
 
     except Exception as e:
         logger.error(f"Error starting quiz {quiz.id} for user {user_id}: {e}")
         if update.callback_query:
-            await update.callback_query.answer(
-                "❌ Error starting quiz. Please try again.", show_alert=True
+            await safe_answer_callback_query(
+                context.bot,
+                update.callback_query.id,
+                "❌ Error starting quiz. Please try again.",
+                show_alert=True,
             )
         else:
-            await context.bot.send_message(
-                chat_id=chat_id, text="❌ Error starting quiz. Please try again."
+            await safe_send_message(
+                context.bot, chat_id, "❌ Error starting quiz. Please try again."
             )
 
     except Exception as e:
         logger.error(f"Error starting enhanced quiz for user {user_id}: {e}")
-        await context.bot.send_message(
-            chat_id=chat_id, text="❌ Error starting quiz. Please try again."
+        await safe_send_message(
+            context.bot, chat_id, "❌ Error starting quiz. Please try again."
         )
 
 
@@ -1783,7 +1802,7 @@ async def confirm_prompt(update, context):
     reward_amount = reward_amount if reward_amount is not None else 0
     total_cost = total_cost if total_cost is not None else 0
 
-    text = f"🎯 Quiz Summary:\n\n"
+    text = f"🎯 Quiz Summary:\n"
     text += f" Topic: {topic}\n"
     text += f"❓ Questions: {n}\n"
 
@@ -1810,27 +1829,27 @@ async def confirm_prompt(update, context):
                 first_place = round(float(reward_amount) * 0.5, 6)
                 second_place = round(float(reward_amount) * 0.3, 6)
                 third_place = round(float(reward_amount) * 0.2, 6)
-                text += f"🥇 1st place: {first_place} NEAR (50%)\\n"
-                text += f"🥈 2nd place: {second_place} NEAR (30%)\\n"
-                text += f"🥉 3rd place: {third_place} NEAR (20%)\\n"
+                text += f"🥇 1st place: {first_place} NEAR (50%)\n"
+                text += f"🥈 2nd place: {second_place} NEAR (30%)\n"
+                text += f"🥉 3rd place: {third_place} NEAR (20%)\n"
         if total_cost > 0:
-            text += f"💳 Total Cost: {total_cost} NEAR\\n"
+            text += f"💳 Total Cost: {total_cost} NEAR\n"
             if service_charge:
-                text += f"💰 Service Charge: {service_charge} NEAR\\n"
+                text += f"💰 Service Charge: {service_charge} NEAR\n"
             if total_paid:
-                text += f"�� Total Paid: {total_paid} NEAR\\n"
+                text += f"�� Total Paid: {total_paid} NEAR\n"
             if payment_status == "completed":
-                text += f"✅ Payment: Completed\\n"
+                text += f"✅ Payment: Completed\n"
                 if transaction_hash:
-                    text += f"🔗 Transaction: {transaction_hash[:20]}...\\n"
+                    text += f"🔗 Transaction: {transaction_hash[:20]}...\n"
             elif payment_status == "not_required":
-                text += f"✅ Payment: Not Required\\n"
+                text += f"✅ Payment: Not Required\n"
             else:
-                text += f"⏳ Payment: Pending\\n"
+                text += f"⏳ Payment: Pending\n"
     else:
-        text += f"💰 Reward: Free\\n"
+        text += f"💰 Reward: Free\n"
 
-    text += f"\\nGenerate this quiz?"
+    text += f"\nGenerate this quiz?"
 
     buttons = [
         [InlineKeyboardButton("✅ Generate Quiz", callback_data="yes")],
@@ -2014,9 +2033,10 @@ async def process_questions_with_payment(
         questions_list = parse_multiple_questions(quiz_text)
 
         if not questions_list:
-            await context.bot.send_message(
-                chat_id=user_id,
-                text="Failed to parse quiz questions. Please try again.",
+            await safe_send_message(
+                context.bot,
+                user_id,
+                "Failed to parse quiz questions. Please try again.",
             )
             return
 
@@ -2096,54 +2116,31 @@ async def process_questions_with_payment(
         # Get bot username from config
         from utils.config import Config
 
-        # Create rich announcement card
-        announcement_msg, announcement_keyboard = create_quiz_announcement_card(
-            topic=topic,
-            num_questions=len(questions_list),
-            duration_minutes=duration_minutes,
-            reward_amount=reward_amount if reward_amount else 0,
-            reward_structure=reward_structure if reward_structure else "Free Quiz",
-            quiz_id=str(quiz_id),
-            is_free=not (reward_amount and float(reward_amount) > 0),
-            bot_username=Config.BOT_USERNAME,
+        # Create rich announcement card with image
+        image_path, announcement_msg, announcement_keyboard = (
+            create_quiz_announcement_card(
+                topic=topic,
+                num_questions=len(questions_list),
+                duration_minutes=duration_minutes,
+                reward_amount=reward_amount if reward_amount else 0,
+                reward_structure=reward_structure if reward_structure else "Free Quiz",
+                quiz_id=str(quiz_id),
+                is_free=not (reward_amount and float(reward_amount) > 0),
+                bot_username=Config.BOT_USERNAME,
+            )
         )
 
-        # Send rich announcement to group
-        await context.bot.send_message(
-            chat_id=group_chat_id,
-            text=announcement_msg,
+        # Send rich announcement with image to group
+        await safe_send_photo(
+            context.bot,
+            group_chat_id,
+            image_path,
+            caption=announcement_msg,
             parse_mode="Markdown",
             reply_markup=announcement_keyboard,
         )
 
-        # Sanitize content for Markdown
-        def sanitize_markdown(text):
-            """Sanitize text to prevent Markdown parsing errors"""
-            if not text:
-                return ""
-            # Escape special Markdown characters
-            text = (
-                str(text)
-                .replace("*", "\\*")
-                .replace("_", "\\_")
-                .replace("[", "\\[")
-                .replace("]", "\\]")
-                .replace("(", "\\(")
-                .replace(")", "\\)")
-                .replace("~", "\\~")
-                .replace("`", "\\`")
-                .replace(">", "\\>")
-                .replace("#", "\\#")
-                .replace("+", "\\+")
-                .replace("-", "\\-")
-                .replace("=", "\\=")
-                .replace("|", "\\|")
-                .replace("{", "\\{")
-                .replace("}", "\\}")
-                .replace(".", "\\.")
-                .replace("!", "\\!")
-            )
-            return text
+        # Sanitize content for Markdown using imported function
 
         # Send confirmation to user with rich formatting
         safe_topic = sanitize_markdown(topic)
@@ -2184,7 +2181,7 @@ async def process_questions_with_payment(
 💳 **Payment:** {safe_payment_status}
 """
         else:
-            user_msg += f"💰 **Reward:** Free Quiz\\n"
+            user_msg += f"💰 **Reward:** Free Quiz\n"
 
         user_msg += f"""
 ══════════════════════════════════════════
@@ -2209,9 +2206,10 @@ async def process_questions_with_payment(
 
         final_message = user_msg.strip()
 
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=final_message,
+        await safe_send_message(
+            context.bot,
+            user_id,
+            final_message,
             parse_mode="Markdown",
             reply_markup=user_keyboard,
         )
@@ -2222,8 +2220,8 @@ async def process_questions_with_payment(
 
     except Exception as e:
         logger.error(f"Error in process_questions_with_payment for user {user_id}: {e}")
-        await context.bot.send_message(
-            chat_id=user_id, text="❌ Error creating quiz. Please try again."
+        await safe_send_message(
+            context.bot, user_id, "❌ Error creating quiz. Please try again."
         )
 
 
@@ -2391,7 +2389,7 @@ async def handle_reward_method_choice(update: Update, context: CallbackContext):
             user_id, "awaiting_reward_input_type", "top3_total_amount"
         )
         await query.edit_message_text(
-            f"🥇🥈🥉 Top 3 (50/30/20) selected for Quiz {quiz_id}.\nPlease enter the total prize amount (e.g., '0.1 NEAR', '5 USDT').\n\nThe system will automatically distribute as:\n🥇 1st place: 50%\n🥈 2nd place: 30%\n🥉 3rd place: 20%"
+            f"🥇🥈🥉 Top 3 (50/30/20) selected for Quiz {quiz_id}.\nPlease enter the total prize amount (e.g., '0.1 NEAR', '5 USDT').\nThe system will automatically distribute as:\n🥇 1st place: 50%\n🥈 2nd place: 30%\n🥉 3rd place: 20%"
         )
     elif method == "custom":
         await redis_client.set_user_data_key(
@@ -2428,231 +2426,6 @@ async def handle_reward_method_choice(update: Update, context: CallbackContext):
 async def create_quiz_handler(update: Update, context: CallbackContext):
     """Handler for /createquiz command."""
     await create_quiz(update, context)
-
-
-async def link_wallet_handler(update: Update, context: CallbackContext):
-    """Handler for /linkwallet command - uses service to prompt for wallet."""
-    # This now calls the function from user_service.py
-    await service_link_wallet(update, context)
-
-
-async def unlink_wallet_handler(update: Update, context: CallbackContext):
-    """Handler for /unlinkwallet command."""
-    user = update.effective_user
-    if not user:
-        await update.message.reply_text("Could not identify user.")
-        return
-
-    user_id = user.id
-
-    existing_wallet = await get_user_wallet(user_id)
-    if not existing_wallet:
-        await update.message.reply_text("You do not have any wallet linked.")
-        return
-
-    # This assumes remove_user_wallet returns True on success, False on failure
-    if await remove_user_wallet(user_id):
-        await update.message.reply_text(
-            f"✅ Your wallet `{existing_wallet}` has been unlinked successfully."
-        )
-    else:
-        await update.message.reply_text(
-            "⚠️ Failed to unlink your wallet. Please try again or contact support."
-        )
-
-
-async def play_quiz_handler(update: Update, context: CallbackContext):
-    """Handler for /playquiz command - now uses enhanced quiz system."""
-    user_id = update.effective_user.id
-    user_username = update.effective_user.username or update.effective_user.first_name
-    chat_type = update.effective_chat.type  # ✅ Add missing chat_type definition
-
-    # Check if user has a wallet - if not, create one first
-    from services.wallet_service import WalletService
-
-    wallet_service = WalletService()
-    has_wallet = await wallet_service.has_wallet_robust(user_id)
-
-    if not has_wallet:
-        logger.info(
-            f"User {user_id} has no wallet, redirecting to private chat for wallet creation."
-        )
-
-        if chat_type != "private":
-            await update.message.reply_text(
-                f"@{user_username}, I'll create a wallet for you first, then we'll play quizzes in private chat."
-            )
-
-        # Send initial loading message in private chat
-        loading_message = await context.bot.send_message(
-            chat_id=user_id,
-            text="🔧 **Creating your NEAR wallet...**\n\n⏳ Please wait while we set up your account on the blockchain...",
-            parse_mode="Markdown",
-        )
-
-        try:
-            # Update loading message with progress
-            await loading_message.edit_text(
-                "🔧 **Creating your NEAR wallet...**\n\n⏳ Generating secure keys and creating your account...",
-                parse_mode="Markdown",
-            )
-
-            # Create wallet using existing service
-            wallet_info = await wallet_service.create_demo_wallet(
-                user_id,
-                user_name=update.effective_user.username
-                or update.effective_user.first_name,
-            )
-
-            # Update loading message with final step
-            await loading_message.edit_text(
-                "🔧 **Creating your NEAR wallet...**\n\n✅ Account created! Finalizing your wallet...",
-                parse_mode="Markdown",
-            )
-
-            # Format the wallet info message
-            wallet_message, mini_app_keyboard = (
-                await wallet_service.format_wallet_info_message(wallet_info)
-            )
-
-            # Update the loading message with the wallet creation result
-            await loading_message.edit_text(
-                f"🎉 **Wallet Created Successfully!**\n\n{wallet_message}\n\nNow let's find a quiz for you!",
-                parse_mode="Markdown",
-            )
-
-            logger.info(
-                f"Wallet created successfully for user {user_id}, proceeding to quiz selection."
-            )
-
-        except Exception as e:
-            logger.error(f"Error creating wallet for user {user_id}: {e}")
-            await loading_message.edit_text(
-                "❌ **Wallet Creation Failed**\n\nSorry, there was an error creating your wallet. Please try again later.",
-                parse_mode="Markdown",
-            )
-            return
-
-    quiz_id_to_play = None
-    if context.args:
-        quiz_id_to_play = context.args[0]
-        logger.info(f"Quiz ID provided via args: {quiz_id_to_play}")
-
-    session = SessionLocal()
-    try:
-        group_chat_id = None
-        if update.effective_chat.type in ["group", "supergroup"]:
-            group_chat_id = update.effective_chat.id
-
-        if not quiz_id_to_play and group_chat_id:
-            # Check for active quizzes in group
-            active_quizzes = (
-                session.query(Quiz)
-                .filter(
-                    Quiz.status == QuizStatus.ACTIVE,
-                    Quiz.group_chat_id == group_chat_id,
-                    Quiz.end_time > datetime.utcnow(),
-                )
-                .order_by(Quiz.end_time)
-                .all()
-            )
-
-            if len(active_quizzes) > 1:
-                # Multiple quizzes - show selection
-                buttons = []
-                for i, q in enumerate(active_quizzes):
-                    num_questions = len(q.questions) if q.questions else 0
-                    buttons.append(
-                        [
-                            InlineKeyboardButton(
-                                f"{q.topic} ({num_questions} questions)",
-                                callback_data=f"playquiz_select:{q.id}:{user_id}",
-                            )
-                        ]
-                    )
-
-                reply_markup = InlineKeyboardMarkup(buttons)
-                await safe_send_message(
-                    context.bot,
-                    update.effective_chat.id,
-                    "Multiple quizzes are active. Choose one to play:",
-                    reply_markup=reply_markup,
-                )
-                return
-            elif len(active_quizzes) == 1:
-                quiz_id_to_play = active_quizzes[0].id
-
-        if quiz_id_to_play:
-            # Get the specific quiz
-            quiz = session.query(Quiz).filter(Quiz.id == quiz_id_to_play).first()
-            if not quiz:
-                await safe_send_message(
-                    context.bot, update.effective_chat.id, "❌ Quiz not found."
-                )
-                return
-
-            # Check if quiz is still active
-            if quiz.status != QuizStatus.ACTIVE or (
-                quiz.end_time and quiz.end_time <= datetime.utcnow()
-            ):
-                await safe_send_message(
-                    context.bot,
-                    update.effective_chat.id,
-                    "❌ This quiz is no longer active.",
-                )
-                return
-
-            # Send quiz intro with start button (don't create session yet)
-            total_questions = len(quiz.questions) if quiz.questions else 0
-            timer_seconds = Config.QUESTION_TIMER_SECONDS
-
-            intro_text = f"""🎲 Get ready for the quiz '{quiz.topic}'
-
-🖊 {total_questions} questions
-⏱ {timer_seconds} seconds per question
-🔀 Questions and answers shuffled
-
-🏁 Press the button below when you are ready.
-Send /stop to stop it."""
-
-            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-
-            keyboard = [
-                [
-                    InlineKeyboardButton(
-                        "🚀 Start Quiz", callback_data=f"enhanced_quiz_start:{quiz.id}"
-                    )
-                ]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-
-            # Send to user's DM
-            await safe_send_message(
-                context.bot, user_id, intro_text, reply_markup=reply_markup
-            )
-
-            # Confirm in group chat
-            await safe_send_message(
-                context.bot,
-                update.effective_chat.id,
-                f"🎮 **{quiz.topic}** Challenge Ready! 🏆\n\n📱 Check your DMs to start the quiz!",
-            )
-        else:
-            await safe_send_message(
-                context.bot,
-                update.effective_chat.id,
-                "❌ No active quizzes found. Use /createquiz to create a new quiz.",
-            )
-
-    except Exception as e:
-        logger.error(f"Error in enhanced play_quiz_handler: {e}")
-        await safe_send_message(
-            context.bot,
-            update.effective_chat.id,
-            "❌ Error starting quiz. Please try again.",
-        )
-    finally:
-        session.close()
 
 
 # Handle selection when multiple quizzes are active in a group
@@ -2724,7 +2497,7 @@ Send /stop to stop it."""
 
         # Update the selection message
         await query.edit_message_text(
-            f"🎯 **{quiz.topic}** Quiz Ready! ⚡\n\n📱 Check your DMs to start the quiz!"
+            f"🎯 **{quiz.topic}** Quiz Ready! ⚡\n📱 Check your DMs to start the quiz!"
         )
 
     except Exception as e:
@@ -2818,7 +2591,7 @@ async def private_message_handler(update: Update, context: CallbackContext):
                 if quiz and quiz.group_chat_id:
                     # ... (rest of the announcement logic remains the same)
                     announce_text = "@everyone \n"
-                    announce_text += f"📣 New quiz '**{_escape_markdown_v2_specials(quiz.topic)}**' is now active! 🎯\n\n"
+                    announce_text += f"📣 New quiz '**{_escape_markdown_v2_specials(quiz.topic)}**' is now active! 🎯\n"
 
                     num_questions = len(quiz.questions) if quiz.questions else "N/A"
                     announce_text += f"📚 **{num_questions} Questions**\n"
@@ -2849,9 +2622,10 @@ async def private_message_handler(update: Update, context: CallbackContext):
                         f"Attempting to send announcement to group {quiz.group_chat_id}:\n{announce_text}"
                     )
                     try:
-                        await context.bot.send_message(
-                            chat_id=quiz.group_chat_id,
-                            text=announce_text,
+                        await safe_send_message(
+                            context.bot,
+                            quiz.group_chat_id,
+                            announce_text,
                             parse_mode="MarkdownV2",
                         )
                         logger.info("Announcement sent successfully.")
@@ -2878,8 +2652,8 @@ async def private_message_handler(update: Update, context: CallbackContext):
                         else:
                             plain_announce_text += f"Ends: No specific end time set.\n"
                         plain_announce_text += "Type /playquiz to participate!"
-                        await context.bot.send_message(
-                            chat_id=quiz.group_chat_id, text=plain_announce_text
+                        await safe_send_message(
+                            context.bot, quiz.group_chat_id, plain_announce_text
                         )
             except Exception as e:
                 logger.error(f"Error during quiz announcement: {e}", exc_info=True)
@@ -2938,16 +2712,16 @@ async def private_message_handler(update: Update, context: CallbackContext):
                     second_place = round(total_amount * 0.3, 6)
                     third_place = round(total_amount * 0.2, 6)
                     reward_confirmation_content = (
-                        f"✅ Got it! Total prize: {total_amount} {currency}\\n"
-                        f"🥇 1st place: {first_place} {currency} (50%)\\n"
-                        f"🥈 2nd place: {second_place} {currency} (30%)\\n"
-                        f"🥉 3rd place: {third_place} {currency} (20%)\\n"
-                        f"for Quiz ID {quiz_id_for_setup}.\\n"
+                        f"✅ Got it! Total prize: {total_amount} {currency}\n"
+                        f"🥇 1st place: {first_place} {currency} (50%)\n"
+                        f"🥈 2nd place: {second_place} {currency} (30%)\n"
+                        f"🥉 3rd place: {third_place} {currency} (20%)\n"
+                        f"for Quiz ID {quiz_id_for_setup}.\n"
                         f"The rewards for this quiz are now set up."
                     )
                 else:
                     reward_confirmation_content = (
-                        f"✅ Got it! I\\'ve noted down {friendly_method_name} as: '{_escape_markdown_v2_specials(message_text)}' for Quiz ID {quiz_id_for_setup}.\\n"
+                        f"✅ Got it! I\\'ve noted down {friendly_method_name} as: '{_escape_markdown_v2_specials(message_text)}' for Quiz ID {quiz_id_for_setup}.\n"
                         f"The rewards for this quiz are now set up."
                     )
                 logger.info(
@@ -2958,7 +2732,7 @@ async def private_message_handler(update: Update, context: CallbackContext):
                 total_with_fee = round(total_amount + fee, 6)
                 deposit_instructions = (
                     f"💰 Please deposit *{total_with_fee} {currency}* (includes 2% fee: {fee} {currency}) "
-                    f"to the following address to fund the quiz: `{Config.DEPOSIT_ADDRESS}`\\n\\n"
+                    f"to the following address to fund the quiz: `{Config.DEPOSIT_ADDRESS}`\n\n"
                     f"Once sent, please reply with the *transaction hash*."
                 )
                 logger.info(f"Deposit instructions prepared: {deposit_instructions}")
@@ -3032,7 +2806,7 @@ async def private_message_handler(update: Update, context: CallbackContext):
                 quiz_id_for_setup, awaiting_reward_type, message_text
             )
             await update.message.reply_text(
-                f"⚠️ I couldn\\'t automatically determine the total amount and currency from your input: '{_escape_markdown_v2_specials(message_text)}'.\\n"
+                f"⚠️ I couldn\\'t automatically determine the total amount and currency from your input: '{_escape_markdown_v2_specials(message_text)}'.\n"
                 f"Please enter the prize amount including the currency (e.g., '5 NEAR', '0.1 USDT')."
             )
             # Do not change Redis state, user needs to re-enter.
@@ -3133,7 +2907,7 @@ async def show_all_active_leaderboards_command(
             )
             return
 
-        response_message = "🏆 <b>Active Quiz Leaderboards</b> 🏆\n\n"
+        response_message = "🏆 <b>Active Quiz Leaderboards</b> 🏆\n"
 
         for quiz_info in active_quizzes:
             quiz_id_full = quiz_info.get("quiz_id", "N/A")
@@ -3601,7 +3375,7 @@ async def stop_enhanced_quiz(update: Update, context: CallbackContext):
         await safe_send_message(
             context.bot,
             user_id,
-            f"🛑 Quiz stopped successfully!\n\n📊 Cleaned up:\n• {session_count} active session(s)\n• {task_count} scheduled task(s)\n\n🎮 You can start a new quiz anytime!",
+            f"🛑 Quiz stopped successfully!\n📊 Cleaned up:\n• {session_count} active session(s)\n• {task_count} scheduled task(s)\n🎮 You can start a new quiz anytime!",
         )
         logger.info(
             f"Stopped {session_count} sessions and {task_count} tasks for user {user_id}"
@@ -3637,7 +3411,7 @@ async def debug_sessions_handler(update: Update, context: CallbackContext):
         user_quiz_keys = []
         logger.error(f"Error checking Redis data: {e}")
 
-    debug_text = f"🔍 **Debug Info for User {user_id}**\n\n"
+    debug_text = f"🔍 **Debug Info for User {user_id}**\n"
     debug_text += f"📊 **Active Sessions:** {len(user_sessions)}\n"
     for session in user_sessions:
         debug_text += f"• {session}\n"
