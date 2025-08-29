@@ -3,7 +3,7 @@ from telegram.ext import CallbackContext, ContextTypes, Application
 from telegram.error import BadRequest
 from models.quiz import Quiz, QuizStatus, QuizAnswer
 from store.database import SessionLocal
-from enhanced_agent import AdvancedQuizGenerator
+from enhanced_agent import generate_quiz
 from services.user_service import check_wallet_linked
 from utils.telegram_helpers import safe_send_message, safe_edit_message_text
 import re
@@ -51,32 +51,47 @@ async def generate_quiz_questions(
     compatible with the existing quiz service expectations.
     """
     try:
-        # Initialize the enhanced quiz generator
-        generator = AdvancedQuizGenerator()
-
-        # Generate questions using the enhanced agent
-        quiz_questions = await generator.generate_quiz(
+        # Use the new function-based approach
+        result = await generate_quiz(
             topic=topic,
             num_questions=num_questions,
-            difficulty="hard",
-            force_refresh=False,
             context_text=context_text,
+            use_current_info=True,
         )
 
-        # Convert QuizQuestion objects to the format expected by quiz service
-        formatted_questions = []
-        for i, question in enumerate(quiz_questions, 1):
-            # Format each question as expected by the existing parser
-            formatted_question = f"""Question {i}: {question.question}
-A) {question.options['A']}
-B) {question.options['B']}
-C) {question.options['C']}
-D) {question.options['D']}
-Correct Answer: {question.correct_answer}"""
-            formatted_questions.append(formatted_question)
+        # Parse the JSON format and convert to the expected format
+        import json
+        import re
 
-        # Join all questions with double newlines
-        return "\n".join(formatted_questions)
+        # Extract JSON from the result (it might be wrapped in markdown or other text)
+        json_match = re.search(r"\[.*\]", result, re.DOTALL)
+        if json_match:
+            try:
+                questions_data = json.loads(json_match.group())
+                formatted_questions = []
+
+                for i, q in enumerate(questions_data, 1):
+                    # Convert the new format to the expected format
+                    options_text = "\n".join(
+                        [
+                            f"{chr(65 + j)}) {option}"
+                            for j, option in enumerate(q["options"])
+                        ]
+                    )
+                    formatted_question = f"""Question {i}: {q['question']}
+{options_text}
+Correct Answer: {q['correct_answer']}"""
+                    formatted_questions.append(formatted_question)
+
+                return "\n\n".join(formatted_questions)
+            except json.JSONDecodeError:
+                logger.warning(
+                    "Failed to parse JSON from quiz result, using raw result"
+                )
+                return result
+        else:
+            # If no JSON found, return the raw result
+            return result
 
     except Exception as e:
         logger.error(f"Error generating quiz with enhanced agent: {e}", exc_info=True)

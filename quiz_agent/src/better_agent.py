@@ -1,496 +1,177 @@
 import os
 import asyncio
 import json
-import random
-import logging
-import sys
-from datetime import datetime
-from typing import Dict, List, Optional, Union
-from dataclasses import dataclass
-from enum import Enum
-import aiohttp
 import re
-from pathlib import Path
-
-# Try to import langchain components with fallbacks
-try:
-    from langchain_core.messages import HumanMessage
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    from langchain_core.prompts import ChatPromptTemplate
-
-    LANGCHAIN_AVAILABLE = True
-except ImportError as e:
-    print(f"Warning: LangChain not available: {e}")
-    print("Install with: pip install langchain-core langchain-google-genai")
-    LANGCHAIN_AVAILABLE = False
-
-# Try to import dotenv with fallback
-try:
-    from dotenv import find_dotenv, load_dotenv
-
-    DOTENV_AVAILABLE = True
-except ImportError:
-    print(
-        "Warning: python-dotenv not available. Install with: pip install python-dotenv"
-    )
-    DOTENV_AVAILABLE = False
-
-# Performance monitoring import with fallback
-try:
-    from utils.performance_monitor import track_ai_generation
-
-    PERFORMANCE_MONITOR_AVAILABLE = True
-except ImportError:
-    from contextlib import asynccontextmanager
-
-    @asynccontextmanager
-    async def track_ai_generation(metadata=None):
-        yield
-
-    PERFORMANCE_MONITOR_AVAILABLE = False
-
-
-# Setup logging
-def setup_logging(level: str = "INFO") -> logging.Logger:
-    """Setup logging configuration"""
-    logger = logging.getLogger("quiz_generator")
-    logger.setLevel(getattr(logging, level.upper(), logging.INFO))
-
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-
-    return logger
-
-
-logger = setup_logging()
+from datetime import datetime
+from typing import Optional, List
+from dataclasses import dataclass
+import aiohttp
+from dotenv import find_dotenv, load_dotenv
+import getpass
 
 # Load environment variables
-if DOTENV_AVAILABLE:
-    load_dotenv(find_dotenv())
+load_dotenv(find_dotenv())
 
 
-# Configuration class
 @dataclass
-class Config:
-    """Configuration for the quiz generator"""
+class QuizConfig:
+    """Simple configuration"""
 
-    google_api_key: Optional[str] = None
+    google_api_key: str
     serper_api_key: Optional[str] = None
-    model_name: str = "gemini-2.5-flash-lite"
-    temperature: float = 0.4
-    max_tokens: int = 1000
-    search_timeout: int = 8
-    llm_timeout: int = 15
-    max_retries: int = 3
-    log_level: str = "INFO"
+    model: str = "gemini-2.0-flash"
+    temperature: float = 0.75
+    timeout: float = 30.0
 
-    def __post_init__(self):
-        # Load API keys from environment or prompt user
-        if not self.google_api_key:
-            self.google_api_key = os.getenv("GOOGLE_GEMINI_API_KEY")
-            if not self.google_api_key:
+    @classmethod
+    def from_env(cls):
+        google_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GOOGLE_GEMINI_API_KEY")
+        if not google_key:
+            google_key = getpass.getpass("Enter your Google API key: ")
+
+        serper_key = os.getenv("SERPER_API_KEY")
+        if not serper_key:
+            print("Note: No Serper API key found. Web search disabled.")
+
+        return cls(google_api_key=google_key, serper_api_key=serper_key)
+
+
+async def search_project_info(project_name: str, config: QuizConfig) -> str:
+    """Get current information about a specific project"""
+    if not config.serper_api_key:
+        return f"No web search available for {project_name}. Using general knowledge."
+
+    queries = [
+        f"{project_name} latest version features 2025",
+        f"{project_name} recent updates changes",
+        f"{project_name} current status documentation",
+    ]
+
+    all_info = []
+
+    try:
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=10)
+        ) as session:
+            for query in queries:
                 try:
-                    import getpass
+                    payload = {"q": query, "num": 3, "gl": "us", "hl": "en"}
 
-                    self.google_api_key = getpass.getpass(
-                        "Enter your Google Gemini API key: "
-                    )
+                    async with session.post(
+                        "https://google.serper.dev/search",
+                        headers={
+                            "X-API-KEY": config.serper_api_key,
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                    ) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            for result in data.get("organic", [])[
+                                :2
+                            ]:  # Top 2 per query
+                                snippet = result.get("snippet", "")
+                                if snippet and len(snippet) > 50:
+                                    all_info.append(f"• {snippet}")
+                        else:
+                            print(
+                                f"Search failed for '{query}': HTTP {response.status}"
+                            )
+
                 except Exception as e:
-                    logger.error(f"Failed to get API key: {e}")
-                    raise ValueError("Google Gemini API key is required")
-
-        if not self.serper_api_key:
-            self.serper_api_key = os.getenv("SERPER_API_KEY")
-            if not self.serper_api_key:
-                try:
-                    import getpass
-
-                    self.serper_api_key = getpass.getpass("Enter your Serper API key: ")
-                except Exception as e:
-                    logger.warning(f"Serper API key not available: {e}")
-                    logger.warning("Search functionality will be limited")
-
-
-class QuestionType(Enum):
-    DEFINITION = "definition"
-    APPLICATION = "application"
-    COMPARISON = "comparison"
-    ANALYSIS = "analysis"
-    PRACTICAL = "practical"
-    CONCEPTUAL = "conceptual"
-    FACTUAL = "factual"
-
-
-@dataclass
-class SearchResult:
-    title: str
-    snippet: str
-    link: str
-    date: Optional[str] = None
-
-
-@dataclass
-class QuizQuestion:
-    question: str
-    options: Dict[str, str]
-    correct_answer: str
-    explanation: str
-    difficulty: str
-    question_type: QuestionType
-    sources: List[str]
-    confidence_score: float = 0.8
-
-
-class SerperSearchTool:
-    """Simple, reliable search tool with robust error handling"""
-
-    def __init__(self, config: Config):
-        self.config = config
-        self.api_key = config.serper_api_key
-        self.base_url = "https://google.serper.dev/search"
-        self.session: Optional[aiohttp.ClientSession] = None
-
-    async def __aenter__(self):
-        """Async context manager entry"""
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=self.config.search_timeout)
-        )
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit"""
-        if self.session:
-            await self.session.close()
-
-    async def search(self, query: str, num_results: int = 5) -> List[SearchResult]:
-        """Perform search and return structured results with retry logic"""
-        if not self.api_key:
-            logger.warning("No Serper API key available, skipping search")
-            return []
-
-        headers = {"X-API-KEY": self.api_key, "Content-Type": "application/json"}
-        payload = {"q": query, "num": num_results, "gl": "us", "hl": "en"}
-
-        for attempt in range(self.config.max_retries):
-            try:
-                if not self.session:
-                    self.session = aiohttp.ClientSession(
-                        timeout=aiohttp.ClientTimeout(total=self.config.search_timeout)
-                    )
-
-                async with self.session.post(
-                    self.base_url,
-                    headers=headers,
-                    json=payload,
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        results = self._parse_results(data)
-                        logger.info(
-                            f"Search successful for '{query}': {len(results)} results"
-                        )
-                        return results
-                    elif response.status == 401:
-                        logger.error("Invalid Serper API key")
-                        return []
-                    elif response.status == 429:
-                        logger.warning("Rate limited, retrying...")
-                        await asyncio.sleep(2**attempt)  # Exponential backoff
-                        continue
-                    else:
-                        logger.error(f"Search API error: {response.status}")
-                        return []
-
-            except asyncio.TimeoutError:
-                logger.warning(f"Search timeout on attempt {attempt + 1}")
-                if attempt == self.config.max_retries - 1:
-                    return []
-                await asyncio.sleep(1)
-            except Exception as e:
-                logger.error(f"Search failed on attempt {attempt + 1}: {e}")
-                if attempt == self.config.max_retries - 1:
-                    return []
-                await asyncio.sleep(1)
-
-        return []
-
-    def _parse_results(self, data: dict) -> List[SearchResult]:
-        """Parse Serper API response into SearchResult objects"""
-        results = []
-        try:
-            for item in data.get("organic", []):
-                results.append(
-                    SearchResult(
-                        title=item.get("title", ""),
-                        snippet=item.get("snippet", ""),
-                        link=item.get("link", ""),
-                        date=item.get("date"),
-                    )
-                )
-        except Exception as e:
-            logger.error(f"Failed to parse search results: {e}")
-
-        return results
-
-
-class AdvancedQuizGenerator:
-    """Balanced quiz generator combining reliability with smart features"""
-
-    def __init__(self, config: Optional[Config] = None):
-        self.config = config or Config()
-        self.used_concepts = set()  # Simple diversity tracking
-
-        if not LANGCHAIN_AVAILABLE:
-            raise ImportError(
-                "LangChain is required for quiz generation. Install with: pip install langchain-core langchain-google-genai"
-            )
-
-        self.llm = ChatGoogleGenerativeAI(
-            model=self.config.model_name,
-            api_key=self.config.google_api_key,
-            temperature=self.config.temperature,
-            max_tokens=self.config.max_tokens,
-        )
-
-    async def generate_quiz(
-        self,
-        topic: str,
-        num_questions: int = 1,
-        difficulty: str = "medium",
-        force_refresh: bool = False,
-        context_text: str = None,
-        include_current_info: bool = True,
-    ) -> List[QuizQuestion]:
-        """Generate quiz with option for current info and robust error handling"""
-
-        if not topic or not topic.strip():
-            logger.error("Topic cannot be empty")
-            return []
-
-        topic = topic.strip()
-        num_questions = max(1, min(num_questions, 10))  # Limit to reasonable range
-
-        logger.info(f"🎯 Generating {num_questions} questions about '{topic}'")
-
-        async with track_ai_generation(
-            {
-                "topic": topic,
-                "num_questions": num_questions,
-                "difficulty": difficulty,
-                "has_context": bool(context_text),
-                "include_current": include_current_info,
-            }
-        ):
-            # Reset for new quiz
-            self.used_concepts.clear()
-
-            # Get search context if needed
-            search_context = ""
-            if not context_text or include_current_info:
-                try:
-                    async with SerperSearchTool(self.config) as search_tool:
-                        search_context = await self._get_search_context(
-                            topic, include_current_info, search_tool
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to get search context: {e}")
-                    search_context = f"Topic: {topic} (using general knowledge)"
-
-            # Generate questions
-            questions = []
-            for i in range(num_questions):
-                try:
-                    question = await self._generate_single_question(
-                        topic, i + 1, difficulty, context_text, search_context
-                    )
-                    if question:
-                        questions.append(question)
-                    else:
-                        logger.warning(f"Failed to generate question {i + 1}")
-                except Exception as e:
-                    logger.error(f"Error generating question {i + 1}: {e}")
+                    print(f"Search error for '{query}': {e}")
                     continue
 
-            logger.info(f"✅ Generated {len(questions)} questions successfully")
-            return questions
+                # Small delay between searches
+                await asyncio.sleep(0.5)
 
-    async def _get_search_context(
-        self,
-        topic: str,
-        include_current: bool = False,
-        search_tool: SerperSearchTool = None,
-    ) -> str:
-        """Get balanced search context with error handling"""
+    except Exception as e:
+        print(f"Search system error: {e}")
+        return f"Web search failed for {project_name}. Using general knowledge."
 
-        if not search_tool:
-            logger.warning("No search tool available")
-            return f"Topic: {topic} (using general knowledge)"
-
-        # Base queries for general coverage
-        queries = [
-            f"{topic} definition explanation",
-            f"{topic} examples applications",
-            f"{topic} key concepts",
-        ]
-
-        # Add current info queries only if requested
-        if include_current:
-            current_year = datetime.now().year
-            queries.extend(
-                [
-                    f"{topic} latest developments {current_year}",
-                    f"{topic} recent news {current_year}",
-                ]
-            )
-
-        logger.info(f"🔍 Searching for {topic} context...")
-
-        # Execute searches
-        all_results = []
-        for query in queries:
-            try:
-                results = await asyncio.wait_for(
-                    search_tool.search(query, 3), timeout=6.0
-                )
-                all_results.extend(results)
-            except asyncio.TimeoutError:
-                logger.warning(f"Search timeout for query: {query}")
-                continue
-            except Exception as e:
-                logger.warning(f"Search failed for query '{query}': {e}")
-                continue
-
-        # Build context
-        if not all_results:
-            return f"Topic: {topic} (using general knowledge)"
-
-        context_parts = []
-        for i, result in enumerate(all_results[:8], 1):
-            snippet = (
-                result.snippet[:200] + "..."
-                if len(result.snippet) > 200
-                else result.snippet
-            )
-            context_parts.append(f"Source {i}: {snippet}")
-
-        return "\n\n".join(context_parts)
-
-    async def _generate_single_question(
-        self,
-        topic: str,
-        question_num: int,
-        difficulty: str,
-        context_text: str,
-        search_context: str,
-    ) -> Optional[QuizQuestion]:
-        """Generate a single high-quality question with retry logic"""
-
-        # Select question type with simple diversity
-        question_types = list(QuestionType)
-        question_type = random.choice(question_types)
-
-        # Build comprehensive context
-        full_context = []
-        if context_text:
-            full_context.append(
-                f"PROVIDED CONTEXT:\n{self._preprocess_text(context_text)[:800]}"
-            )
-        if search_context:
-            full_context.append(f"SEARCH CONTEXT:\n{search_context[:600]}")
-
-        context_str = (
-            "\n\n".join(full_context)
-            if full_context
-            else f"Topic: {topic} (general knowledge)"
+    if all_info:
+        return f"Current information about {project_name}:\n" + "\n".join(all_info[:8])
+    else:
+        return (
+            f"No current information found for {project_name}. Using general knowledge."
         )
 
-        # Create focused prompt
-        prompt = self._create_focused_prompt(
-            topic, question_type, difficulty, context_str, question_num
-        )
 
-        # Retry logic for question generation
-        for attempt in range(self.config.max_retries):
-            try:
-                response = await asyncio.wait_for(
-                    self.llm.ainvoke(prompt), timeout=self.config.llm_timeout
-                )
-                question = self._parse_question_response(
-                    response.content, topic, question_type, difficulty
-                )
-                if question:
-                    return question
-                else:
-                    logger.warning(f"Failed to parse question on attempt {attempt + 1}")
+def preprocess_text(text: str) -> str:
+    """Clean and limit context text"""
+    if not text:
+        return ""
 
-            except asyncio.TimeoutError:
-                logger.warning(f"LLM timeout on attempt {attempt + 1}")
-                if attempt == self.config.max_retries - 1:
-                    break
-                await asyncio.sleep(1)
-            except Exception as e:
-                logger.error(
-                    f"Question generation failed on attempt {attempt + 1}: {e}"
-                )
-                if attempt == self.config.max_retries - 1:
-                    break
-                await asyncio.sleep(1)
+    # Basic cleanup
+    text = re.sub(r"\s+", " ", text.strip())
 
-        logger.error(
-            f"❌ Failed to generate question {question_num} after {self.config.max_retries} attempts"
-        )
-        return None
+    # Limit length to prevent token overflow
+    if len(text) > 2000:
+        text = text[:2000] + "..."
 
-    def _create_focused_prompt(
-        self,
-        topic: str,
-        question_type: QuestionType,
-        difficulty: str,
-        context: str,
-        question_num: int,
-    ) -> List:
-        """Create clear, focused prompt without over-engineering"""
+    return text
 
-        type_instructions = {
-            QuestionType.DEFINITION: "Ask what something is or means",
-            QuestionType.APPLICATION: "Ask how something is used or applied",
-            QuestionType.COMPARISON: "Ask about differences or similarities",
-            QuestionType.ANALYSIS: "Ask why or how something works",
-            QuestionType.PRACTICAL: "Ask about real-world implementation",
-            QuestionType.CONCEPTUAL: "Ask about underlying principles",
-            QuestionType.FACTUAL: "Ask about specific facts or data",
-        }
 
-        system_prompt = f"""You are an expert quiz creator. Generate ONE high-quality multiple-choice question about {topic}.
+async def generate_quiz_questions(
+    topic: str, num_questions: int, context: str, config: QuizConfig
+) -> str:
+    """Generate quiz using Gemini with proper error handling"""
 
-TOPIC: {topic}
-QUESTION TYPE: {question_type.value} - {type_instructions[question_type]}
-DIFFICULTY: {difficulty}
-QUESTION NUMBER: {question_num}
+    # Import here to avoid startup issues
+    try:
+        from langchain_openai import ChatOpenAI
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from langchain_core.prompts import ChatPromptTemplate
+    except ImportError as e:
+        raise ImportError(
+            f"LangChain required: pip install langchain-google-genai langchain-core"
+        ) from e
 
-CONTEXT INFORMATION:
-{context[:1200]}
+    # llm = ChatGoogleGenerativeAI(
+    #     model=config.model,
+    #     api_key=config.google_api_key,
+    #     temperature=config.temperature,
+    # )
 
-REQUIREMENTS:
-1. Create ONE question specifically about {topic}
-2. Focus on the {question_type.value} aspect
-3. Generate exactly 4 options (A, B, C, D)
-4. Make sure only ONE option is clearly correct
-5. Each option should be concise (under 90 characters)
-6. Avoid repetitive or overly similar options
-7. Base the question on the provided context when possible
-8. Make it appropriate for {difficulty} difficulty level
+    llm = ChatOpenAI(
+        model="gpt-4o-mini",
+        api_key=os.getenv("OPENAI_API_KEY"),
+        temperature=config.temperature,
+    )
 
-QUALITY STANDARDS:
-- Question should be clear and unambiguous
-- Distractors should be plausible but clearly wrong
-- Test genuine understanding, not obscure trivia
-- Avoid questions that could have multiple correct answers
+    # Advanced prompt for challenging quiz generation
+    system_prompt = """You are a Community Quiz Creator, an expert at creating fun, engaging, and accessible quiz questions for a general audience. Your goal is to spark interest and test foundational knowledge in a friendly way.
+
+KEY PRINCIPLES:
+- Accessible & Fun: Questions should be understandable to newcomers. Avoid overly technical jargon.
+- Foundational Knowledge: Test core concepts and key facts.
+- Clear & Concise: Keep questions and options simple and to the point.
+- Positive & Encouraging Tone: The quiz should feel like a fun community activity.
+
+GROUNDING:
+- You MUST exclusively use the information from the "Context" section below.
+- Do NOT use any external knowledge or information from web searches if context is provided.
+- If the context is insufficient to create a question, state that as the answer.
+
+QUESTION CATEGORIES TO EMPLOY:
+
+1.  Key Concepts:
+    *   Ask about the definition or purpose of a core idea.
+    *   Example: "What is the main purpose of a blockchain?"
+
+2.  General Knowledge:
+    *   Ask about well-known facts or events related to the topic.
+    *   Example: "Which cryptocurrency is the oldest?"
+
+3.  Basic Comparison:
+    *   Ask for a simple distinction between two things.
+    *   Example: "What is one key difference between a wallet and an exchange?"
+
+STRICT OUTPUT REQUIREMENTS:
+- Generate exactly {num_questions} engaging question(s) about {topic}.
+- Provide exactly 4 options (A-D).
+- Number questions sequentially (1., 2., etc.).
+- End each question with "Correct Answer: [letter]".
 
 OUTPUT FORMAT (JSON only):
 {{
@@ -501,290 +182,178 @@ OUTPUT FORMAT (JSON only):
         "Option C (plausible distractor)",
         "Option D (plausible distractor)"
     ],
-    "correct_answer": "A",
-    "explanation": "Clear explanation of why A is correct and others are wrong",
-    "confidence_score": 0.9
+    "correct_answer": "A, B, C, or D",
 }}
 
-Generate the question now:"""
+{context_instruction}"""
 
-        return [HumanMessage(content=system_prompt)]
+    context_instruction = (
+        "**Crucially, you MUST base your questions on the provided context below. The context is the source of truth.**"
+        if context.strip()
+        else "Use your general knowledge about the topic."
+    )
 
-    def _parse_question_response(
-        self, content: str, topic: str, question_type: QuestionType, difficulty: str
-    ) -> Optional[QuizQuestion]:
-        """Parse LLM response into QuizQuestion object with robust error handling"""
+    prompt_text = system_prompt.format(
+        num_questions=num_questions,
+        topic=topic,
+        context_instruction=context_instruction,
+    )
+
+    if context.strip():
+        prompt_text += f"\n\nContext:\n{context}"
+
+    # Generate with retry logic
+    for attempt in range(3):
         try:
-            # Extract JSON from response
-            if "```json" in content:
-                start = content.find("```json") + 7
-                end = content.find("```", start)
-                content = content[start:end] if end > start else content[start:]
-            elif "```" in content:
-                start = content.find("```") + 3
-                end = content.find("```", start)
-                content = content[start:end] if end > start else content[start:]
+            print(f"Generating quiz questions (attempt {attempt + 1}/3)...")
 
-            # Clean the content
-            content = content.strip()
-            if content.startswith("```"):
-                content = content[3:]
-            if content.endswith("```"):
-                content = content[:-3]
-
-            data = json.loads(content.strip())
-
-            # Validate required fields
-            required_fields = ["question", "options", "correct_answer", "explanation"]
-            if not all(field in data for field in required_fields):
-                logger.error(
-                    f"Missing required fields in response: {list(data.keys())}"
-                )
-                return None
-
-            # Validate options
-            options = data["options"]
-            if not isinstance(options, list) or len(options) != 4:
-                logger.error(f"Invalid options format: {options}")
-                return None
-
-            # Build options dictionary
-            options_dict = {}
-            for i, option in enumerate(options):
-                if not isinstance(option, str):
-                    logger.error(f"Invalid option type: {type(option)}")
-                    return None
-                key = chr(65 + i)  # A, B, C, D
-                options_dict[key] = option[:90]  # Ensure length limit
-
-            # Validate correct answer
-            correct_answer = str(data["correct_answer"]).upper()
-            if correct_answer not in ["A", "B", "C", "D"]:
-                logger.warning(
-                    f"Invalid correct answer '{correct_answer}', defaulting to 'A'"
-                )
-                correct_answer = "A"
-
-            return QuizQuestion(
-                question=data["question"],
-                options=options_dict,
-                correct_answer=correct_answer,
-                explanation=data["explanation"],
-                difficulty=difficulty,
-                question_type=question_type,
-                sources=[],  # Could add source tracking if needed
-                confidence_score=float(data.get("confidence_score", 0.8)),
+            response = await asyncio.wait_for(
+                llm.ainvoke([{"role": "user", "content": prompt_text}]),
+                timeout=config.timeout,
             )
 
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response: {e}")
-            logger.debug(f"Response content: {content[:200]}...")
-            return None
+            if response.content and len(response.content.strip()) > 100:
+                return response.content.strip()
+            else:
+                raise ValueError("Generated content too short")
+
+        except asyncio.TimeoutError:
+            print(f"Timeout on attempt {attempt + 1}")
+            if attempt < 2:
+                await asyncio.sleep(2**attempt)
         except Exception as e:
-            logger.error(f"Failed to parse question: {e}")
-            return None
+            print(f"Generation error on attempt {attempt + 1}: {e}")
+            if attempt < 2:
+                await asyncio.sleep(1)
 
-    def _preprocess_text(self, text: str) -> str:
-        """Clean and prepare text"""
-        if not text:
-            return ""
-
-        try:
-            # Remove markdown links
-            text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
-            # Remove URLs
-            text = re.sub(r"https?://\S+", "", text)
-            # Clean whitespace
-            text = re.sub(r"\s+", " ", text)
-            # Remove markdown headers
-            text = re.sub(r"#{1,6}\s+", "", text)
-
-            return text.strip()
-        except Exception as e:
-            logger.error(f"Failed to preprocess text: {e}")
-            return text.strip() if text else ""
+    # Final fallback
+    return generate_simple_fallback(topic, num_questions)
 
 
-# Convenience function matching your original interface
+def generate_simple_fallback(topic: str, num_questions: int) -> str:
+    """Generate a basic fallback quiz when AI generation fails"""
+    fallback = f"""# {topic} Quiz (Fallback)
+
+Unfortunately, the AI generation failed. Here's a basic question to get you started:
+
+1. Question: What is {topic} primarily used for?
+A) General purpose applications
+B) Specific domain solutions
+C) Educational purposes
+D) All of the above
+Correct Answer: D
+
+Please try generating again or check your API configuration."""
+
+    return fallback
+
+
+def format_quiz_output(topic: str, content: str, has_search: bool) -> str:
+    """Format the final quiz output"""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    header = f"""# {topic} Quiz
+Generated on: {timestamp}
+Search-enhanced: {"Yes" if has_search else "No"}
+
+---
+
+"""
+    return header + content
+
+
 async def generate_quiz(
     topic: str,
-    num_questions: int = 1,
-    difficulty: str = "medium",
+    num_questions: int = 3,
     context_text: str = None,
-    include_current_info: bool = False,
-    config: Optional[Config] = None,
+    use_current_info: bool = True,
 ) -> str:
-    """Generate quiz and return formatted string with error handling"""
+    """
+    Main function to generate a quiz.
+
+    Args:
+        topic: The subject for the quiz
+        num_questions: Number of questions to generate
+        context_text: Additional context to include
+        use_current_info: Whether to search for current project information
+    """
+    config = QuizConfig.from_env()
+
+    print(f"🎯 Generating {num_questions} question(s) about: {topic}")
+
+    # Build context
+    context_parts = []
+
+    if context_text:
+        context_parts.append(f"User Context:\n{preprocess_text(context_text)}")
+
+    # Add current info if requested, available, and no specific context is given
+    search_used = False
+    if use_current_info and not context_text and config.serper_api_key:
+        print("🔍 Searching for current project information...")
+        current_info = await search_project_info(topic, config)
+        if "No current information found" not in current_info:
+            context_parts.append(f"Current Information:\n{current_info}")
+            search_used = True
+            print("✅ Current information added to context")
+        else:
+            print("⚠️ No current information found, using general knowledge")
+
+    final_context = "\n\n".join(context_parts)
+
+    # Generate the quiz
+    print("🤖 Generating quiz questions...")
     try:
-        generator = AdvancedQuizGenerator(config)
-        questions = await generator.generate_quiz(
-            topic, num_questions, difficulty, context_text, include_current_info
+        quiz_content = await generate_quiz_questions(
+            topic, num_questions, final_context, config
         )
+        result = format_quiz_output(topic, quiz_content, search_used)
+        print("✅ Quiz generation completed!")
+        return result
 
-        if not questions:
-            return f"Failed to generate quiz for topic: {topic}"
-
-        formatted_questions = []
-        for i, q in enumerate(questions, 1):
-            options_text = "\n".join(
-                [f"{key}) {value}" for key, value in q.options.items()]
-            )
-            formatted_questions.append(
-                f"Question {i}: {q.question}\n{options_text}\n"
-                f"Correct Answer: {q.correct_answer}\n"
-                f"Explanation: {q.explanation}"
-            )
-
-        return "\n\n".join(formatted_questions)
     except Exception as e:
-        logger.error(f"Quiz generation failed: {e}")
-        return f"Error generating quiz for topic '{topic}': {str(e)}"
+        print(f"❌ Quiz generation failed: {e}")
+        return generate_simple_fallback(topic, num_questions)
 
 
-# Keep the original simple function as fallback
-async def generate_quiz_simple(
-    topic: str,
-    num_questions: int = 1,
-    context_text: str = None,
-    config: Optional[Config] = None,
-) -> str:
-    """Simple version using your original approach with error handling"""
+# Simple CLI interface
+async def main():
+    """Interactive CLI for quiz generation"""
+    print("=== Quiz Generator ===\n")
 
-    if not LANGCHAIN_AVAILABLE:
-        return "LangChain is required for quiz generation"
+    topic = input("Enter topic/project name: ").strip()
+    if not topic:
+        print("Topic is required!")
+        return
 
     try:
-        async with track_ai_generation(
-            {
-                "topic": topic,
-                "num_questions": num_questions,
-                "has_context": bool(context_text),
-                "method": "simple",
-            }
-        ):
-            config = config or Config()
-            llm = ChatGoogleGenerativeAI(
-                model=config.model_name,
-                api_key=config.google_api_key,
-                temperature=0.75,
-            )
+        num_q = input("Number of questions (default 3): ").strip()
+        num_questions = int(num_q) if num_q.isdigit() and int(num_q) > 0 else 3
+    except:
+        num_questions = 3
 
-            if context_text:
-                context_text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", context_text)
+    # Ask about current info
+    current_info = input(
+        "Include current/recent information? (y/n, default n): "
+    ).lower()
+    use_current = current_info == "y"
 
-            BASIC_SYSTEM = """You are QuizMasterGPT, an expert educator and fact-checker.
-Your primary goal is to produce unique, evidence-based multiple-choice questions.
-Each question should explore a different aspect of the main theme."""
+    # Optional context
+    context = input("Any additional context? (press enter to skip): ").strip()
+    context = context if context else None
 
-            TEMPLATE = """
-Generate {num_questions} distinct multiple-choice question(s) about **{topic}**.
+    print(f"\n🚀 Starting generation...")
 
-Context (use if relevant, otherwise rely on general knowledge):
-{context}
-
-Requirements:
-1. Focus solely on: **{topic}**
-2. Each question covers a different aspect of **{topic}**
-3. Generate EXACTLY four options per question (A-D)
-4. Only ONE correct answer per question
-5. State "Correct Answer: [letter]" after each question
-6. No repetition between questions
-7. Use verifiable facts only
-8. Vary question types (definitions, applications, comparisons, etc.)
-9. Concise, clear language
-10. Number questions sequentially
-
-Format:
-Question 1: [question text]
-A) [option]
-B) [option]
-C) [option]
-D) [option]
-Correct Answer: [letter]
-"""
-
-            prompt = ChatPromptTemplate.from_template(BASIC_SYSTEM + "\n" + TEMPLATE)
-            messages = prompt.format_messages(
-                topic=topic,
-                num_questions=num_questions,
-                context=context_text
-                or f"No additional context. Use general knowledge about {topic}.",
-            )
-
-            response = await asyncio.wait_for(llm.ainvoke(messages), timeout=20.0)
-            return response.content
-    except Exception as e:
-        logger.error(f"Simple generation failed: {e}")
-        return f"Failed to generate quiz about {topic}: {str(e)}"
-
-
-def main():
-    """Main function for running the quiz generator standalone"""
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Generate quiz questions")
-    parser.add_argument("topic", help="Topic for quiz questions")
-    parser.add_argument(
-        "--num-questions",
-        "-n",
-        type=int,
-        default=1,
-        help="Number of questions to generate",
+    # Generate quiz
+    quiz = await generate_quiz(
+        topic=topic,
+        num_questions=num_questions,
+        context_text=context,
+        # use_current_info=use_current,
     )
-    parser.add_argument(
-        "--difficulty",
-        "-d",
-        default="medium",
-        choices=["easy", "medium", "hard"],
-        help="Difficulty level",
-    )
-    parser.add_argument("--context", "-c", help="Additional context text")
-    parser.add_argument(
-        "--include-current", action="store_true", help="Include current information"
-    )
-    parser.add_argument(
-        "--simple", action="store_true", help="Use simple generation method"
-    )
-    parser.add_argument("--log-level", default="INFO", help="Logging level")
 
-    args = parser.parse_args()
-
-    # Setup logging
-    global logger
-    logger = setup_logging(args.log_level)
-
-    # Create config
-    config = Config(log_level=args.log_level)
-
-    async def run():
-        try:
-            if args.simple:
-                result = await generate_quiz_simple(
-                    args.topic, args.num_questions, args.context, config
-                )
-            else:
-                result = await generate_quiz(
-                    args.topic,
-                    args.num_questions,
-                    args.difficulty,
-                    args.context,
-                    args.include_current,
-                    config,
-                )
-
-            print("\n" + "=" * 50)
-            print("QUIZ GENERATED:")
-            print("=" * 50)
-            print(result)
-
-        except KeyboardInterrupt:
-            print("\nOperation cancelled by user")
-        except Exception as e:
-            logger.error(f"Failed to generate quiz: {e}")
-            sys.exit(1)
-
-    asyncio.run(run())
+    print(quiz)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

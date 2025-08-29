@@ -19,7 +19,7 @@ class QuizConfig:
 
     google_api_key: str
     serper_api_key: Optional[str] = None
-    model: str = "gemini-2.0-flash"
+    model: str = "gemini-2.5-flash-lite"
     temperature: float = 0.75
     timeout: float = 30.0
 
@@ -36,16 +36,32 @@ class QuizConfig:
         return cls(google_api_key=google_key, serper_api_key=serper_key)
 
 
-async def search_project_info(project_name: str, config: QuizConfig) -> str:
+async def search_project_info(
+    project_name: str, config: QuizConfig, include_current: bool = False
+) -> str:
     """Get current information about a specific project"""
     if not config.serper_api_key:
         return f"No web search available for {project_name}. Using general knowledge."
 
     queries = [
+        f"{project_name} definition explanation",
+        f"{project_name} examples applications",
+        f"{project_name} key concepts",
+        f"{project_name} current news",
         f"{project_name} latest version features 2025",
-        f"{project_name} recent updates changes",
-        f"{project_name} current status documentation",
+        f"{project_name} latest news updates",
+        f"{project_name} recent events",
+        f"{project_name} recent research",
     ]
+    # Add current info queries only if requested
+    if include_current:
+        current_year = datetime.now().year
+        queries.extend(
+            [
+                f"{project_name} latest developments {current_year}",
+                f"{project_name} recent news {current_year}",
+            ]
+        )
 
     all_info = []
 
@@ -119,7 +135,6 @@ async def generate_quiz_questions(
 
     # Import here to avoid startup issues
     try:
-        from langchain_openai import ChatOpenAI
         from langchain_google_genai import ChatGoogleGenerativeAI
         from langchain_core.prompts import ChatPromptTemplate
     except ImportError as e:
@@ -127,68 +142,44 @@ async def generate_quiz_questions(
             f"LangChain required: pip install langchain-google-genai langchain-core"
         ) from e
 
-    # llm = ChatGoogleGenerativeAI(
-    #     model=config.model,
-    #     api_key=config.google_api_key,
-    #     temperature=config.temperature,
-    # )
-
-    llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        api_key=os.getenv("OPENAI_API_KEY"),
+    llm = ChatGoogleGenerativeAI(
+        model=config.model,
+        api_key=config.google_api_key,
         temperature=config.temperature,
     )
 
-    # Advanced prompt for challenging quiz generation
-    system_prompt = """You are a Community Quiz Creator, an expert at creating fun, engaging, and accessible quiz questions for a general audience. Your goal is to spark interest and test foundational knowledge in a friendly way.
+    # Focused prompt for quiz generation
+    system_prompt = """You are an expert quiz generator. Create high-quality, factual multiple-choice questions.
 
-KEY PRINCIPLES:
-- Accessible & Fun: Questions should be understandable to newcomers. Avoid overly technical jargon.
-- Foundational Knowledge: Test core concepts and key facts.
-- Clear & Concise: Keep questions and options simple and to the point.
-- Positive & Encouraging Tone: The quiz should feel like a fun community activity.
+Example format:
+Question: What is the primary purpose of Docker containers?
+A) To replace virtual machines entirely
+B) To package applications with their dependencies
+C) To manage databases exclusively
+D) To create web servers
+Correct Answer: B
 
-GROUNDING:
-- You MUST exclusively use the information from the "Context" section below.
-- Do NOT use any external knowledge or information from web searches if context is provided.
-- If the context is insufficient to create a question, state that as the answer.
 
-QUESTION CATEGORIES TO EMPLOY:
+QUALITY STANDARDS:
+- Question should be clear and unambiguous
+- Distractors should be plausible but clearly wrong
+- Test genuine understanding, not obscure trivia
+- Avoid questions that could have multiple correct answers
 
-1.  Key Concepts:
-    *   Ask about the definition or purpose of a core idea.
-    *   Example: "What is the main purpose of a blockchain?"
-
-2.  General Knowledge:
-    *   Ask about well-known facts or events related to the topic.
-    *   Example: "Which cryptocurrency is the oldest?"
-
-3.  Basic Comparison:
-    *   Ask for a simple distinction between two things.
-    *   Example: "What is one key difference between a wallet and an exchange?"
-
-STRICT OUTPUT REQUIREMENTS:
-- Generate exactly {num_questions} engaging question(s) about {topic}.
-- Provide exactly 4 options (A-D).
-- Number questions sequentially (1., 2., etc.).
-- End each question with "Correct Answer: [letter]".
-
-OUTPUT FORMAT (JSON only):
-{{
-    "question": "Clear, specific question about {topic}",
-    "options": [
-        "Option A (correct answer)",
-        "Option B (plausible distractor)",
-        "Option C (plausible distractor)",
-        "Option D (plausible distractor)"
-    ],
-    "correct_answer": "A, B, C, or D",
-}}
+Requirements:
+- Generate exactly {num_questions} question(s) about {topic}
+- Each question must be unique and cover different aspects
+- Provide exactly 4 options (A-D) per question
+- Only one correct answer per question
+- Use factual, verifiable information
+- Vary question types: definitions, applications, comparisons, features
+- Number questions sequentially (1., 2., etc.)
+- End each question with "Correct Answer: [letter]"
 
 {context_instruction}"""
 
     context_instruction = (
-        "**Crucially, you MUST base your questions on the provided context below. The context is the source of truth.**"
+        "Use the provided context information when relevant:"
         if context.strip()
         else "Use your general knowledge about the topic."
     )
@@ -266,7 +257,7 @@ async def generate_quiz(
     topic: str,
     num_questions: int = 3,
     context_text: str = None,
-    use_current_info: bool = True,
+    use_current_info: bool = False,
 ) -> str:
     """
     Main function to generate a quiz.
@@ -287,11 +278,11 @@ async def generate_quiz(
     if context_text:
         context_parts.append(f"User Context:\n{preprocess_text(context_text)}")
 
-    # Add current info if requested, available, and no specific context is given
+    # Add current info if requested and available
     search_used = False
-    if use_current_info and not context_text and config.serper_api_key:
+    if config.serper_api_key:
         print("🔍 Searching for current project information...")
-        current_info = await search_project_info(topic, config)
+        current_info = await search_project_info(topic, config, use_current_info)
         if "No current information found" not in current_info:
             context_parts.append(f"Current Information:\n{current_info}")
             search_used = True
@@ -314,3 +305,59 @@ async def generate_quiz(
     except Exception as e:
         print(f"❌ Quiz generation failed: {e}")
         return generate_simple_fallback(topic, num_questions)
+
+
+# Simple CLI interface
+async def main():
+    """Interactive CLI for quiz generation"""
+    print("=== Quiz Generator ===\n")
+
+    topic = input("Enter topic/project name: ").strip()
+    if not topic:
+        print("Topic is required!")
+        return
+
+    try:
+        num_q = input("Number of questions (default 3): ").strip()
+        num_questions = int(num_q) if num_q.isdigit() and int(num_q) > 0 else 3
+    except:
+        num_questions = 3
+
+    # Ask about current info
+    current_info = input(
+        "Include current/recent information? (y/n, default n): "
+    ).lower()
+    use_current = current_info == "y"
+
+    # Optional context
+    context = input("Any additional context? (press enter to skip): ").strip()
+    context = context if context else None
+
+    print(f"\n🚀 Starting generation...")
+
+    # Generate quiz
+    quiz = await generate_quiz(
+        topic=topic,
+        num_questions=num_questions,
+        context_text=context,
+        use_current_info=use_current,
+    )
+
+    print("\n" + "=" * 60)
+    print(quiz)
+    print("=" * 60)
+
+    # Optional save
+    save = input("\nSave to file? (y/n): ").lower()
+    if save == "y":
+        filename = f"quiz_{topic.replace(' ', '_').lower()}_{datetime.now().strftime('%Y%m%d')}.md"
+        try:
+            with open(filename, "w", encoding="utf-8") as f:
+                f.write(quiz)
+            print(f"📁 Saved to: {filename}")
+        except Exception as e:
+            print(f"Save failed: {e}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

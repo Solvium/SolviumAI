@@ -33,7 +33,7 @@ from services.user_service import (
     handle_wallet_address as service_handle_wallet_address,  # Renamed import
     check_wallet_linked,  # Add this import
 )
-from enhanced_agent import AdvancedQuizGenerator
+from enhanced_agent import generate_quiz
 import logging
 import re  # Import re for duration_input and potentially wallet validation
 import asyncio  # Add asyncio import
@@ -55,29 +55,62 @@ from datetime import datetime, timezone, timedelta  # Add this import
 # Configure logger
 logger = logging.getLogger(__name__)
 
-# Initialize the quiz generator
-quiz_generator = AdvancedQuizGenerator()
-
 
 async def generate_quiz_questions(
     topic: str, num_questions: int, context_text: str = ""
 ) -> str:
     """Wrapper function for backward compatibility with the quiz service"""
-    questions = await quiz_generator.generate_quiz(
-        topic, num_questions, context_text=context_text
-    )
-
-    # Format as string for backward compatibility
-    formatted_questions = []
-    for i, q in enumerate(questions, 1):
-        options_text = "\n".join(
-            [f"{key}) {value}" for key, value in q.options.items()]
-        )
-        formatted_questions.append(
-            f"Question {i}: {q.question}\n{options_text}\nCorrect Answer: {q.correct_answer}"
+    try:
+        # Use the new function-based approach
+        result = await generate_quiz(
+            topic=topic,
+            num_questions=num_questions,
+            context_text=context_text,
+            use_current_info=True,
         )
 
-    return "\n".join(formatted_questions)
+        # Parse the JSON format and convert to the expected format
+        import json
+        import re
+
+        # Extract JSON from the result (it might be wrapped in markdown or other text)
+        json_match = re.search(r"\[.*\]", result, re.DOTALL)
+        if json_match:
+            try:
+                questions_data = json.loads(json_match.group())
+                formatted_questions = []
+
+                for i, q in enumerate(questions_data, 1):
+                    # Convert the new format to the expected format
+                    options_text = "\n".join(
+                        [
+                            f"{chr(65 + j)}) {option}"
+                            for j, option in enumerate(q["options"])
+                        ]
+                    )
+                    formatted_question = f"""Question {i}: {q['question']}
+{options_text}
+Correct Answer: {q['correct_answer']}"""
+                    formatted_questions.append(formatted_question)
+
+                return "\n\n".join(formatted_questions)
+            except json.JSONDecodeError:
+                logger.warning(
+                    "Failed to parse JSON from quiz result, using raw result"
+                )
+                return result
+        else:
+            # If no JSON found, return the raw result
+            return result
+    except Exception as e:
+        logger.error(f"Error generating quiz questions: {e}")
+        # Fallback to simple format
+        return f"""Question 1: What is the main topic of {topic}?
+A) {topic} related concept
+B) Unrelated concept
+C) Another unrelated concept
+D) Yet another unrelated concept
+Correct Answer: A"""
 
 
 async def start_handler(update, context):
