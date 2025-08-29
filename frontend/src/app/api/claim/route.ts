@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   try {
     const { username, type, data, userMultipler, solWallet } = await req.json();
 
-    let user;
+    let user: any = null;
     try {
       user = await prisma.user.findUnique({
         where: {
@@ -31,7 +31,6 @@ export async function POST(req: NextRequest) {
           where: {
             username,
           },
-
           data: {
             isOfficial: true,
           },
@@ -43,7 +42,6 @@ export async function POST(req: NextRequest) {
               username: user.referredBy,
             },
           });
-
           if (invitor) {
             await prisma.user.update({
               where: {
@@ -83,7 +81,6 @@ export async function POST(req: NextRequest) {
           where: {
             username,
           },
-
           data: {
             lastClaim: nextClaim,
             claimCount: {
@@ -103,7 +100,6 @@ export async function POST(req: NextRequest) {
         where: {
           username,
         },
-
         data: {
           lastClaim: nextClaim,
           isMining: true,
@@ -113,119 +109,54 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(res);
     }
 
-    // if (type.includes("spin claim") && user) {
-    //   console.log(user);
-    //   const newDay =
-    //     new Date(Number(user?.lastSpinClaim) + 24 * 60 * 60 * 1000) <
-    //     new Date(Date.now());
-
-    //   console.log(
-    //     new Date(Number(user?.lastSpinClaim) + 24 * 60 * 60 * 1000),
-    //     new Date(Date.now())
-    //   );
-
-    //   if (user?.dailySpinCount <= 0 && !newDay)
-    //     return NextResponse.json("No Free spins available");
-    //   const res = await prisma.user.update({
-    //     where: {
-    //       username,
-    //     },
-
-    //     data: {
-    //       lastSpinClaim: new Date(Date.now()),
-    //       spinCount: {
-    //         increment: 1,
-    //       },
-    //       dailySpinCount: newDay ? 1 : user?.dailySpinCount - 1,
-    //     },
-    //   });
-
-    //   return NextResponse.json(res);
-    // }
-
-    if (type.includes("spin claim") && user) {
-      try {
-        const [_, point, wallet] = type.split("--");
-
-        const newDay =
-          new Date(Number(user?.lastSpinClaim) + 24 * 60 * 60 * 1000) <
-          new Date(Date.now());
-
-        if (user?.dailySpinCount <= 0 && !newDay)
-          throw new Error("No Free spins available");
-
-        const res = await prisma.user.update({
-          where: {
-            username,
-          },
-          data: {
-            lastSpinClaim: new Date(Date.now()),
-            spinCount: {
-              increment: 1,
-            },
-            dailySpinCount: newDay ? 1 : user?.dailySpinCount - 1,
-          },
-        });
-
-        await sendTokensToUser(
-          wallet,
-          point,
-          "7aow41W5XU4KJ7oFgRqWDbAUAf1fsTeKrRtJhvdaAE67"
-        );
-
-        return NextResponse.json(res);
-      } catch (error) {
-        console.log(error);
-        return NextResponse.json({ error });
-      }
-    }
-
-    if (type.includes("buy spins")) {
-      const np = JSON.parse(type.split("--")[1]);
-
-      const res = await prisma.user.update({
-        where: {
-          username,
-        },
-
-        data: {
-          totalPoints: {
-            decrement: np.solvPrice,
-          },
-          dailySpinCount: {
-            increment: np.spinCount,
-          },
-        },
-      });
-
-      return NextResponse.json(res);
-    }
-
     if (type.includes("farm claim")) {
-      const lastClaim = new Date(user?.lastClaim ?? Date.now());
-      const nextClaim = new Date(new Date().getTime() + 1000 * 60 * 60 * 5);
+      // Check if user is mining and if 5 hours have passed
+      if (!user?.isMining) {
+        return NextResponse.json(
+          { error: "Not currently mining" },
+          { status: 400 }
+        );
+      }
 
-      if (new Date(Date.now()) > lastClaim) {
-        const np = type.split("--")[1];
-        await addLeaderboard(user, np, null);
+      const miningStartTime = new Date(user?.lastClaim ?? Date.now());
+      const currentTime = new Date();
+      const fiveHoursInMs = 5 * 60 * 60 * 1000; // 5 hours in milliseconds
+      const timeElapsed = currentTime.getTime() - miningStartTime.getTime();
+
+      if (timeElapsed >= fiveHoursInMs) {
+        // Extract points from the type string (e.g., "farm claim--63")
+        const pointsMatch = type.match(/farm claim--(\d+(?:\.\d+)?)/);
+        const pointsToAward = pointsMatch ? parseFloat(pointsMatch[1]) : 63;
+
+        await addLeaderboard(user, pointsToAward, null);
 
         const res = await prisma.user.update({
           where: {
             username,
           },
           data: {
-            lastClaim: nextClaim,
+            lastClaim: currentTime,
             isMining: false,
           },
         });
 
-        return NextResponse.json(res);
+        return NextResponse.json({
+          success: true,
+          pointsAwarded: pointsToAward,
+        });
       } else {
-        try {
-          throw new Error("Still Farming");
-        } catch (error) {
-          return NextResponse.json({ error });
-        }
+        const remainingTime = fiveHoursInMs - timeElapsed;
+        const remainingHours = Math.floor(remainingTime / (60 * 60 * 1000));
+        const remainingMinutes = Math.floor(
+          (remainingTime % (60 * 60 * 1000)) / (60 * 1000)
+        );
+
+        return NextResponse.json(
+          {
+            error: `Still mining. Time remaining: ${remainingHours}h ${remainingMinutes}m`,
+          },
+          { status: 400 }
+        );
       }
     }
 
@@ -257,7 +188,7 @@ export async function GET(req: any) {
 }
 
 const addLeaderboard = async (user: any, np: number, type: any) => {
-  const userId = user.id;
+  const userId = user?.id;
   const points = np;
 
   console.log(np);
@@ -334,9 +265,9 @@ const addLeaderboard = async (user: any, np: number, type: any) => {
 
     return updatedScore;
   } catch (error) {
-    console.error("Error adding weekly points:", error);
-    NextResponse.json(
-      { error: "Failed to add weekly points kk" },
+    console.error("Error in addLeaderboard:", error);
+    return NextResponse.json(
+      { error: "Failed to update leaderboard" },
       { status: 500 }
     );
   }

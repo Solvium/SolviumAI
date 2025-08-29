@@ -1,11 +1,9 @@
 // pages/api/auth/login.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { sign, verify } from "jsonwebtoken";
 import * as cookie from "cookie";
 import { NextRequest, NextResponse } from "next/server";
-
-const prisma = new PrismaClient();
 
 export async function POST(req: NextRequest) {
   const {
@@ -25,21 +23,31 @@ export async function POST(req: NextRequest) {
     try {
       if (!username) {
         return NextResponse.json(
-          { message: "Username and password are required" },
+          { message: "Username is required" },
           { status: 400 }
         );
       }
 
-      // Find user
-      const user = await prisma.user.findUnique({
+      // Find or create user
+      let user = await prisma.user.findUnique({
         where: { username },
       });
 
       if (!user) {
-        return NextResponse.json(
-          { message: "Invalid credentials" },
-          { status: 401 }
-        );
+        // Create new user if doesn't exist
+        user = await prisma.user.create({
+          data: {
+            username,
+            referredBy: "",
+            chatId: "",
+            totalPoints: 0,
+            referralCount: 0,
+            isMining: false,
+            isPremium: false,
+            lastClaim: new Date(),
+            lastSpinClaim: new Date(),
+          },
+        });
       }
 
       // Create JWT token
@@ -57,7 +65,18 @@ export async function POST(req: NextRequest) {
       const response = NextResponse.json(
         {
           message: "Login successful",
-          user,
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            name: user.name,
+            totalPoints: user.totalPoints,
+            referralCount: user.referralCount,
+            chatId: user.chatId,
+            isMining: user.isMining,
+            lastClaim: user.lastClaim,
+            wallet: user.wallet,
+          },
         },
         { status: 200 }
       );
@@ -85,14 +104,14 @@ export async function POST(req: NextRequest) {
   if (type == "loginWithGoogle") {
     try {
       if (!email) {
-        NextResponse.json(
-          { message: "email and password are required" },
+        return NextResponse.json(
+          { message: "Email is required" },
           { status: 400 }
         );
       }
 
       console.log(email);
-      // Find user
+      // Find or create user
       let user = await prisma.user.findUnique({
         where: { email },
       });
@@ -104,21 +123,15 @@ export async function POST(req: NextRequest) {
             email,
             isPremium: false,
             name: name,
-            referredBy: ref,
+            referredBy: ref || "",
             chatId: "",
             username,
             totalPoints: 0,
+            lastClaim: new Date(),
+            lastSpinClaim: new Date(),
           },
         });
       }
-
-      // Assuming you have a password field in your schema (add it if missing)
-      // Compare password (this example assumes you're storing hashed passwords)
-      // const isValid = await compare(password, user.password);
-
-      // if (!isValid) {
-      //   return res.status(401).json({ message: 'Invalid credentials' });
-      // }
 
       // Create JWT token
       const token = sign(
@@ -134,7 +147,18 @@ export async function POST(req: NextRequest) {
       const response = NextResponse.json(
         {
           message: "Login successful",
-          user,
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            name: user.name,
+            totalPoints: user.totalPoints,
+            referralCount: user.referralCount,
+            chatId: user.chatId,
+            isMining: user.isMining,
+            lastClaim: user.lastClaim,
+            wallet: user.wallet,
+          },
         },
         { status: 200 }
       );
@@ -247,7 +271,7 @@ export async function POST(req: NextRequest) {
     const res = NextResponse.json({ message: "Logged out successfully" });
     res.headers.set(
       "Set-Cookie",
-      cookie.serialize("auth_token", "", {
+      cookie.serialize("access_token", "", {
         httpOnly: true,
         secure: process.env.NODE_ENV !== "development",
         sameSite: "strict",
@@ -265,7 +289,7 @@ export async function GET(req: NextRequest) {
   const type = searchParams.get("type");
 
   // Get token from cookies
-  const auth_token = req.cookies.get("auth_token");
+  const auth_token = req.cookies.get("access_token");
 
   if (!auth_token) {
     return NextResponse.json({ authenticated: false }, { status: 401 });
@@ -290,7 +314,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         {
           authenticated: true,
-          user,
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            name: user.name,
+            totalPoints: user.totalPoints,
+            referralCount: user.referralCount,
+            chatId: user.chatId,
+            isMining: user.isMining,
+            lastClaim: user.lastClaim,
+            wallet: user.wallet,
+          },
         },
         { status: 200 }
       );

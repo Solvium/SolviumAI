@@ -9,6 +9,8 @@ import React, {
 import axios from "axios";
 import WebApp from "@twa-dev/sdk";
 import { jwtDecode } from "jwt-decode";
+import { useSimpleWallet } from "@/app/contexts/SimpleWalletContext";
+import { WalletCheckResponse } from "@/lib/crypto";
 
 // Types
 export type AuthProvider = "telegram" | "google" | "email" | "wallet";
@@ -26,10 +28,22 @@ export interface User {
   multiplier: number;
   level: number;
   difficulty: number;
+  puzzleCount: number;
+  referralCount: number;
+  spinCount: number;
+  dailySpinCount: number;
+  claimCount: number;
+  isOfficial: boolean;
+  isMining: boolean;
+  isPremium: boolean;
+  weeklyPoints: number;
   createdAt: Date;
   lastLoginAt: Date;
   lastSpinClaim?: Date;
-  dailySpinCount?: number;
+  lastClaim?: Date;
+  chatId?: string;
+  wallet?: any; // Changed from string to any to handle parsed wallet data
+  solviumWallet?: WalletCheckResponse; // New field for SolviumAI wallet data
 }
 
 export interface AuthState {
@@ -56,6 +70,12 @@ export interface AuthContextType extends AuthState {
   refreshUser: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   refreshToken: () => Promise<void>;
+
+  // Wallet methods
+  getWalletData: (
+    telegramUserId: number
+  ) => Promise<WalletCheckResponse | null>;
+  refreshWalletData: () => Promise<void>;
 }
 
 export interface AuthProviderConfig {
@@ -143,13 +163,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [state.isAuthenticated]);
 
+  const getWalletData = useCallback(
+    async (
+      telegramUserId: number,
+      forceRefresh: boolean = false
+    ): Promise<WalletCheckResponse | null> => {
+      try {
+        const response = await axios.post("/api/wallet/check", {
+          telegram_user_id: telegramUserId,
+          force_refresh: forceRefresh,
+        });
+
+        if (response.data.has_wallet || response.data.message) {
+          return response.data;
+        } else {
+          console.warn("Wallet check failed:", response.data.error);
+          return null;
+        }
+      } catch (error) {
+        console.error("Failed to get wallet data:", error);
+        return null;
+      }
+    },
+    []
+  );
+
   const checkAuthStatus = async () => {
+    const tgUserId = "724141849"; //WebApp?.initDataUnsafe?.user?.id?.toString();
+
     try {
       const response = await axios.get("/api/auth/me");
+      console.log("response", response);
       if (response.data.authenticated) {
+        const user = response.data.user;
+
+        // Try to fetch wallet data if we have a Telegram ID
+        let solviumWallet = null;
+        if (tgUserId) {
+          try {
+            const telegramUserId = parseInt(tgUserId);
+            if (!isNaN(telegramUserId)) {
+              solviumWallet = await getWalletData(telegramUserId);
+              console.log(
+                "[Auth] Fetched SolviumAI wallet data:",
+                solviumWallet
+              );
+            }
+          } catch (error) {
+            console.warn("[Auth] Failed to fetch wallet data:", error);
+          }
+        }
+
         setState((prev) => ({
           ...prev,
-          user: response.data.user,
+          user: {
+            ...user,
+            solviumWallet,
+          },
           isAuthenticated: true,
           isLoading: false,
         }));
@@ -218,6 +288,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     async (credential: string): Promise<User> => {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
+      console.log("credential", credential);
       try {
         const response = await axios.post("/api/auth/google", { credential });
 
@@ -291,15 +362,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const response = await axios.get("/api/auth/me");
       if (response.data.authenticated) {
+        const user = response.data.user;
+
+        // Try to fetch wallet data if we have a Telegram ID
+        let solviumWallet = null;
+        if (user.telegramId) {
+          try {
+            const telegramUserId = parseInt(user.telegramId);
+            if (!isNaN(telegramUserId)) {
+              solviumWallet = await getWalletData(telegramUserId);
+              console.log(
+                "[Auth] Refreshed SolviumAI wallet data:",
+                solviumWallet
+              );
+            }
+          } catch (error) {
+            console.warn("[Auth] Failed to refresh wallet data:", error);
+          }
+        }
+
         setState((prev) => ({
           ...prev,
-          user: response.data.user,
+          user: {
+            ...user,
+            solviumWallet,
+          },
         }));
       }
     } catch (error) {
       console.error("Failed to refresh user:", error);
     }
-  }, []);
+  }, [getWalletData]);
 
   const updateUser = useCallback(async (updates: Partial<User>) => {
     try {
@@ -313,6 +406,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  const refreshWalletData = useCallback(async () => {
+    if (!state.user?.telegramId) {
+      console.warn("No Telegram ID available for wallet refresh");
+      return;
+    }
+
+    try {
+      const telegramUserId = parseInt(state.user.telegramId);
+      if (isNaN(telegramUserId)) {
+        console.warn("Invalid Telegram ID for wallet refresh");
+        return;
+      }
+
+      const walletData = await getWalletData(telegramUserId);
+      if (walletData) {
+        setState((prev) => ({
+          ...prev,
+          user: prev.user
+            ? {
+                ...prev.user,
+                solviumWallet: walletData,
+              }
+            : null,
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to refresh wallet data:", error);
+    }
+  }, [state.user?.telegramId, getWalletData]);
+
   const value: AuthContextType = {
     ...state,
     loginWithTelegram,
@@ -323,6 +446,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     refreshUser,
     updateUser,
     refreshToken,
+    getWalletData,
+    refreshWalletData,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

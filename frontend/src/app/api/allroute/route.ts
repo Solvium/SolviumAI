@@ -2,16 +2,16 @@ import { getCurrentYear, getISOWeekNumber } from "@/app/utils/utils";
 import { telegramClient } from "../../clients/TelegramApiClient";
 import { InlineKeyboardMarkup } from "@grammyjs/types";
 import { PrismaClient } from "@prisma/client";
+import axios from "axios";
 import { NextRequest, NextResponse } from "next/server";
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-// export const prisma =
-//   globalForPrisma.prisma ||
-//   new PrismaClient({
-//     log: ["query"],
-//   });
-const prisma = globalForPrisma.prisma || new PrismaClient();
+const prisma =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    log: ["query"],
+  });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
@@ -36,6 +36,8 @@ export async function POST(req: NextRequest) {
       replyNoUsername(message, null);
       return NextResponse.json("error", { status: 404 });
     }
+
+    console.log("username", username);
 
     const user = await prisma.user.findUnique({
       where: {
@@ -97,87 +99,191 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(user);
     }
 
-    if (type == "reg4tasks") {
-      console.log("reg4task");
-      let isCreated;
-      isCreated = await getUserTasks(data);
-      console.log(isCreated);
-
-      if (!isCreated) isCreated = await registerForTasks(data);
-      return NextResponse.json(isCreated);
-    }
-
-    if (type == "createAccount") {
-      if (user) {
-        return NextResponse.json(user);
-      }
-
-      const newUser = await prisma.user.create({
-        data: {
-          referralCount: 0,
-          referredBy: ref,
-          name,
-          chatId: "null",
-          email,
-          username: username,
-          totalPoints: 0,
-        },
-      });
-
-      return NextResponse.json(newUser);
-    }
-
     if (type == "updateWallet") {
-      await prisma.user.update({
+      const updatedUser = await prisma.user.update({
         where: { username },
         data: {
           wallet,
         },
       });
+
+      return NextResponse.json({
+        success: true,
+        user: updatedUser,
+      });
     }
 
     if (type == "completetasks") {
-      if (!user?.isOfficial) {
-        const res = await prisma.user.update({
-          where: {
-            username,
-          },
+      // Handle both data.task.id (nested structure) and data.id (direct task ID)
+      const taskId = data?.task?.id || data?.id;
+      const userId = data?.userId || data?.task?.userId;
 
-          data: {
-            isOfficial: true,
+      if (!taskId || !userId) {
+        return NextResponse.json(
+          { error: "Task ID and User ID are required" },
+          { status: 400 }
+        );
+      }
+
+      // Convert userId to number for Prisma
+      const userIdNumber = parseInt(userId.toString());
+
+      // Get the task to know how many points to award
+      const task = await prisma.task.findUnique({
+        where: { id: taskId },
+      });
+
+      if (!task) {
+        return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      }
+
+      // Check if user has already completed this task
+      const existingUserTask = await prisma.userTask.findUnique({
+        where: {
+          userId_taskId: {
+            userId: userIdNumber,
+            taskId: taskId,
+          },
+        },
+      });
+
+      if (existingUserTask?.isCompleted) {
+        return NextResponse.json(
+          { error: "Task already completed" },
+          { status: 400 }
+        );
+      }
+
+      // Calculate points with multiplier
+      const pointsToAward =
+        task.points * (userMultipler > 0 ? userMultipler : 1);
+
+      // Update user task completion and user points in a transaction
+      const result = await prisma.$transaction(async (tx) => {
+        // Mark task as completed
+        const userTask = await tx.userTask.upsert({
+          where: {
+            userId_taskId: {
+              userId: userIdNumber,
+              taskId: taskId,
+            },
+          },
+          update: {
+            isCompleted: true,
+          },
+          create: {
+            userId: userIdNumber,
+            taskId: taskId,
+            isCompleted: true,
           },
         });
 
-        if (user?.referredBy) {
-          const invitor = await prisma.user.findUnique({
-            where: {
-              username: user.referredBy,
+        // Update user's total points
+        const updatedUser = await tx.user.update({
+          where: { id: userIdNumber },
+          data: {
+            totalPoints: {
+              increment: pointsToAward,
             },
-          });
+          },
+        });
 
-          if (invitor) {
-            await prisma.user.update({
-              where: {
-                username: invitor.username,
-              },
-              data: {
-                referralCount: invitor.referralCount + 1,
-                totalPoints: {
-                  increment: 100,
-                },
-              },
-            });
-          }
-        }
-        return NextResponse.json(res);
+        // Add to weekly score
+        const currentWeek = getISOWeekNumber(new Date());
+        const currentYear = getCurrentYear();
+
+        const weeklyScore = await tx.weeklyScore.upsert({
+          where: {
+            userId_weekNumber_year: {
+              userId: userIdNumber,
+              weekNumber: currentWeek,
+              year: currentYear,
+            },
+          },
+          update: {
+            points: {
+              increment: pointsToAward,
+            },
+          },
+          create: {
+            userId: userIdNumber,
+            weekNumber: currentWeek,
+            year: currentYear,
+            points: pointsToAward,
+          },
+        });
+
+        return { userTask, updatedUser, weeklyScore };
+      });
+
+      return NextResponse.json({
+        success: true,
+        pointsAwarded: pointsToAward,
+        user: result.updatedUser,
+      });
+    }
+
+    if (type == "reg4tasks") {
+      // Handle both data.id (direct task ID) and data.task.id (nested structure)
+      const taskId = data?.id || data?.task?.id;
+
+      if (!taskId || !username) {
+        return NextResponse.json(
+          { error: "Task ID and username are required" },
+          { status: 400 }
+        );
       }
 
-      await completeTasks(data);
+      // Get user by username
+      const user = await prisma.user.findUnique({
+        where: { username },
+      });
 
-      const np = data.task.points * (userMultipler > 0 ? userMultipler : 1);
+      if (!user) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
 
-      const res = await addLeaderboard(user, np);
-      return res;
+      // Get the task
+      const task = await prisma.task.findUnique({
+        where: { id: taskId },
+      });
+
+      if (!task) {
+        return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      }
+
+      // Check if user has already registered for this task
+      const existingUserTask = await prisma.userTask.findUnique({
+        where: {
+          userId_taskId: {
+            userId: user.id, // user.id is already a number
+            taskId: taskId,
+          },
+        },
+      });
+
+      if (existingUserTask) {
+        return NextResponse.json({
+          success: true,
+          message: "Already registered for this task",
+          userTask: existingUserTask,
+        });
+      }
+
+      // Register user for the task
+      const userTask = await prisma.userTask.create({
+        data: {
+          userId: user.id, // user.id is already a number
+          taskId: taskId,
+          isCompleted: false,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: "Successfully registered for task",
+        userTask: userTask,
+      });
     }
 
     return NextResponse.json("user");
@@ -222,8 +328,13 @@ export async function GET(req: any) {
         );
       }
 
-      const user = await prisma.user.findUnique({
-        where: { wallet },
+      const user = await prisma.user.findFirst({
+        where: {
+          wallet: {
+            path: ["$"],
+            equals: wallet,
+          },
+        },
       });
 
       if (!user) {
@@ -237,7 +348,6 @@ export async function GET(req: any) {
       const users = await prisma.user.findMany({
         orderBy: { totalPoints: "desc" },
       });
-
       return NextResponse.json(users || []);
     }
 
@@ -279,16 +389,6 @@ export async function GET(req: any) {
   }
 }
 
-const replyNoUsername = async (message: any, user: any) => {
-  await telegramClient.sendMessage(
-    message.chat.id,
-    `*Welcome to Solvium Task/Game Bot\\!*
-Start earning Solvium Points Now🚀 while enjoying our game
-
-Kindly add a Username to your telegram account and try again\\!`
-  );
-};
-
 const replyStart = async (message: any, user: any) => {
   const reply_markup: InlineKeyboardMarkup = {
     inline_keyboard: [
@@ -311,6 +411,16 @@ const replyStart = async (message: any, user: any) => {
     `*Welcome to Solvium Task/Game Bot\\!*
 Start earning Solvium Points Now🚀 while enjoying our game`,
     reply_markup
+  );
+};
+
+const replyNoUsername = async (message: any, user: any) => {
+  await telegramClient.sendMessage(
+    message.chat.id,
+    `*Welcome to Solvium Task/Game Bot\\!*
+Start earning Solvium Points Now🚀 while enjoying our game
+
+Kindly add a Username to your telegram account and try again\\!`
   );
 };
 
@@ -387,7 +497,7 @@ const getAllUserTasks = async (userId: string) => {
 };
 
 const addLeaderboard = async (user: any, np: number) => {
-  const userId = user.id;
+  const userId = user?.id;
   const points = np;
   try {
     if (!userId || points === undefined) {
@@ -442,9 +552,9 @@ const addLeaderboard = async (user: any, np: number) => {
 
     return NextResponse.json(updatedScore, { status: 200 });
   } catch (error) {
-    console.error("Error adding weekly points:", error);
+    console.error("Error in addLeaderboard:", error);
     return NextResponse.json(
-      { error: "Failed to add weekly points kk" },
+      { error: "Failed to update leaderboard" },
       { status: 500 }
     );
   }

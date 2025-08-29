@@ -1,9 +1,9 @@
+"use client";
 // src/context/MultiLoginContext.tsx
 import { createContext, useContext, useEffect, useState } from "react";
 import { useMultiLogin } from "../hooks/useMultiLogin";
 import axios from "axios";
 import WebApp from "@twa-dev/sdk";
-import { useSolviumMultiplier } from "../hooks/useSolMultiplier";
 
 const MultiLoginContext = createContext<
   | (ReturnType<typeof useMultiLogin> & {
@@ -37,8 +37,6 @@ export const MultiLoginProvider = ({
 }) => {
   const multiLogin = useMultiLogin();
   const { userData: user, checkAuthStatus } = multiLogin;
-
-  const { userDeposits } = useSolviumMultiplier();
 
   // Added state for API calls
   const [leader, setLeader] = useState<any[]>([]);
@@ -163,15 +161,15 @@ export const MultiLoginProvider = ({
     initializeApp();
   }, [tg]);
 
-  useEffect(() => {
-    let total = 0;
-    if (userDeposits) {
-      for (let index = 0; index < userDeposits.deposits?.length; index++) {
-        total += Number(userDeposits.deposits[index].multiplier);
-      }
-    }
-    setMultiplier(total);
-  }, [userDeposits]);
+  // useEffect(() => {
+  //   let total = 0;
+  //   if (userDeposits) {
+  //     for (let index = 0; index < userDeposits.deposits?.length; index++) {
+  //       total += Number(userDeposits.deposits[index].multiplier);
+  //     }
+  //   }
+  //   setMultiplier(total);
+  // }, [userDeposits]);
 
   const engageTasks = async (
     type: string,

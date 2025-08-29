@@ -4,14 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 6001",
-    "build": "yarn configbot && prisma generate && next build",
     "start": "next start",
     "configbot": "node configure.mjs",
+    "build": "yarn configbot && prisma generate && next build",
     "lint": "next lint",
     "setup": "node setup-env.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.29",
@@ -24,6 +25,7 @@
     "@near-wallet-selector/my-near-wallet": "^8.9.15",
     "@noble/ed25519": "^2.2.3",
     "@orbs-network/ton-access": "^2.2.2",
+    "@prisma/client": "^6.13.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
     "@radix-ui/react-aspect-ratio": "^1.1.0",
@@ -125,7 +127,6 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
-    "@prisma/client": "^6.13.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-copy-to-clipboard": "^5.0.7",
@@ -133,7 +134,7 @@
     "eslint": "^8",
     "eslint-config-next": "14.2.12",
     "postcss": "^8",
-    "prisma": "^5.22.0",
+    "prisma": "^6.13.0",
     "typescript": "^5"
   }
 }

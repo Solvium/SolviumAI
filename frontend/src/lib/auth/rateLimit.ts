@@ -1,11 +1,13 @@
-import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextRequest } from "next/server";
 
 export interface RateLimitConfig {
   windowMs: number; // Time window in milliseconds
   maxRequests: number; // Maximum requests per window
   keyGenerator?: (req: NextRequest) => string; // Custom key generator
 }
+
+// In-memory store: request timestamps per key
+const requestStore: Map<string, number[]> = new Map();
 
 export class RateLimiter {
   private static readonly DEFAULT_CONFIG: RateLimitConfig = {
@@ -19,64 +21,34 @@ export class RateLimiter {
   ): Promise<{ allowed: boolean; remaining: number; resetTime: Date }> {
     const finalConfig = { ...this.DEFAULT_CONFIG, ...config };
     const key = this.generateKey(request, finalConfig);
-    const now = new Date();
-    const windowStart = new Date(now.getTime() - finalConfig.windowMs);
+    const now = Date.now();
+    const windowStart = now - finalConfig.windowMs;
 
-    try {
-      // Clean up old records
-      await prisma.rateLimit.deleteMany({
-        where: {
-          key,
-          createdAt: {
-            lt: windowStart,
-          },
-        },
-      });
+    // Read existing timestamps and prune old ones
+    const timestamps = requestStore.get(key) || [];
+    const recent = timestamps.filter((t) => t >= windowStart);
 
-      // Count recent requests
-      const requestCount = await prisma.rateLimit.count({
-        where: {
-          key,
-          createdAt: {
-            gte: windowStart,
-          },
-        },
-      });
+    const remaining = Math.max(0, finalConfig.maxRequests - recent.length);
+    const allowed = remaining > 0;
 
-      const remaining = Math.max(0, finalConfig.maxRequests - requestCount);
-      const allowed = remaining > 0;
-
-      if (allowed) {
-        // Record this request
-        await prisma.rateLimit.create({
-          data: {
-            key,
-            ipAddress: this.getClientIP(request),
-            userAgent: request.headers.get('user-agent') || 'unknown',
-            createdAt: now,
-          },
-        });
-      }
-
-      const resetTime = new Date(now.getTime() + finalConfig.windowMs);
-
-      return {
-        allowed,
-        remaining,
-        resetTime,
-      };
-    } catch (error) {
-      console.error('Rate limit check failed:', error);
-      // Fail open - allow request if rate limiting fails
-      return {
-        allowed: true,
-        remaining: 1,
-        resetTime: new Date(now.getTime() + finalConfig.windowMs),
-      };
+    if (allowed) {
+      recent.push(now);
+      requestStore.set(key, recent);
     }
+
+    // Compute resetTime as when the oldest recent request falls out of window
+    const oldest = recent[0];
+    const resetTime = oldest
+      ? new Date(oldest + finalConfig.windowMs)
+      : new Date(now + finalConfig.windowMs);
+
+    return { allowed, remaining, resetTime };
   }
 
-  private static generateKey(request: NextRequest, config: RateLimitConfig): string {
+  private static generateKey(
+    request: NextRequest,
+    config: RateLimitConfig
+  ): string {
     if (config.keyGenerator) {
       return config.keyGenerator(request);
     }
@@ -87,34 +59,23 @@ export class RateLimiter {
   }
 
   private static getClientIP(request: NextRequest): string {
-    // Check for forwarded headers first (for proxy setups)
-    const forwardedFor = request.headers.get('x-forwarded-for');
-    if (forwardedFor) {
-      return forwardedFor.split(',')[0].trim();
-    }
+    const forwardedFor = request.headers.get("x-forwarded-for");
+    if (forwardedFor) return forwardedFor.split(",")[0].trim();
 
-    const realIP = request.headers.get('x-real-ip');
-    if (realIP) {
-      return realIP;
-    }
+    const realIP = request.headers.get("x-real-ip");
+    if (realIP) return realIP;
 
     // Fallback to connection remote address
-    return request.ip || 'unknown';
+    const anyReq = request as unknown as { ip?: string };
+    return anyReq.ip || "unknown";
   }
 
   static async cleanup(): Promise<void> {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    
-    try {
-      await prisma.rateLimit.deleteMany({
-        where: {
-          createdAt: {
-            lt: oneHourAgo,
-          },
-        },
-      });
-    } catch (error) {
-      console.error('Rate limit cleanup failed:', error);
+    const now = Date.now();
+    for (const [key, timestamps] of requestStore.entries()) {
+      const pruned = timestamps.filter((t) => t > now - 60 * 60 * 1000);
+      if (pruned.length === 0) requestStore.delete(key);
+      else requestStore.set(key, pruned);
     }
   }
 }
@@ -137,4 +98,4 @@ export const RATE_LIMIT_CONFIGS = {
     windowMs: 60 * 1000, // 1 minute
     maxRequests: 100, // 100 API requests per minute
   },
-} as const; 
+} as const;

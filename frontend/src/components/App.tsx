@@ -1,25 +1,9 @@
 "use client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { TonConnectUIProvider } from "@tonconnect/ui-react";
 import Script from "next/script";
-import { useEffect, useMemo } from "react";
-import { WalletProvider as TonWalletProvider } from "@/app/hooks/useNearWallet.context";
-
-import {
-  ConnectionProvider,
-  WalletProvider,
-} from "@solana/wallet-adapter-react";
-import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
-import "@solana/wallet-adapter-react-ui/styles.css";
-import { clusterApiUrl } from "@solana/web3.js";
-import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import {
-  UnsafeBurnerWalletAdapter,
-  PhantomWalletAdapter,
-} from "@solana/wallet-adapter-wallets";
+import { useEffect } from "react";
 import { MultiLoginProvider } from "@/app/contexts/MultiLoginContext";
-
-const manifestUrl = "https://solvium.xyz/tonconnect-manifest.json";
+import { SimpleWalletProvider } from "@/app/contexts/SimpleWalletContext";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false } },
@@ -30,13 +14,6 @@ export default function App({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // The network can be set to 'devnet', 'testnet', or 'mainnet-beta'.
-  const network = WalletAdapterNetwork.Devnet;
-  // You can also provide a custom RPC endpoint.
-  const endpoint = useMemo(() => clusterApiUrl(network), [network]);
-
-  const wallets = useMemo(() => [], [network]);
-
   useEffect(() => {
     function sessionStorageSet(key: string, value: string) {
       try {
@@ -73,25 +50,17 @@ export default function App({
   }, []);
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>
-          <TonConnectUIProvider manifestUrl={manifestUrl}>
-            <QueryClientProvider client={queryClient}>
-              <TonWalletProvider>
-                <html lang="en">
-                  <head>
-                    <Script src="https://telegram.org/js/telegram-web-app.js"></Script>
-                  </head>
-                  <MultiLoginProvider>
-                    <body>{children}</body>
-                  </MultiLoginProvider>
-                </html>
-              </TonWalletProvider>
-            </QueryClientProvider>
-          </TonConnectUIProvider>
-        </WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <QueryClientProvider client={queryClient}>
+      <html lang="en">
+        <head>
+          <Script src="https://telegram.org/js/telegram-web-app.js"></Script>
+        </head>
+        <SimpleWalletProvider>
+          <MultiLoginProvider>
+            <body>{children}</body>
+          </MultiLoginProvider>
+        </SimpleWalletProvider>
+      </html>
+    </QueryClientProvider>
   );
 }

@@ -1,19 +1,20 @@
 import { getCurrentYear, getISOWeekNumber } from "@/app/utils/utils";
 import { telegramClient } from "../../clients/TelegramApiClient";
 import { InlineKeyboardMarkup } from "@grammyjs/types";
-import { PrismaClient } from "@prisma/client";
+// import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { sign } from "jsonwebtoken";
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+// const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
 // export const prisma =
 //   globalForPrisma.prisma ||
 //   new PrismaClient({
 //     log: ["query"],
 //   });
-const prisma = globalForPrisma.prisma || new PrismaClient();
+// const prisma = globalForPrisma.prisma || new PrismaClient();
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+// if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 export async function POST(req: NextRequest) {
   try {

@@ -1,62 +1,138 @@
 import { useEffect, useState } from "react";
-import { useTonClient } from "./useTonClient";
-import { useAsyncInitialize } from "./useAsyncInitialize";
-import { useTonConnect } from "./useTonConnect";
-import { CHAIN } from "@tonconnect/protocol";
-import { SolviumMultiplier } from "../contracts/deposit_multiplier";
-import { Address, OpenedContract, toNano } from "@ton/core";
+import { useAuth } from "@/app/contexts/AuthContext";
 
-export function useMultiplierContract(user: string) {
-  const { client } = useTonClient();
-  const { sender, network } = useTonConnect();
-  const [deposits, setDeposits]: any = useState();
+interface Deposit {
+  id: number;
+  amount: number;
+  timestamp: Date;
+  status: "pending" | "completed" | "failed";
+  txHash?: string;
+}
 
-  const multiplierContract = useAsyncInitialize(async () => {
-    if (!client) return;
-    const contract = new SolviumMultiplier(
-      Address.parse(
-        network === CHAIN.MAINNET
-          ? "EQBJF4GTZjNzFHOVnWYtMor7v4QdrH-vF0qmNmJRc_BGDLIo"
-          : "kQBJF4GTZjNzFHOVnWYtMor7v4QdrH-vF0qmNmJRc_BGDAmi"
-      )
-    );
-    return client.open(contract) as OpenedContract<SolviumMultiplier>;
-  }, [client]);
+export function useDepositContract() {
+  const { user } = useAuth();
+  const [deposits, setDeposits] = useState<Deposit[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const getGetAllUserDeposits = async (user: Address) => {
-    const res = await multiplierContract?.getGetAllUserDeposits(user);
-    if (!res) return;
-    const newDeposits = [];
-    for (let index = 0; index < res.size; index++) {
-      const curDep = res.get(BigInt(index + 1));
-      const date = (Number(curDep?.startTime) + 604800) * 1000;
-      if (date < Date.now()) continue;
-      newDeposits.push(curDep);
+  // Get user's deposits from database
+  const getUserDeposits = async () => {
+    if (!user?.id) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/user/deposits`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch deposits");
+      }
+
+      const data = await response.json();
+      setDeposits(data.deposits);
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Failed to fetch deposits"
+      );
+    } finally {
+      setIsLoading(false);
     }
-    setDeposits(newDeposits);
+  };
+
+  // Handle deposit using user's private key
+  const handleDeposit = async (amount: string) => {
+    if (!user?.id) {
+      throw new Error("User not authenticated");
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/user/deposits`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount: parseFloat(amount),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Deposit failed");
+      }
+
+      const data = await response.json();
+
+      // Add new deposit to local state
+      setDeposits((prev) => [data.deposit, ...prev]);
+
+      return data.deposit;
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Deposit failed");
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Admin withdraw function (only for admin users)
+  const adminWithdraw = async (amount: string) => {
+    if (!user?.id) {
+      throw new Error("User not authenticated");
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/user/deposits/withdraw`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount: parseFloat(amount),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Withdraw failed");
+      }
+
+      const data = await response.json();
+      return data.transaction;
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Withdraw failed");
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
-    if (!user || !multiplierContract) return;
-    getGetAllUserDeposits(Address.parse(user));
-  }, [user, multiplierContract]);
+    if (user?.id) {
+      getUserDeposits();
+    }
+  }, [user?.id]);
 
   return {
-    ca: multiplierContract?.address.toString(),
     deposits,
-    handleDeposit: async (amount: string) => {
-      return multiplierContract?.send(
-        sender,
-        { value: toNano(amount) },
-        "Deposit"
-      );
-    },
-    adminWithdraw: async (amount: string) => {
-      return multiplierContract?.send(
-        sender,
-        { value: toNano("0.1") },
-        { $$type: "AdminWithdraw", amount: toNano("1.4") }
-      );
-    },
+    isLoading,
+    error,
+    handleDeposit,
+    adminWithdraw,
+    getUserDeposits,
+    // Contract address (for compatibility)
+    ca: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "",
   };
 }

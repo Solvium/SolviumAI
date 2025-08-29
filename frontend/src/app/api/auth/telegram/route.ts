@@ -5,34 +5,50 @@ import { JWTService } from "@/lib/auth/jwt";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { initData, user } = body;
+    const { initData } = await request.json();
 
-    // Validate Telegram Web App data
-    if (!user || !user.id || !user.username) {
+    console.log("initData", initData);
+    // console.log("user", user);
+
+    if (!initData) {
       return NextResponse.json(
-        { error: "Invalid Telegram user data - missing required fields" },
+        { error: "Telegram data is required" },
         { status: 400 }
       );
     }
 
-    // Check if user exists or create new user
-    let dbUser = await prisma.user.findFirst({
+    // Extract user data from Telegram WebApp (be tolerant to shapes)
+    const src = initData || {};
+    const tgUser =
+      src.user || src.telegramData || src.initDataUnsafe?.user || {};
+    const telegramId = (tgUser.id ?? src.id)?.toString();
+    const username = tgUser.username ?? src.username;
+    const firstName = tgUser.first_name ?? src.first_name;
+    const lastName = tgUser.last_name ?? src.last_name;
+
+    if (!telegramId) {
+      return NextResponse.json(
+        { error: "Telegram ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // Check if user already exists in database by telegram ID or username
+    let user = await prisma.user.findFirst({
       where: {
-        OR: [{ username: user.username }, { chatId: user.id.toString() }],
+        OR: [{ chatId: telegramId }, { username: username }],
       },
     });
 
-    if (!dbUser) {
-      // Create new user
-      dbUser = await prisma.user.create({
+    if (!user) {
+      // Create new user in database
+      user = await prisma.user.create({
         data: {
-          username: user.username,
-          name: `${user.first_name || ""} ${user.last_name || ""}`.trim(),
-          chatId: user.id.toString(),
-          referredBy: "telegram",
-          totalPoints: 0,
-          multiplier: 1,
+          username: username || `telegram_${telegramId}`,
+          name: `${firstName || ""} ${lastName || ""}`.trim(),
+          chatId: telegramId,
+          email: null, // Telegram users don't have email
+          referredBy: "", // Default empty value
           level: 1,
           difficulty: 1,
           puzzleCount: 1,
@@ -40,76 +56,98 @@ export async function POST(request: NextRequest) {
           spinCount: 0,
           dailySpinCount: 0,
           claimCount: 0,
+          lastSpinClaim: new Date(),
+          totalPoints: 0,
           isOfficial: false,
           isMining: false,
           isPremium: false,
+          lastClaim: new Date(),
+          weeklyPoints: 0,
         },
       });
+
+      console.log("New Telegram user created:", user.username);
     } else {
-      // Update last login
-      await prisma.user.update({
-        where: { id: dbUser.id },
-        data: { lastClaim: new Date() },
-      });
+      console.log("Existing Telegram user logged in:", user.username);
     }
 
-    // Create or update login method
-    try {
-      await prisma.loginMethod.upsert({
-        where: {
-          type_value: {
-            type: "telegram",
-            value: user.id.toString(),
-          },
-        },
-        update: {},
-        create: {
-          type: "telegram",
-          value: user.id.toString(),
-          userId: dbUser.id,
-        },
-      });
-    } catch (error) {
-      console.error("Failed to upsert login method:", error);
-      // Continue anyway - this is not critical
+    // Parse wallet data if it exists
+    let walletData = null;
+    if (user.wallet) {
+      try {
+        walletData =
+          typeof user.wallet === "string"
+            ? JSON.parse(user.wallet)
+            : user.wallet;
+      } catch (error) {
+        console.error("Error parsing wallet data:", error);
+      }
     }
 
-    // Create secure session
-    const sessionData = await SessionManager.createSession(
-      dbUser.id.toString()
-    );
-
-    // Prepare user data for response
+    // Create complete user data for response
     const userData = {
-      id: dbUser.id.toString(),
-      username: dbUser.username,
-      telegramId: user.id.toString(),
-      firstName: user.first_name,
-      lastName: user.last_name,
-      avatar: user.photo_url,
-      totalPoints: dbUser.totalPoints,
-      multiplier: dbUser.multiplier,
-      level: dbUser.level,
-      createdAt: dbUser.createdAt,
+      id: user.id.toString(),
+      username: user.username,
+      email: user.email || undefined, // Convert null to undefined for User interface
+      telegramId: telegramId,
+      googleId: undefined, // Not available for Telegram auth
+      firstName: firstName,
+      lastName: lastName,
+      avatar: undefined, // Telegram doesn't provide avatar in this context
+      totalPoints: user.totalPoints || 0,
+      multiplier: 1, // Default multiplier
+      level: user.level || 1,
+      difficulty: user.difficulty || 1,
+      puzzleCount: user.puzzleCount || 0,
+      referralCount: user.referralCount || 0,
+      spinCount: user.spinCount || 0,
+      dailySpinCount: user.dailySpinCount || 0,
+      claimCount: user.claimCount || 0,
+      isOfficial: user.isOfficial || false,
+      isMining: user.isMining || false,
+      isPremium: user.isPremium || false,
+      weeklyPoints: user.weeklyPoints || 0,
+      createdAt: new Date(), // Default since not in schema
       lastLoginAt: new Date(),
-      lastSpinClaim: dbUser.lastSpinClaim,
-      dailySpinCount: dbUser.dailySpinCount,
+      lastSpinClaim: user.lastSpinClaim || undefined,
+      lastClaim: user.lastClaim || undefined,
+      chatId: user.chatId || undefined,
+      wallet: walletData, // Include parsed wallet data
     };
 
-    // Create response with secure cookies
+    console.log("Complete user data from Telegram auth:", userData);
+
+    // Generate tokens
+    const accessToken = JWTService.generateAccessToken(userData);
+    const refreshToken = JWTService.generateRefreshToken(
+      userData.id,
+      "telegram_session"
+    );
+
+    // Create session (commented out for now)
+    // const session = await SessionManager.createSession(userData.id, refreshToken);
+
+    // Set cookies
     const response = NextResponse.json({
       success: true,
       user: userData,
+      accessToken,
+      refreshToken,
     });
 
-    // Set secure session cookies
-    SessionManager.setSessionCookies(response, sessionData);
+    response.cookies.set("auth_token", userData.id, {
+      httpOnly: true,
+      secure: true, // required for SameSite=None
+      sameSite: "none", // works in embedded webviews/iframes
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+    });
 
     return response;
   } catch (error) {
     console.error("Telegram auth error:", error);
     return NextResponse.json(
-      { error: "Authentication failed - please try again" },
+      { error: "Authentication failed" },
       { status: 500 }
     );
   }

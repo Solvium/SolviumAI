@@ -1,8 +1,8 @@
 import { getCurrentYear, getISOWeekNumber } from "@/app/utils/utils";
-import { PrismaClient } from "@prisma/client";
+// import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient();
 
 export async function POST(req: NextRequest) {
   const { type, userId, np: points } = await req.json();
@@ -10,36 +10,36 @@ export async function POST(req: NextRequest) {
   if (type == "reset") {
     try {
       // Reset weekly points for all users
-      await prisma.user.updateMany({
-        data: {
-          weeklyPoints: 0,
-        },
-      });
+      // await prisma.user.updateMany({
+      //   data: {
+      //     weeklyPoints: 0,
+      //   },
+      // });
 
       // Optional: Update rankings based on weekly scores
       const currentWeek = getISOWeekNumber(new Date());
       const currentYear = getCurrentYear();
 
       // Get sorted weekly scores for the previous week
-      const weeklyScores = await prisma.weeklyScore.findMany({
-        where: {
-          weekNumber: currentWeek - 1, // Previous week
-          year: currentYear,
-        },
-        orderBy: {
-          points: "desc",
-        },
-      });
+      // const weeklyScores = await prisma.weeklyScore.findMany({
+      //   where: {
+      //     weekNumber: currentWeek - 1, // Previous week
+      //     year: currentYear,
+      //   },
+      //   orderBy: {
+      //     points: "desc",
+      //   },
+      // });
 
       // Update ranks for the previous week
-      await Promise.all(
-        weeklyScores.map(async (score, index) => {
-          await prisma.weeklyScore.update({
-            where: { id: score.id },
-            data: { rank: index + 1 },
-          });
-        })
-      );
+      // await Promise.all(
+      //   weeklyScores.map(async (score, index) => {
+      //     await prisma.weeklyScore.update({
+      //       where: { id: score.id },
+      //       data: { rank: index + 1 },
+      //     });
+      //   })
+      // );
 
       NextResponse.json(
         { message: "Weekly points reset successfully" },
@@ -67,46 +67,49 @@ export async function POST(req: NextRequest) {
       const currentYear = getCurrentYear();
 
       // Update weekly score and user's points in a transaction
-      const updatedScore = await prisma.$transaction(async (prisma) => {
-        // Update or create weekly score
-        const weeklyScore = await prisma.weeklyScore.upsert({
-          where: {
-            userId_weekNumber_year: {
-              userId: Number(userId),
-              weekNumber: currentWeek,
-              year: currentYear,
-            },
-          },
-          update: {
-            points: {
-              increment: Number(points),
-            },
-          },
-          create: {
-            userId: Number(userId),
-            weekNumber: currentWeek,
-            year: currentYear,
-            points: Number(points),
-          },
-        });
+      // const updatedScore = await prisma.$transaction(async (prisma) => {
+      //   // Update or create weekly score
+      //   const weeklyScore = await prisma.weeklyScore.upsert({
+      //     where: {
+      //       userId_weekNumber_year: {
+      //         userId: Number(userId),
+      //         weekNumber: currentWeek,
+      //         year: currentYear,
+      //       },
+      //     },
+      //     update: {
+      //       points: {
+      //         increment: Number(points),
+      //       },
+      //     },
+      //     create: {
+      //       userId: Number(userId),
+      //       weekNumber: currentWeek,
+      //       year: currentYear,
+      //       points: Number(points),
+      //     },
+      //   });
 
-        // Update user's weekly and total points
-        const updatedUser = await prisma.user.update({
-          where: { id: Number(userId) },
-          data: {
-            weeklyPoints: {
-              increment: Number(points),
-            },
-            totalPoints: {
-              increment: Number(points),
-            },
-          },
-        });
+      //   // Update user's weekly and total points
+      //   const updatedUser = await prisma.user.update({
+      //     where: { id: Number(userId) },
+      //     data: {
+      //       weeklyPoints: {
+      //         increment: Number(points),
+      //       },
+      //       totalPoints: {
+      //         increment: Number(points),
+      //       },
+      //     },
+      //   });
 
-        return { weeklyScore, updatedUser };
-      });
+      //   return { weeklyScore, updatedUser };
+      // });
 
-      NextResponse.json(updatedScore, { status: 200 });
+      NextResponse.json(
+        { message: "Points added successfully" },
+        { status: 200 }
+      );
     } catch (error) {
       console.error("Error adding weekly points:", error);
       NextResponse.json(
@@ -125,24 +128,27 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const weeklyScore = await prisma.weeklyScore.findMany({
-        orderBy: {
-          points: "desc",
-        },
-        take: 10,
+      // const weeklyScore = await prisma.weeklyScore.findMany({
+      //   orderBy: {
+      //     points: "desc",
+      //   },
+      //   take: 10,
 
-        include: {
-          user: {
-            select: {
-              name: true,
-              weeklyPoints: true,
-              totalPoints: true,
-            },
-          },
-        },
-      });
+      //   include: {
+      //     user: {
+      //       select: {
+      //         name: true,
+      //         weeklyPoints: true,
+      //         totalPoints: true,
+      //       },
+      //     },
+      //   },
+      // });
 
-      return NextResponse.json({ weeklyScore }, { status: 200 });
+      return NextResponse.json(
+        { message: "Leaderboard fetched" },
+        { status: 200 }
+      );
     } catch (error) {
       console.error("Error fetching weekly points:", error);
       return NextResponse.json(

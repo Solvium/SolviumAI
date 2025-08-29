@@ -1,20 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { useTonAddress } from "@tonconnect/ui-react";
-import { fromNano } from "@ton/core";
 import { Wallet, Star } from "lucide-react";
-import { useTonConnect } from "@/app/hooks/useTonConnect";
-import { useMultiplierContract } from "@/app/hooks/useDepositContract";
-import { useWalletStore } from "@/app/hooks/useWalletStore";
 import { XMarkIcon } from "@heroicons/react/24/solid";
-import { utils, providers } from "near-api-js";
-import { useWallet } from "@/app/contexts/WalletContext";
-import { useNearDeposits } from "@/app/contracts/near_deposits";
 import BarLoader from "react-spinners/BarLoader";
 import { ToastContainer, toast, Bounce } from "react-toastify";
 import timestampLib from "unix-timestamp";
+import { useNearWallet } from "@/app/hooks/useNearWallet";
+
 // Update interfaces at top of file
 export interface Deposit {
-  id: number;
+  id: string;
   amount: string;
   startTime: number;
   multiplier: number;
@@ -29,202 +23,92 @@ interface DepositResponse {
 }
 
 export default function DepositMultiplier({ user }: any) {
-  const { connected: tonConnected, connectWallet: connectTon } =
-    useTonConnect();
-  const {
-    state: { selector, accountId: nearAddress, isConnected: nearConnected },
-    connect: connectNear,
-    disconnect: disconnectNear,
-  } = useWallet();
   const [isOpen, setIsOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [activeTab, setActiveTab] = useState("deposit");
-  const [walletType, setWalletType] = useState<"TON" | "NEAR">("NEAR");
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [walletType, setWalletType] = useState<"NEAR">("NEAR");
   const [isDepositing, setIsDepositing] = useState<boolean>(false);
-  const tonAddress = useTonAddress();
-  const { deposits, handleDeposit } = useMultiplierContract(tonAddress);
-
-  const getCurrencyLabel = () => (walletType === "TON" ? "TON" : "NEAR");
-  const getMinDeposit = () => (walletType === "TON" ? "0.11" : "0.1");
 
   const {
-    deposits: nearDeposits,
-    loading: nearLoading,
-    refetch,
-  } = useNearDeposits();
+    state,
+    deposits,
+    isLoading,
+    connectWallet,
+    disconnectWallet,
+    makeDeposit,
+    getDeposits,
+    getBalance,
+  } = useNearWallet();
 
-  //   useEffect(() => {
-  //     const pollInterval = setInterval(() => {
-  //       refetch();
-  //     }, 3000);
+  const { isConnected, accountId, balance, error } = state;
 
-  //     return () => clearInterval(pollInterval);
-  //   }, [refetch]);
+  const getCurrencyLabel = () => "NEAR";
+  const getMinDeposit = () => "0.1";
 
-  // console.log(nearDeposits, "nearDeposits");
-
-  const getDeposits = (): Deposit[] => {
-    if (walletType === "TON") {
-      return deposits;
+  // Connect wallet when modal opens
+  useEffect(() => {
+    if (isOpen && !isConnected) {
+      console.log("Connecting to NEAR wallet...");
+      connectWallet(); // Uses test private key automatically
     }
+  }, [isOpen, isConnected, connectWallet]);
 
-    if (!nearDeposits?.deposits) return [];
-
-    const ONE_WEEK_IN_SECONDS = 604800;
-
-    const isDepositActive = (startTimeInMs: number) => {
-      const startTimeInSeconds = startTimeInMs / 1000; // Convert ms to seconds
-      const currentTimeInSeconds = Math.floor(Date.now() / 1000);
-      const endTimeInSeconds = startTimeInSeconds + ONE_WEEK_IN_SECONDS;
-
-      // Return true only if current time is less than end time
-      return currentTimeInSeconds <= endTimeInSeconds;
-    };
-
-    return Object.values(nearDeposits.deposits)
-      .map((deposit) => {
-        const startTimeInMs = Number(deposit.startTime) / 1000000; // Convert to milliseconds
-
-        return {
-          id: deposit.id,
-          amount: utils.format.formatNearAmount(deposit.amount),
-          endTime: startTimeInMs + ONE_WEEK_IN_SECONDS * 1000,
-          startTime: startTimeInMs,
-          multiplier: Number(deposit.multiplier) / 1e16,
-          active: isDepositActive(startTimeInMs),
-        };
-      })
-      .sort((a, b) => b.startTime - a.startTime); // Sort by newest first
-  };
-
-  // Update currentDeposits type
-  const currentDeposits = getDeposits();
-
-  // console.log(currentDeposits, "firstDeposit");
-  const isLoading = walletType === "NEAR" ? nearLoading : false;
-
-  const isConnected = walletType === "NEAR" ? nearConnected : false; // Add TON connection check
+  // Load deposits when wallet is connected
+  useEffect(() => {
+    if (isOpen && isConnected) {
+      console.log("Loading deposits...");
+      getDeposits(); // Uses test private key automatically
+    }
+  }, [isOpen, isConnected, getDeposits]);
 
   const handleStart = () => {
-    if (!isConnected) {
-      setIsOpen(true);
-      return;
-    }
+    // Open modal immediately without checking wallet connection
     setIsOpen(true);
-  };
-
-  const handleWalletConnect = async () => {
-    try {
-      if (walletType === "TON") {
-        await connectTon();
-      } else {
-        await connectNear();
-      }
-    } catch (error) {
-      console.error("Failed to connect wallet:", error);
-    }
   };
 
   const handleNearDeposit = async (amount: string) => {
     setIsDepositing(true);
-    if (!nearAddress || !selector) return;
 
     try {
       const numAmount = parseFloat(amount);
-
       if (isNaN(numAmount)) throw new Error("Invalid amount");
 
-      const wallet = await selector.wallet();
-      const deposit = utils.format.parseNearAmount(amount);
+      console.log("Making NEAR deposit:", amount, "NEAR");
 
-      await wallet.signAndSendTransaction({
-        signerId: nearAddress,
-        receiverId: process.env.NEXT_PUBLIC_CONTRACT_ID!,
-        actions: [
-          {
-            type: "FunctionCall",
-            params: {
-              methodName: "depositToGame",
-              args: {},
-              gas: "30000000000000",
-              deposit: deposit || "0",
-            },
-          },
-        ],
-      });
+      const result = await makeDeposit(amount); // Uses test private key automatically
 
-      const response = await fetch("/api/deposit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: user.id,
-          amount: numAmount,
-        }),
-      });
+      if (result.success) {
+        toast.success("Deposit successful!");
+        setAmount("");
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to process deposit");
+        // Refresh deposits
+        await getDeposits();
+      } else {
+        throw new Error(result.error || "Deposit failed");
       }
-
-      const { points, multiplier } = data as DepositResponse;
-
-      toast.success("Deposit successful");
-      // Trigger refresh after deposit
-      setRefreshTrigger((prev) => prev + 1);
-      setAmount("");
-
-      // Immediate refetch
-      await refetch();
     } catch (error) {
       console.error("Failed to deposit:", error);
-      throw error;
+      toast.error(error instanceof Error ? error.message : "Deposit failed");
     } finally {
       setIsDepositing(false);
     }
   };
 
-  useEffect(() => {
-    if (refreshTrigger > 0) {
-      refetch();
-    }
-  }, [refreshTrigger, refetch]);
-
   const handleSmartDeposit = async (amount: string) => {
-    if (walletType === "TON") {
-      await handleDeposit(amount);
-    } else {
-      await handleNearDeposit(amount);
-      // Add Near deposit logic here
-      // await handleNearDeposit(amount);
-    }
+    await handleNearDeposit(amount);
   };
 
   // Add helper functions before component
-  const formatDepositAmount = (amount: string, type: "TON" | "NEAR") => {
-    return type === "TON"
-      ? `${fromNano(amount)} TON`
-      : `${utils.format.formatNearAmount(amount)} NEAR`;
+  const formatDepositAmount = (amount: string) => {
+    return `${amount} NEAR`;
   };
-
-  interface Deposit {
-    id: string | number;
-    amount: string;
-    startTime: number;
-    multiplier: number;
-    active: boolean;
-  }
 
   const formatDate = (timestamp: number | string): string => {
     try {
       // Convert milliseconds to seconds for timestampLib
       const seconds = Number(timestamp) / 1000;
-
       // Use timestampLib to create date
       const date = timestampLib.toDate(seconds);
-
       return date.toLocaleString("en-US", {
         year: "numeric",
         month: "short",
@@ -243,11 +127,9 @@ export default function DepositMultiplier({ user }: any) {
 
   const isValidAmount = (amount: string): boolean => {
     const value = parseFloat(amount);
-    if (walletType === "NEAR") {
-      return value >= 0.5;
-    }
-    return value >= 0.11; // TON minimum
+    return value >= 0.1; // NEAR minimum
   };
+
   return (
     <div className="container mx-auto p-4 max-w-4xl">
       <button
@@ -256,7 +138,6 @@ export default function DepositMultiplier({ user }: any) {
       >
         Start
       </button>
-
       {isOpen && (
         <div className="fixed z-[50] top-0 left-0 w-full h-full bg-[rgba(0,0,0,0.7)] flex items-center justify-center">
           <div className="border-blue-80 border-[2px] w-[85%] mx-auto bg-black p-5">
@@ -268,14 +149,7 @@ export default function DepositMultiplier({ user }: any) {
                 </h3>
               </button>
             </div>
-
             <div className="tabs tabs-boxed mb-4">
-              {/* <a
-                className={`tab ${walletType === "TON" ? "tab-active" : ""}`}
-                onClick={() => setWalletType("TON")}
-              >
-                TON
-              </a> */}
               <a
                 className={`tab ${walletType === "NEAR" ? "tab-active" : ""}`}
                 onClick={() => setWalletType("NEAR")}
@@ -283,19 +157,16 @@ export default function DepositMultiplier({ user }: any) {
                 NEAR
               </a>
             </div>
-
             {!isConnected ? (
               <div className="card border-blue-80 border-[2px] p-8 text-center z-0">
-                <h2 className="text-xl mb-4">
-                  Connect your {walletType} wallet to get started
-                </h2>
-                <button
-                  onClick={handleWalletConnect}
-                  className="btn btn-primary flex"
-                >
-                  <Wallet className="mr-2 hidden md:flex" size={20} />
-                  CONNECT
-                </button>
+                <h2 className="text-xl mb-4">Connecting to wallet...</h2>
+                {isLoading && (
+                  <div className="loading loading-spinner loading-md"></div>
+                )}
+                {error && <p className="text-red-500 mt-2">{error}</p>}
+                <p className="text-sm text-gray-400 mt-4">
+                  Please wait while we connect to your NEAR wallet
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -325,6 +196,7 @@ export default function DepositMultiplier({ user }: any) {
                         <div className="form-control">
                           <label className="label">
                             <span className="text-white">
+                              {" "}
                               Amount ({getCurrencyLabel()})
                             </span>
                           </label>
@@ -341,8 +213,7 @@ export default function DepositMultiplier({ user }: any) {
                         <div className="card bg-base-500 border-blue-80 border-[2px]">
                           <div className="card-body">
                             <h3 className="card-title text-sm">
-                              <Star size={20} />
-                              Estimated Multiplier
+                              <Star size={20} /> Estimated Multiplier
                             </h3>
                             <p className="text-2xl font-bold">
                               {amount
@@ -350,7 +221,8 @@ export default function DepositMultiplier({ user }: any) {
                                 : "0x"}
                             </p>
                             <p className="text-sm opacity-70">
-                              Active for 1 week
+                              {" "}
+                              Active for 1 week{" "}
                             </p>
                           </div>
                         </div>
@@ -360,12 +232,9 @@ export default function DepositMultiplier({ user }: any) {
                           }
                           onClick={() => handleSmartDeposit(amount)}
                           className="btn btn-secondary w-full"
-                          // disabled={!amount || parseFloat(amount) < 0.11}
                         >
                           {amount && !isValidAmount(amount) ? (
-                            `Minimum ${
-                              walletType === "NEAR" ? "0.5 NEAR" : "0.11 TON"
-                            } required`
+                            `Minimum 0.1 NEAR required`
                           ) : (
                             <>
                               Deposit {getCurrencyLabel()}
@@ -380,27 +249,31 @@ export default function DepositMultiplier({ user }: any) {
                   <div className="card bg-base-600 border-blue-80 border-[2px]">
                     <div className="w-full p-2">
                       <h2 className="text-xl mb-4 text-center">
-                        My {getCurrencyLabel()} Deposits
+                        {" "}
+                        My {getCurrencyLabel()} Deposits{" "}
                       </h2>
                       {isLoading ? (
                         <div className="text-center py-8">
                           <div className="loading loading-spinner loading-md"></div>
                           <p className="text-gray-500 mt-2">
-                            Loading deposits...
+                            {" "}
+                            Loading deposits...{" "}
                           </p>
                         </div>
-                      ) : currentDeposits?.length === 0 ? (
+                      ) : deposits?.length === 0 ? (
                         <div className="text-center py-8">
                           <p className="text-gray-500">
-                            No {getCurrencyLabel()} deposits found
+                            {" "}
+                            No {getCurrencyLabel()} deposits found{" "}
                           </p>
                           <p className="text-sm text-gray-400 mt-2">
-                            Make your first deposit to get started
+                            {" "}
+                            Make your first deposit to get started{" "}
                           </p>
                         </div>
                       ) : (
                         <div className="space-y-4">
-                          {currentDeposits?.map((deposit: Deposit) => (
+                          {deposits?.map((deposit: Deposit) => (
                             <div
                               key={deposit.id.toString()}
                               className="collapse border-blue-80 border-[2px] collapse-arrow bg-base-600"
@@ -410,9 +283,7 @@ export default function DepositMultiplier({ user }: any) {
                                 <div className="flex justify-between items-center">
                                   <div>
                                     <p className="font-bold">
-                                      {walletType === "TON"
-                                        ? `${fromNano(deposit.amount)} TON`
-                                        : `${deposit.amount} NEAR`}
+                                      {deposit.amount} NEAR
                                     </p>
                                     <p className="text-sm opacity-70">
                                       {formatDate(deposit.startTime)}
@@ -432,16 +303,21 @@ export default function DepositMultiplier({ user }: any) {
                               <div className="collapse-content">
                                 <div className="pt-4 space-y-2">
                                   <p>
-                                    Multiplier: {deposit.multiplier.toString()}x
+                                    {" "}
+                                    Multiplier: {deposit.multiplier.toString()}x{" "}
                                   </p>
                                   <p>
-                                    Start Time: {formatDate(deposit.startTime)}
+                                    {" "}
+                                    Start Time: {formatDate(
+                                      deposit.startTime
+                                    )}{" "}
                                   </p>
                                   <p>
+                                    {" "}
                                     End Time:{" "}
                                     {formatDate(
                                       deposit.startTime + 604800 * 1000
-                                    )}
+                                    )}{" "}
                                   </p>
                                 </div>
                               </div>
@@ -470,14 +346,6 @@ export default function DepositMultiplier({ user }: any) {
           </div>
         </div>
       )}
-
-      {/* Error Alert */}
-      {/* {error != "" && (
-        <div className="alert alert-error mt-4">
-          <AlertCircle size={20} />
-          <span>{error}</span>
-        </div>
-      )} */}
     </div>
   );
 }
