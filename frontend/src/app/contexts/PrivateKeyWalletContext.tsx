@@ -62,21 +62,23 @@ export const PrivateKeyWalletProvider = ({
 
   // Auto-connect when user data is available
   useEffect(() => {
-    if (user?.id && !isConnected) {
+    if ((user?.chatId || (user as any)?.telegramId) && !isConnected) {
       autoConnect();
     }
-  }, [user]);
+  }, [user?.chatId, (user as any)?.telegramId]);
 
   const autoConnect = async () => {
-    if (!user?.id) return;
+    const tgId =
+      (user?.chatId as string) || ((user as any)?.telegramId as string);
+    if (!tgId) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      // Fetch wallet information from the database
+      // Fetch wallet information from the database using Telegram ID
       const response = await fetch(
-        `/api/wallet/byTelegram/${user.id}?decrypt=1`
+        `/api/wallet/byTelegram/${encodeURIComponent(tgId)}?decrypt=1`
       );
 
       if (!response.ok) {
