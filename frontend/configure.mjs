@@ -19,6 +19,7 @@ const banner = `
 
 console.log(banner);
 
+return;
 let botUsername;
 
 (async () => {
