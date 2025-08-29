@@ -68,30 +68,49 @@ export const PrivateKeyWalletProvider = ({
   }, [user?.chatId, (user as any)?.telegramId]);
 
   const autoConnect = async () => {
-    const tgId =
+    const tgIdRaw =
       (user?.chatId as string) || ((user as any)?.telegramId as string);
-    if (!tgId) return;
+    if (!tgIdRaw) return;
+
+    // Coerce to number string for API that expects numeric id
+    const tgId = String(parseInt(tgIdRaw, 10));
+    if (!tgId || tgId === "NaN") {
+      setError("Invalid Telegram ID");
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
 
     try {
-      // Fetch wallet information from the database using Telegram ID
-      const response = await fetch(
+      // Try primary route
+      let response = await fetch(
         `/api/wallet/byTelegram/${encodeURIComponent(tgId)}?decrypt=1`
       );
 
+      // Fallback to alternate route if needed
       if (!response.ok) {
-        throw new Error(`Failed to fetch wallet: ${response.statusText}`);
+        const alt = await fetch(
+          `/api/wallet/by-telegram/${encodeURIComponent(tgId)}?decrypt=1`
+        );
+        if (alt.ok) response = alt;
+      }
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(
+          `Failed to fetch wallet (${response.status}): ${
+            text || response.statusText
+          }`
+        );
       }
 
       const walletData = await response.json();
 
       if (!walletData.privateKey || !walletData.accountId) {
-        throw new Error("No wallet found for this user");
+        throw new Error("Wallet not found for this user");
       }
 
-      // Initialize NEAR connection with the fetched private key
       const { account: nearAccount } = await initializeNearWithPrivateKey(
         walletData.privateKey,
         walletData.accountId
@@ -100,7 +119,6 @@ export const PrivateKeyWalletProvider = ({
       setAccount(nearAccount);
       setAccountId(walletData.accountId);
       setIsConnected(true);
-
       console.log("Auto-connected wallet:", walletData.accountId);
     } catch (err) {
       const errorMessage =
