@@ -87,10 +87,17 @@ async def generate_quiz_questions(
                     cleaned_options = []
                     for option in q["options"]:
                         # Remove "(correct answer)" and similar text
-                        cleaned_option = re.sub(r'\s*\(correct answer\)', '', option, flags=re.IGNORECASE)
-                        cleaned_option = re.sub(r'\s*\(plausible distractor\)', '', cleaned_option, flags=re.IGNORECASE)
+                        cleaned_option = re.sub(
+                            r"\s*\(correct answer\)", "", option, flags=re.IGNORECASE
+                        )
+                        cleaned_option = re.sub(
+                            r"\s*\(plausible distractor\)",
+                            "",
+                            cleaned_option,
+                            flags=re.IGNORECASE,
+                        )
                         cleaned_options.append(cleaned_option)
-                    
+
                     options_text = "\n".join(
                         [
                             f"{chr(65 + j)}) {option}"
