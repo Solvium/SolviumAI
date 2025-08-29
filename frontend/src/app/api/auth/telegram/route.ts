@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       id: user.id.toString(),
       username: user.username,
       email: user.email || undefined, // Convert null to undefined for User interface
-      telegramId: telegramId,
+
       googleId: undefined, // Not available for Telegram auth
       firstName: firstName,
       lastName: lastName,
