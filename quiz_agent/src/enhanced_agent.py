@@ -177,14 +177,16 @@ OUTPUT FORMAT (JSON array only):
     {{
         "question": "Clear, specific question about {topic}",
         "options": [
-            "Option A (correct answer)",
-            "Option B (plausible distractor)",
-            "Option C (plausible distractor)",
-            "Option D (plausible distractor)"
+            "Option A",
+            "Option B",
+            "Option C",
+            "Option D"
         ],
         "correct_answer": "A"
     }}
 ]
+
+IMPORTANT: Do NOT include "(correct answer)" or similar text in the options. The correct answer should only be indicated by the "correct_answer" field.
 
 {context_instruction}"""
 
