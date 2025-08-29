@@ -13,6 +13,7 @@ from telegram.ext import (
 from telegram.ext import MessageHandler, filters
 from telegram.error import TimedOut, NetworkError, RetryAfter, TelegramError, BadRequest
 from services.blockchain import start_blockchain_monitor
+from utils.telegram_helpers import message_queue
 import httpx
 import traceback
 
@@ -161,9 +162,9 @@ class TelegramBot:
             REWARD_STRUCTURE_CHOICE,
             PAYMENT_VERIFICATION,
             CONFIRM,
-            link_wallet_handler,
-            unlink_wallet_handler,
-            play_quiz_handler,
+            # link_wallet_handler,
+            # unlink_wallet_handler,
+            # play_quiz_handler,
             play_quiz_selection_callback,  # New multi-quiz selection handler
             quiz_answer_handler,
             private_message_handler,
@@ -331,24 +332,24 @@ class TelegramBot:
         self.app.add_handler(
             CommandHandler("start", start_handler)
         )  # Register start handler
-        self.app.add_handler(CommandHandler("linkwallet", link_wallet_handler))
-        self.app.add_handler(
-            CommandHandler("unlinkwallet", unlink_wallet_handler)
-        )  # Register the new handler
-        self.app.add_handler(CommandHandler("playquiz", play_quiz_handler))
-        self.app.add_handler(CommandHandler("winners", winners_handler))
+        # self.app.add_handler(CommandHandler("linkwallet", link_wallet_handler))
+        # self.app.add_handler(
+        #     CommandHandler("unlinkwallet", unlink_wallet_handler)
+        # )  # Register the new handler
+        # self.app.add_handler(CommandHandler("playquiz", play_quiz_handler))
+        # self.app.add_handler(CommandHandler("winners", winners_handler))
         self.app.add_handler(
             CommandHandler("leaderboards", show_all_active_leaderboards_command)
         )
+        # self.app.add_handler(
+        #     CommandHandler("resetwallet", handle_reset_wallet)
+        # )  # Development command
         self.app.add_handler(
-            CommandHandler("resetwallet", handle_reset_wallet)
-        )  # Development command
-        self.app.add_handler(
-            CommandHandler("announceend", announce_quiz_end_handler)
+            CommandHandler("announcement", announce_quiz_end_handler)
         )  # Quiz end announcement command
-        self.app.add_handler(
-            CommandHandler("debug", debug_sessions_handler)
-        )  # Debug sessions command
+        # self.app.add_handler(
+        #     CommandHandler("debug", debug_sessions_handler)
+        # )  # Debug sessions command
 
         # self.app.add_handler(
         #     CommandHandler("distributerewards", distribute_rewards_handler)
@@ -423,6 +424,10 @@ class TelegramBot:
         """Start the bot using webhook or polling, and initialize services."""
         logger.info("Initializing blockchain monitor...")
         await self.init_blockchain()
+
+        # Start the message queue for rate limiting
+        logger.info("Starting message queue for rate limiting...")
+        await message_queue.start()
 
         await self.app.initialize()
         await self.app.start()
@@ -559,6 +564,10 @@ class TelegramBot:
     async def stop(self):
         """Gracefully stop the bot and its services."""
         logger.info("Attempting to gracefully stop the bot...")
+
+        # Stop the message queue
+        logger.info("Stopping message queue...")
+        await message_queue.stop()
 
         # Signal the polling loop to stop if it's waiting on _stop_signal
         if not self._stop_signal.done():

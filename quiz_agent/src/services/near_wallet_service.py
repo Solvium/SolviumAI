@@ -863,11 +863,18 @@ class NEARWalletService:
         Supports both testnet and mainnet wallets
         """
         try:
+            logger.info(
+                f"DEBUG: format_wallet_info_message called with wallet_info keys: {list(wallet_info.keys())}"
+            )
+
             # Decrypt private key for display
             private_key = self.decrypt_private_key(
                 wallet_info["encrypted_private_key"],
                 wallet_info["iv"],
                 wallet_info["tag"],
+            )
+            logger.info(
+                f"DEBUG: Private key decrypted successfully, length: {len(private_key)}"
             )
 
             # Determine network from wallet info
@@ -940,10 +947,16 @@ class NEARWalletService:
                 ]
             )
 
+            logger.info(
+                f"DEBUG: Wallet message formatted successfully, returning message and keyboard"
+            )
             return message, mini_app_keyboard
 
         except Exception as e:
             logger.error(f"Error formatting wallet message: {e}")
+            logger.error(
+                f"DEBUG: Exception in format_wallet_info_message: {type(e).__name__}: {str(e)}"
+            )
             return (
                 "❌ Error formatting wallet information. Please contact support.",
                 None,

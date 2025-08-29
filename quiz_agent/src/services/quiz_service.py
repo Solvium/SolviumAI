@@ -3,7 +3,7 @@ from telegram.ext import CallbackContext, ContextTypes, Application
 from telegram.error import BadRequest
 from models.quiz import Quiz, QuizStatus, QuizAnswer
 from store.database import SessionLocal
-from enhanced_agent import AdvancedQuizGenerator
+from enhanced_agent import generate_quiz
 from services.user_service import check_wallet_linked
 from utils.telegram_helpers import safe_send_message, safe_edit_message_text
 import re
@@ -51,32 +51,47 @@ async def generate_quiz_questions(
     compatible with the existing quiz service expectations.
     """
     try:
-        # Initialize the enhanced quiz generator
-        generator = AdvancedQuizGenerator()
-
-        # Generate questions using the enhanced agent
-        quiz_questions = await generator.generate_quiz(
+        # Use the new function-based approach
+        result = await generate_quiz(
             topic=topic,
             num_questions=num_questions,
-            difficulty="medium",
-            force_refresh=False,
             context_text=context_text,
+            use_current_info=True,
         )
 
-        # Convert QuizQuestion objects to the format expected by quiz service
-        formatted_questions = []
-        for i, question in enumerate(quiz_questions, 1):
-            # Format each question as expected by the existing parser
-            formatted_question = f"""Question {i}: {question.question}
-A) {question.options['A']}
-B) {question.options['B']}
-C) {question.options['C']}
-D) {question.options['D']}
-Correct Answer: {question.correct_answer}"""
-            formatted_questions.append(formatted_question)
+        # Parse the JSON format and convert to the expected format
+        import json
+        import re
 
-        # Join all questions with double newlines
-        return "\n\n".join(formatted_questions)
+        # Extract JSON from the result (it might be wrapped in markdown or other text)
+        json_match = re.search(r"\[.*\]", result, re.DOTALL)
+        if json_match:
+            try:
+                questions_data = json.loads(json_match.group())
+                formatted_questions = []
+
+                for i, q in enumerate(questions_data, 1):
+                    # Convert the new format to the expected format
+                    options_text = "\n".join(
+                        [
+                            f"{chr(65 + j)}) {option}"
+                            for j, option in enumerate(q["options"])
+                        ]
+                    )
+                    formatted_question = f"""Question {i}: {q['question']}
+{options_text}
+Correct Answer: {q['correct_answer']}"""
+                    formatted_questions.append(formatted_question)
+
+                return "\n\n".join(formatted_questions)
+            except json.JSONDecodeError:
+                logger.warning(
+                    "Failed to parse JSON from quiz result, using raw result"
+                )
+                return result
+        else:
+            # If no JSON found, return the raw result
+            return result
 
     except Exception as e:
         logger.error(f"Error generating quiz with enhanced agent: {e}", exc_info=True)
@@ -1591,8 +1606,10 @@ async def handle_reward_structure(update: Update, context: ContextTypes.DEFAULT_
         finally:
             session.close()
 
-        msg = f"Please deposit a total of {total} Near to this address:\n{deposit_addr}\n\n"
-        msg += "⚠️ IMPORTANT: After making your deposit, you MUST send me the transaction hash to activate the quiz. The quiz will NOT be activated automatically.\n\n"
+        msg = (
+            f"Please deposit a total of {total} Near to this address:\n{deposit_addr}\n"
+        )
+        msg += "⚠️ IMPORTANT: After making your deposit, you MUST send me the transaction hash to activate the quiz. The quiz will NOT be activated automatically.\n"
         msg += "Your transaction hash will look like 'FnuPC7YmQBJ1Qr22qjRT3XX8Vr8NbJAuWGVG5JyXQRjS' and can be found in your wallet's transaction history."
 
         await safe_send_message(context.bot, update.effective_chat.id, msg)
@@ -1750,7 +1767,7 @@ async def get_winners(update: Update, context: CallbackContext):
             return
 
         # Generate leaderboard message
-        message = f"📊 Leaderboard for quiz: *{quiz.topic}*\n\n"
+        message = f"📊 Leaderboard for quiz: *{quiz.topic}*\n"
 
         # Display winners with rewards if available
         reward_schedule = quiz.reward_schedule or {}
@@ -2115,7 +2132,7 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
 
         # Add quiz answers review
         if quiz.questions and len(quiz.questions) > 0:
-            answers_announcement += f"\n\n� <b>The answers to the questions are:</b>\n"
+            answers_announcement += f"\n� <b>The answers to the questions are:</b>\n"
             for i, question_data in enumerate(quiz.questions, 1):
                 question_text = question_data.get("question", f"Question {i}")
                 # Get correct answer - try multiple possible field names and structures
@@ -2169,7 +2186,7 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                 answers_announcement += f"✅ <b>Q{i}:</b> {question_text}\n"
                 answers_announcement += f"   � <b>Answer:</b> {correct_answer}\n"
 
-        answers_announcement += "\n\n⏳ <i>Winners announcement coming up next...</i>"
+        answers_announcement += "\n⏳ <i>Winners announcement coming up next...</i>"
 
         # Send first announcement (answers)
         await safe_send_message(
@@ -2196,7 +2213,7 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
             num_questions_in_quiz = len(quiz.questions) if quiz.questions else 0
 
             # Add leaderboard
-            winners_announcement += "\n\n🏆 <b>FINAL LEADERBOARD:</b>\n"
+            winners_announcement += "\n🏆 <b>FINAL LEADERBOARD:</b>\n"
             for i, participant in enumerate(all_participants[:10]):  # Show top 10
                 medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "🏅"
                 username = participant.get(
@@ -2231,7 +2248,7 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
             winners_announcement += f"• Average accuracy: {avg_accuracy:.1f}%\n"
             winners_announcement += f"• Questions in quiz: {num_questions_in_quiz}\n"
         else:
-            winners_announcement += "\n\n📊 No participants found for this quiz."
+            winners_announcement += "\n📊 No participants found for this quiz."
 
         # Add reward information if applicable
         if quiz.reward_schedule:
@@ -2268,7 +2285,7 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
 
                 # Add DM notification message for winners
                 if winners_to_notify:
-                    winners_announcement += "\n\n📧 <b>Reward Recipients:</b>"
+                    winners_announcement += "\n📧 <b>Reward Recipients:</b>"
                     for winner in winners_to_notify:
                         username = winner.get(
                             "username", f"User_{winner.get('user_id', 'Unknown')[:8]}"
@@ -2277,7 +2294,7 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                             f"\n🎁 @{username}, check your DM for reward details!"
                         )
 
-        winners_announcement += "\n\n🎯 <b>Thanks to all participants!</b> 🎯"
+        winners_announcement += "\n🎯 <b>Thanks to all participants!</b> 🎯"
 
         # Send second announcement (winners)
         await safe_send_message(
@@ -2492,9 +2509,9 @@ def parse_multiple_questions(raw_questions):
     chunks = [chunk.strip() for chunk in chunks if chunk.strip()]
 
     # If we only got one chunk but it might contain multiple questions
-    if len(chunks) == 1 and "\n\n" in raw_questions:
+    if len(chunks) == 1 and "\n" in raw_questions:
         # Try splitting by double newline
-        chunks = raw_questions.split("\n\n")
+        chunks = raw_questions.split("\n")
         chunks = [chunk.strip() for chunk in chunks if chunk.strip()]
 
     # Process each chunk as an individual question
