@@ -2,7 +2,7 @@ import crypto from "crypto";
 
 // Global type declarations
 declare global {
-  var walletCache: Map<string, SecureWalletData> | undefined;
+  let walletCache: Map<string, SecureWalletData> | undefined;
 }
 
 // Types for the SolviumAI API

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useWalletCheck } from "@/app/hooks/useWalletCheck";
-import { WalletCheckResponse } from "@/lib/crypto";
+import { WalletCheckResponse, WalletInfo } from "@/lib/crypto";
 
 export default function WalletChecker() {
   const [telegramUserId, setTelegramUserId] = useState<string>("");
@@ -26,6 +26,35 @@ export default function WalletChecker() {
     setTelegramUserId("");
     setWalletInfo(null);
     clearError();
+  };
+
+  const renderWalletDetails = (info: WalletInfo) => {
+    return (
+      <div className="mt-3 space-y-2 text-sm">
+        <div>
+          <span className="font-medium text-gray-700">Account ID:</span>
+          <span className="ml-2 font-mono text-gray-600 break-all">
+            {info.account_id}
+          </span>
+        </div>
+        <div>
+          <span className="font-medium text-gray-700">Public Key:</span>
+          <span className="ml-2 font-mono text-gray-600 break-all">
+            {info.public_key}
+          </span>
+        </div>
+        <div>
+          <span className="font-medium text-gray-700">Network:</span>
+          <span className="ml-2 text-gray-600">{info.network}</span>
+        </div>
+        <div>
+          <span className="font-medium text-gray-700">Demo:</span>
+          <span className="ml-2 text-gray-600">
+            {info.is_demo ? "Yes" : "No"}
+          </span>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -81,34 +110,14 @@ export default function WalletChecker() {
             </h3>
             <div className="space-y-2 text-sm">
               <div>
-                <span className="font-medium text-gray-700">Success:</span>
+                <span className="font-medium text-gray-700">Has Wallet:</span>
                 <span className="ml-2 text-green-600">
-                  {walletInfo.success ? "Yes" : "No"}
+                  {walletInfo.has_wallet ? "Yes" : "No"}
                 </span>
               </div>
 
-              {walletInfo.wallet && (
-                <>
-                  <div>
-                    <span className="font-medium text-gray-700">Address:</span>
-                    <span className="ml-2 font-mono text-gray-600 break-all">
-                      {walletInfo.wallet.address}
-                    </span>
-                  </div>
-
-                  {walletInfo.wallet.balance && (
-                    <div>
-                      <span className="font-medium text-gray-700">
-                        Balance:
-                      </span>
-                      <span className="ml-2 text-gray-600">
-                        {walletInfo.wallet.balance}{" "}
-                        {walletInfo.wallet.currency || ""}
-                      </span>
-                    </div>
-                  )}
-                </>
-              )}
+              {walletInfo.wallet_info &&
+                renderWalletDetails(walletInfo.wallet_info)}
 
               {walletInfo.message && (
                 <div>
@@ -116,6 +125,13 @@ export default function WalletChecker() {
                   <span className="ml-2 text-gray-600">
                     {walletInfo.message}
                   </span>
+                </div>
+              )}
+
+              {walletInfo.error && (
+                <div>
+                  <span className="font-medium text-gray-700">Error:</span>
+                  <span className="ml-2 text-red-600">{walletInfo.error}</span>
                 </div>
               )}
             </div>

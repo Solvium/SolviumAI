@@ -14,7 +14,9 @@ export class PrivateKeyStore extends keyStores.KeyStore {
 
   constructor(privateKey: string, accountId: string) {
     super();
-    this.keyPair = KeyPair.fromString(privateKey);
+    // near-api-js expects a KeyPairString (e.g., "ed25519:...")
+    // Cast to satisfy typings while supporting runtime-provided strings
+    this.keyPair = KeyPair.fromString(privateKey as unknown as any);
     this.accountId = accountId;
   }
 
@@ -73,11 +75,7 @@ export const initializeNearWithPrivateKey = async (
       BLOCKCHAIN_NET === "mainnet"
         ? "https://helper.mainnet.near.org"
         : "https://helper.testnet.near.org",
-    explorerUrl:
-      BLOCKCHAIN_NET === "mainnet"
-        ? "https://explorer.mainnet.near.org"
-        : "https://explorer.testnet.near.org",
-  });
+  } as any);
 
   const account = new Account(near.connection, accountId);
 
@@ -85,7 +83,6 @@ export const initializeNearWithPrivateKey = async (
     near,
     account,
     accountId,
-    keyPair: keyStore.keyPair,
   };
 };
 
@@ -94,16 +91,20 @@ export const signAndSendTransaction = async (
   account: Account,
   receiverId: string,
   actions: any[],
-  gas: string = "300000000000000",
-  deposit: string = "0"
+  gas: string | bigint = "300000000000000",
+  deposit: string | bigint = "0"
 ) => {
   try {
+    const gasBig: bigint = typeof gas === "string" ? BigInt(gas) : gas;
+    const depositBig: bigint =
+      typeof deposit === "string" ? BigInt(deposit) : deposit;
+
     const result = await account.functionCall({
       contractId: receiverId,
       methodName: actions[0].params.methodName,
       args: actions[0].params.args,
-      gas: gas,
-      attachedDeposit: deposit,
+      gas: gasBig,
+      attachedDeposit: depositBig,
     });
 
     return result;
@@ -146,8 +147,8 @@ export const registerToken = async (
         account_id: accountId,
         registration_only: true,
       },
-      gas: "30000000000000",
-      attachedDeposit: "1250000000000000000000", // 0.00125 NEAR
+      gas: BigInt("30000000000000"),
+      attachedDeposit: BigInt("1250000000000000000000"), // 0.00125 NEAR
     });
 
     return result;

@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-export const prisma =
+const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
     log: ["query"],
@@ -328,8 +328,13 @@ export async function GET(req: any) {
         );
       }
 
-      const user = await prisma.user.findUnique({
-        where: { wallet },
+      const user = await prisma.user.findFirst({
+        where: {
+          wallet: {
+            path: ["$"],
+            equals: wallet,
+          },
+        },
       });
 
       if (!user) {

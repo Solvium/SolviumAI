@@ -13,7 +13,7 @@ datasource db {
 model User {
   id            Int      @id @default(autoincrement())
   username      String   @unique
-  email         String?
+  email         String?  @unique
   name          String?
   wallet        Json?
   level         Int      @default(1)
@@ -32,8 +32,56 @@ model User {
   chatId        String?
   totalPoints   Int      @default(0)
   telegramId    String?  // Add Telegram ID field
+  referredBy    String?  // Add referral field
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  
+  // Relations
+  userTasks     UserTask[]
+  weeklyScores  WeeklyScore[]
+}
+
+model Task {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  points      Int
+  link        String?
+  isCompleted Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Relations
+  userTasks   UserTask[]
+}
+
+model UserTask {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  taskId      Int
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, taskId])
+}
+
+model WeeklyScore {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  weekNumber Int
+  year       Int
+  points     Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // Relations
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, weekNumber, year])
 }
 
 model WalletCache {

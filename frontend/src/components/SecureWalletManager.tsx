@@ -21,7 +21,10 @@ export default function SecureWalletManager() {
     setIsLoading(true);
     try {
       const telegramUserId = parseInt(user.telegramId);
-      const data = await getWalletData(telegramUserId, forceRefresh);
+      if (forceRefresh) {
+        await refreshWalletData();
+      }
+      const data = await getWalletData(telegramUserId);
       setWalletData(data);
     } catch (error) {
       console.error("Failed to get wallet data:", error);
@@ -217,4 +220,3 @@ export default function SecureWalletManager() {
     </div>
   );
 }
-
