@@ -169,21 +169,22 @@ QUESTION CATEGORIES TO EMPLOY:
 
 STRICT OUTPUT REQUIREMENTS:
 - Generate exactly {num_questions} engaging question(s) about {topic}.
-- Provide exactly 4 options (A-D).
-- Number questions sequentially (1., 2., etc.).
-- End each question with "Correct Answer: [letter]".
+- Provide exactly 4 options (A-D) for each question.
+- Each question should have a clear correct answer.
 
-OUTPUT FORMAT (JSON only):
-{{
-    "question": "Clear, specific question about {topic}",
-    "options": [
-        "Option A (correct answer)",
-        "Option B (plausible distractor)",
-        "Option C (plausible distractor)",
-        "Option D (plausible distractor)"
-    ],
-    "correct_answer": "A, B, C, or D",
-}}
+OUTPUT FORMAT (JSON array only):
+[
+    {{
+        "question": "Clear, specific question about {topic}",
+        "options": [
+            "Option A (correct answer)",
+            "Option B (plausible distractor)",
+            "Option C (plausible distractor)",
+            "Option D (plausible distractor)"
+        ],
+        "correct_answer": "A"
+    }}
+]
 
 {context_instruction}"""
 

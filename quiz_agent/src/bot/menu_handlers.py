@@ -24,6 +24,7 @@ from .keyboard_markups import (
 from utils.redis_client import RedisClient
 from services.wallet_service import WalletService
 import logging
+from utils.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -543,8 +544,8 @@ async def handle_view_balance(update: Update, context: CallbackContext) -> None:
             await update.message.reply_text(
                 f"💰 **Your Wallet Balance**\n"
                 f"**Account:** `{account_id}`\n"
-                f"**Balance:** {balance}\n"
-                f"*This is a demo wallet for testing purposes*",
+                f"**Balance:** {balance}\n",
+                f"*{'This is a demo wallet for testing purposes' if Config.is_testnet_enabled() else 'Live wallet on mainnet'}*",
                 parse_mode="Markdown",
                 reply_markup=create_cancel_keyboard(),
             )

@@ -77,7 +77,8 @@ async def generate_quiz_questions(
         json_match = re.search(r"\[.*\]", result, re.DOTALL)
         if json_match:
             try:
-                questions_data = json.loads(json_match.group())
+                json_str = json_match.group()
+                questions_data = json.loads(json_str)
                 formatted_questions = []
 
                 for i, q in enumerate(questions_data, 1):
@@ -94,9 +95,9 @@ Correct Answer: {q['correct_answer']}"""
                     formatted_questions.append(formatted_question)
 
                 return "\n\n".join(formatted_questions)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
                 logger.warning(
-                    "Failed to parse JSON from quiz result, using raw result"
+                    f"Failed to parse JSON from quiz result: {e}, using raw result"
                 )
                 return result
         else:
