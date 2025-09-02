@@ -123,11 +123,12 @@ export async function POST(request: NextRequest) {
       user: userData,
     });
 
-    // Set a simple auth cookie
+    // Set a simple auth cookie (root path for all routes)
     response.cookies.set("auth_token", userData.id, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: true, // required for SameSite=None
+      sameSite: "none", // works in embedded webviews/iframes
+      path: "/",
       maxAge: 7 * 24 * 60 * 60, // 7 days
     });
 

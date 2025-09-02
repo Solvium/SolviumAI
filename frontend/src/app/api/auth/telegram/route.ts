@@ -5,20 +5,26 @@ import { JWTService } from "@/lib/auth/jwt";
 
 export async function POST(request: NextRequest) {
   try {
-    const { telegramData } = await request.json();
+    const { initData } = await request.json();
 
-    if (!telegramData) {
+    console.log("initData", initData);
+    // console.log("user", user);
+
+    if (!initData) {
       return NextResponse.json(
         { error: "Telegram data is required" },
         { status: 400 }
       );
     }
 
-    // Extract user data from Telegram WebApp
-    const telegramId = telegramData.id?.toString();
-    const username = telegramData.username;
-    const firstName = telegramData.first_name;
-    const lastName = telegramData.last_name;
+    // Extract user data from Telegram WebApp (be tolerant to shapes)
+    const src = initData || {};
+    const tgUser =
+      src.user || src.telegramData || src.initDataUnsafe?.user || {};
+    const telegramId = (tgUser.id ?? src.id)?.toString();
+    const username = tgUser.username ?? src.username;
+    const firstName = tgUser.first_name ?? src.first_name;
+    const lastName = tgUser.last_name ?? src.last_name;
 
     if (!telegramId) {
       return NextResponse.json(
@@ -83,7 +89,7 @@ export async function POST(request: NextRequest) {
       id: user.id.toString(),
       username: user.username,
       email: user.email || undefined, // Convert null to undefined for User interface
-      telegramId: telegramId,
+
       googleId: undefined, // Not available for Telegram auth
       firstName: firstName,
       lastName: lastName,
@@ -131,8 +137,9 @@ export async function POST(request: NextRequest) {
 
     response.cookies.set("auth_token", userData.id, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: true, // required for SameSite=None
+      sameSite: "none", // works in embedded webviews/iframes
+      path: "/",
       maxAge: 7 * 24 * 60 * 60, // 7 days
     });
 

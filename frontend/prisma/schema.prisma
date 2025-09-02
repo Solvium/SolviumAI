@@ -1,4 +1,6 @@
-// prisma/schema.prisma
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,117 +10,91 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id            Int      @id @default(autoincrement())
+  username      String   @unique
+  email         String?  @unique
+  name          String?
+  wallet        Json?
+  level         Int      @default(1)
+  difficulty    Int      @default(1)
+  puzzleCount   Int      @default(0)
+  referralCount Int      @default(0)
+  spinCount     Int      @default(0)
+  dailySpinCount Int     @default(0)
+  claimCount    Int      @default(0)
+  isOfficial    Boolean  @default(false)
+  isMining      Boolean  @default(false)
+  isPremium     Boolean  @default(false)
+  weeklyPoints  Int      @default(0)
+  lastSpinClaim DateTime?
+  lastClaim     DateTime?
+  chatId        String?
+  totalPoints   Int      @default(0)
+  referredBy    String?  // Add referral field
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+  
+  // Relations
+  userTasks     UserTask[]
+  weeklyScores  WeeklyScore[]
+}
+
 model Task {
-  id          Int        @id @default(autoincrement())
-  name        String
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
   points      Int
   link        String?
-  isCompleted Boolean    @default(false)
-  UserTasks   UserTask[]
+  isCompleted Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+  
+  // Relations
+  userTasks   UserTask[]
 }
 
-model User {
-  id             Int           @id @default(autoincrement())
-  username       String        @unique
-  name           String?
-  wallet         String?       @unique
-  email          String?       @unique
-  referredBy     String
-  chain          String?
-  level          Int           @default(1)
-  difficulty     Int           @default(1)
-  puzzleCount    Int           @default(1)
-  referralCount  Int           @default(0)
-  chatId         String?
-  spinCount      Int           @default(0)
-  dailySpinCount Int           @default(0)
-  claimCount     Int           @default(0)
-  lastSpinClaim  DateTime      @default(now())
-  totalPoints    Int           @default(0)
-  isOfficial     Boolean       @default(false)
-  isMining       Boolean       @default(false)
-  isPremium      Boolean       @default(false)
-  lastClaim      DateTime      @default(now())
-  UserTasks      UserTask[]
-  weeklyPoints   Int           @default(0)
-  WeeklyScores   WeeklyScore[]
-  wallets        Wallet[] // Relation to the new Wallet model
-  linkedAccounts LoginMethod[] // Relation to the new LoginMethod model
-  sessions       Session[] // Relation to the new Session model
-}
-
-// New model for wallets
-model Wallet {
-  id      Int    @id @default(autoincrement())
-  chain   String
-  address String
-  userId  Int
-  user    User   @relation(fields: [userId], references: [id])
-
-  @@unique([userId, chain])
-}
-
-// New model for linked accounts
-model LoginMethod {
-  id     Int    @id @default(autoincrement())
-  type   String // e.g., "email", "wallet", "telegram"
-  value  String
-  userId Int
-  user   User   @relation(fields: [userId], references: [id])
-
-  @@unique([type, value])
-}
-
-// New model for sessions
-model Session {
-  id           String   @id @default(uuid())
-  userId       Int
-  refreshToken String
-  expiresAt    DateTime
-  userAgent    String?
-  ipAddress    String?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([refreshToken])
-}
-
-// New model for rate limiting
-model RateLimit {
-  id        Int      @id @default(autoincrement())
-  key       String // Rate limit key (e.g., "ip:path")
-  ipAddress String
-  userAgent String?
-  createdAt DateTime @default(now())
-
-  @@index([key, createdAt])
-  @@index([ipAddress])
+model UserTask {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  taskId      Int
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, taskId])
 }
 
 model WeeklyScore {
   id         Int      @id @default(autoincrement())
   userId     Int
-  weekNumber Int // ISO week number
-  year       Int // Year for clarity
-  points     Int      @default(0) // Points scored by the user in the week
-  rank       Int? // Rank of the user for the week
+  weekNumber Int
+  year       Int
+  points     Int      @default(0)
   createdAt  DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@unique([userId, weekNumber, year]) // Ensure no duplicate records for the same week
+  updatedAt  DateTime @default(now()) @updatedAt
+  
+  // Relations
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, weekNumber, year])
 }
 
-model UserTask {
-  id          Int     @id @default(autoincrement())
-  userId      Int
-  taskId      Int
-  isCompleted Boolean @default(false)
-  user        User    @relation(fields: [userId], references: [id])
-  task        Task    @relation(fields: [taskId], references: [id])
-
-  @@unique([userId, taskId])
+model WalletCache {
+  id                  Int      @id @default(autoincrement())
+  telegramUserId      Int      @unique
+  accountId           String
+  publicKey           String
+  encryptedPrivateKey String
+  encryptionIv        String
+  encryptionTag       String
+  isDemo              Boolean  @default(false)
+  network             String
+  lastUpdated         DateTime @default(now())
+  expiresAt           DateTime
+  
+  @@map("wallet_cache")
 }

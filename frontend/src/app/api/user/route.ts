@@ -271,7 +271,7 @@ export async function POST(req: NextRequest) {
     const res = NextResponse.json({ message: "Logged out successfully" });
     res.headers.set(
       "Set-Cookie",
-      cookie.serialize("auth_token", "", {
+      cookie.serialize("access_token", "", {
         httpOnly: true,
         secure: process.env.NODE_ENV !== "development",
         sameSite: "strict",
@@ -289,7 +289,7 @@ export async function GET(req: NextRequest) {
   const type = searchParams.get("type");
 
   // Get token from cookies
-  const auth_token = req.cookies.get("auth_token");
+  const auth_token = req.cookies.get("access_token");
 
   if (!auth_token) {
     return NextResponse.json({ authenticated: false }, { status: 401 });

@@ -6,7 +6,7 @@
     "dev": "next dev --port 6001",
     "start": "next start",
     "configbot": "node configure.mjs",
-    "build": "yarn configbot && prisma generate && next build",
+    "build": " prisma generate && next build",
     "lint": "next lint",
     "setup": "node setup-env.js",
     "db:generate": "prisma generate",

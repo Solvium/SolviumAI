@@ -5,9 +5,22 @@ import { JWTService } from "@/lib/auth/jwt";
 
 export async function POST(request: NextRequest) {
   try {
-    const { refreshToken } = await request.json();
+    // Try to get refresh token from request body first
+    let refreshToken;
+    try {
+      const body = await request.json();
+      refreshToken = body?.refreshToken;
+    } catch (parseError) {
+      console.log("No JSON body provided, checking cookies...");
+    }
+
+    // If no refresh token in body, try to get it from cookies
+    if (!refreshToken) {
+      refreshToken = request.cookies.get("refreshToken")?.value;
+    }
 
     if (!refreshToken) {
+      console.error("No refresh token found in body or cookies");
       return NextResponse.json(
         { error: "Refresh token is required" },
         { status: 400 }
@@ -75,10 +88,21 @@ export async function POST(request: NextRequest) {
     // Update session with new access token
     // await SessionManager.updateSession(refreshToken, newAccessToken);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       accessToken: newAccessToken,
       refreshToken: refreshToken, // Keep the same refresh token
     });
+
+    // Set the new access token as a cookie
+    response.cookies.set("accessToken", newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 15 * 60, // 15 minutes
+    });
+
+    return response;
   } catch (error) {
     console.error("Token refresh error:", error);
     return NextResponse.json(

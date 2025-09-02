@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import AuthProviderWrapper from "./providers/AuthProviderWrapper";
 import { MultiLoginProvider } from "./contexts/MultiLoginContext";
+import { SimpleWalletProvider } from "@/app/contexts/SimpleWalletContext";
+import { PrivateKeyWalletProvider } from "./contexts/PrivateKeyWalletContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,9 +21,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <AuthProviderWrapper>
-          <MultiLoginProvider>{children}</MultiLoginProvider>
-        </AuthProviderWrapper>
+        <SimpleWalletProvider>
+          <AuthProviderWrapper>
+            <MultiLoginProvider>
+              <PrivateKeyWalletProvider>{children}</PrivateKeyWalletProvider>
+            </MultiLoginProvider>
+          </AuthProviderWrapper>
+        </SimpleWalletProvider>
       </body>
     </html>
   );

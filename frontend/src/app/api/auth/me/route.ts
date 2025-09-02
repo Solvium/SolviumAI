@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     // Get user ID from token
     const userId = parseInt(authToken.value);
-    
+
     if (isNaN(userId)) {
       return NextResponse.json(
         { authenticated: false, user: null },
@@ -62,9 +62,10 @@ export async function GET(request: NextRequest) {
     let walletData = null;
     if (user.wallet) {
       try {
-        walletData = typeof user.wallet === 'string' 
-          ? JSON.parse(user.wallet) 
-          : user.wallet;
+        walletData =
+          typeof user.wallet === "string"
+            ? JSON.parse(user.wallet)
+            : user.wallet;
       } catch (error) {
         console.error("Error parsing wallet data:", error);
       }
@@ -75,10 +76,9 @@ export async function GET(request: NextRequest) {
       id: user.id.toString(),
       username: user.username,
       email: user.email || undefined,
-      telegramId: undefined, // Not in current schema
       googleId: undefined, // Not in current schema
-      firstName: user.name ? user.name.split(' ')[0] : undefined,
-      lastName: user.name ? user.name.split(' ').slice(1).join(' ') : undefined,
+      firstName: user.name ? user.name.split(" ")[0] : undefined,
+      lastName: user.name ? user.name.split(" ").slice(1).join(" ") : undefined,
       avatar: undefined, // Add if you have avatar field
       totalPoints: user.totalPoints || 0,
       multiplier: 1, // Default multiplier since it's not in schema
@@ -107,7 +107,6 @@ export async function GET(request: NextRequest) {
       authenticated: true,
       user: userData,
     });
-
   } catch (error) {
     console.error("Error in /api/auth/me:", error);
     return NextResponse.json(
