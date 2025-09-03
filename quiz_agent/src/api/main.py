@@ -180,8 +180,14 @@ def create_app():
             ["*"]
             if Config.is_development()
             else [
-                Config.WEBHOOK_URL.replace("https://", "").replace("http://", ""),
+                (
+                    Config.WEBHOOK_URL.replace("https://", "").replace("http://", "")
+                    if Config.WEBHOOK_URL
+                    else "quiz.solviumgame.xyz"
+                ),
+                "quiz.solviumgame.xyz",
                 "t.me",
+                "localhost",
             ]
         ),
     )
