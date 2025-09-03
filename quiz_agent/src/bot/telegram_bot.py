@@ -256,7 +256,7 @@ class TelegramBot:
                 REWARD_CHOICE: [
                     CallbackQueryHandler(
                         reward_choice,
-                        pattern="^(reward_free|reward_0\\.1|reward_0\\.5|reward_custom)$",
+                        pattern="^(reward_free|reward_0\\.1|reward_0\\.5|reward_1\\.0|reward_2\\.0|reward_3\\.0|reward_5\\.0|reward_custom)$",
                     ),
                     MessageHandler(
                         filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
