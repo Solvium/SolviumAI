@@ -231,7 +231,75 @@ def create_app():
         app.include_router(health_router, prefix="/health", tags=["health"])
         app.include_router(monitoring_router, prefix="/monitoring", tags=["monitoring"])
         app.include_router(wallet_router, prefix="/wallet", tags=["wallet"])
-        logger.info("All routers included successfully")
+
+        # Add Prometheus metrics endpoint
+        @app.get("/metrics")
+        async def get_prometheus_metrics():
+            """Get Prometheus-formatted metrics for scraping."""
+            try:
+                from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+
+                # Generate Prometheus metrics
+                metrics = generate_latest()
+
+                from fastapi.responses import Response
+
+                return Response(content=metrics, media_type=CONTENT_TYPE_LATEST)
+
+            except ImportError:
+                logger.warning(
+                    "prometheus_client not available, using simple metrics service"
+                )
+                # Use our simple metrics service as fallback
+                from services.simple_metrics import get_simple_metrics
+
+                metrics_service = get_simple_metrics()
+                basic_metrics = metrics_service.generate_prometheus_metrics()
+
+                from fastapi.responses import Response
+
+                return Response(content=basic_metrics, media_type="text/plain")
+            except Exception as e:
+                logger.error(f"Error generating Prometheus metrics: {e}")
+                # Final fallback to basic metrics
+                basic_metrics = """# HELP solvium_quiz_bot_up Bot is running
+# TYPE solvium_quiz_bot_up gauge
+solvium_quiz_bot_up 1
+# HELP solvium_quiz_bot_requests_total Total requests
+# TYPE solvium_quiz_bot_requests_total counter
+solvium_quiz_bot_requests_total 1
+"""
+                from fastapi.responses import Response
+
+                return Response(content=basic_metrics, media_type="text/plain")
+
+        # Add dashboard route
+        @app.get("/dashboard")
+        async def get_dashboard():
+            """Redirect to monitoring dashboard."""
+            from fastapi.responses import RedirectResponse
+
+            return RedirectResponse(url="/monitoring/dashboard")
+
+        # Add monitoring root route
+        @app.get("/monitoring")
+        async def get_monitoring_root():
+            """Redirect to monitoring dashboard."""
+            from fastapi.responses import RedirectResponse
+
+            return RedirectResponse(url="/monitoring/dashboard")
+
+        # Add favicon route to prevent 404 errors
+        @app.get("/favicon.ico")
+        async def get_favicon():
+            """Return a simple favicon to prevent 404 errors."""
+            from fastapi.responses import Response
+
+            # Return a minimal 1x1 transparent PNG
+            favicon = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x00\x00\x02\x00\x01\xe5\x27\xfe\x00\x00\x00\x00IEND\xaeB`\x82"
+            return Response(content=favicon, media_type="image/x-icon")
+
+        logger.info("All routers and endpoints included successfully")
     except ImportError as e:
         logger.error(f"Failed to import routers: {e}")
         logger.error(f"Import error details: {type(e).__name__}: {str(e)}")
@@ -248,6 +316,21 @@ def create_app():
     async def optimized_logging_middleware(request: Request, call_next):
         """High-performance logging middleware with minimal overhead."""
         start_time = time.perf_counter()
+
+        # Increment metrics counters
+        try:
+            from services.simple_metrics import get_simple_metrics
+
+            metrics_service = get_simple_metrics()
+            metrics_service.increment_request()
+
+            # Increment specific counters based on path
+            if "/webhook" in request.url.path:
+                metrics_service.increment_webhook_request()
+            elif "/quiz" in request.url.path:
+                metrics_service.increment_quiz_request()
+        except Exception as e:
+            logger.debug(f"Could not update metrics: {e}")
 
         # Skip logging for health checks in production
         if not Config.is_development() and request.url.path in [
@@ -275,6 +358,13 @@ def create_app():
             logger.warning(
                 f"Slow request detected: {process_time:.2f}ms - {request.url}"
             )
+
+        # Increment error counter if response indicates error
+        if response.status_code >= 400:
+            try:
+                metrics_service.increment_error()
+            except Exception as e:
+                logger.debug(f"Could not update error metrics: {e}")
 
         # Add performance headers for monitoring
         response.headers["X-Process-Time"] = f"{process_time:.2f}ms"
@@ -325,7 +415,10 @@ if FASTAPI_AVAILABLE:
                 "webhook": "/webhook",
                 "wallet": "/wallet",
                 "monitoring": "/monitoring",
-                "metrics": "/metrics/performance",
+                "metrics": "/metrics",
+                "dashboard": "/dashboard",
+                "prometheus": "/prometheus/",
+                "grafana": "/grafana/",
             },
         }
 
