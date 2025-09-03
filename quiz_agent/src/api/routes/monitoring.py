@@ -587,3 +587,496 @@ async def get_detailed_health() -> JSONResponse:
         raise HTTPException(
             status_code=500, detail="Failed to get detailed health status"
         )
+
+
+@router.get("/dashboard")
+async def get_monitoring_dashboard():
+    """Serve a comprehensive monitoring dashboard HTML page."""
+    dashboard_html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SolviumAI Quiz Bot - Monitoring Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+        }
+
+        .card h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .metric-label {
+            font-weight: 500;
+            color: #555;
+        }
+
+        .metric-value {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 1.1rem;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-healthy { background-color: #28a745; }
+        .status-warning { background-color: #ffc107; }
+        .status-error { background-color: #dc3545; }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 20px;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .external-links {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .external-link {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .external-link:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-2px);
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 SolviumAI Quiz Bot</h1>
+            <p>Real-time Monitoring Dashboard</p>
+        </div>
+
+        <div class="external-links">
+            <a href="/prometheus/" target="_blank" class="external-link">📊 Prometheus</a>
+            <a href="/grafana/" target="_blank" class="external-link">📈 Grafana</a>
+            <a href="/monitoring/metrics/realtime" target="_blank" class="external-link">🔍 Raw Metrics</a>
+        </div>
+
+        <button class="refresh-btn" onclick="refreshDashboard()">🔄 Refresh Dashboard</button>
+
+        <div class="dashboard-grid">
+            <!-- System Status Card -->
+            <div class="card">
+                <h3>🖥️ System Status</h3>
+                <div id="system-status">
+                    <div class="loading">Loading system status...</div>
+                </div>
+            </div>
+
+            <!-- Performance Metrics Card -->
+            <div class="card">
+                <h3>⚡ Performance Metrics</h3>
+                <div id="performance-metrics">
+                    <div class="loading">Loading performance data...</div>
+                </div>
+            </div>
+
+            <!-- Bot Statistics Card -->
+            <div class="card">
+                <h3>🤖 Bot Statistics</h3>
+                <div id="bot-stats">
+                    <div class="loading">Loading bot statistics...</div>
+                </div>
+            </div>
+
+            <!-- Cache Performance Card -->
+            <div class="card">
+                <h3>💾 Cache Performance</h3>
+                <div id="cache-stats">
+                    <div class="loading">Loading cache statistics...</div>
+                </div>
+            </div>
+
+            <!-- Real-time Activity Card -->
+            <div class="card">
+                <h3>📱 Real-time Activity</h3>
+                <div id="realtime-activity">
+                    <div class="loading">Loading activity data...</div>
+                </div>
+            </div>
+
+            <!-- Webhook Status Card -->
+            <div class="card">
+                <h3>🔗 Webhook Status</h3>
+                <div id="webhook-status">
+                    <div class="loading">Loading webhook information...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="card" style="grid-column: 1 / -1;">
+            <h3>📈 Performance Trends</h3>
+            <div class="chart-container">
+                <canvas id="performanceChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let performanceChart;
+        let updateInterval;
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshDashboard();
+            // Auto-refresh every 30 seconds
+            updateInterval = setInterval(refreshDashboard, 30000);
+        });
+
+        async function refreshDashboard() {
+            try {
+                await Promise.all([
+                    loadSystemStatus(),
+                    loadPerformanceMetrics(),
+                    loadBotStats(),
+                    loadCacheStats(),
+                    loadRealtimeActivity(),
+                    loadWebhookStatus()
+                ]);
+            } catch (error) {
+                console.error('Error refreshing dashboard:', error);
+            }
+        }
+
+        async function loadSystemStatus() {
+            try {
+                const response = await axios.get('/monitoring/status');
+                const data = response.data;
+
+                const html = `
+                    <div class="metric">
+                        <span class="metric-label">Overall Status</span>
+                        <span class="metric-value">
+                            <span class="status-indicator status-${data.status === 'healthy' ? 'healthy' : 'error'}"></span>
+                            ${data.status.toUpperCase()}
+                        </span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Environment</span>
+                        <span class="metric-value">${data.environment}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Redis</span>
+                        <span class="metric-value">
+                            <span class="status-indicator status-${data.services.redis === 'healthy' ? 'healthy' : 'error'}"></span>
+                            ${data.services.redis}
+                        </span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Database</span>
+                        <span class="metric-value">
+                            <span class="status-indicator status-${data.services.database === 'healthy' ? 'healthy' : 'error'}"></span>
+                            ${data.services.database}
+                        </span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Response Time</span>
+                        <span class="metric-value">${data.performance.response_time_ms}ms</span>
+                    </div>
+                `;
+
+                document.getElementById('system-status').innerHTML = html;
+            } catch (error) {
+                document.getElementById('system-status').innerHTML = `<div class="error">Error loading system status: ${error.message}</div>`;
+            }
+        }
+
+        async function loadPerformanceMetrics() {
+            try {
+                const response = await axios.get('/monitoring/performance');
+                const data = response.data;
+
+                const html = `
+                    <div class="metric">
+                        <span class="metric-label">Cache Hit Rate</span>
+                        <span class="metric-value">${data.redis_info.keyspace_hits || 'N/A'}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Redis Memory</span>
+                        <span class="metric-value">${data.redis_info.used_memory || 'N/A'}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Connected Clients</span>
+                        <span class="metric-value">${data.redis_info.connected_clients || 'N/A'}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Active Quizzes</span>
+                        <span class="metric-value">${data.active_quizzes}</span>
+                    </div>
+                `;
+
+                document.getElementById('performance-metrics').innerHTML = html;
+            } catch (error) {
+                document.getElementById('performance-metrics').innerHTML = `<div class="error">Error loading performance metrics: ${error.message}</div>`;
+            }
+        }
+
+        async function loadBotStats() {
+            try {
+                const response = await axios.get('/monitoring/stats');
+                const data = response.data;
+
+                const html = `
+                    <div class="metric">
+                        <span class="metric-label">Bot Status</span>
+                        <span class="metric-value">
+                            <span class="status-indicator status-${data.bot_info.running ? 'healthy' : 'error'}"></span>
+                            ${data.bot_info.running ? 'Running' : 'Stopped'}
+                        </span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Webhook Mode</span>
+                        <span class="metric-value">${data.configuration.webhook_mode ? 'Yes' : 'No'}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Environment</span>
+                        <span class="metric-value">${data.configuration.environment}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Username</span>
+                        <span class="metric-value">${data.telegram_bot?.username || 'N/A'}</span>
+                    </div>
+                `;
+
+                document.getElementById('bot-stats').innerHTML = html;
+            } catch (error) {
+                document.getElementById('bot-stats').innerHTML = `<div class="error">Error loading bot statistics: ${error.message}</div>`;
+            }
+        }
+
+        async function loadCacheStats() {
+            try {
+                const response = await axios.get('/monitoring/cache/stats');
+                const data = response.data;
+
+                const html = `
+                    <div class="metric">
+                        <span class="metric-label">Total Requests</span>
+                        <span class="metric-value">${data.cache_performance.total_requests}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Cache Hits</span>
+                        <span class="metric-value">${data.cache_performance.cache_hits}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Hit Rate</span>
+                        <span class="metric-value">${data.cache_performance.hit_rate_percent}%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">User Profiles</span>
+                        <span class="metric-value">${data.cache_sizes.user_profile || 0}</span>
+                    </div>
+                `;
+
+                document.getElementById('cache-stats').innerHTML = html;
+            } catch (error) {
+                document.getElementById('cache-stats').innerHTML = `<div class="error">Error loading cache statistics: ${error.message}</div>`;
+            }
+        }
+
+        async function loadRealtimeActivity() {
+            try {
+                const response = await axios.get('/monitoring/metrics/realtime');
+                const data = response.data;
+
+                const html = `
+                    <div class="metric">
+                        <span class="metric-label">Active Users (5min)</span>
+                        <span class="metric-value">${data.active_users}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Active Quizzes</span>
+                        <span class="metric-value">${data.active_quizzes}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Cache Hit Rate</span>
+                        <span class="metric-value">${data.cache_performance.hit_rate}%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">CPU Usage</span>
+                        <span class="metric-value">${data.system_metrics.cpu_percent || 'N/A'}%</span>
+                    </div>
+                `;
+
+                document.getElementById('realtime-activity').innerHTML = html;
+            } catch (error) {
+                document.getElementById('realtime-activity').innerHTML = `<div class="error">Error loading activity data: ${error.message}</div>`;
+            }
+        }
+
+        async function loadWebhookStatus() {
+            try {
+                const response = await axios.get('/monitoring/webhook/info');
+                const data = response.data;
+
+                const html = `
+                    <div class="metric">
+                        <span class="metric-label">Webhook URL</span>
+                        <span class="metric-value">${data.url ? 'Set' : 'Not Set'}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Pending Updates</span>
+                        <span class="metric-value">${data.pending_update_count}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Last Error</span>
+                        <span class="metric-value">${data.last_error_message || 'None'}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Max Connections</span>
+                        <span class="metric-value">${data.max_connections}</span>
+                    </div>
+                `;
+
+                document.getElementById('webhook-status').innerHTML = html;
+            } catch (error) {
+                document.getElementById('webhook-status').innerHTML = `<div class="error">Error loading webhook status: ${error.message}</div>`;
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+            }
+        });
+    </script>
+</body>
+</html>
+    """
+
+    from fastapi.responses import HTMLResponse
+
+    return HTMLResponse(content=dashboard_html)
