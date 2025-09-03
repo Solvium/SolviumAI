@@ -63,9 +63,8 @@ setup_environment() {
 
     # Check if .env file exists
     if [ ! -f .env ]; then
-            print_error ".env file not found and no template available."
-            exit 1
-        fi
+        print_error ".env file not found. Please create a .env file with your configuration."
+        exit 1
     fi
 
     # Load environment variables
