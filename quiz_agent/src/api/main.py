@@ -188,6 +188,11 @@ def create_app():
                 "quiz.solviumgame.xyz",
                 "t.me",
                 "localhost",
+                "localhost:8000",
+                "quiz-agent:8000",
+                "quiz-agent",
+                "127.0.0.1",
+                "127.0.0.1:8000",
             ]
         ),
     )
