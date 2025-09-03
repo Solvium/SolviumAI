@@ -231,7 +231,7 @@ def sanitize_markdown(text: str) -> str:
         "|",
         "{",
         "}",
-        ".",
+        # Removed "." - dots are valid in numbers and text
     ]
 
     for char in chars_to_escape:

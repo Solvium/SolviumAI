@@ -198,7 +198,17 @@ def create_leaderboard_card(
         correct_answers = player.get("correct_answers", 0)
         total_questions = player.get("total_questions", 0)
 
-        card += f"{rank_emoji} **@{username}** - {score} pts ({correct_answers}/{total_questions})\n"
+        # Sanitize username to prevent Markdown parsing issues
+        # Only escape characters that are problematic for usernames, not parentheses
+        safe_username = (
+            username.replace("*", "\\*")
+            .replace("_", "\\_")
+            .replace("`", "\\`")
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+        )
+
+        card += f"{rank_emoji} **{safe_username}** - {score} pts ({correct_answers}/{total_questions})\n"
 
     # Add footer
     card += f"""
