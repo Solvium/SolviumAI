@@ -43,8 +43,9 @@ check_prerequisites() {
         exit 1
     fi
 
-    if ! command_exists docker-compose; then
-        print_error "Docker Compose is not installed. Please install Docker Compose first."
+    # Check for both docker-compose (standalone) and docker compose (built-in)
+    if ! command_exists docker-compose && ! docker compose version >/dev/null 2>&1; then
+        print_error "Docker Compose is not available. Please ensure Docker is installed with compose support."
         exit 1
     fi
 
@@ -62,12 +63,6 @@ setup_environment() {
 
     # Check if .env file exists
     if [ ! -f .env ]; then
-        if [ -f env.production.example ]; then
-            print_warning ".env file not found. Creating from template..."
-            cp env.production.example .env
-            print_warning "Please edit .env file with your production values before continuing."
-            read -p "Press Enter after editing .env file..."
-        else
             print_error ".env file not found and no template available."
             exit 1
         fi
@@ -150,11 +145,11 @@ generate_ssl_certificates() {
 deploy_application() {
     print_status "Deploying application..."
 
-    # Stop existing containers
-    docker-compose -f docker-compose.production.yml down --remove-orphans
+        # Stop existing containers
+    docker compose -f docker-compose.production.yml down --remove-orphans
 
     # Build and start services
-    docker-compose -f docker-compose.production.yml up -d --build
+    docker compose -f docker-compose.production.yml up -d --build
 
     print_success "Application deployment initiated"
 }
@@ -166,8 +161,8 @@ wait_for_services() {
     local max_attempts=30
     local attempt=1
 
-    while [ $attempt -le $max_attempts ]; do
-        if docker-compose -f docker-compose.production.yml ps | grep -q "Up"; then
+        while [ $attempt -le $max_attempts ]; do
+        if docker compose -f docker-compose.production.yml ps | grep -q "Up"; then
             print_success "Services are running"
             break
         fi
@@ -179,7 +174,7 @@ wait_for_services() {
 
     if [ $attempt -gt $max_attempts ]; then
         print_error "Services failed to start within expected time"
-        docker-compose -f docker-compose.production.yml logs
+        docker compose -f docker-compose.production.yml logs
         exit 1
     fi
 }
@@ -222,10 +217,10 @@ check_health() {
 # Function to show status
 show_status() {
     print_status "Application status:"
-    docker-compose -f docker-compose.production.yml ps
+    docker compose -f docker-compose.production.yml ps
 
     print_status "Service logs (last 20 lines):"
-    docker-compose -f docker-compose.production.yml logs --tail=20
+    docker compose -f docker-compose.production.yml logs --tail=20
 }
 
 # Function to show access information
@@ -241,9 +236,9 @@ show_access_info() {
     echo
     echo "Useful Commands:"
     echo "==============="
-    echo "View logs: docker-compose -f docker-compose.production.yml logs -f"
-    echo "Stop services: docker-compose -f docker-compose.production.yml down"
-    echo "Restart services: docker-compose -f docker-compose.production.yml restart"
+    echo "View logs: docker compose -f docker-compose.production.yml logs -f"
+    echo "Stop services: docker compose -f docker-compose.production.yml down"
+    echo "Restart services: docker compose -f docker-compose.production.yml restart"
     echo "Update and redeploy: ./deploy-production.sh"
 }
 
