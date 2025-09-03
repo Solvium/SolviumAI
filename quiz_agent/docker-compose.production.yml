@@ -92,7 +92,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./.htpasswd:/etc/nginx/.htpasswd:ro
       - ./logs/nginx:/var/log/nginx:rw
     depends_on:
