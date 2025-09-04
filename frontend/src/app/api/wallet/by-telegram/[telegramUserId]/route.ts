@@ -3,6 +3,8 @@ import { prismaWallet } from "@/lib/prismaWallet";
 import { decryptAes256Gcm } from "@/lib/crypto";
 import crypto from "crypto";
 
+const FILE_NAME = "wallet/by-telegram/[telegramUserId]/route.ts";
+
 // Test encryption function to verify our key works
 function encryptAes256Gcm(
   plaintext: string,
@@ -27,15 +29,27 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { telegramUserId: string } }
 ) {
+  console.log(
+    `[${FILE_NAME}:GET] GET request received for fallback wallet lookup`
+  );
+
   try {
-    console.log("params", params);
+    console.log(`[${FILE_NAME}:GET] Request params:`, params);
 
     const telegramUserId = decodeURIComponent(params.telegramUserId);
     const { searchParams } = new URL(request.url);
-    console.log("searchParams", searchParams);
+    console.log(`[${FILE_NAME}:GET] Search params:`, searchParams);
+
     const shouldDecrypt = true; // searchParams.get("decrypt") === "1";
 
+    console.log(`[${FILE_NAME}:GET] Request parameters:`, {
+      telegramUserId,
+      shouldDecrypt,
+      searchParams: Object.fromEntries(searchParams.entries()),
+    });
+
     if (!telegramUserId) {
+      console.error(`[${FILE_NAME}:GET] Missing telegramUserId in path`);
       return NextResponse.json(
         { error: "Missing telegramUserId in path" },
         { status: 400 }
@@ -43,6 +57,7 @@ export async function GET(
     }
 
     // Mock data for testing - replace with your actual wallet data
+    console.log(`[${FILE_NAME}:GET] Using mock wallet data for testing`);
     const row = {
       id: 5,
       telegram_user_id: "724141849",
@@ -59,7 +74,7 @@ export async function GET(
       encryption_tag: "YAYu2qt12BzXq73gtkJAxg==",
     };
 
-    console.log("Using mock wallet data:", {
+    console.log(`[${FILE_NAME}:GET] Mock wallet data:`, {
       telegramUserId,
       accountId: row.account_id,
       hasEncryptedData: !!(
@@ -68,9 +83,13 @@ export async function GET(
         row.encryption_tag
       ),
     });
-    console.log("[API] Wallet lookup by TG", {
+
+    console.log(`[${FILE_NAME}:GET] Wallet lookup by TG:`, {
       telegramUserId,
       hasSecurity: !!row.encrypted_private_key,
+      accountId: row.account_id,
+      isActive: row.is_active,
+      network: row.network,
     });
 
     let decryptedPrivateKey: string | null = null;
@@ -80,25 +99,38 @@ export async function GET(
       row.encryption_iv &&
       row.encryption_tag
     ) {
+      console.log(`[${FILE_NAME}:GET] Starting decryption process...`);
+
       // Parse encryption key from environment variable
       const keyInput = process.env.WALLET_ENCRYPTION_KEY;
 
       if (!keyInput) {
-        console.log("❌ WALLET_ENCRYPTION_KEY not set");
+        console.log(`[${FILE_NAME}:GET] ❌ WALLET_ENCRYPTION_KEY not set`);
         return NextResponse.json(
           { error: "WALLET_ENCRYPTION_KEY not set" },
           { status: 500 }
         );
       }
 
+      console.log(
+        `[${FILE_NAME}:GET] WALLET_ENCRYPTION_KEY found, length:`,
+        keyInput.length
+      );
+
       // Try different formats to get 32 bytes
       let encryptionKey: Buffer;
       try {
         // Try base64 first
         encryptionKey = Buffer.from(keyInput, "base64");
+        console.log(
+          `[${FILE_NAME}:GET] Parsed encryption key from base64, length:`,
+          encryptionKey.length
+        );
 
         // TEST: Try encrypting and decrypting a test message to verify the key works
-        console.log("🧪 Testing encryption/decryption with current key...");
+        console.log(
+          `[${FILE_NAME}:GET] 🧪 Testing encryption/decryption with current key...`
+        );
         const testMessage = "test-private-key-123";
         const testEncrypted = encryptAes256Gcm(testMessage, encryptionKey);
         const testDecrypted = decryptAes256Gcm(
@@ -108,33 +140,40 @@ export async function GET(
           encryptionKey
         );
         console.log(
-          "🧪 Test encryption/decryption successful:",
+          `[${FILE_NAME}:GET] 🧪 Test encryption/decryption successful:`,
           testDecrypted === testMessage
         );
-        console.log("🧪 Test decrypted:", testDecrypted);
+        console.log(`[${FILE_NAME}:GET] 🧪 Test decrypted:`, testDecrypted);
       } catch (e) {
-        console.log("❌ Error parsing encryption key:", e);
+        console.log(`[${FILE_NAME}:GET] ❌ Error parsing encryption key:`, e);
         return NextResponse.json(
           { error: "Invalid WALLET_ENCRYPTION_KEY format" },
           { status: 500 }
         );
       }
+
       try {
-        console.log("🔓 Starting decryption...");
+        console.log(`[${FILE_NAME}:GET] 🔓 Starting decryption...`);
         console.log(
-          "🔓 Encrypted data length:",
+          `[${FILE_NAME}:GET] 🔓 Encrypted data length:`,
           row.encrypted_private_key.length
         );
-        console.log("🔓 IV length:", row.encryption_iv.length);
-        console.log("🔓 Tag length:", row.encryption_tag.length);
+        console.log(
+          `[${FILE_NAME}:GET] 🔓 IV length:`,
+          row.encryption_iv.length
+        );
+        console.log(
+          `[${FILE_NAME}:GET] 🔓 Tag length:`,
+          row.encryption_tag.length
+        );
 
         // Log the actual values for debugging
         console.log(
-          "🔓 Encrypted data (first 50 chars):",
+          `[${FILE_NAME}:GET] 🔓 Encrypted data (first 50 chars):`,
           row.encrypted_private_key.substring(0, 50)
         );
-        console.log("🔓 IV:", row.encryption_iv);
-        console.log("🔓 Tag:", row.encryption_tag);
+        console.log(`[${FILE_NAME}:GET] 🔓 IV:`, row.encryption_iv);
+        console.log(`[${FILE_NAME}:GET] 🔓 Tag:`, row.encryption_tag);
 
         decryptedPrivateKey = decryptAes256Gcm(
           row.encrypted_private_key,
@@ -143,25 +182,35 @@ export async function GET(
           encryptionKey
         );
 
-        console.log("✅ Decryption successful!");
+        console.log(`[${FILE_NAME}:GET] ✅ Decryption successful!`);
         console.log(
-          "✅ Decrypted private key length:",
+          `[${FILE_NAME}:GET] ✅ Decrypted private key length:`,
           decryptedPrivateKey.length
         );
         console.log(
-          "✅ Decrypted private key preview:",
+          `[${FILE_NAME}:GET] ✅ Decrypted private key preview:`,
           decryptedPrivateKey.substring(0, 20) + "..."
         );
-        console.log("[API] Decrypted private key for TG user", telegramUserId);
+        console.log(
+          `[${FILE_NAME}:GET] Decrypted private key for TG user:`,
+          telegramUserId
+        );
       } catch (e: any) {
-        console.log("❌ Decryption failed:", e);
-        console.log("❌ Error message:", e?.message);
-        console.log("❌ Error stack:", e?.stack);
+        console.log(`[${FILE_NAME}:GET] ❌ Decryption failed:`, e);
+        console.log(`[${FILE_NAME}:GET] ❌ Error message:`, e?.message);
+        console.log(`[${FILE_NAME}:GET] ❌ Error stack:`, e?.stack);
         return NextResponse.json(
           { error: `Failed to decrypt private key: ${e?.message || e}` },
           { status: 500 }
         );
       }
+    } else {
+      console.log(`[${FILE_NAME}:GET] Decryption skipped or missing data:`, {
+        shouldDecrypt,
+        hasEncryptedPrivateKey: !!row.encrypted_private_key,
+        hasEncryptionIv: !!row.encryption_iv,
+        hasEncryptionTag: !!row.encryption_tag,
+      });
     }
 
     const response = {
@@ -184,8 +233,19 @@ export async function GET(
       privateKey: decryptedPrivateKey || undefined,
     };
 
+    console.log(`[${FILE_NAME}:GET] Sending response:`, {
+      hasPrivateKey: !!response.privateKey,
+      accountId: response.accountId,
+      isActive: response.isActive,
+      privateKeyLength: response.privateKey?.length || 0,
+    });
+
     return NextResponse.json(response);
   } catch (error: any) {
+    console.error(`[${FILE_NAME}:GET] Internal server error:`, {
+      error: error?.message || error,
+      stack: error?.stack,
+    });
     return NextResponse.json(
       { error: error?.message || "Internal Server Error" },
       { status: 500 }

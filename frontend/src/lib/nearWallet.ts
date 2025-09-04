@@ -1,30 +1,26 @@
-import {
-  connect,
-  keyStores,
-  KeyPair,
-  WalletConnection,
-  Account,
-} from "near-api-js";
-import { BLOCKCHAIN_NET } from "../components/constants/contractId";
+import { connect, keyStores, KeyPair, Account } from "near-api-js";
 
-// Create a custom key store for private key usage
+const FILE_NAME = "nearWallet.ts";
+
+// Use testnet as default
+const BLOCKCHAIN_NET = "testnet";
+
+// Custom key store for private key usage
 export class PrivateKeyStore extends keyStores.KeyStore {
-  private keyPair: KeyPair;
+  private privateKey: string;
   private accountId: string;
 
   constructor(privateKey: string, accountId: string) {
     super();
-    // near-api-js expects a KeyPairString (e.g., "ed25519:...")
-    // Cast to satisfy typings while supporting runtime-provided strings
-    this.keyPair = KeyPair.fromString(privateKey as unknown as any);
+    console.log(
+      `[${FILE_NAME}:constructor] PrivateKeyStore constructor called:`,
+      {
+        accountId,
+        privateKeyLength: privateKey.length,
+      }
+    );
+    this.privateKey = privateKey;
     this.accountId = accountId;
-  }
-
-  async getKey(networkId: string, accountId: string): Promise<KeyPair> {
-    if (accountId === this.accountId) {
-      return this.keyPair;
-    }
-    throw new Error(`Key not found for account ${accountId}`);
   }
 
   async setKey(
@@ -32,24 +28,67 @@ export class PrivateKeyStore extends keyStores.KeyStore {
     accountId: string,
     keyPair: KeyPair
   ): Promise<void> {
-    // This is a read-only key store for private key usage
-    throw new Error("Cannot set key in PrivateKeyStore");
+    console.log(`[${FILE_NAME}:setKey] setKey called:`, {
+      networkId,
+      accountId,
+      keyPairType: keyPair.constructor.name,
+    });
+    // Implementation for setting key
+  }
+
+  async getKey(networkId: string, accountId: string): Promise<KeyPair> {
+    console.log(`[${FILE_NAME}:getKey] getKey called:`, {
+      networkId,
+      accountId,
+      requestedAccountId: accountId,
+      storedAccountId: this.accountId,
+    });
+
+    if (accountId === this.accountId) {
+      console.log(
+        `[${FILE_NAME}:getKey] Creating KeyPair from stored private key`
+      );
+      try {
+        const keyPair = KeyPair.fromString(this.privateKey as any);
+        console.log(`[${FILE_NAME}:getKey] KeyPair created successfully:`, {
+          publicKey: keyPair.getPublicKey().toString(),
+          keyType: keyPair.constructor.name,
+        });
+        return keyPair;
+      } catch (error) {
+        console.error(`[${FILE_NAME}:getKey] Failed to create KeyPair:`, error);
+        throw new Error(`Failed to create KeyPair: ${error}`);
+      }
+    }
+
+    console.log(`[${FILE_NAME}:getKey] Account ID mismatch, throwing error`);
+    throw new Error(`Key not found for account ${accountId}`);
   }
 
   async removeKey(networkId: string, accountId: string): Promise<void> {
-    throw new Error("Cannot remove key from PrivateKeyStore");
+    console.log(`[${FILE_NAME}:removeKey] removeKey called:`, {
+      networkId,
+      accountId,
+    });
+    // Implementation for removing key
   }
 
   async clear(): Promise<void> {
-    throw new Error("Cannot clear PrivateKeyStore");
-  }
-
-  async getNetworks(): Promise<string[]> {
-    return [BLOCKCHAIN_NET];
+    console.log(`[${FILE_NAME}:clear] clear called`);
+    // Implementation for clearing all keys
   }
 
   async getAccounts(networkId: string): Promise<string[]> {
+    console.log(`[${FILE_NAME}:getAccounts] getAccounts called:`, {
+      networkId,
+      storedAccountId: this.accountId,
+    });
     return [this.accountId];
+  }
+
+  async getNetworks(): Promise<string[]> {
+    console.log(`[${FILE_NAME}:getNetworks] getNetworks called`);
+    return [BLOCKCHAIN_NET];
   }
 }
 
@@ -58,32 +97,64 @@ export const initializeNearWithPrivateKey = async (
   privateKey: string,
   accountId: string
 ) => {
-  const keyStore = new PrivateKeyStore(privateKey, accountId);
+  console.log(
+    `[${FILE_NAME}:initializeNearWithPrivateKey] initializeNearWithPrivateKey called:`,
+    {
+      accountId,
+      privateKeyLength: privateKey.length,
+      blockchainNet: BLOCKCHAIN_NET,
+    }
+  );
 
-  const near = await connect({
-    networkId: BLOCKCHAIN_NET,
-    keyStore,
-    nodeUrl:
-      BLOCKCHAIN_NET === "mainnet"
-        ? "https://rpc.mainnet.near.org"
-        : "https://rpc.testnet.near.org",
-    walletUrl:
-      BLOCKCHAIN_NET === "mainnet"
-        ? "https://wallet.near.org"
-        : "https://wallet.testnet.near.org",
-    helperUrl:
-      BLOCKCHAIN_NET === "mainnet"
-        ? "https://helper.mainnet.near.org"
-        : "https://helper.testnet.near.org",
-  } as any);
+  try {
+    console.log(
+      `[${FILE_NAME}:initializeNearWithPrivateKey] Creating PrivateKeyStore...`
+    );
+    const keyStore = new PrivateKeyStore(privateKey, accountId);
 
-  const account = new Account(near.connection, accountId);
+    console.log(
+      `[${FILE_NAME}:initializeNearWithPrivateKey] Connecting to NEAR network...`
+    );
+    const near = await connect({
+      networkId: BLOCKCHAIN_NET,
+      keyStore,
+      nodeUrl: "https://rpc.testnet.near.org",
+      walletUrl: "https://wallet.testnet.near.org",
+      helperUrl: "https://helper.testnet.near.org",
+    } as any);
 
-  return {
-    near,
-    account,
-    accountId,
-  };
+    console.log(
+      `[${FILE_NAME}:initializeNearWithPrivateKey] NEAR connection established successfully`
+    );
+
+    console.log(
+      `[${FILE_NAME}:initializeNearWithPrivateKey] Creating Account instance...`
+    );
+    const account = new Account(near.connection, accountId);
+
+    console.log(
+      `[${FILE_NAME}:initializeNearWithPrivateKey] Account instance created:`,
+      {
+        accountId: account.accountId,
+        connectionExists: !!account.connection,
+      }
+    );
+
+    return {
+      near,
+      account,
+      accountId,
+    };
+  } catch (error) {
+    console.error(
+      `[${FILE_NAME}:initializeNearWithPrivateKey] Failed to initialize NEAR:`,
+      {
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      }
+    );
+    throw error;
+  }
 };
 
 // Sign and send transaction using private key
@@ -91,69 +162,121 @@ export const signAndSendTransaction = async (
   account: Account,
   receiverId: string,
   actions: any[],
-  gas: string | bigint = "300000000000000",
-  deposit: string | bigint = "0"
+  gas: string = "300000000000000",
+  deposit: string = "0"
 ) => {
-  try {
-    const gasBig: bigint = typeof gas === "string" ? BigInt(gas) : gas;
-    const depositBig: bigint =
-      typeof deposit === "string" ? BigInt(deposit) : deposit;
+  console.log(
+    `[${FILE_NAME}:signAndSendTransaction] signAndSendTransaction called:`,
+    {
+      receiverId,
+      actionsCount: actions.length,
+      gas,
+      deposit,
+      accountId: account.accountId,
+    }
+  );
 
+  try {
+    console.log(
+      `[${FILE_NAME}:signAndSendTransaction] Executing transaction...`
+    );
     const result = await account.functionCall({
       contractId: receiverId,
-      methodName: actions[0].params.methodName,
-      args: actions[0].params.args,
-      gas: gasBig,
-      attachedDeposit: depositBig,
+      methodName: "ft_transfer_call",
+      args: actions,
+      gas: BigInt(gas),
+      attachedDeposit: BigInt(deposit),
     });
+
+    console.log(
+      `[${FILE_NAME}:signAndSendTransaction] Transaction successful:`,
+      {
+        transactionHash: result.transaction.hash,
+        blockHash: "transaction completed",
+      }
+    );
 
     return result;
   } catch (error) {
-    console.error("Transaction failed:", error);
+    console.error(`[${FILE_NAME}:signAndSendTransaction] Transaction failed:`, {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     throw error;
   }
 };
 
-// Check token registration
+// Check if token is registered for the account
 export const checkTokenRegistration = async (
   account: Account,
   tokenAddress: string,
   accountId: string
 ) => {
+  console.log(
+    `[${FILE_NAME}:checkTokenRegistration] checkTokenRegistration called:`,
+    {
+      tokenAddress,
+      accountId,
+    }
+  );
+
   try {
+    console.log(
+      `[${FILE_NAME}:checkTokenRegistration] Checking token registration...`
+    );
     const result = await account.viewFunction({
       contractId: tokenAddress,
       methodName: "storage_balance_of",
       args: { account_id: accountId },
     });
+
+    console.log(
+      `[${FILE_NAME}:checkTokenRegistration] Token registration check result:`,
+      result
+    );
     return result;
   } catch (error) {
-    console.error("Token registration check failed:", error);
+    console.log(
+      `[${FILE_NAME}:checkTokenRegistration] Token not registered or error occurred:`,
+      {
+        error: error instanceof Error ? error.message : error,
+      }
+    );
     return null;
   }
 };
 
-// Register token
+// Register token for the account
 export const registerToken = async (
   account: Account,
   tokenId: string,
   accountId: string
 ) => {
+  console.log(`[${FILE_NAME}:registerToken] registerToken called:`, {
+    tokenId,
+    accountId,
+  });
+
   try {
+    console.log(`[${FILE_NAME}:registerToken] Registering token...`);
     const result = await account.functionCall({
       contractId: tokenId,
       methodName: "storage_deposit",
-      args: {
-        account_id: accountId,
-        registration_only: true,
-      },
-      gas: BigInt("30000000000000"),
-      attachedDeposit: BigInt("1250000000000000000000"), // 0.00125 NEAR
+      args: { account_id: accountId, registration_only: true },
+      gas: BigInt("300000000000000"),
+      attachedDeposit: BigInt("1250000000000000000000"),
+    });
+
+    console.log(`[${FILE_NAME}:registerToken] Token registration successful:`, {
+      transactionHash: result.transaction.hash,
     });
 
     return result;
   } catch (error) {
-    console.error("Token registration failed:", error);
+    console.error(`[${FILE_NAME}:registerToken] Token registration failed:`, {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     throw error;
   }
 };
