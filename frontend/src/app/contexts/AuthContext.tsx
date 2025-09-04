@@ -11,7 +11,6 @@ import WebApp from "@twa-dev/sdk";
 import { jwtDecode } from "jwt-decode";
 import { useSimpleWallet } from "@/app/contexts/SimpleWalletContext";
 
-
 // Types
 export type AuthProvider = "telegram" | "google" | "email" | "wallet";
 
@@ -155,8 +154,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       return () => clearInterval(refreshInterval);
     }
   }, [state.isAuthenticated]);
-
-
 
   const checkAuthStatus = async () => {
     try {
@@ -333,8 +330,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       console.error("Failed to update user:", error);
     }
   }, []);
-
-
 
   const value: AuthContextType = {
     ...state,
