@@ -603,8 +603,29 @@ class HighPerformanceQuizService:
             for key in cleanup_keys:
                 await RedisClient.delete_value(key)
 
+            # Clean up leaderboard message IDs for this quiz
+            await self._cleanup_leaderboard_messages(quiz_id)
+
         except Exception as e:
             logger.error(f"Error cleaning up cache for quiz {quiz_id}: {e}")
+
+    async def _cleanup_leaderboard_messages(self, quiz_id: str):
+        """Clean up leaderboard message IDs for completed quiz."""
+        try:
+            from utils.redis_client import RedisClient
+
+            # Get all leaderboard message keys for this quiz
+            redis_client = await RedisClient.get_instance()
+            if redis_client:
+                pattern = f"leaderboard_msg_{quiz_id}_*"
+                async for key in redis_client.scan_iter(match=pattern):
+                    await redis_client.delete(key)
+                    logger.info(f"Cleaned up leaderboard message key: {key}")
+
+        except Exception as e:
+            logger.error(
+                f"Error cleaning up leaderboard messages for quiz {quiz_id}: {e}"
+            )
 
     def _serialize_quiz_state(self, quiz_state: QuizState) -> Dict[str, Any]:
         """Serialize quiz state for caching."""

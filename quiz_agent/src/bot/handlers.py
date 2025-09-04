@@ -1452,6 +1452,10 @@ async def handle_show_leaderboard(update, context, quiz_id):
         from utils.quiz_cards import create_leaderboard_card
         from store.database import SessionLocal
         from models.quiz import Quiz
+        from utils.redis_client import RedisClient
+
+        # Initialize Redis client
+        redis_client = RedisClient()
 
         session = SessionLocal()
         try:
@@ -1506,13 +1510,166 @@ async def handle_show_leaderboard(update, context, quiz_id):
                 quiz_id, leaderboard_data, time_remaining, total_participants
             )
 
-            await safe_send_message(
-                context.bot,
-                chat_id,
-                leaderboard_msg,
-                parse_mode="Markdown",
-                reply_markup=leaderboard_keyboard,
+            # Check if we already have a leaderboard message for this quiz in this chat
+            # Store under the chat_id since the message is in the group chat
+            leaderboard_key = f"leaderboard_msg_{quiz_id}_{chat_id}"
+            existing_message_id = await redis_client.get_user_data_key(
+                chat_id, leaderboard_key
             )
+
+            # Debug logging
+            logger.info(f"Leaderboard key: {leaderboard_key}")
+            logger.info(f"User ID: {user_id}")
+            logger.info(f"Existing message ID: {existing_message_id}")
+
+            if existing_message_id:
+                try:
+                    # Edit existing message
+                    await context.bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=int(existing_message_id),
+                        text=leaderboard_msg,
+                        parse_mode="Markdown",
+                        reply_markup=leaderboard_keyboard,
+                    )
+                    logger.info(
+                        f"Updated existing leaderboard message {existing_message_id} for quiz {quiz_id}"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to edit existing leaderboard message: {e}, sending new one"
+                    )
+                    # Fall back to sending new message
+                    message = await safe_send_message(
+                        context.bot,
+                        chat_id,
+                        leaderboard_msg,
+                        parse_mode="Markdown",
+                        reply_markup=leaderboard_keyboard,
+                    )
+                    if message:
+                        logger.info(
+                            f"Fallback message object received: {message}, type: {type(message)}"
+                        )
+                        logger.info(
+                            f"Fallback Message ID: {getattr(message, 'message_id', 'NO_MESSAGE_ID')}"
+                        )
+
+                        try:
+                            await redis_client.set_user_data_key(
+                                chat_id, leaderboard_key, str(message.message_id)
+                            )
+                            # Set TTL for the leaderboard message key
+                            await redis_client.expire_user_data_key(
+                                chat_id, leaderboard_key, 86400
+                            )  # 24 hours
+                            logger.info(
+                                f"Stored fallback leaderboard message ID {message.message_id} with key {leaderboard_key} for chat {chat_id}"
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"Failed to store fallback leaderboard message ID: {e}"
+                            )
+                    else:
+                        logger.warning(
+                            "No fallback message object returned from safe_send_message"
+                        )
+                        # Fallback: try to send message directly and get the ID
+                        try:
+                            logger.info(
+                                "Attempting fallback direct message sending for edit failure case..."
+                            )
+                            fallback_message = await context.bot.send_message(
+                                chat_id=chat_id,
+                                text=leaderboard_msg,
+                                parse_mode="Markdown",
+                                reply_markup=leaderboard_keyboard,
+                            )
+                            if fallback_message:
+                                logger.info(
+                                    f"Fallback message sent successfully with ID: {fallback_message.message_id}"
+                                )
+                                # Store the message ID from fallback
+                                await redis_client.set_user_data_key(
+                                    chat_id,
+                                    leaderboard_key,
+                                    str(fallback_message.message_id),
+                                )
+                                await redis_client.expire_user_data_key(
+                                    chat_id, leaderboard_key, 86400
+                                )
+                                logger.info(
+                                    f"Stored fallback leaderboard message ID {fallback_message.message_id} with key {leaderboard_key} for chat {chat_id}"
+                                )
+                            else:
+                                logger.error("Fallback message sending also failed")
+                        except Exception as e:
+                            logger.error(f"Fallback message sending failed: {e}")
+            else:
+                # Send new message and store its ID
+                message = await safe_send_message(
+                    context.bot,
+                    chat_id,
+                    leaderboard_msg,
+                    parse_mode="Markdown",
+                    reply_markup=leaderboard_keyboard,
+                )
+                if message:
+                    # Store message ID with TTL (24 hours) to auto-cleanup
+                    logger.info(
+                        f"Message object received: {message}, type: {type(message)}"
+                    )
+                    logger.info(
+                        f"Message ID: {getattr(message, 'message_id', 'NO_MESSAGE_ID')}"
+                    )
+
+                    try:
+                        await redis_client.set_user_data_key(
+                            chat_id, leaderboard_key, str(message.message_id)
+                        )
+                        # Set TTL for the leaderboard message key
+                        await redis_client.expire_user_data_key(
+                            chat_id, leaderboard_key, 86400
+                        )  # 24 hours
+                        logger.info(
+                            f"Stored leaderboard message ID {message.message_id} with key {leaderboard_key} for chat {chat_id}"
+                        )
+                        logger.info(
+                            f"Sent new leaderboard message {message.message_id} for quiz {quiz_id}"
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to store leaderboard message ID: {e}")
+                else:
+                    logger.warning("No message object returned from safe_send_message")
+                    # Fallback: try to send message directly and get the ID
+                    try:
+                        logger.info("Attempting fallback direct message sending...")
+                        fallback_message = await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=leaderboard_msg,
+                            parse_mode="Markdown",
+                            reply_markup=leaderboard_keyboard,
+                        )
+                        if fallback_message:
+                            logger.info(
+                                f"Fallback message sent successfully with ID: {fallback_message.message_id}"
+                            )
+                            # Store the message ID from fallback
+                            await redis_client.set_user_data_key(
+                                chat_id,
+                                leaderboard_key,
+                                str(fallback_message.message_id),
+                            )
+                            await redis_client.expire_user_data_key(
+                                chat_id, leaderboard_key, 86400
+                            )
+                            logger.info(
+                                f"Stored fallback leaderboard message ID {fallback_message.message_id} with key {leaderboard_key} for chat {chat_id}"
+                            )
+                        else:
+                            logger.error("Fallback message sending also failed")
+                    except Exception as e:
+                        logger.error(f"Fallback message sending failed: {e}")
 
         finally:
             session.close()
@@ -1960,27 +2117,79 @@ async def confirm_choice(update, context):
         await redis_client.clear_user_data(user_id)
         return ConversationHandler.END
 
-    quiz_text = await generate_quiz_questions(topic, num_questions, context_text)
+    try:
+        quiz_text = await generate_quiz_questions(topic, num_questions, context_text)
+        if not quiz_text:
+            await update.callback_query.message.reply_text(
+                "❌ Failed to generate quiz questions. Please try again with a different topic."
+            )
+            await redis_client.clear_user_data(user_id)
+            return ConversationHandler.END
+    except Exception as e:
+        import traceback
+
+        error_details = traceback.format_exc()
+        logger.error(f"Error generating quiz questions for user {user_id}: {e}")
+        logger.error(f"Full error details: {error_details}")
+
+        await update.callback_query.message.reply_text(
+            f"❌ Error generating quiz questions: {str(e)}\n\nPlease try again with a simpler topic or fewer questions."
+        )
+        await redis_client.clear_user_data(user_id)
+        return ConversationHandler.END
 
     group_chat_id_to_use = group_chat_id if group_chat_id else update.effective_chat.id
 
-    # Call process_questions with enhanced data including payment info
-    await process_questions_with_payment(
-        update,
-        context,
-        topic,
-        quiz_text,
-        group_chat_id_to_use,
-        duration_seconds=duration_seconds,
-        reward_amount=reward_amount,
-        reward_structure=reward_structure,
-        payment_status=payment_status,
-        total_cost=total_cost,
-    )
+    try:
+        # Call process_questions with enhanced data including payment info
+        await process_questions_with_payment(
+            update,
+            context,
+            topic,
+            quiz_text,
+            group_chat_id_to_use,
+            duration_seconds=duration_seconds,
+            reward_amount=reward_amount,
+            reward_structure=reward_structure,
+            payment_status=payment_status,
+            total_cost=total_cost,
+        )
 
-    # Clear conversation data for quiz creation
-    await redis_client.clear_user_data(user_id)
-    return ConversationHandler.END
+        # Clear conversation data for quiz creation
+        await redis_client.clear_user_data(user_id)
+        return ConversationHandler.END
+
+    except Exception as e:
+        import traceback
+
+        error_details = traceback.format_exc()
+        logger.error(f"Error in confirm_choice for user {user_id}: {e}")
+        logger.error(f"Full error details: {error_details}")
+
+        # Send error message to user
+        try:
+            await update.callback_query.message.reply_text(
+                f"❌ Error creating quiz: {str(e)}\n\nPlease try again or contact support if the issue persists."
+            )
+        except Exception as send_error:
+            logger.error(
+                f"Failed to send error message to user {user_id}: {send_error}"
+            )
+            # Fallback: try to send a simple error message
+            try:
+                await context.bot.send_message(
+                    chat_id=user_id, text="❌ Error creating quiz. Please try again."
+                )
+            except Exception as fallback_error:
+                logger.error(f"Even fallback error message failed: {fallback_error}")
+
+        # Clear conversation data on error
+        try:
+            await redis_client.clear_user_data(user_id)
+        except Exception as clear_error:
+            logger.error(f"Failed to clear user data for {user_id}: {clear_error}")
+
+        return ConversationHandler.END
 
 
 async def process_real_near_payment(
@@ -2158,6 +2367,7 @@ async def process_questions_with_payment(
 
         # Import rich card formatting
         from utils.quiz_cards import create_quiz_announcement_card
+        from utils.telegram_helpers import sanitize_markdown
 
         # Calculate duration in minutes
         duration_minutes = duration_seconds // 60 if duration_seconds else 0
@@ -2268,10 +2478,30 @@ async def process_questions_with_payment(
         )
 
     except Exception as e:
+        import traceback
+
+        error_details = traceback.format_exc()
         logger.error(f"Error in process_questions_with_payment for user {user_id}: {e}")
-        await safe_send_message(
-            context.bot, user_id, "❌ Error creating quiz. Please try again."
-        )
+        logger.error(f"Full error details: {error_details}")
+
+        # Send more informative error message to user
+        try:
+            await safe_send_message(
+                context.bot,
+                user_id,
+                f"❌ Error creating quiz: {str(e)}\n\nPlease try again or contact support if the issue persists.",
+            )
+        except Exception as send_error:
+            logger.error(
+                f"Failed to send error message to user {user_id}: {send_error}"
+            )
+            # Fallback: try to send a simple error message
+            try:
+                await context.bot.send_message(
+                    chat_id=user_id, text="❌ Error creating quiz. Please try again."
+                )
+            except Exception as fallback_error:
+                logger.error(f"Even fallback error message failed: {fallback_error}")
 
 
 async def store_payment_info_in_quiz(user_id: int, payment_info: dict):
