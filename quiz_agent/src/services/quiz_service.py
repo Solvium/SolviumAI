@@ -2313,14 +2313,24 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         winners_announcement += "\n🎯 <b>Thanks to all participants!</b> 🎯"
 
         # Send second announcement (winners)
-        await safe_send_message(
+        message = await safe_send_message(
             application.bot,
             announcement_chat_id,
             winners_announcement,
             parse_mode="HTML",
         )
 
-        logger.info(f"Quiz end announcements (both parts) sent for quiz {quiz_id}")
+        if message:
+            # Store announcement message ID for cleanup (this is the main end announcement)
+            quiz.announcement_message_id = message.message_id
+            session.commit()
+            logger.info(
+                f"Quiz end announcements sent for quiz {quiz_id} with message ID: {message.message_id}"
+            )
+        else:
+            logger.warning(
+                f"Quiz end announcements sent for quiz {quiz_id} but no message object returned"
+            )
 
         # Debug logging to diagnose reward distribution issue
         logger.info(f"Quiz {quiz_id} reward_schedule: {quiz.reward_schedule}")
