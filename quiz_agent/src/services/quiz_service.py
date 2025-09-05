@@ -1782,31 +1782,37 @@ async def get_winners(update: Update, context: CallbackContext):
             )
             return
 
+        # Filter out participants with 0 correct answers from leaderboard display
+        winners_with_scores = [w for w in winners if w.get("correct_count", 0) > 0]
+
         # Generate leaderboard message
         message = f"📊 Leaderboard for quiz: *{quiz.topic}*\n"
 
-        # Display winners with rewards if available
-        reward_schedule = quiz.reward_schedule or {}
+        if winners_with_scores:
+            # Display winners with rewards if available
+            reward_schedule = quiz.reward_schedule or {}
 
-        for i, winner in enumerate(winners[:10]):  # Show top 10 max
-            rank = i + 1
-            # Improve username display and tagging
-            username = winner.get("username")
-            if not username:
-                winner_user_id = winner.get("user_id", "UnknownUser")
-                username = f"User_{winner_user_id[:8]}"
+            for i, winner in enumerate(winners_with_scores[:10]):  # Show top 10 max
+                rank = i + 1
+                # Improve username display and tagging
+                username = winner.get("username")
+                if not username:
+                    winner_user_id = winner.get("user_id", "UnknownUser")
+                    username = f"User_{winner_user_id[:8]}"
 
-            correct = winner["correct_count"]
-            rank_emoji = ["🥇", "🥈", "🥉"][i] if i < 3 else "🏅"
+                correct = winner["correct_count"]
+                rank_emoji = ["🥇", "🥈", "🥉"][i] if i < 3 else "🏅"
 
-            # Show reward if this position has a reward and quiz is active/closed
-            reward_text = ""
-            if str(rank) in reward_schedule:
-                reward_text = f" - {reward_schedule[str(rank)]} NEAR"
-            elif rank in reward_schedule:
-                reward_text = f" - {reward_schedule[rank]} NEAR"
+                # Show reward if this position has a reward and quiz is active/closed
+                reward_text = ""
+                if str(rank) in reward_schedule:
+                    reward_text = f" - {reward_schedule[str(rank)]} NEAR"
+                elif rank in reward_schedule:
+                    reward_text = f" - {reward_schedule[rank]} NEAR"
 
-            message += f"{rank_emoji} {rank}. @{username}: {correct} correct answers{reward_text}\n"
+                message += f"{rank_emoji} {rank}. @{username}: {correct} correct answers{reward_text}\n"
+        else:
+            message += "📊 No correct answers yet! Be the first to get one right! 🎯\n"
 
         # Add quiz status info
         status = f"Quiz is {quiz.status.value.lower()}"
@@ -2228,24 +2234,38 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
             # Get the actual number of questions in the quiz
             num_questions_in_quiz = len(quiz.questions) if quiz.questions else 0
 
-            # Add leaderboard
-            winners_announcement += "\n🏆 <b>FINAL LEADERBOARD:</b>\n"
-            for i, participant in enumerate(all_participants[:10]):  # Show top 10
-                medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "🏅"
-                username = participant.get(
-                    "username", f"User_{participant.get('user_id', 'Unknown')[:8]}"
-                )
-                correct_count = participant.get("correct_count", 0)
-                # Use the total questions in quiz instead of questions_answered
-                accuracy = (
-                    (correct_count / num_questions_in_quiz * 100)
-                    if num_questions_in_quiz > 0
-                    else 0
-                )
+            # Filter out participants with 0 correct answers from winners display
+            winners_with_scores = [
+                p for p in all_participants if p.get("correct_count", 0) > 0
+            ]
 
-                winners_announcement += f"{medal} <b>{i+1}.</b> @{username}\n"
+            if winners_with_scores:
+                # Add leaderboard
+                winners_announcement += "\n🏆 <b>FINAL LEADERBOARD:</b>\n"
+                for i, participant in enumerate(
+                    winners_with_scores[:10]
+                ):  # Show top 10
+                    medal = (
+                        "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "🏅"
+                    )
+                    username = participant.get(
+                        "username", f"User_{participant.get('user_id', 'Unknown')[:8]}"
+                    )
+                    correct_count = participant.get("correct_count", 0)
+                    # Use the total questions in quiz instead of questions_answered
+                    accuracy = (
+                        (correct_count / num_questions_in_quiz * 100)
+                        if num_questions_in_quiz > 0
+                        else 0
+                    )
+
+                    winners_announcement += f"{medal} <b>{i+1}.</b> @{username}\n"
+                    winners_announcement += f"   📊 {correct_count}/{num_questions_in_quiz} ({accuracy:.1f}%)\n"
+            else:
+                # No one got any questions right
+                winners_announcement += "\n🏆 <b>FINAL LEADERBOARD:</b>\n"
                 winners_announcement += (
-                    f"   📊 {correct_count}/{num_questions_in_quiz} ({accuracy:.1f}%)\n"
+                    "📊 No correct answers this round! Better luck next time! 🍀\n"
                 )
 
             # Add participation stats
@@ -2277,27 +2297,22 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                 winners_announcement += "\n💰 <b>Reward Type:</b> Custom Rewards"
 
             # Add DM notification for winners when there are rewards
-            if all_participants:
+            if winners_with_scores:
                 # Determine who gets rewards based on reward type
                 winners_to_notify = []
 
                 if reward_type == "wta_amount":
-                    # Winner takes all - only the top participant
-                    if all_participants:
-                        winners_to_notify = [all_participants[0]]
+                    # Winner takes all - only the top participant with correct answers
+                    winners_to_notify = [winners_with_scores[0]]
                 elif reward_type == "top3_details":
-                    # Top 3 winners
-                    winners_to_notify = all_participants[:3]
+                    # Top 3 winners with correct answers
+                    winners_to_notify = winners_with_scores[:3]
                 elif reward_type == "custom_details":
-                    # Custom rewards - assume all participants with correct answers
-                    winners_to_notify = [
-                        p for p in all_participants if p.get("correct_count", 0) > 0
-                    ]
+                    # Custom rewards - all participants with correct answers
+                    winners_to_notify = winners_with_scores
                 else:
-                    # For other reward types, assume participants with correct answers
-                    winners_to_notify = [
-                        p for p in all_participants if p.get("correct_count", 0) > 0
-                    ]
+                    # For other reward types, all participants with correct answers
+                    winners_to_notify = winners_with_scores
 
                 # Add DM notification message for winners
                 if winners_to_notify:
@@ -2313,14 +2328,24 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         winners_announcement += "\n🎯 <b>Thanks to all participants!</b> 🎯"
 
         # Send second announcement (winners)
-        await safe_send_message(
+        message = await safe_send_message(
             application.bot,
             announcement_chat_id,
             winners_announcement,
             parse_mode="HTML",
         )
 
-        logger.info(f"Quiz end announcements (both parts) sent for quiz {quiz_id}")
+        if message:
+            # Store announcement message ID for cleanup (this is the main end announcement)
+            quiz.announcement_message_id = message.message_id
+            session.commit()
+            logger.info(
+                f"Quiz end announcements sent for quiz {quiz_id} with message ID: {message.message_id}"
+            )
+        else:
+            logger.warning(
+                f"Quiz end announcements sent for quiz {quiz_id} but no message object returned"
+            )
 
         # Debug logging to diagnose reward distribution issue
         logger.info(f"Quiz {quiz_id} reward_schedule: {quiz.reward_schedule}")

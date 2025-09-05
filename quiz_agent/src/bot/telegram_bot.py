@@ -429,6 +429,12 @@ class TelegramBot:
         logger.info("Starting message queue for rate limiting...")
         await message_queue.start()
 
+        # Start the message cleanup service for anti-spam features
+        logger.info("Starting message cleanup service...")
+        from services.message_cleanup_service import start_message_cleanup_service
+
+        await start_message_cleanup_service(self.app)
+
         await self.app.initialize()
         await self.app.start()
 
