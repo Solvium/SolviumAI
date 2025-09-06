@@ -207,7 +207,8 @@ def _escape_markdown_v2_specials(text: str) -> str:
     REWARD_TOP3_INPUT,
     REWARD_CUSTOM_INPUT,
     REWARD_MANUAL_INPUT,
-) = range(7, 12)
+    REWARD_CUSTOM_STRUCTURE_INPUT,
+) = range(7, 13)
 
 
 # Helper function to parse reward details
@@ -1385,7 +1386,7 @@ async def handle_quiz_interaction_callback(update, context):
 
 
 async def handle_play_quiz(update, context, quiz_id):
-    """Handle play quiz button click"""
+    """Handle play quiz button click with anti-spam features"""
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
@@ -1396,23 +1397,51 @@ async def handle_play_quiz(update, context, quiz_id):
     try:
         from store.database import SessionLocal
         from models.quiz import Quiz, QuizStatus
-        from datetime import datetime
+        from datetime import datetime, timedelta
+        from utils.rate_limiter import is_rate_limited, get_remaining_attempts
+
+        # Check rate limiting for quiz not found errors
+        if await is_rate_limited(
+            str(user_id), "quiz_not_found", max_attempts=3, window_seconds=60
+        ):
+            remaining = await get_remaining_attempts(
+                str(user_id), "quiz_not_found", max_attempts=3
+            )
+            await safe_send_message(
+                context.bot,
+                chat_id,
+                f"⏳ Please wait before trying again. You have {remaining} attempts remaining in the next minute.",
+            )
+            return
 
         session = SessionLocal()
         try:
-            quiz = (
-                session.query(Quiz)
-                .filter(Quiz.id == quiz_id, Quiz.status == QuizStatus.ACTIVE)
-                .first()
-            )
-
-            logger.info(
-                f"DEBUG: Quiz lookup result - found: {quiz is not None}, quiz_id: {quiz_id}"
-            )
+            # First check if quiz exists at all
+            quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
 
             if not quiz:
+                await safe_send_message(context.bot, chat_id, "❌ Quiz not found.")
+                return
+
+            # Check if quiz is active
+            if quiz.status != QuizStatus.ACTIVE:
+                # Check if quiz recently ended
+                if quiz.status == QuizStatus.CLOSED and quiz.end_time:
+                    time_since_end = datetime.utcnow() - quiz.end_time.replace(
+                        tzinfo=None
+                    )
+                    if time_since_end < timedelta(minutes=10):
+                        await safe_send_message(
+                            context.bot,
+                            chat_id,
+                            f"🏁 Oops! Quiz '{quiz.topic}' just ended. Better luck next time!",
+                        )
+                        return
+
                 await safe_send_message(
-                    context.bot, chat_id, "❌ Quiz not found or no longer active."
+                    context.bot,
+                    chat_id,
+                    f"❌ Quiz '{quiz.topic}' is no longer active. Status: {quiz.status.value}",
                 )
                 return
 
@@ -1421,7 +1450,7 @@ async def handle_play_quiz(update, context, quiz_id):
                 await safe_send_message(
                     context.bot,
                     chat_id,
-                    "❌ This quiz has already ended. Check the final results!",
+                    f"⏰ Quiz '{quiz.topic}' has ended! Check /winners for final results.",
                 )
                 return
 
@@ -1444,7 +1473,7 @@ async def handle_play_quiz(update, context, quiz_id):
 
 
 async def handle_show_leaderboard(update, context, quiz_id):
-    """Handle show leaderboard button click"""
+    """Handle show leaderboard button click with anti-spam features"""
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
@@ -1452,10 +1481,8 @@ async def handle_show_leaderboard(update, context, quiz_id):
         from utils.quiz_cards import create_leaderboard_card
         from store.database import SessionLocal
         from models.quiz import Quiz
-        from utils.redis_client import RedisClient
-
-        # Initialize Redis client
-        redis_client = RedisClient()
+        from services.message_cleanup_service import get_cleanup_service
+        from datetime import datetime, timezone, timedelta
 
         session = SessionLocal()
         try:
@@ -1465,211 +1492,34 @@ async def handle_show_leaderboard(update, context, quiz_id):
                 await safe_send_message(context.bot, chat_id, "❌ Quiz not found.")
                 return
 
-            # Get actual leaderboard data using the existing service
-            from services.quiz_service import _generate_leaderboard_data_for_quiz
-            from datetime import datetime, timezone
+            # Get cleanup service
+            cleanup_service = await get_cleanup_service()
 
-            # Generate leaderboard data
-            leaderboard_info = await _generate_leaderboard_data_for_quiz(quiz, session)
-
-            # Extract participant data for the leaderboard card
-            leaderboard_data = []
-            total_participants = len(leaderboard_info.get("participants", []))
-
-            # Convert to the format expected by create_leaderboard_card
-            for participant in leaderboard_info.get("participants", [])[:10]:  # Top 10
-                score = participant.get("score", 0)
-                questions_answered = participant.get("questions_answered", 0)
-                username = participant.get("username", "UnknownUser")
-                logger.info(
-                    f"Leaderboard participant: {username}, score: {score}, questions_answered: {questions_answered}"
-                )
-                leaderboard_data.append(
-                    {
-                        "username": username,
-                        "score": score,
-                        "correct_answers": score,
-                        "total_questions": questions_answered,
-                    }
-                )
-
-            # Calculate time remaining
-            time_remaining = 0
-            if quiz.end_time:
-                now = datetime.now(timezone.utc)
-                # Ensure quiz.end_time is timezone-aware
-                quiz_end_time = quiz.end_time
-                if quiz_end_time.tzinfo is None:
-                    quiz_end_time = quiz_end_time.replace(tzinfo=timezone.utc)
-
-                if quiz_end_time > now:
-                    time_remaining = int((quiz_end_time - now).total_seconds())
-
-            # Create rich leaderboard card
-            leaderboard_msg, leaderboard_keyboard = create_leaderboard_card(
-                quiz_id, leaderboard_data, time_remaining, total_participants
-            )
-
-            # Check if we already have a leaderboard message for this quiz in this chat
-            # Store under the chat_id since the message is in the group chat
-            leaderboard_key = f"leaderboard_msg_{quiz_id}_{chat_id}"
-            existing_message_id = await redis_client.get_user_data_key(
-                chat_id, leaderboard_key
-            )
-
-            # Debug logging
-            logger.info(f"Leaderboard key: {leaderboard_key}")
-            logger.info(f"User ID: {user_id}")
-            logger.info(f"Existing message ID: {existing_message_id}")
-
-            if existing_message_id:
-                try:
-                    # Edit existing message
-                    await context.bot.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=int(existing_message_id),
-                        text=leaderboard_msg,
-                        parse_mode="Markdown",
-                        reply_markup=leaderboard_keyboard,
-                    )
-                    logger.info(
-                        f"Updated existing leaderboard message {existing_message_id} for quiz {quiz_id}"
-                    )
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to edit existing leaderboard message: {e}, sending new one"
-                    )
-                    # Fall back to sending new message
-                    message = await safe_send_message(
-                        context.bot,
-                        chat_id,
-                        leaderboard_msg,
-                        parse_mode="Markdown",
-                        reply_markup=leaderboard_keyboard,
-                    )
-                    if message:
-                        logger.info(
-                            f"Fallback message object received: {message}, type: {type(message)}"
-                        )
-                        logger.info(
-                            f"Fallback Message ID: {getattr(message, 'message_id', 'NO_MESSAGE_ID')}"
+            # Check if we already have an active leaderboard for this quiz
+            if quiz.leaderboard_message_id and not quiz.leaderboard_deleted_at:
+                # Check if leaderboard is still valid (not older than 5 minutes)
+                if quiz.leaderboard_created_at:
+                    now = datetime.now(timezone.utc)
+                    leaderboard_created_at = quiz.leaderboard_created_at
+                    # Ensure both datetimes have timezone info
+                    if leaderboard_created_at.tzinfo is None:
+                        leaderboard_created_at = leaderboard_created_at.replace(
+                            tzinfo=timezone.utc
                         )
 
-                        try:
-                            await redis_client.set_user_data_key(
-                                chat_id, leaderboard_key, str(message.message_id)
-                            )
-                            # Set TTL for the leaderboard message key
-                            await redis_client.expire_user_data_key(
-                                chat_id, leaderboard_key, 86400
-                            )  # 24 hours
-                            logger.info(
-                                f"Stored fallback leaderboard message ID {message.message_id} with key {leaderboard_key} for chat {chat_id}"
-                            )
-                        except Exception as e:
-                            logger.error(
-                                f"Failed to store fallback leaderboard message ID: {e}"
-                            )
+                    time_since_creation = now - leaderboard_created_at
+                    if time_since_creation < timedelta(seconds=300):  # 5 minutes
+                        # Refresh the existing leaderboard instead of creating a new one
+                        await refresh_existing_leaderboard(
+                            quiz, session, context, cleanup_service
+                        )
+                        return
                     else:
-                        logger.warning(
-                            "No fallback message object returned from safe_send_message"
-                        )
-                        # Fallback: try to send message directly and get the ID
-                        try:
-                            logger.info(
-                                "Attempting fallback direct message sending for edit failure case..."
-                            )
-                            fallback_message = await context.bot.send_message(
-                                chat_id=chat_id,
-                                text=leaderboard_msg,
-                                parse_mode="Markdown",
-                                reply_markup=leaderboard_keyboard,
-                            )
-                            if fallback_message:
-                                logger.info(
-                                    f"Fallback message sent successfully with ID: {fallback_message.message_id}"
-                                )
-                                # Store the message ID from fallback
-                                await redis_client.set_user_data_key(
-                                    chat_id,
-                                    leaderboard_key,
-                                    str(fallback_message.message_id),
-                                )
-                                await redis_client.expire_user_data_key(
-                                    chat_id, leaderboard_key, 86400
-                                )
-                                logger.info(
-                                    f"Stored fallback leaderboard message ID {fallback_message.message_id} with key {leaderboard_key} for chat {chat_id}"
-                                )
-                            else:
-                                logger.error("Fallback message sending also failed")
-                        except Exception as e:
-                            logger.error(f"Fallback message sending failed: {e}")
-            else:
-                # Send new message and store its ID
-                message = await safe_send_message(
-                    context.bot,
-                    chat_id,
-                    leaderboard_msg,
-                    parse_mode="Markdown",
-                    reply_markup=leaderboard_keyboard,
-                )
-                if message:
-                    # Store message ID with TTL (24 hours) to auto-cleanup
-                    logger.info(
-                        f"Message object received: {message}, type: {type(message)}"
-                    )
-                    logger.info(
-                        f"Message ID: {getattr(message, 'message_id', 'NO_MESSAGE_ID')}"
-                    )
+                        # Leaderboard is too old, delete it and create a new one
+                        await cleanup_service.delete_leaderboard_message(quiz, session)
 
-                    try:
-                        await redis_client.set_user_data_key(
-                            chat_id, leaderboard_key, str(message.message_id)
-                        )
-                        # Set TTL for the leaderboard message key
-                        await redis_client.expire_user_data_key(
-                            chat_id, leaderboard_key, 86400
-                        )  # 24 hours
-                        logger.info(
-                            f"Stored leaderboard message ID {message.message_id} with key {leaderboard_key} for chat {chat_id}"
-                        )
-                        logger.info(
-                            f"Sent new leaderboard message {message.message_id} for quiz {quiz_id}"
-                        )
-                    except Exception as e:
-                        logger.error(f"Failed to store leaderboard message ID: {e}")
-                else:
-                    logger.warning("No message object returned from safe_send_message")
-                    # Fallback: try to send message directly and get the ID
-                    try:
-                        logger.info("Attempting fallback direct message sending...")
-                        fallback_message = await context.bot.send_message(
-                            chat_id=chat_id,
-                            text=leaderboard_msg,
-                            parse_mode="Markdown",
-                            reply_markup=leaderboard_keyboard,
-                        )
-                        if fallback_message:
-                            logger.info(
-                                f"Fallback message sent successfully with ID: {fallback_message.message_id}"
-                            )
-                            # Store the message ID from fallback
-                            await redis_client.set_user_data_key(
-                                chat_id,
-                                leaderboard_key,
-                                str(fallback_message.message_id),
-                            )
-                            await redis_client.expire_user_data_key(
-                                chat_id, leaderboard_key, 86400
-                            )
-                            logger.info(
-                                f"Stored fallback leaderboard message ID {fallback_message.message_id} with key {leaderboard_key} for chat {chat_id}"
-                            )
-                        else:
-                            logger.error("Fallback message sending also failed")
-                    except Exception as e:
-                        logger.error(f"Fallback message sending failed: {e}")
+            # Create new leaderboard
+            await create_new_leaderboard(quiz, session, context, cleanup_service)
 
         finally:
             session.close()
@@ -1679,6 +1529,160 @@ async def handle_show_leaderboard(update, context, quiz_id):
         await safe_send_message(
             context.bot, chat_id, "❌ Error loading leaderboard. Please try again."
         )
+
+
+async def refresh_existing_leaderboard(quiz, session, context, cleanup_service):
+    """Refresh an existing leaderboard message with updated data"""
+    try:
+        from services.quiz_service import _generate_leaderboard_data_for_quiz
+        from datetime import datetime, timezone
+
+        # Generate fresh leaderboard data
+        leaderboard_info = await _generate_leaderboard_data_for_quiz(quiz, session)
+
+        # Extract participant data for the leaderboard card
+        leaderboard_data = []
+        total_participants = len(leaderboard_info.get("participants", []))
+
+        # Convert to the format expected by create_leaderboard_card
+        for participant in leaderboard_info.get("participants", [])[:10]:  # Top 10
+            score = participant.get("score", 0)
+            questions_answered = participant.get("questions_answered", 0)
+            username = participant.get("username", "UnknownUser")
+            leaderboard_data.append(
+                {
+                    "username": username,
+                    "score": score,
+                    "correct_answers": score,
+                    "total_questions": questions_answered,
+                }
+            )
+
+        # Calculate time remaining
+        time_remaining = 0
+        if quiz.end_time:
+            now = datetime.now(timezone.utc)
+            quiz_end_time = quiz.end_time
+            if quiz_end_time.tzinfo is None:
+                quiz_end_time = quiz_end_time.replace(tzinfo=timezone.utc)
+
+            if quiz_end_time > now:
+                time_remaining = int((quiz_end_time - now).total_seconds())
+
+        # Calculate time until auto-delete
+        time_until_delete = 0
+        if quiz.leaderboard_created_at:
+            now = datetime.now(timezone.utc)
+            leaderboard_created_at = quiz.leaderboard_created_at
+            # Ensure both datetimes have timezone info
+            if leaderboard_created_at.tzinfo is None:
+                leaderboard_created_at = leaderboard_created_at.replace(
+                    tzinfo=timezone.utc
+                )
+
+            time_since_creation = now - leaderboard_created_at
+            time_until_delete = max(0, 300 - int(time_since_creation.total_seconds()))
+
+        # Create updated leaderboard card with auto-delete countdown
+        from utils.quiz_cards import create_leaderboard_card
+
+        leaderboard_msg, leaderboard_keyboard = create_leaderboard_card(
+            quiz.id,
+            leaderboard_data,
+            time_remaining,
+            total_participants,
+            time_until_delete,
+        )
+
+        # Try to refresh the existing message
+        success = await cleanup_service.refresh_leaderboard_message(
+            quiz, session, leaderboard_msg, leaderboard_keyboard
+        )
+
+        if success:
+            logger.info(
+                f"Refreshed leaderboard message {quiz.leaderboard_message_id} for quiz {quiz.id}"
+            )
+        else:
+            # If refresh failed, create a new leaderboard
+            await create_new_leaderboard(quiz, session, context, cleanup_service)
+
+    except Exception as e:
+        logger.error(f"Error refreshing leaderboard: {e}")
+        # Fallback to creating new leaderboard
+        await create_new_leaderboard(quiz, session, context, cleanup_service)
+
+
+async def create_new_leaderboard(quiz, session, context, cleanup_service):
+    """Create a new leaderboard message"""
+    try:
+        from services.quiz_service import _generate_leaderboard_data_for_quiz
+        from datetime import datetime, timezone
+
+        # Generate leaderboard data
+        leaderboard_info = await _generate_leaderboard_data_for_quiz(quiz, session)
+
+        # Extract participant data for the leaderboard card
+        leaderboard_data = []
+        total_participants = len(leaderboard_info.get("participants", []))
+
+        # Convert to the format expected by create_leaderboard_card
+        for participant in leaderboard_info.get("participants", [])[:10]:  # Top 10
+            score = participant.get("score", 0)
+            questions_answered = participant.get("questions_answered", 0)
+            username = participant.get("username", "UnknownUser")
+            leaderboard_data.append(
+                {
+                    "username": username,
+                    "score": score,
+                    "correct_answers": score,
+                    "total_questions": questions_answered,
+                }
+            )
+
+        # Calculate time remaining
+        time_remaining = 0
+        if quiz.end_time:
+            now = datetime.now(timezone.utc)
+            quiz_end_time = quiz.end_time
+            if quiz_end_time.tzinfo is None:
+                quiz_end_time = quiz_end_time.replace(tzinfo=timezone.utc)
+
+            if quiz_end_time > now:
+                time_remaining = int((quiz_end_time - now).total_seconds())
+
+        # Create leaderboard card with 5-minute auto-delete countdown
+        from utils.quiz_cards import create_leaderboard_card
+
+        leaderboard_msg, leaderboard_keyboard = create_leaderboard_card(
+            quiz.id, leaderboard_data, time_remaining, total_participants, 300
+        )
+
+        # Send new leaderboard message (disable queue to get message ID)
+        message = await safe_send_message(
+            context.bot,
+            quiz.group_chat_id,
+            leaderboard_msg,
+            parse_mode="MarkdownV2",
+            reply_markup=leaderboard_keyboard,
+            use_queue=False,  # Disable queue to get message ID for cleanup
+        )
+
+        if message:
+            # Store message ID and schedule for deletion
+            quiz.leaderboard_message_id = message.message_id
+            await cleanup_service.schedule_leaderboard_deletion(quiz, session)
+            session.commit()
+
+            logger.info(
+                f"Created new leaderboard message {message.message_id} for quiz {quiz.id}"
+            )
+        else:
+            logger.error("Failed to send leaderboard message")
+
+    except Exception as e:
+        logger.error(f"Error creating new leaderboard: {e}")
+        raise
 
 
 async def handle_show_past_winners(update, context, quiz_id):
@@ -2390,7 +2394,7 @@ async def process_questions_with_payment(
         )
 
         # Send rich announcement with image to group
-        await safe_send_photo(
+        announcement_message = await safe_send_photo(
             context.bot,
             group_chat_id,
             image_path,
@@ -2398,6 +2402,22 @@ async def process_questions_with_payment(
             parse_mode="Markdown",
             reply_markup=announcement_keyboard,
         )
+
+        # Store announcement message ID for cleanup
+        if announcement_message:
+            session = SessionLocal()
+            try:
+                quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
+                if quiz:
+                    quiz.announcement_message_id = announcement_message.message_id
+                    session.commit()
+                    logger.info(
+                        f"Stored announcement message ID {announcement_message.message_id} for quiz {quiz_id}"
+                    )
+            except Exception as e:
+                logger.error(f"Failed to store announcement message ID: {e}")
+            finally:
+                session.close()
 
         # Sanitize content for Markdown using imported function
 
@@ -2901,13 +2921,23 @@ async def private_message_handler(update: Update, context: CallbackContext):
                         f"Attempting to send announcement to group {quiz.group_chat_id}:\n{announce_text}"
                     )
                     try:
-                        await safe_send_message(
+                        message = await safe_send_message(
                             context.bot,
                             quiz.group_chat_id,
                             announce_text,
                             parse_mode="MarkdownV2",
                         )
-                        logger.info("Announcement sent successfully.")
+                        if message:
+                            # Store announcement message ID for cleanup
+                            quiz.announcement_message_id = message.message_id
+                            session.commit()
+                            logger.info(
+                                f"Announcement sent successfully with message ID: {message.message_id}"
+                            )
+                        else:
+                            logger.warning(
+                                "Announcement sent but no message object returned"
+                            )
                     except Exception as e:
                         logger.error(
                             f"Failed to send announcement with MarkdownV2: {e}. Sending as plain text."
@@ -2931,9 +2961,16 @@ async def private_message_handler(update: Update, context: CallbackContext):
                         else:
                             plain_announce_text += f"Ends: No specific end time set.\n"
                         plain_announce_text += "Type /playquiz to participate!"
-                        await safe_send_message(
+                        message = await safe_send_message(
                             context.bot, quiz.group_chat_id, plain_announce_text
                         )
+                        if message:
+                            # Store announcement message ID for cleanup
+                            quiz.announcement_message_id = message.message_id
+                            session.commit()
+                            logger.info(
+                                f"Plain text announcement sent with message ID: {message.message_id}"
+                            )
             except Exception as e:
                 logger.error(f"Error during quiz announcement: {e}", exc_info=True)
             finally:

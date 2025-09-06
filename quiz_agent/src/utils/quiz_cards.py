@@ -173,9 +173,17 @@ def create_leaderboard_card(
     leaderboard_data: List[Dict[str, Any]],
     time_remaining: int,
     total_participants: int,
+    auto_delete_seconds: int = None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """
-    Create an enhanced leaderboard display
+    Create an enhanced leaderboard display with auto-delete countdown
+
+    Args:
+        quiz_id: Quiz identifier
+        leaderboard_data: List of participant data
+        time_remaining: Quiz time remaining in seconds
+        total_participants: Total number of participants
+        auto_delete_seconds: Seconds until auto-delete (optional)
 
     Returns:
         tuple: (formatted_message, inline_keyboard)
@@ -199,22 +207,41 @@ def create_leaderboard_card(
         total_questions = player.get("total_questions", 0)
 
         # Sanitize username to prevent Markdown parsing issues
-        # Only escape characters that are problematic for usernames, not parentheses
+        # Escape all MarkdownV2 special characters
         safe_username = (
             username.replace("*", "\\*")
             .replace("_", "\\_")
             .replace("`", "\\`")
             .replace("[", "\\[")
             .replace("]", "\\]")
+            .replace("(", "\\(")
+            .replace(")", "\\)")
+            .replace("-", "\\-")
+            .replace(".", "\\.")
+            .replace("!", "\\!")
+            .replace("+", "\\+")
+            .replace("=", "\\=")
+            .replace("|", "\\|")
+            .replace("{", "\\{")
+            .replace("}", "\\}")
         )
 
-        card += f"{rank_emoji} **{safe_username}** - {score} pts ({correct_answers}/{total_questions})\n"
+        card += f"{rank_emoji} **{safe_username}** \\- {score} pts \\({correct_answers}/{total_questions}\\)\n"
 
-    # Add footer
-    card += f"""
+    # Add footer with auto-delete countdown if provided
+    footer = f"""
 ══════════════════════════════════════════
-⏱ **{time_remaining}s remaining** • 👥 **{total_participants} players active**
-"""
+⏱ **{time_remaining}s remaining** • 👥 **{total_participants} players active**"""
+
+    if auto_delete_seconds is not None and auto_delete_seconds > 0:
+        minutes = auto_delete_seconds // 60
+        seconds = auto_delete_seconds % 60
+        if minutes > 0:
+            footer += f"\n🗑️ **Auto\\-delete in {minutes}m {seconds}s**"
+        else:
+            footer += f"\n🗑️ **Auto\\-delete in {seconds}s**"
+
+    card += footer
 
     # Create action buttons
     buttons = [
