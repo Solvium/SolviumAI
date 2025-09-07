@@ -21,17 +21,22 @@ class WalletService:
         self.near_wallet_service = NEARWalletService()
 
     async def create_wallet(
-        self, user_id: int, user_name: str = None, network: str = None
+        self,
+        user_id: int,
+        user_name: str = None,
+        network: str = None,
+        robust_mode: bool = None,
     ) -> Dict[str, str]:
         """
         Creates a NEAR wallet for the user with network-specific robustness
-        - testnet: Simple, fast creation for local testing
-        - mainnet: Robust with retries, error handling, verification
+        - testnet: Can be simple (fast) or robust (for testing)
+        - mainnet: Always robust with retries, error handling, verification
 
         Args:
             user_id: User ID for wallet creation
             user_name: Optional user name
             network: Network type ("testnet" or "mainnet"). If None, uses config default
+            robust_mode: Force robust mode for testnet (None = auto-detect)
 
         Returns:
             Dict containing wallet information
@@ -45,8 +50,18 @@ class WalletService:
                 user_id, user_name, network, max_retries=3
             )
         else:
-            # Simple creation for testnet
-            return await self._create_wallet_simple(user_id, user_name, network)
+            # For testnet, check if robust mode is requested
+            if robust_mode is None:
+                robust_mode = getattr(Config, "TESTNET_ROBUST_MODE_ENABLED", False)
+
+            if robust_mode:
+                # Use robust retry logic for testnet
+                return await self._create_wallet_with_retry(
+                    user_id, user_name, network, max_retries=3
+                )
+            else:
+                # Simple creation for testnet
+                return await self._create_wallet_simple(user_id, user_name, network)
 
     async def create_demo_wallet(
         self, user_id: int, user_name: str = None

@@ -381,8 +381,9 @@ async def start_createquiz_group(update, context):
 
             # Update the loading message with the wallet creation result
             await loading_message.edit_text(
-                f"🎉 **Wallet Created Successfully!**\n{wallet_message}\nNow let's create your quiz!",
+                f"🎉 **Wallet Created Successfully!**\n{wallet_message}\n\nNow let's create your quiz!",
                 parse_mode="Markdown",
+                reply_markup=mini_app_keyboard,
             )
 
             logger.info(
@@ -391,9 +392,85 @@ async def start_createquiz_group(update, context):
 
         except Exception as e:
             logger.error(f"Error creating wallet for user {user_id}: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
+
+            # Check if wallet was actually created despite the error
+            try:
+                has_wallet = await wallet_service.has_wallet_robust(user_id)
+                if has_wallet:
+                    logger.info(
+                        f"Wallet was actually created for user {user_id} despite error"
+                    )
+                    # Get wallet info and show it to user
+                    wallet_info = await wallet_service.get_user_wallet(user_id)
+                    if wallet_info:
+                        wallet_message, mini_app_keyboard = (
+                            await wallet_service.format_wallet_info_message(wallet_info)
+                        )
+                        await loading_message.edit_text(
+                            f"🎉 **Wallet Created Successfully!**\n{wallet_message}\n\nNow let's create your quiz!",
+                            parse_mode="Markdown",
+                            reply_markup=mini_app_keyboard,
+                        )
+                        logger.info(
+                            f"Showed wallet info to user {user_id} after timeout recovery"
+                        )
+                        # Continue with quiz creation
+                        if chat_type != "private":
+                            await update.message.reply_text(
+                                f"@{user.username}, let's create a quiz! I'll message you privately to set it up."
+                            )
+                            await context.bot.send_message(
+                                chat_id=user_id,
+                                text="🎯 Create Quiz - Step 1 of 4\nWhat's your quiz topic?\n[Quick Topics: Crypto | Gaming | Technology | Custom...]",
+                            )
+                            await redis_client.set_user_data_key(
+                                user_id, "group_chat_id", update.effective_chat.id
+                            )
+                            return TOPIC
+                        else:
+                            await update.message.reply_text(
+                                "🎯 Create Quiz - Step 1 of 4\nWhat's your quiz topic?\n[Quick Topics: Crypto | Gaming | Technology | Custom...]"
+                            )
+                            await redis_client.delete_user_data_key(
+                                user_id, "group_chat_id"
+                            )
+                            return TOPIC
+            except Exception as check_error:
+                logger.error(
+                    f"Error checking wallet status after timeout: {check_error}"
+                )
+
+            # Determine error type and provide appropriate message
+            error_message = "Sorry, there was an error creating your wallet."
+            if "timeout" in str(e).lower() or "timed out" in str(e).lower():
+                error_message = "The wallet creation is taking longer than expected. Your wallet may have been created successfully, but we couldn't confirm it in time."
+            elif "connection" in str(e).lower() or "network" in str(e).lower():
+                error_message = "There was a network connection issue. Please check your internet connection and try again."
+            elif "database" in str(e).lower() or "db" in str(e).lower():
+                error_message = "There was a database issue. Your wallet may have been created, but we couldn't save the information properly."
+
+            # Create retry keyboard
+            retry_keyboard = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "🔄 Try Creating Wallet Again",
+                            callback_data=f"retry_wallet_creation:{user_id}",
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "🆘 Contact Support", callback_data="contact_support"
+                        )
+                    ],
+                ]
+            )
+
             await loading_message.edit_text(
-                "❌ **Wallet Creation Failed**\nSorry, there was an error creating your wallet. Please try again later.",
+                f"❌ **Wallet Creation Failed**\n{error_message} Please try again later.",
                 parse_mode="Markdown",
+                reply_markup=retry_keyboard,
             )
             return ConversationHandler.END
 
@@ -1292,6 +1369,90 @@ async def show_funding_instructions(update, context, required_amount, current_ba
     return PAYMENT_VERIFICATION
 
 
+async def handle_wallet_retry_callback(update, context):
+    """Handle wallet creation retry callback"""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    user_name = update.effective_user.username or update.effective_user.first_name
+
+    logger.info(f"User {user_id} requested wallet creation retry")
+
+    try:
+        # Send initial loading message
+        loading_message = await context.bot.send_message(
+            chat_id=user_id,
+            text="🔧 **Retrying wallet creation...**\n⏳ Please wait while we set up your account on the blockchain...",
+            parse_mode="Markdown",
+        )
+
+        # Create wallet service
+        from services.wallet_service import WalletService
+
+        wallet_service = WalletService()
+        network = "mainnet" if Config.is_mainnet_enabled() else "testnet"
+
+        # Update loading message with progress
+        await loading_message.edit_text(
+            "🔧 **Retrying wallet creation...**\n⏳ Generating secure keys and creating your account...",
+            parse_mode="Markdown",
+        )
+
+        # Create wallet using existing service
+        wallet_info = await wallet_service.create_wallet(
+            user_id, user_name=user_name, network=network
+        )
+
+        # Update loading message with final step
+        await loading_message.edit_text(
+            "🔧 **Retrying wallet creation...**\n✅ Account created! Finalizing your wallet...",
+            parse_mode="Markdown",
+        )
+
+        # Format the wallet info message
+        wallet_message, mini_app_keyboard = (
+            await wallet_service.format_wallet_info_message(wallet_info)
+        )
+
+        # Update the loading message with the wallet creation result
+        await loading_message.edit_text(
+            f"🎉 **Wallet Created Successfully!**\n{wallet_message}",
+            parse_mode="Markdown",
+            reply_markup=mini_app_keyboard,
+        )
+
+        logger.info(f"Wallet retry successful for user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Error retrying wallet creation for user {user_id}: {e}")
+
+        # Create retry keyboard
+        retry_keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "🔄 Try Again", callback_data=f"retry_wallet_creation:{user_id}"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "🆘 Contact Support", callback_data="contact_support"
+                    )
+                ],
+            ]
+        )
+
+        try:
+            await loading_message.edit_text(
+                "❌ **Wallet Creation Failed Again**\nSorry, there was still an error creating your wallet. Please try again later or contact support.",
+                parse_mode="Markdown",
+                reply_markup=retry_keyboard,
+            )
+        except:
+            pass
+
+
 async def handle_payment_verification_callback(update, context):
     """Handle payment verification callbacks"""
     user_id = update.effective_user.id
@@ -1904,9 +2065,37 @@ async def start_quiz_for_user(update, context, quiz):
             except Exception as e:
                 logger.error(f"Error creating wallet for user {user_id}: {e}")
                 logger.error(f"DEBUG: Exception details: {type(e).__name__}: {str(e)}")
+
+                # Determine error type and provide appropriate message
+                error_message = "Sorry, there was an error creating your wallet."
+                if "timeout" in str(e).lower() or "timed out" in str(e).lower():
+                    error_message = "The wallet creation is taking longer than expected. Your wallet may have been created successfully, but we couldn't confirm it in time."
+                elif "connection" in str(e).lower() or "network" in str(e).lower():
+                    error_message = "There was a network connection issue. Please check your internet connection and try again."
+                elif "database" in str(e).lower() or "db" in str(e).lower():
+                    error_message = "There was a database issue. Your wallet may have been created, but we couldn't save the information properly."
+
+                # Create retry keyboard
+                retry_keyboard = InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton(
+                                "🔄 Try Creating Wallet Again",
+                                callback_data=f"retry_wallet_creation:{user_id}",
+                            )
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                "🆘 Contact Support", callback_data="contact_support"
+                            )
+                        ],
+                    ]
+                )
+
                 await loading_message.edit_text(
-                    "❌ **Wallet Creation Failed**\nSorry, there was an error creating your wallet. Please try again later.",
+                    f"❌ **Wallet Creation Failed**\n{error_message} Please try again later.",
                     parse_mode="Markdown",
+                    reply_markup=retry_keyboard,
                 )
                 return
 

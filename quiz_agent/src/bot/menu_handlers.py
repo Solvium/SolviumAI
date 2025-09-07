@@ -1,4 +1,9 @@
-from telegram import Update, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import (
+    Update,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    ReplyKeyboardMarkup,
+)
 from telegram.ext import CallbackContext
 from .keyboard_markups import (
     create_main_menu_keyboard,
@@ -147,11 +152,40 @@ async def handle_silent_wallet_creation(
         return True
     except Exception as e:
         logger.error(f"Error creating wallet for user {user_id}: {e}")
+        logger.error(f"Error type: {type(e).__name__}")
+
+        # Determine error type and provide appropriate message
+        error_message = "Sorry, there was an error creating your wallet."
+        if "timeout" in str(e).lower() or "timed out" in str(e).lower():
+            error_message = "The wallet creation is taking longer than expected. Your wallet may have been created successfully, but we couldn't confirm it in time."
+        elif "connection" in str(e).lower() or "network" in str(e).lower():
+            error_message = "There was a network connection issue. Please check your internet connection and try again."
+        elif "database" in str(e).lower() or "db" in str(e).lower():
+            error_message = "There was a database issue. Your wallet may have been created, but we couldn't save the information properly."
+
         # Try to send error message if loading message was created
         try:
+            # Create retry keyboard
+            retry_keyboard = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "🔄 Try Again",
+                            callback_data=f"retry_wallet_creation:{user_id}",
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "🆘 Contact Support", callback_data="contact_support"
+                        )
+                    ],
+                ]
+            )
+
             await loading_message.edit_text(
-                "❌ **Wallet Creation Failed**\nSorry, there was an error creating your wallet. Please try again later.",
+                f"❌ **Wallet Creation Failed**\n{error_message} Please try again later.",
                 parse_mode="Markdown",
+                reply_markup=retry_keyboard,
             )
         except:
             pass
@@ -717,6 +751,25 @@ async def handle_menu_callback(update: Update, context: CallbackContext) -> None
         await handle_navigation_callback(update, context, callback_data)
     else:
         await query.edit_message_text("❌ Invalid menu selection. Please try again.")
+
+
+async def handle_game_callback(
+    update: Update, context: CallbackContext, callback_data: str
+) -> None:
+    """Handle game-related callback queries"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+
+    if callback_data == "game:create_quiz":
+        await handle_create_quiz(update, context)
+    elif callback_data == "game:play_quiz":
+        await handle_play_quiz(update, context)
+    elif callback_data == "game:leaderboards":
+        await handle_leaderboards(update, context)
+    elif callback_data == "game:rewards":
+        await handle_rewards(update, context)
+    else:
+        await query.edit_message_text("❌ Invalid game selection. Please try again.")
 
 
 async def handle_main_menu_callback(

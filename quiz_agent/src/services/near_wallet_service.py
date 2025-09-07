@@ -263,16 +263,17 @@ class NEARWalletService:
         return f"{sub_account_name}.{main_account}"
 
     async def create_wallet(
-        self, user_id: int, network: str = "mainnet"
+        self, user_id: int, network: str = "mainnet", robust_mode: bool = None
     ) -> Dict[str, str]:
         """
         Unified wallet creation with network-specific robustness
-        - testnet: Simple, fast creation for local testing
-        - mainnet: Robust with retries, error handling, verification
+        - testnet: Can be simple (fast) or robust (for testing)
+        - mainnet: Always robust with retries, error handling, verification
 
         Args:
             user_id: User ID for wallet creation
             network: Network type ("testnet" or "mainnet")
+            robust_mode: Force robust mode for testnet (None = auto-detect)
 
         Returns:
             Dict containing wallet information
@@ -280,7 +281,18 @@ class NEARWalletService:
         if network == "mainnet":
             return await self._create_mainnet_wallet_robust(user_id)
         else:
-            return await self._create_testnet_wallet_simple(user_id)
+            # For testnet, use robust mode if explicitly requested or if config enables it
+            if robust_mode is None:
+                robust_mode = (
+                    Config.TESTNET_ROBUST_MODE_ENABLED
+                    if hasattr(Config, "TESTNET_ROBUST_MODE_ENABLED")
+                    else False
+                )
+
+            if robust_mode:
+                return await self._create_testnet_wallet_robust(user_id)
+            else:
+                return await self._create_testnet_wallet_simple(user_id)
 
     async def _create_testnet_wallet_simple(self, user_id: int) -> Dict[str, str]:
         """
@@ -371,6 +383,110 @@ class NEARWalletService:
 
         except Exception as e:
             logger.error(f"Error creating NEAR testnet wallet for user {user_id}: {e}")
+            raise
+
+    async def _create_testnet_wallet_robust(self, user_id: int) -> Dict[str, str]:
+        """
+        Robust testnet wallet creation for testing purposes
+        - Multiple retry strategies
+        - Comprehensive error handling
+        - Account verification
+        - Fallback mechanisms
+        - Same robustness as mainnet but for testnet
+        """
+        try:
+            logger.info(f"Creating robust NEAR testnet wallet for user {user_id}")
+
+            # Generate secure keypair in NEAR format
+            near_private_key_bytes, public_key_bytes = self._generate_secure_keypair()
+
+            # Create unique sub-account ID with collision handling
+            account_id = await self._create_unique_account_id(user_id, is_mainnet=False)
+
+            # Format keys for NEAR using base58 encoding
+            near_private_key = (
+                f"ed25519:{base58.b58encode(near_private_key_bytes).decode()}"
+            )
+            near_public_key = f"ed25519:{base58.b58encode(public_key_bytes).decode()}"
+
+            # Debug logging to check key format
+            logger.debug(
+                f"Generated robust testnet private key length: {len(near_private_key)}"
+            )
+            logger.debug(
+                f"Robust testnet private key format: {near_private_key[:50]}..."
+            )
+            logger.debug(f"Robust testnet public key format: {near_public_key[:50]}...")
+
+            # Create sub-account on NEAR testnet with robust error handling
+            try:
+                account_created = await self._create_testnet_sub_account_robust(
+                    account_id, public_key_bytes
+                )
+                is_real_account = account_created and self.main_account is not None
+
+                if not account_created:
+                    raise WalletCreationError(
+                        "Testnet account creation returned False",
+                        RPCErrorType.UNKNOWN,
+                        True,
+                    )
+
+            except WalletCreationError as e:
+                logger.error(f"Robust testnet sub-account creation failed: {e.message}")
+
+                # Add to retry queue if retryable
+                if e.retryable and Config.WALLET_CREATION_QUEUE_ENABLED:
+                    logger.info(
+                        f"Adding robust testnet wallet creation to retry queue for user {user_id}"
+                    )
+                    # Import locally to avoid circular import
+                    from services.wallet_creation_queue import wallet_creation_queue
+
+                    await wallet_creation_queue.add_failed_wallet_creation(
+                        user_id=user_id,
+                        user_name=None,
+                        is_mainnet=False,
+                        account_id=account_id,
+                        public_key=near_public_key,
+                        private_key=near_private_key,
+                        error_message=e.message,
+                    )
+
+                # Re-raise the error - no more silent fallbacks
+                raise e
+
+            # Encrypt private key for storage
+            encrypted_private_key, iv, tag = self._encrypt_data(
+                near_private_key, self.encryption_key
+            )
+
+            # Create wallet info
+            wallet_info = {
+                "account_id": account_id,
+                "public_key": near_public_key,
+                "encrypted_private_key": base64.b64encode(
+                    encrypted_private_key
+                ).decode(),
+                "iv": base64.b64encode(iv).decode(),
+                "tag": base64.b64encode(tag).decode(),
+                "balance": "0 NEAR",
+                "created_at": datetime.now().isoformat(),
+                "is_testnet": True,
+                "is_demo": not is_real_account,  # Mark as demo if not a real account
+                "network": "testnet",
+                "robust_mode": True,  # Mark as robust mode
+            }
+
+            logger.info(
+                f"Successfully created robust NEAR testnet wallet: {account_id}"
+            )
+            return wallet_info
+
+        except Exception as e:
+            logger.error(
+                f"Error creating robust NEAR testnet wallet for user {user_id}: {e}"
+            )
             raise
 
     async def create_testnet_wallet(self, user_id: int) -> Dict[str, str]:
@@ -629,6 +745,154 @@ class NEARWalletService:
             raise
         except Exception as e:
             logger.error(f"Error creating NEAR sub-account {sub_account_id}: {e}")
+            raise WalletCreationError(
+                f"Unexpected error: {str(e)}", RPCErrorType.UNKNOWN, True
+            )
+
+    async def _create_testnet_sub_account_robust(
+        self, sub_account_id: str, public_key: bytes
+    ) -> bool:
+        """
+        Robust testnet sub-account creation with multiple strategies
+        - Primary method: py-near create_account
+        - Fallback: NEAR Helper API
+        - Account verification after creation
+        - Comprehensive error handling
+        - Same robustness as mainnet but for testnet
+        """
+        try:
+            # Get our main account from config
+            main_account = Config.NEAR_WALLET_ADDRESS
+
+            if not main_account:
+                logger.error("NEAR_WALLET_ADDRESS not configured")
+                raise WalletCreationError(
+                    "NEAR_WALLET_ADDRESS not configured",
+                    RPCErrorType.INVALID_REQUEST,
+                    False,
+                )
+
+            # Extract sub-account name from full account ID
+            # e.g., "quiz1234.kindpuma8958.testnet" -> "quiz1234"
+            sub_account_name = sub_account_id.split(".")[0]
+
+            logger.info(
+                f"Creating robust testnet sub-account {sub_account_name} under {main_account}"
+            )
+
+            # Primary method: Try py-near create_account method first (most reliable)
+            if self.main_account:
+                logger.info(
+                    f"Attempting py-near create_account method for robust testnet: {sub_account_id}"
+                )
+                try:
+                    real_created = await self._create_real_sub_account(
+                        sub_account_id, public_key
+                    )
+                    if real_created:
+                        # Verify account was actually created
+                        verified = await self.verify_account_exists(
+                            sub_account_id, "testnet"
+                        )
+                        if verified:
+                            logger.info(
+                                f"py-near create_account method successful and verified: {sub_account_id}"
+                            )
+                            return True
+                        else:
+                            logger.error(
+                                f"Testnet account creation appeared successful but verification failed: {sub_account_id}"
+                            )
+                            raise WalletCreationError(
+                                "Account verification failed after creation",
+                                RPCErrorType.UNKNOWN,
+                                True,
+                            )
+                    else:
+                        logger.warning(
+                            f"py-near create_account method failed: {sub_account_id}"
+                        )
+                except Exception as e:
+                    logger.error(f"py-near create_account method error: {e}")
+                    raise WalletCreationError(
+                        f"py-near creation failed: {str(e)}", RPCErrorType.UNKNOWN, True
+                    )
+
+            # Fallback: Try NEAR Helper API
+            logger.info(
+                f"Attempting robust testnet sub-account creation via NEAR Helper API: {sub_account_id}"
+            )
+
+            # Convert bytes to NEAR format for helper API
+            near_public_key = f"ed25519:{base64.b64encode(public_key).decode()}"
+
+            payload = {
+                "newAccountId": sub_account_id,
+                "newAccountPublicKey": near_public_key,
+            }
+
+            try:
+
+                async def _helper_api_call():
+                    response = requests.post(
+                        f"{self.testnet_helper_url}/account",
+                        json=payload,
+                        headers={"Content-Type": "application/json"},
+                        timeout=Config.ACCOUNT_CREATION_TIMEOUT,
+                    )
+                    return response
+
+                response = await rpc_call_with_retry(
+                    _helper_api_call,
+                    "near_helper_api_robust_testnet",
+                    max_retries=Config.RPC_MAX_RETRIES,
+                )
+
+                if response.status_code == 200:
+                    # Verify account was actually created
+                    verified = await self.verify_account_exists(
+                        sub_account_id, "testnet"
+                    )
+                    if verified:
+                        logger.info(
+                            f"NEAR Helper API robust testnet sub-account creation successful and verified: {sub_account_id}"
+                        )
+                        return True
+                    else:
+                        logger.error(
+                            f"Helper API creation appeared successful but verification failed: {sub_account_id}"
+                        )
+                        raise WalletCreationError(
+                            "Account verification failed after helper API creation",
+                            RPCErrorType.UNKNOWN,
+                            True,
+                        )
+                else:
+                    error_msg = f"NEAR Helper API creation failed: {response.status_code} - {response.text}"
+                    logger.warning(error_msg)
+                    raise WalletCreationError(error_msg, RPCErrorType.UNKNOWN, True)
+
+            except WalletCreationError:
+                raise
+            except Exception as api_error:
+                logger.error(f"NEAR Helper API error: {api_error}")
+                raise WalletCreationError(
+                    f"Helper API error: {str(api_error)}", RPCErrorType.UNKNOWN, True
+                )
+
+            # If we reach here, all methods failed
+            raise WalletCreationError(
+                "All robust testnet account creation methods failed",
+                RPCErrorType.UNKNOWN,
+                True,
+            )
+
+        except WalletCreationError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Error creating robust testnet sub-account {sub_account_id}: {e}"
+            )
             raise WalletCreationError(
                 f"Unexpected error: {str(e)}", RPCErrorType.UNKNOWN, True
             )
@@ -1289,9 +1553,7 @@ class NEARWalletService:
 
             # Choose explorer URL based on network
             if network == "mainnet" or not is_testnet:
-                explorer_url = (
-                    f"https://explorer.near.org/accounts/{wallet_info['account_id']}"
-                )
+                explorer_url = f"https://pikespeak.ai/wallet-explorer/{wallet_info['account_id']}"
                 network_name = "Mainnet"
             else:
                 explorer_url = f"https://explorer.testnet.near.org/accounts/{wallet_info['account_id']}"
@@ -1338,7 +1600,7 @@ class NEARWalletService:
                     [
                         InlineKeyboardButton(
                             "🎮 Play Games",
-                            web_app=WebAppInfo(url="https://quiz-agent.vercel.app/"),
+                            web_app=WebAppInfo(url="https://solvium-ai.vercel.app/"),
                         )
                     ]
                 ]

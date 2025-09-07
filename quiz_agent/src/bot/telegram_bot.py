@@ -172,13 +172,13 @@ class TelegramBot:
             distribute_rewards_handler,
             start_reward_setup_callback,  # Import new reward setup handlers
             handle_reward_method_choice,
-    
             handle_quiz_interaction_callback,  # New quiz interaction handler
             handle_enhanced_quiz_start_callback,  # Enhanced quiz handlers
             handle_poll_answer,
             stop_enhanced_quiz,
             announce_quiz_end_handler,  # Quiz end announcement handler
             debug_sessions_handler,  # Debug sessions handler
+            handle_wallet_retry_callback,  # Wallet retry callback handler
         )
 
         # Import menu handlers
@@ -324,6 +324,14 @@ class TelegramBot:
             CallbackQueryHandler(
                 handle_menu_callback,
                 pattern="^(menu:|game:|challenge:|app:|quiz:|cancel|back)",
+            )
+        )
+
+        # Handle wallet creation retry callbacks
+        self.app.add_handler(
+            CallbackQueryHandler(
+                handle_wallet_retry_callback,
+                pattern="^retry_wallet_creation:",
             )
         )
 

@@ -198,3 +198,8 @@ class Config:
     def is_mainnet_enabled(cls) -> bool:
         """Check if mainnet is enabled"""
         return os.getenv("ENABLE_NEAR_MAINNET", "false").lower() == "true"
+
+    # Testnet robust mode configuration
+    TESTNET_ROBUST_MODE_ENABLED = (
+        os.getenv("TESTNET_ROBUST_MODE_ENABLED", "false").lower() == "true"
+    )
