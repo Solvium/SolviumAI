@@ -103,7 +103,7 @@ class Config:
         "NEAR_TESTNET_RPC_URL", "https://test.rpc.fastnear.com"
     )
     NEAR_TESTNET_HELPER_URL = os.getenv(
-        "NEAR_TESTNET_HELPER_URL", "https://rpc.web4.testnet.page/account/testnet"
+        "NEAR_TESTNET_HELPER_URL", "https://rpc.testnet.fastnear.com"
     )
     NEAR_MAINNET_RPC_URL = os.getenv(
         "NEAR_MAINNET_RPC_URL", "https://free.rpc.fastnear.com		"
