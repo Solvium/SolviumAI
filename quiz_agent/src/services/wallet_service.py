@@ -7,6 +7,7 @@ from services.near_wallet_service import NEARWalletService
 from services.database_service import db_service
 from services.cache_service import cache_service
 from utils.config import Config
+from utils.rpc_retry import WalletCreationError, RPCErrorType
 import logging
 
 logger = logging.getLogger(__name__)
@@ -33,18 +34,6 @@ class WalletService:
             user_id, user_name, is_mainnet=is_mainnet
         )
 
-    async def create_mainnet_wallet(
-        self, user_id: int, user_name: str = None
-    ) -> Dict[str, str]:
-        """
-        Creates a real NEAR mainnet wallet for the user
-        Returns wallet info including account ID and encrypted private key
-        """
-        is_mainnet = Config.is_mainnet_enabled()
-        return await self._create_wallet_with_retry(
-            user_id, user_name, is_mainnet=is_mainnet
-        )
-
     async def _create_wallet_with_retry(
         self,
         user_id: int,
@@ -53,8 +42,10 @@ class WalletService:
         max_retries: int = 3,
     ) -> Dict[str, str]:
         """
-        Creates a NEAR wallet with retry logic for handling account ID collisions
+        Creates a NEAR wallet with retry logic for handling account ID collisions and RPC errors
         """
+        last_error = None
+
         for attempt in range(max_retries):
             try:
                 # Determine network based on environment and parameters
@@ -86,20 +77,43 @@ class WalletService:
                 )
                 return wallet_info
 
-            except Exception as e:
+            except WalletCreationError as e:
+                last_error = e
                 logger.error(
-                    f"Error creating NEAR wallet for user {user_id} (attempt {attempt + 1}): {e}"
+                    f"Wallet creation failed for user {user_id} (attempt {attempt + 1}): {e.message}"
                 )
 
-                # If this is the last attempt, raise the exception
+                # Don't retry non-retryable errors
+                if not e.retryable:
+                    logger.error(f"Non-retryable error for user {user_id}: {e.message}")
+                    raise e
+
+                # Don't retry on last attempt
                 if attempt == max_retries - 1:
-                    raise
+                    logger.error(f"All retry attempts failed for user {user_id}")
+                    raise e
 
-                # Log retry attempt
+                # Log retry information
                 logger.info(
-                    f"Retrying wallet creation for user {user_id} (attempt {attempt + 2}/{max_retries})"
+                    f"Retrying wallet creation for user {user_id} in {2 ** attempt} seconds..."
                 )
-                continue
+
+            except Exception as e:
+                last_error = e
+                logger.error(
+                    f"Unexpected error creating wallet for user {user_id} (attempt {attempt + 1}): {e}"
+                )
+
+                # Don't retry on last attempt
+                if attempt == max_retries - 1:
+                    logger.error(f"All retry attempts failed for user {user_id}")
+                    raise e
+
+        # If we reach here, all retries failed
+        if last_error:
+            raise last_error
+        else:
+            raise Exception("Wallet creation failed after all retry attempts")
 
     async def get_user_wallet(self, user_id: int) -> Optional[Dict[str, str]]:
         """

@@ -120,6 +120,37 @@ class Config:
     ACCOUNT_CREATION_TIMEOUT = int(os.getenv("ACCOUNT_CREATION_TIMEOUT", "30"))
     BALANCE_CHECK_TIMEOUT = int(os.getenv("BALANCE_CHECK_TIMEOUT", "10"))
 
+    # RPC Retry Configuration
+    RPC_MAX_RETRIES = int(os.getenv("RPC_MAX_RETRIES", "3"))
+    RPC_RETRY_DELAY = float(
+        os.getenv("RPC_RETRY_DELAY", "1.0")
+    )  # Initial delay in seconds
+    RPC_MAX_RETRY_DELAY = float(
+        os.getenv("RPC_MAX_RETRY_DELAY", "10.0")
+    )  # Max delay in seconds
+    RPC_BACKOFF_MULTIPLIER = float(os.getenv("RPC_BACKOFF_MULTIPLIER", "2.0"))
+
+    # Circuit Breaker Configuration
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD = int(
+        os.getenv("CIRCUIT_BREAKER_FAILURE_THRESHOLD", "5")
+    )
+    CIRCUIT_BREAKER_RECOVERY_TIMEOUT = int(
+        os.getenv("CIRCUIT_BREAKER_RECOVERY_TIMEOUT", "60")
+    )  # seconds
+
+    # Account Verification Configuration
+    ACCOUNT_VERIFICATION_TIMEOUT = int(os.getenv("ACCOUNT_VERIFICATION_TIMEOUT", "15"))
+    ACCOUNT_VERIFICATION_RETRIES = int(os.getenv("ACCOUNT_VERIFICATION_RETRIES", "2"))
+
+    # Wallet Creation Queue Configuration
+    WALLET_CREATION_QUEUE_ENABLED = (
+        os.getenv("WALLET_CREATION_QUEUE_ENABLED", "true").lower() == "true"
+    )
+    WALLET_CREATION_RETRY_DELAY = int(
+        os.getenv("WALLET_CREATION_RETRY_DELAY", "300")
+    )  # 5 minutes
+    WALLET_CREATION_MAX_RETRIES = int(os.getenv("WALLET_CREATION_MAX_RETRIES", "3"))
+
     # NEAR Account Creation Settings
     # Minimum balance required for account creation (in NEAR)
     # This covers storage costs and allows the account to exist
