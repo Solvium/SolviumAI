@@ -88,6 +88,54 @@ class RPCRetryHandler:
             self.circuit_breakers[endpoint] = CircuitBreaker()
         return self.circuit_breakers[endpoint]
 
+    def reset_circuit_breaker(self, endpoint: str) -> bool:
+        """Reset a specific circuit breaker to CLOSED state"""
+        if endpoint in self.circuit_breakers:
+            circuit_breaker = self.circuit_breakers[endpoint]
+            circuit_breaker.state = "CLOSED"
+            circuit_breaker.failure_count = 0
+            circuit_breaker.last_failure_time = None
+            logger.info(f"Circuit breaker reset for endpoint: {endpoint}")
+            return True
+        return False
+
+    def reset_all_circuit_breakers(self) -> int:
+        """Reset all circuit breakers to CLOSED state"""
+        reset_count = 0
+        for endpoint, circuit_breaker in self.circuit_breakers.items():
+            circuit_breaker.state = "CLOSED"
+            circuit_breaker.failure_count = 0
+            circuit_breaker.last_failure_time = None
+            reset_count += 1
+        logger.info(f"Reset {reset_count} circuit breakers")
+        return reset_count
+
+    def get_circuit_breaker_status(self, endpoint: str = None) -> dict:
+        """Get circuit breaker status for a specific endpoint or all endpoints"""
+        if endpoint:
+            if endpoint in self.circuit_breakers:
+                cb = self.circuit_breakers[endpoint]
+                return {
+                    "endpoint": endpoint,
+                    "state": cb.state,
+                    "failure_count": cb.failure_count,
+                    "last_failure_time": cb.last_failure_time,
+                    "failure_threshold": cb.failure_threshold,
+                    "recovery_timeout": cb.recovery_timeout,
+                }
+            return None
+        else:
+            return {
+                endpoint: {
+                    "state": cb.state,
+                    "failure_count": cb.failure_count,
+                    "last_failure_time": cb.last_failure_time,
+                    "failure_threshold": cb.failure_threshold,
+                    "recovery_timeout": cb.recovery_timeout,
+                }
+                for endpoint, cb in self.circuit_breakers.items()
+            }
+
     def _classify_error(self, exception: Exception) -> RPCError:
         """Classify an exception into an RPC error type"""
         error_message = str(exception).lower()
@@ -211,6 +259,21 @@ async def rpc_call_with_retry(
     return await rpc_retry_handler.execute_with_retry(
         func, endpoint, max_retries, *args, **kwargs
     )
+
+
+def reset_circuit_breaker(endpoint: str) -> bool:
+    """Reset a specific circuit breaker to CLOSED state"""
+    return rpc_retry_handler.reset_circuit_breaker(endpoint)
+
+
+def reset_all_circuit_breakers() -> int:
+    """Reset all circuit breakers to CLOSED state"""
+    return rpc_retry_handler.reset_all_circuit_breakers()
+
+
+def get_circuit_breaker_status(endpoint: str = None) -> dict:
+    """Get circuit breaker status for a specific endpoint or all endpoints"""
+    return rpc_retry_handler.get_circuit_breaker_status(endpoint)
 
 
 class WalletCreationError(Exception):

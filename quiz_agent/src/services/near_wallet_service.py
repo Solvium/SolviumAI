@@ -1466,7 +1466,7 @@ class NEARWalletService:
 
             response = await rpc_call_with_retry(
                 _balance_call,
-                f"balance_check_{account_id}",
+                "balance_check_general",  # Use general endpoint instead of per-account
                 max_retries=Config.RPC_MAX_RETRIES,
             )
 
@@ -1553,7 +1553,9 @@ class NEARWalletService:
 
             # Choose explorer URL based on network
             if network == "mainnet" or not is_testnet:
-                explorer_url = f"https://pikespeak.ai/wallet-explorer/{wallet_info['account_id']}"
+                explorer_url = (
+                    f"https://pikespeak.ai/wallet-explorer/{wallet_info['account_id']}"
+                )
                 network_name = "Mainnet"
             else:
                 explorer_url = f"https://explorer.testnet.near.org/accounts/{wallet_info['account_id']}"
