@@ -7,6 +7,7 @@ from services.near_wallet_service import NEARWalletService
 from services.database_service import db_service
 from services.cache_service import cache_service
 from utils.config import Config
+from utils.rpc_retry import WalletCreationError, RPCErrorType
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,61 +20,107 @@ class WalletService:
         self.redis_client = RedisClient()
         self.near_wallet_service = NEARWalletService()
 
+    async def create_wallet(
+        self,
+        user_id: int,
+        user_name: str = None,
+        network: str = None,
+        robust_mode: bool = None,
+    ) -> Dict[str, str]:
+        """
+        Creates a NEAR wallet for the user with network-specific robustness
+        - testnet: Can be simple (fast) or robust (for testing)
+        - mainnet: Always robust with retries, error handling, verification
+
+        Args:
+            user_id: User ID for wallet creation
+            user_name: Optional user name
+            network: Network type ("testnet" or "mainnet"). If None, uses config default
+            robust_mode: Force robust mode for testnet (None = auto-detect)
+
+        Returns:
+            Dict containing wallet information
+        """
+        if network is None:
+            network = "mainnet" if Config.is_mainnet_enabled() else "testnet"
+
+        if network == "mainnet":
+            # Use robust retry logic for mainnet
+            return await self._create_wallet_with_retry(
+                user_id, user_name, network, max_retries=3
+            )
+        else:
+            # For testnet, check if robust mode is requested
+            if robust_mode is None:
+                robust_mode = getattr(Config, "TESTNET_ROBUST_MODE_ENABLED", False)
+
+            if robust_mode:
+                # Use robust retry logic for testnet
+                return await self._create_wallet_with_retry(
+                    user_id, user_name, network, max_retries=3
+                )
+            else:
+                # Simple creation for testnet
+                return await self._create_wallet_simple(user_id, user_name, network)
+
     async def create_demo_wallet(
         self, user_id: int, user_name: str = None
     ) -> Dict[str, str]:
         """
+        Legacy function - redirects to unified create_wallet
         Creates a NEAR wallet for the user based on environment configuration
         - Production: Creates mainnet wallet
         - Development: Creates testnet wallet
         Returns wallet info including account ID and encrypted private key
         """
-        is_mainnet = Config.is_mainnet_enabled()
-        return await self._create_wallet_with_retry(
-            user_id, user_name, is_mainnet=is_mainnet
+        logger.info(
+            "Using legacy create_demo_wallet - redirecting to unified create_wallet"
         )
+        return await self.create_wallet(user_id, user_name)
 
-    async def create_mainnet_wallet(
-        self, user_id: int, user_name: str = None
+    async def _create_wallet_simple(
+        self, user_id: int, user_name: str, network: str
     ) -> Dict[str, str]:
         """
-        Creates a real NEAR mainnet wallet for the user
-        Returns wallet info including account ID and encrypted private key
+        Simple wallet creation for testnet (no retries)
         """
-        is_mainnet = Config.is_mainnet_enabled()
-        return await self._create_wallet_with_retry(
-            user_id, user_name, is_mainnet=is_mainnet
+        logger.info(f"Creating NEAR {network} wallet for user {user_id} (simple mode)")
+
+        wallet_info = await self.near_wallet_service.create_wallet(user_id, network)
+
+        # Enhanced caching with TTL and fallback
+        await cache_service.cache_wallet_creation(user_id, wallet_info)
+
+        # Save to database (non-blocking background task)
+        await db_service.save_wallet_async(wallet_info, user_id, user_name)
+
+        logger.info(
+            f"Created NEAR {network} wallet for user {user_id}: {wallet_info['account_id']}"
         )
+        return wallet_info
 
     async def _create_wallet_with_retry(
         self,
         user_id: int,
         user_name: str = None,
-        is_mainnet: bool = False,
+        network: str = "mainnet",
         max_retries: int = 3,
     ) -> Dict[str, str]:
         """
-        Creates a NEAR wallet with retry logic for handling account ID collisions
+        Creates a NEAR wallet with retry logic for handling account ID collisions and RPC errors
         """
+        last_error = None
+
         for attempt in range(max_retries):
             try:
-                # Determine network based on environment and parameters
-                if is_mainnet or Config.is_production():
-                    logger.info(
-                        f"Creating NEAR mainnet wallet for user {user_id} (attempt {attempt + 1})"
-                    )
-                    wallet_info = await self.near_wallet_service.create_mainnet_wallet(
-                        user_id
-                    )
-                    network_type = "mainnet"
-                else:
-                    logger.info(
-                        f"Creating NEAR testnet wallet for user {user_id} (attempt {attempt + 1})"
-                    )
-                    wallet_info = await self.near_wallet_service.create_testnet_wallet(
-                        user_id
-                    )
-                    network_type = "testnet"
+                logger.info(
+                    f"Creating NEAR {network} wallet for user {user_id} (attempt {attempt + 1})"
+                )
+
+                # Use unified wallet creation
+                wallet_info = await self.near_wallet_service.create_wallet(
+                    user_id, network
+                )
 
                 # Enhanced caching with TTL and fallback
                 await cache_service.cache_wallet_creation(user_id, wallet_info)
@@ -82,24 +129,47 @@ class WalletService:
                 await db_service.save_wallet_async(wallet_info, user_id, user_name)
 
                 logger.info(
-                    f"Created NEAR {network_type} wallet for user {user_id}: {wallet_info['account_id']}"
+                    f"Created NEAR {network} wallet for user {user_id}: {wallet_info['account_id']}"
                 )
                 return wallet_info
 
-            except Exception as e:
+            except WalletCreationError as e:
+                last_error = e
                 logger.error(
-                    f"Error creating NEAR wallet for user {user_id} (attempt {attempt + 1}): {e}"
+                    f"Wallet creation failed for user {user_id} (attempt {attempt + 1}): {e.message}"
                 )
 
-                # If this is the last attempt, raise the exception
+                # Don't retry non-retryable errors
+                if not e.retryable:
+                    logger.error(f"Non-retryable error for user {user_id}: {e.message}")
+                    raise e
+
+                # Don't retry on last attempt
                 if attempt == max_retries - 1:
-                    raise
+                    logger.error(f"All retry attempts failed for user {user_id}")
+                    raise e
 
-                # Log retry attempt
+                # Log retry information
                 logger.info(
-                    f"Retrying wallet creation for user {user_id} (attempt {attempt + 2}/{max_retries})"
+                    f"Retrying wallet creation for user {user_id} in {2 ** attempt} seconds..."
                 )
-                continue
+
+            except Exception as e:
+                last_error = e
+                logger.error(
+                    f"Unexpected error creating wallet for user {user_id} (attempt {attempt + 1}): {e}"
+                )
+
+                # Don't retry on last attempt
+                if attempt == max_retries - 1:
+                    logger.error(f"All retry attempts failed for user {user_id}")
+                    raise e
+
+        # If we reach here, all retries failed
+        if last_error:
+            raise last_error
+        else:
+            raise Exception("Wallet creation failed after all retry attempts")
 
     async def get_user_wallet(self, user_id: int) -> Optional[Dict[str, str]]:
         """

@@ -1,4 +1,9 @@
-from telegram import Update, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import (
+    Update,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    ReplyKeyboardMarkup,
+)
 from telegram.ext import CallbackContext
 from .keyboard_markups import (
     create_main_menu_keyboard,
@@ -53,8 +58,9 @@ async def handle_first_time_wallet_creation(
 
         # Create wallet service and generate demo wallet
         wallet_service = WalletService()
-        wallet_info = await wallet_service.create_demo_wallet(
-            user_id, user_name=user_name
+        network = "mainnet" if Config.is_mainnet_enabled() else "testnet"
+        wallet_info = await wallet_service.create_wallet(
+            user_id, user_name=user_name, network=network
         )
 
         # Update loading message with final step
@@ -121,8 +127,10 @@ async def handle_silent_wallet_creation(
 
         # Create wallet service and generate demo wallet
         wallet_service = WalletService()
-        wallet_info = await wallet_service.create_demo_wallet(
-            user_id, user_name=user_name
+        network = "mainnet" if Config.is_mainnet_enabled() else "testnet"
+
+        wallet_info = await wallet_service.create_wallet(
+            user_id, user_name=user_name, network=network
         )
 
         # Format the wallet info message
@@ -144,11 +152,40 @@ async def handle_silent_wallet_creation(
         return True
     except Exception as e:
         logger.error(f"Error creating wallet for user {user_id}: {e}")
+        logger.error(f"Error type: {type(e).__name__}")
+
+        # Determine error type and provide appropriate message
+        error_message = "Sorry, there was an error creating your wallet."
+        if "timeout" in str(e).lower() or "timed out" in str(e).lower():
+            error_message = "The wallet creation is taking longer than expected. Your wallet may have been created successfully, but we couldn't confirm it in time."
+        elif "connection" in str(e).lower() or "network" in str(e).lower():
+            error_message = "There was a network connection issue. Please check your internet connection and try again."
+        elif "database" in str(e).lower() or "db" in str(e).lower():
+            error_message = "There was a database issue. Your wallet may have been created, but we couldn't save the information properly."
+
         # Try to send error message if loading message was created
         try:
+            # Create retry keyboard
+            retry_keyboard = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "🔄 Try Again",
+                            callback_data=f"retry_wallet_creation:{user_id}",
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "🆘 Contact Support", callback_data="contact_support"
+                        )
+                    ],
+                ]
+            )
+
             await loading_message.edit_text(
-                "❌ **Wallet Creation Failed**\nSorry, there was an error creating your wallet. Please try again later.",
+                f"❌ **Wallet Creation Failed**\n{error_message} Please try again later.",
                 parse_mode="Markdown",
+                reply_markup=retry_keyboard,
             )
         except:
             pass
@@ -716,6 +753,25 @@ async def handle_menu_callback(update: Update, context: CallbackContext) -> None
         await query.edit_message_text("❌ Invalid menu selection. Please try again.")
 
 
+async def handle_game_callback(
+    update: Update, context: CallbackContext, callback_data: str
+) -> None:
+    """Handle game-related callback queries"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+
+    if callback_data == "game:create_quiz":
+        await handle_create_quiz(update, context)
+    elif callback_data == "game:play_quiz":
+        await handle_play_quiz(update, context)
+    elif callback_data == "game:leaderboards":
+        await handle_leaderboards(update, context)
+    elif callback_data == "game:rewards":
+        await handle_rewards(update, context)
+    else:
+        await query.edit_message_text("❌ Invalid game selection. Please try again.")
+
+
 async def handle_main_menu_callback(
     update: Update, context: CallbackContext, callback_data: str
 ) -> None:
@@ -762,47 +818,6 @@ async def handle_main_menu_callback(
             "📱 Get our cash winning app:", reply_markup=create_inline_app_keyboard()
         )
         await redis_client.set_user_data_key(user_id, "current_menu", "app")
-
-
-async def handle_game_callback(
-    update: Update, context: CallbackContext, callback_data: str
-) -> None:
-    """
-    Handles game-related button clicks for InlineKeyboardMarkup
-    """
-    query = update.callback_query
-    user_id = update.effective_user.id
-
-    if callback_data == "game:create_quiz":
-        # Show quiz creation options
-        await query.edit_message_text(
-            "📝 Create a new quiz:", reply_markup=create_inline_quiz_creation_keyboard()
-        )
-
-    elif callback_data == "game:play_quiz":
-        # Trigger the existing play quiz functionality
-        await query.edit_message_text("🎲 Loading available quizzes...")
-        # Import and call the existing play_quiz function
-        from services.quiz_service import play_quiz
-
-        context.args = []  # Reset args for play_quiz
-        await play_quiz(update, context)
-
-    elif callback_data == "game:leaderboards":
-        # Show leaderboards
-        await query.edit_message_text("🏆 Loading leaderboards...")
-        # Import and call the existing leaderboards function
-        from bot.handlers import show_all_active_leaderboards_command
-
-        await show_all_active_leaderboards_command(update, context)
-
-    elif callback_data == "game:winners":
-        # Show winners
-        await query.edit_message_text("💰 Loading winners...")
-        # Import and call the existing winners function
-        from bot.handlers import winners_handler
-
-        await winners_handler(update, context)
 
 
 async def handle_challenge_callback(
