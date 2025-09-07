@@ -14,6 +14,11 @@ from fastapi.responses import JSONResponse
 from api.main import get_bot_instance
 from utils.config import Config
 from utils.redis_client import RedisClient
+from utils.rpc_retry import (
+    get_circuit_breaker_status,
+    reset_circuit_breaker,
+    reset_all_circuit_breakers,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1080,3 +1085,84 @@ async def get_monitoring_dashboard():
     from fastapi.responses import HTMLResponse
 
     return HTMLResponse(content=dashboard_html)
+
+
+@router.get("/circuit-breakers")
+async def get_circuit_breaker_status() -> JSONResponse:
+    """
+    Get status of all circuit breakers.
+
+    Returns:
+        JSONResponse with circuit breaker statuses
+    """
+    try:
+        status = get_circuit_breaker_status()
+        return JSONResponse(
+            content={
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "circuit_breakers": status,
+                "total_breakers": len(status),
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error getting circuit breaker status: {e}")
+        raise HTTPException(
+            status_code=500, detail="Failed to get circuit breaker status"
+        )
+
+
+@router.post("/circuit-breakers/reset/{endpoint}")
+async def reset_specific_circuit_breaker(endpoint: str) -> JSONResponse:
+    """
+    Reset a specific circuit breaker.
+
+    Args:
+        endpoint: The circuit breaker endpoint to reset
+
+    Returns:
+        JSONResponse with reset result
+    """
+    try:
+        success = reset_circuit_breaker(endpoint)
+        if success:
+            return JSONResponse(
+                content={
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "message": f"Circuit breaker reset for endpoint: {endpoint}",
+                    "success": True,
+                }
+            )
+        else:
+            return JSONResponse(
+                content={
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "message": f"Circuit breaker not found for endpoint: {endpoint}",
+                    "success": False,
+                }
+            )
+    except Exception as e:
+        logger.error(f"Error resetting circuit breaker {endpoint}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reset circuit breaker")
+
+
+@router.post("/circuit-breakers/reset-all")
+async def reset_all_circuit_breakers_endpoint() -> JSONResponse:
+    """
+    Reset all circuit breakers.
+
+    Returns:
+        JSONResponse with reset result
+    """
+    try:
+        reset_count = reset_all_circuit_breakers()
+        return JSONResponse(
+            content={
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "message": f"Reset {reset_count} circuit breakers",
+                "success": True,
+                "reset_count": reset_count,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error resetting all circuit breakers: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reset circuit breakers")
