@@ -15,7 +15,7 @@ from api.main import get_bot_instance
 from utils.config import Config
 from utils.redis_client import RedisClient
 from utils.rpc_retry import (
-    get_circuit_breaker_status,
+    get_circuit_breaker_status as get_cb_status,
     reset_circuit_breaker,
     reset_all_circuit_breakers,
 )
@@ -1096,7 +1096,7 @@ async def get_circuit_breaker_status() -> JSONResponse:
         JSONResponse with circuit breaker statuses
     """
     try:
-        status = get_circuit_breaker_status()
+        status = get_cb_status()
         return JSONResponse(
             content={
                 "timestamp": datetime.now(timezone.utc).isoformat(),
