@@ -338,9 +338,9 @@ class TelegramBot:
         # )  # Register the new handler
         # self.app.add_handler(CommandHandler("playquiz", play_quiz_handler))
         # self.app.add_handler(CommandHandler("winners", winners_handler))
-        self.app.add_handler(
-            CommandHandler("leaderboards", show_all_active_leaderboards_command)
-        )
+        # self.app.add_handler(
+        #     CommandHandler("leaderboards", show_all_active_leaderboards_command)
+        # )
         # self.app.add_handler(
         #     CommandHandler("resetwallet", handle_reset_wallet)
         # )  # Development command

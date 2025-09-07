@@ -53,8 +53,9 @@ async def handle_first_time_wallet_creation(
 
         # Create wallet service and generate demo wallet
         wallet_service = WalletService()
-        wallet_info = await wallet_service.create_demo_wallet(
-            user_id, user_name=user_name
+        network = "mainnet" if Config.is_mainnet_enabled() else "testnet"
+        wallet_info = await wallet_service.create_wallet(
+            user_id, user_name=user_name, network=network
         )
 
         # Update loading message with final step
@@ -121,8 +122,10 @@ async def handle_silent_wallet_creation(
 
         # Create wallet service and generate demo wallet
         wallet_service = WalletService()
-        wallet_info = await wallet_service.create_demo_wallet(
-            user_id, user_name=user_name
+        network = "mainnet" if Config.is_mainnet_enabled() else "testnet"
+
+        wallet_info = await wallet_service.create_wallet(
+            user_id, user_name=user_name, network=network
         )
 
         # Format the wallet info message

@@ -11,7 +11,6 @@ from services.quiz_service import (
     create_quiz,
     play_quiz,
     handle_quiz_answer,
-    get_winners,
     distribute_quiz_rewards,
     process_questions,
     schedule_auto_distribution,
@@ -363,9 +362,11 @@ async def start_createquiz_group(update, context):
                 parse_mode="Markdown",
             )
 
+            network = "mainnet" if Config.is_mainnet_enabled() else "testnet"
+
             # Create wallet using existing service
-            wallet_info = await wallet_service.create_demo_wallet(
-                user_id, user_name=user.username or user.first_name
+            wallet_info = await wallet_service.create_wallet(
+                user_id, user_name=user.username or user.first_name, network=network
             )
 
             # Update loading message with final step
@@ -1859,10 +1860,13 @@ async def start_quiz_for_user(update, context, quiz):
 
                 # Create wallet using existing service
                 logger.info(f"DEBUG: Creating wallet for user {user_id}")
-                wallet_info = await wallet_service.create_demo_wallet(
+                network = "mainnet" if Config.is_mainnet_enabled() else "testnet"
+
+                wallet_info = await wallet_service.create_wallet(
                     user_id,
                     user_name=update.effective_user.username
                     or update.effective_user.first_name,
+                    network=network,
                 )
                 logger.info(
                     f"DEBUG: Wallet created successfully: {wallet_info.get('account_id', 'N/A')}"
@@ -3177,10 +3181,6 @@ async def private_message_handler(update: Update, context: CallbackContext):
     )
 
 
-async def winners_handler(update: Update, context: CallbackContext):
-    """Handler for /winners command to display quiz results."""
-    await get_winners(update, context)
-
 
 async def distribute_rewards_handler(update: Update, context: CallbackContext):
     """Handler for /distributerewards command to send NEAR rewards to winners."""
@@ -3206,123 +3206,6 @@ async def announce_quiz_end_handler(update: Update, context: CallbackContext):
         f"✅ Quiz end announcement triggered for quiz {quiz_id}",
     )
 
-
-async def show_all_active_leaderboards_command(
-    update: Update, context: CallbackContext
-):
-    """Displays leaderboards for all active quizzes in a more user-friendly format."""
-    session = SessionLocal()
-    try:
-        active_quizzes = await get_leaderboards_for_all_active_quizzes()
-
-        if not active_quizzes:
-            await safe_send_message(
-                context.bot,
-                update.effective_chat.id,
-                "🏁 No active quizzes found at the moment. Create one with /createquiz!",
-            )
-            return
-
-        response_message = "🏆 <b>Active Quiz Leaderboards</b> 🏆\n"
-
-        for quiz_info in active_quizzes:
-            quiz_id_full = quiz_info.get("quiz_id", "N/A")
-            quiz_id_short = quiz_id_full[:8]  # Use the full ID for slicing
-            quiz_topic = html.escape(quiz_info.get("quiz_topic", "N/A"))
-            response_message += f"<pre>------------------------------</pre>\n"
-            # Corrected f-string syntax below
-            response_message += (
-                f'🎯 <b>Quiz: "{quiz_topic}"</b> (ID: {quiz_id_short})\n'
-            )
-
-            # Display the parsed reward description returned by the service
-            reward_desc = quiz_info.get("reward_description") or "Not specified"
-            response_message += f"💰 Reward: {html.escape(str(reward_desc))}\n"
-
-            if quiz_info.get("end_time"):
-                try:
-                    end_time_dt = datetime.fromisoformat(
-                        quiz_info["end_time"].replace("Z", "+00:00")
-                    )
-                    # Ensure timezone-aware datetime for correct comparisons
-                    if (
-                        end_time_dt.tzinfo is None
-                        or end_time_dt.tzinfo.utcoffset(end_time_dt) is None
-                    ):
-                        end_time_dt = end_time_dt.replace(tzinfo=timezone.utc)
-                    time_left_str = "Ended"
-                    now_utc = datetime.now(timezone.utc)
-                    if end_time_dt > now_utc:
-                        delta = end_time_dt - now_utc
-                        days, remainder = divmod(delta.total_seconds(), 86400)
-                        hours, remainder = divmod(remainder, 3600)
-                        minutes, _ = divmod(remainder, 60)
-                        time_left_parts = []
-                        if days > 0:
-                            time_left_parts.append(f"{int(days)}d")
-                        if hours > 0:
-                            time_left_parts.append(f"{int(hours)}h")
-                        if minutes > 0 or not time_left_parts:
-                            time_left_parts.append(f"{int(minutes)}m")
-                        # Corrected join logic for time_left_str
-                        if time_left_parts:
-                            time_left_str = " ".join(time_left_parts) + " left"
-                        else:
-                            time_left_str = "Ending soon"
-                    response_message += f"⏳ Ends: {html.escape(end_time_dt.strftime('%b %d, %H:%M UTC'))} ({html.escape(time_left_str)})\n"
-                except ValueError:
-                    response_message += f"⏳ Ends: {html.escape(quiz_info['end_time'])} (Could not parse time)\n"
-            else:
-                response_message += "⏳ Ends: Not specified\n"
-
-            response_message += "\n"
-            if quiz_info.get("participants", []):
-                response_message += "<b>Leaderboard:</b>\n"
-                for i, entry in enumerate(quiz_info["participants"][:3]):
-                    rank_emoji = ["🥇", "🥈", "🥉"][i] if i < 3 else "🏅"
-                    # Improve username display and tagging
-                    username = entry.get("username")
-                    if not username:
-                        user_id = entry.get("user_id", "Unknown")
-                        username = (
-                            f"User_{user_id[:8]}" if user_id != "Unknown" else "Unknown"
-                        )
-                    username = html.escape(username)
-
-                    score = entry.get(
-                        "score", "-"
-                    )  # Changed from entry["correct_count"] to entry.get("score", "-")
-                    response_message += (
-                        f"{rank_emoji} {i+1}. @{username} - Score: {score}\n"
-                    )
-            else:
-                response_message += "<i>No participants yet. Be the first!</i>\n"
-
-            response_message += (
-                f"\n➡️ Play this quiz: <code> /playquiz {quiz_id_full}</code>\n"
-            )
-
-        response_message += "<pre>------------------------------</pre>\n"
-        response_message += "\nCreate your own quiz with /createquiz!"
-
-        await safe_send_message(
-            context.bot,
-            update.effective_chat.id,
-            response_message,
-            parse_mode="HTML",
-        )
-
-    except Exception as e:
-        logger.error(
-            f"Error in show_all_active_leaderboards_command: {e}", exc_info=True
-        )
-        await safe_send_message(
-            context.bot,
-            update.effective_chat.id,
-            "Sorry, I couldn't fetch the leaderboards right now. Please try again later.",
-        )
-    finally:
-        session.close()
 
 
 async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackContext):

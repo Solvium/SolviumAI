@@ -20,25 +20,75 @@ class WalletService:
         self.redis_client = RedisClient()
         self.near_wallet_service = NEARWalletService()
 
+    async def create_wallet(
+        self, user_id: int, user_name: str = None, network: str = None
+    ) -> Dict[str, str]:
+        """
+        Creates a NEAR wallet for the user with network-specific robustness
+        - testnet: Simple, fast creation for local testing
+        - mainnet: Robust with retries, error handling, verification
+
+        Args:
+            user_id: User ID for wallet creation
+            user_name: Optional user name
+            network: Network type ("testnet" or "mainnet"). If None, uses config default
+
+        Returns:
+            Dict containing wallet information
+        """
+        if network is None:
+            network = "mainnet" if Config.is_mainnet_enabled() else "testnet"
+
+        if network == "mainnet":
+            # Use robust retry logic for mainnet
+            return await self._create_wallet_with_retry(
+                user_id, user_name, network, max_retries=3
+            )
+        else:
+            # Simple creation for testnet
+            return await self._create_wallet_simple(user_id, user_name, network)
+
     async def create_demo_wallet(
         self, user_id: int, user_name: str = None
     ) -> Dict[str, str]:
         """
+        Legacy function - redirects to unified create_wallet
         Creates a NEAR wallet for the user based on environment configuration
         - Production: Creates mainnet wallet
         - Development: Creates testnet wallet
         Returns wallet info including account ID and encrypted private key
         """
-        is_mainnet = Config.is_mainnet_enabled()
-        return await self._create_wallet_with_retry(
-            user_id, user_name, is_mainnet=is_mainnet
+        logger.info(
+            "Using legacy create_demo_wallet - redirecting to unified create_wallet"
         )
+        return await self.create_wallet(user_id, user_name)
+
+    async def _create_wallet_simple(
+        self, user_id: int, user_name: str, network: str
+    ) -> Dict[str, str]:
+        """
+        Simple wallet creation for testnet (no retries)
+        """
+        logger.info(f"Creating NEAR {network} wallet for user {user_id} (simple mode)")
+
+        wallet_info = await self.near_wallet_service.create_wallet(user_id, network)
+
+        # Enhanced caching with TTL and fallback
+        await cache_service.cache_wallet_creation(user_id, wallet_info)
+
+        # Save to database (non-blocking background task)
+        await db_service.save_wallet_async(wallet_info, user_id, user_name)
+
+        logger.info(
+            f"Created NEAR {network} wallet for user {user_id}: {wallet_info['account_id']}"
+        )
+        return wallet_info
 
     async def _create_wallet_with_retry(
         self,
         user_id: int,
         user_name: str = None,
-        is_mainnet: bool = False,
+        network: str = "mainnet",
         max_retries: int = 3,
     ) -> Dict[str, str]:
         """
@@ -48,23 +98,14 @@ class WalletService:
 
         for attempt in range(max_retries):
             try:
-                # Determine network based on environment and parameters
-                if is_mainnet or Config.is_production():
-                    logger.info(
-                        f"Creating NEAR mainnet wallet for user {user_id} (attempt {attempt + 1})"
-                    )
-                    wallet_info = await self.near_wallet_service.create_mainnet_wallet(
-                        user_id
-                    )
-                    network_type = "mainnet"
-                else:
-                    logger.info(
-                        f"Creating NEAR testnet wallet for user {user_id} (attempt {attempt + 1})"
-                    )
-                    wallet_info = await self.near_wallet_service.create_testnet_wallet(
-                        user_id
-                    )
-                    network_type = "testnet"
+                logger.info(
+                    f"Creating NEAR {network} wallet for user {user_id} (attempt {attempt + 1})"
+                )
+
+                # Use unified wallet creation
+                wallet_info = await self.near_wallet_service.create_wallet(
+                    user_id, network
+                )
 
                 # Enhanced caching with TTL and fallback
                 await cache_service.cache_wallet_creation(user_id, wallet_info)
@@ -73,7 +114,7 @@ class WalletService:
                 await db_service.save_wallet_async(wallet_info, user_id, user_name)
 
                 logger.info(
-                    f"Created NEAR {network_type} wallet for user {user_id}: {wallet_info['account_id']}"
+                    f"Created NEAR {network} wallet for user {user_id}: {wallet_info['account_id']}"
                 )
                 return wallet_info
 
