@@ -767,47 +767,6 @@ async def handle_main_menu_callback(
         await redis_client.set_user_data_key(user_id, "current_menu", "app")
 
 
-async def handle_game_callback(
-    update: Update, context: CallbackContext, callback_data: str
-) -> None:
-    """
-    Handles game-related button clicks for InlineKeyboardMarkup
-    """
-    query = update.callback_query
-    user_id = update.effective_user.id
-
-    if callback_data == "game:create_quiz":
-        # Show quiz creation options
-        await query.edit_message_text(
-            "📝 Create a new quiz:", reply_markup=create_inline_quiz_creation_keyboard()
-        )
-
-    elif callback_data == "game:play_quiz":
-        # Trigger the existing play quiz functionality
-        await query.edit_message_text("🎲 Loading available quizzes...")
-        # Import and call the existing play_quiz function
-        from services.quiz_service import play_quiz
-
-        context.args = []  # Reset args for play_quiz
-        await play_quiz(update, context)
-
-    elif callback_data == "game:leaderboards":
-        # Show leaderboards
-        await query.edit_message_text("🏆 Loading leaderboards...")
-        # Import and call the existing leaderboards function
-        from bot.handlers import show_all_active_leaderboards_command
-
-        await show_all_active_leaderboards_command(update, context)
-
-    elif callback_data == "game:winners":
-        # Show winners
-        await query.edit_message_text("💰 Loading winners...")
-        # Import and call the existing winners function
-        from bot.handlers import winners_handler
-
-        await winners_handler(update, context)
-
-
 async def handle_challenge_callback(
     update: Update, context: CallbackContext, callback_data: str
 ) -> None:

@@ -9,14 +9,13 @@ from telegram.ext import (
 )
 from services.quiz_service import (
     create_quiz,
-    play_quiz,
-    handle_quiz_answer,
+    # handle_quiz_answer,
     distribute_quiz_rewards,
     process_questions,
     schedule_auto_distribution,
     save_quiz_payment_hash,  # Added import
     save_quiz_reward_details,  # Added import
-    get_leaderboards_for_all_active_quizzes,  # Add this import
+    # get_leaderboards_for_all_active_quizzes,  # Add this import
     start_enhanced_quiz,
     send_enhanced_question,
     handle_enhanced_quiz_answer,
@@ -3181,7 +3180,6 @@ async def private_message_handler(update: Update, context: CallbackContext):
     )
 
 
-
 async def distribute_rewards_handler(update: Update, context: CallbackContext):
     """Handler for /distributerewards command to send NEAR rewards to winners."""
     await distribute_quiz_rewards(update, context)
@@ -3205,7 +3203,6 @@ async def announce_quiz_end_handler(update: Update, context: CallbackContext):
         update.effective_chat.id,
         f"✅ Quiz end announcement triggered for quiz {quiz_id}",
     )
-
 
 
 async def handle_enhanced_quiz_start_callback(update: Update, context: CallbackContext):

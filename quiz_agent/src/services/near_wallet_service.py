@@ -37,6 +37,7 @@ class NEARWalletService:
         self.mainnet_rpc_url = Config.NEAR_MAINNET_RPC_URL
         self.encryption_key = Config.get_wallet_encryption_key()
         self.main_account: Optional[Account] = None
+        self.mainnet_helper_url = Config.NEAR_MAINNET_HELPER_URL
         self._init_main_account()
 
         # Collision tracking for monitoring
@@ -857,7 +858,7 @@ class NEARWalletService:
                     # Note: This would need a mainnet helper URL if available
                     # For now, we'll use the testnet helper as a fallback
                     response = requests.post(
-                        f"{self.testnet_helper_url}/account",
+                        f"{self.mainnet_helper_url}/account",
                         json=payload,
                         headers={"Content-Type": "application/json"},
                         timeout=Config.ACCOUNT_CREATION_TIMEOUT,

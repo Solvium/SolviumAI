@@ -100,13 +100,16 @@ class Config:
 
     # NEAR Wallet Configuration
     NEAR_TESTNET_RPC_URL = os.getenv(
-        "NEAR_TESTNET_RPC_URL", "https://rpc.testnet.near.org"
+        "NEAR_TESTNET_RPC_URL", "https://test.rpc.fastnear.com"
     )
     NEAR_TESTNET_HELPER_URL = os.getenv(
-        "NEAR_TESTNET_HELPER_URL", "https://helper.testnet.near.org"
+        "NEAR_TESTNET_HELPER_URL", "https://rpc.web4.testnet.page/account/testnet"
     )
     NEAR_MAINNET_RPC_URL = os.getenv(
-        "NEAR_MAINNET_RPC_URL", "https://rpc.mainnet.near.org"
+        "NEAR_MAINNET_RPC_URL", "https://rpc.web4.near.page	"
+    )
+    NEAR_MAINNET_HELPER_URL = os.getenv(
+        "NEAR_MAINNET_HELPER_URL", "https://free.rpc.fastnear.com"
     )
 
     # Wallet Security Configuration
