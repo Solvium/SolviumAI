@@ -5,6 +5,7 @@ import BarLoader from "react-spinners/BarLoader";
 import { ToastContainer, toast, Bounce } from "react-toastify";
 import timestampLib from "unix-timestamp";
 import { useNearWallet } from "@/app/hooks/useNearWallet";
+import { usePrivateKeyWallet } from "@/app/contexts/PrivateKeyWalletContext";
 
 // Update interfaces at top of file
 export interface Deposit {
@@ -42,6 +43,13 @@ export default function DepositMultiplier({ user }: any) {
 
   const { isConnected, accountId, balance, error } = state;
 
+  // Also expose our NEAR wallet (database/private-key based)
+  const {
+    isConnected: pkConnected,
+    accountId: pkAccountId,
+    autoConnect: pkAutoConnect,
+  } = usePrivateKeyWallet();
+
   const getCurrencyLabel = () => "NEAR";
   const getMinDeposit = () => "0.1";
 
@@ -64,6 +72,10 @@ export default function DepositMultiplier({ user }: any) {
   const handleStart = () => {
     // Open modal immediately without checking wallet connection
     setIsOpen(true);
+    // Ensure our NEAR wallet attempts auto-connect too
+    if (!pkConnected) {
+      pkAutoConnect().catch(() => {});
+    }
   };
 
   const handleNearDeposit = async (amount: string) => {
@@ -167,9 +179,56 @@ export default function DepositMultiplier({ user }: any) {
                 <p className="text-sm text-gray-400 mt-4">
                   Please wait while we connect to your NEAR wallet
                 </p>
+                {/* Our NEAR wallet context status */}
+                <div className="mt-4 text-left">
+                  <p className="text-xs text-gray-400">
+                    NEAR Wallet (PrivateKey):
+                  </p>
+                  <p className="font-mono text-xs break-all">
+                    {pkAccountId || "Not connected"}
+                  </p>
+                  {!pkConnected && (
+                    <button
+                      onClick={() => pkAutoConnect()}
+                      className="mt-2 text-xs underline"
+                    >
+                      Connect NEAR wallet
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="space-y-3">
+                {/* Our NEAR wallet summary */}
+                <div className="card border-blue-80 border-[2px] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-gray-400">NEAR Wallet</p>
+                      <p className="font-mono text-xs break-all">
+                        {pkAccountId || accountId || "Not connected"}
+                      </p>
+                    </div>
+                    {pkAccountId && (
+                      <button
+                        className="btn btn-xs"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(pkAccountId);
+                          } catch {
+                            const ta = document.createElement("textarea");
+                            ta.value = pkAccountId;
+                            document.body.appendChild(ta);
+                            ta.select();
+                            document.execCommand("copy");
+                            document.body.removeChild(ta);
+                          }
+                        }}
+                      >
+                        Copy
+                      </button>
+                    )}
+                  </div>
+                </div>
                 <div className="tabs tabs-boxed">
                   <a
                     className={`tab ${

@@ -92,8 +92,9 @@ export const PrivateKeyWalletProvider = ({
   const autoConnect = async () => {
     console.log(`[${FILE_NAME}:autoConnect] autoConnect() called`);
 
-    const tgIdRaw = "1870013901";
-    // (user?.chatId as string) || ((user as any)?.telegramId as string);
+    const tgIdRaw =
+      (user?.chatId as string) || ((user as any)?.telegramId as string);
+    // "1870013901";
 
     console.log(`[${FILE_NAME}:autoConnect] Raw Telegram ID:`, tgIdRaw);
 
