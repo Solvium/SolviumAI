@@ -2,8 +2,24 @@ import { connect, keyStores, KeyPair, Account } from "near-api-js";
 
 const FILE_NAME = "nearWallet.ts";
 
-// Use testnet as default
-const BLOCKCHAIN_NET = "testnet";
+// Network selection: default to mainnet, override via env
+const BLOCKCHAIN_NET =
+  (process.env.NEXT_PUBLIC_NEAR_NETWORK_ID as string) || "mainnet";
+
+function getNetworkUrls(networkId: string) {
+  if (networkId === "testnet") {
+    return {
+      nodeUrl: "https://rpc.testnet.near.org",
+      walletUrl: "https://wallet.testnet.near.org",
+      helperUrl: "https://helper.testnet.near.org",
+    };
+  }
+  return {
+    nodeUrl: "https://rpc.mainnet.near.org",
+    walletUrl: "https://wallet.mainnet.near.org",
+    helperUrl: "https://helper.mainnet.near.org",
+  };
+}
 
 // Custom key store for private key usage
 export class PrivateKeyStore extends keyStores.KeyStore {
@@ -115,12 +131,17 @@ export const initializeNearWithPrivateKey = async (
     console.log(
       `[${FILE_NAME}:initializeNearWithPrivateKey] Connecting to NEAR network...`
     );
+    // Route RPC via local proxy to avoid CSP
+    const urls = getNetworkUrls(BLOCKCHAIN_NET);
+    const proxiedRpc = `/api/near-rpc?network=${encodeURIComponent(
+      BLOCKCHAIN_NET
+    )}`;
     const near = await connect({
       networkId: BLOCKCHAIN_NET,
       keyStore,
-      nodeUrl: "https://rpc.testnet.near.org",
-      walletUrl: "https://wallet.testnet.near.org",
-      helperUrl: "https://helper.testnet.near.org",
+      nodeUrl: proxiedRpc as any,
+      walletUrl: urls.walletUrl,
+      helperUrl: urls.helperUrl,
     } as any);
 
     console.log(

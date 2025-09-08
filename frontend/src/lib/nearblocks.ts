@@ -1,4 +1,5 @@
-const BASE_URL = "https://api.nearblocks.io";
+// Proxied via local API to avoid CSP and hide API key
+const LOCAL_BASE = "";
 
 function buildHeaders() {
   const headers: Record<string, string> = { Accept: "application/json" };
@@ -10,10 +11,12 @@ function buildHeaders() {
 export async function getAccountInfo(accountId: string): Promise<any | null> {
   try {
     const res = await fetch(
-      `${BASE_URL}/v1/account/${encodeURIComponent(accountId)}`,
+      `${LOCAL_BASE}/api/nearblocks/account/${encodeURIComponent(
+        accountId
+      )}/info`,
       {
         method: "GET",
-        headers: buildHeaders(),
+        headers: { Accept: "application/json" },
         cache: "no-store",
       }
     );
@@ -35,10 +38,14 @@ export async function getAccountTxns(
       order: "desc",
     });
     const res = await fetch(
-      `${BASE_URL}/v1/account/${encodeURIComponent(
+      `${LOCAL_BASE}/api/nearblocks/account/${encodeURIComponent(
         accountId
-      )}/txns-only?${params.toString()}`,
-      { method: "GET", headers: buildHeaders(), cache: "no-store" }
+      )}/txns?${params.toString()}`,
+      {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      }
     );
     if (!res.ok) return null;
     const data = await res.json();

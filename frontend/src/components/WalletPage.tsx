@@ -20,24 +20,31 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  getAccountInfo,
-  getAccountTxns,
-  formatNearAmount,
-} from "@/lib/nearblocks";
+import { getAccountInfo, formatNearAmount } from "@/lib/nearblocks";
+import { getAccountFull, formatYoctoToNear } from "@/lib/fastnear";
+import { getNearUsd } from "@/lib/prices";
+import { getAccountTxnsFastnear } from "@/lib/fastnearExplorer";
 
 const WalletPage = () => {
   const [selectedNetwork, setSelectedNetwork] = useState("NEAR");
   const [showBalance, setShowBalance] = useState(true);
-  const { isConnected, isLoading, error, accountId, autoConnect } =
+  const [copied, setCopied] = useState(false);
+  const { isConnected, isLoading, error, accountId, autoConnect, account } =
     usePrivateKeyWallet();
   const [nearBalance, setNearBalance] = useState<string | null>(null);
   const [recentTxns, setRecentTxns] = useState<any[] | null>(null);
+  const [nearUsd, setNearUsd] = useState<number | null>(null);
 
   // Mock data
   const walletAddress = "solvium.near";
   const balances = {
-    NEAR: { amount: nearBalance ?? "••••", usd: "—" },
+    NEAR: {
+      amount: nearBalance ?? "••••",
+      usd:
+        nearUsd && nearBalance && /^[0-9]+(\.[0-9]+)?$/.test(nearBalance)
+          ? (Number(nearBalance) * nearUsd).toFixed(2)
+          : "—",
+    },
   };
 
   const networks = [{ name: "NEAR", color: "bg-green-500", icon: "🟢" }];
@@ -49,25 +56,42 @@ const WalletPage = () => {
   }, [isConnected, isLoading, autoConnect]);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const price = await getNearUsd();
+      if (!cancelled && price) setNearUsd(price);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!accountId) return;
     let cancelled = false;
     (async () => {
-      const info = await getAccountInfo(accountId);
-      if (!cancelled) {
-        const bal = info?.account?.amount || info?.amount || info?.balance;
-        if (bal) setNearBalance(formatNearAmount(bal));
+      // FastNEAR first for balance and tokens
+      const full = await getAccountFull(accountId);
+      if (!cancelled && full?.state?.balance) {
+        setNearBalance(formatYoctoToNear(full.state.balance));
+      } else {
+        // Fallback: Nearblocks
+        const info = await getAccountInfo(accountId);
+        if (!cancelled) {
+          const bal = info?.account?.amount || info?.amount || info?.balance;
+          if (bal) setNearBalance(formatNearAmount(bal));
+        }
       }
-      const tx = await getAccountTxns(accountId, 10);
-      if (!cancelled && Array.isArray(tx)) {
-        const normalized = tx.map((t: any, idx: number) => ({
-          id: t.hash || idx,
-          type: t.signer_id === accountId ? "send" : "receive",
+      const fast = await getAccountTxnsFastnear(accountId);
+      if (!cancelled && fast?.account_txs) {
+        const normalized = fast.account_txs.map((row) => ({
+          id: row.transaction_hash,
+          type: row.signer_id === accountId ? "send" : "receive",
           amount: "",
           token: "NEAR",
-          from: t.signer_id,
-          to: t.receiver_id,
-          timestamp:
-            t.block_timestamp || t.block_timestamp_ms || t.block_time || "",
+          from: row.signer_id,
+          to: accountId,
+          timestamp: row.tx_block_timestamp,
           status: "completed",
         }));
         setRecentTxns(normalized);
@@ -77,6 +101,23 @@ const WalletPage = () => {
       cancelled = true;
     };
   }, [accountId]);
+
+  // Fallback: read balance from connected NEAR account if API didn't return
+  useEffect(() => {
+    if (!account || nearBalance) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const b = await account.getAccountBalance?.();
+        if (!cancelled && b?.available) {
+          setNearBalance(formatNearAmount(b.available));
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [account, nearBalance]);
 
   const WalletConnectSection = () => (
     <div className="flex flex-col items-center justify-center min-h-[300px] space-y-4">
@@ -196,11 +237,35 @@ const WalletPage = () => {
               <span className="font-mono">{accountId || walletAddress}</span>
             </div>
             <Button
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(
+                    accountId || walletAddress
+                  );
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                } catch (e) {
+                  const textarea = document.createElement("textarea");
+                  textarea.value = accountId || walletAddress;
+                  document.body.appendChild(textarea);
+                  textarea.select();
+                  document.execCommand("copy");
+                  document.body.removeChild(textarea);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                }
+              }}
               variant="ghost"
               size="sm"
               className="text-[#8E8EA8] hover:text-white p-1"
+              aria-label={copied ? "Copied" : "Copy address"}
+              title={copied ? "Copied" : "Copy address"}
             >
-              <Copy className="w-3 h-3" />
+              {copied ? (
+                <span className="text-green-500 text-xs px-1">Copied</span>
+              ) : (
+                <Copy className="w-3 h-3" />
+              )}
             </Button>
           </div>
         </div>
