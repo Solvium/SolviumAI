@@ -8,22 +8,11 @@ export async function POST(request: NextRequest) {
     const { telegram_user_id, force_refresh } = body;
 
     // Validate input
-    if (!telegram_user_id || typeof telegram_user_id !== "number") {
+    if (!telegram_user_id || !Number.isInteger(telegram_user_id)) {
       return NextResponse.json(
         {
           has_wallet: false,
           error: "Invalid telegram_user_id. Must be a number.",
-        },
-        { status: 400 }
-      );
-    }
-
-    // Check if the user ID is reasonable (positive integer)
-    if (telegram_user_id <= 0 || !Number.isInteger(telegram_user_id)) {
-      return NextResponse.json(
-        {
-          has_wallet: false,
-          error: "Invalid telegram_user_id. Must be a positive integer.",
         },
         { status: 400 }
       );

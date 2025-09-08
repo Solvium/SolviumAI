@@ -51,7 +51,7 @@ export class SolviumAPIError extends Error {
 
 // API configuration
 const SOLVIUM_API_BASE_URL =
-  process.env.SOLVIUM_API_BASE_URL || "https://solviumaiq.onrender.com";
+  process.env.SOLVIUM_API_BASE_URL || "https://quiz.solviumgame.xyz";
 
 // Wallet cache configuration
 const WALLET_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes

@@ -28,6 +28,20 @@ interface PrivateKeyWalletContextType {
   disconnect: () => void;
   autoConnect: () => Promise<void>;
   refreshSolviumWallet: () => Promise<void>;
+  signAndSendTransaction: (
+    receiverId: string,
+    actions: Array<{
+      type: "FunctionCall";
+      params: {
+        methodName: string;
+        args: Record<string, any>;
+        gas: string;
+        deposit: string;
+      };
+    }>
+  ) => Promise<any>;
+  checkTokenRegistration: (tokenId: string) => Promise<boolean>;
+  registerToken: (tokenId: string) => Promise<boolean>;
 }
 
 const PrivateKeyWalletContext =
@@ -58,7 +72,8 @@ export const PrivateKeyWalletProvider = ({
       username: user?.username,
     });
 
-    if ((user?.chatId || (user as any)?.telegramId) && !isConnected) {
+    // if ((user?.chatId || (user as any)?.telegramId) && !isConnected) {
+    if (!isConnected) {
       console.log(
         `[${FILE_NAME}:useEffect] Auto-connect triggered for user:`,
         user
@@ -77,7 +92,7 @@ export const PrivateKeyWalletProvider = ({
   const autoConnect = async () => {
     console.log(`[${FILE_NAME}:autoConnect] autoConnect() called`);
 
-    const tgIdRaw = "724141849";
+    const tgIdRaw = "1870013901";
     // (user?.chatId as string) || ((user as any)?.telegramId as string);
 
     console.log(`[${FILE_NAME}:autoConnect] Raw Telegram ID:`, tgIdRaw);
@@ -112,31 +127,16 @@ export const PrivateKeyWalletProvider = ({
       console.log(
         `[${FILE_NAME}:autoConnect] Trying primary wallet API route...`
       );
-      let response = await fetch(
-        `/api/wallet/byTelegram/${encodeURIComponent(tgId)}?decrypt=1`
-      );
+      let response = await fetch(`/api/wallet/check`, {
+        method: "POST",
+        body: JSON.stringify({ telegram_user_id: Number(tgId) }),
+      });
 
       console.log(`[${FILE_NAME}:autoConnect] Primary route response:`, {
         status: response.status,
         statusText: response.statusText,
         ok: response.ok,
       });
-
-      // Fallback to alternate route if needed
-      if (!response.ok) {
-        console.log(
-          `[${FILE_NAME}:autoConnect] Primary route failed, trying fallback...`
-        );
-        const alt = await fetch(
-          `/api/wallet/by-telegram/${encodeURIComponent(tgId)}?decrypt=1`
-        );
-        console.log(`[${FILE_NAME}:autoConnect] Fallback route response:`, {
-          status: alt.status,
-          statusText: alt.statusText,
-          ok: alt.ok,
-        });
-        if (alt.ok) response = alt;
-      }
 
       if (!response.ok) {
         const text = await response.text().catch(() => "");
@@ -147,15 +147,27 @@ export const PrivateKeyWalletProvider = ({
         throw new Error(errorMsg);
       }
 
-      const walletData = await response.json();
+      const walletData = (await response.json()).wallet_info;
+      console.log("walletData ", walletData);
+      // Map snake_case API response to camelCase fields used locally
+      const mapped = walletData
+        ? {
+            accountId: walletData.account_id,
+            privateKey: walletData.private_key,
+            publicKey: walletData.public_key,
+            network: walletData.network,
+            isDemo: walletData.is_demo,
+          }
+        : null;
+
       console.log(`[${FILE_NAME}:autoConnect] Wallet data received:`, {
-        hasPrivateKey: !!walletData.privateKey,
-        hasAccountId: !!walletData.accountId,
-        accountId: walletData.accountId,
-        privateKeyLength: walletData.privateKey?.length || 0,
+        hasPrivateKey: !!mapped?.privateKey,
+        hasAccountId: !!mapped?.accountId,
+        accountId: mapped?.accountId,
+        privateKeyLength: mapped?.privateKey?.length || 0,
       });
 
-      if (!walletData.privateKey || !walletData.accountId) {
+      if (!mapped?.privateKey || !mapped?.accountId) {
         const errorMsg = "Wallet not found for this user";
         console.error(`[${FILE_NAME}:autoConnect] ${errorMsg}:`, walletData);
         throw new Error(errorMsg);
@@ -163,21 +175,21 @@ export const PrivateKeyWalletProvider = ({
 
       console.log(`[${FILE_NAME}:autoConnect] Initializing NEAR connection...`);
       const { account: nearAccount } = await initializeNearWithPrivateKey(
-        walletData.privateKey,
-        walletData.accountId
+        mapped.privateKey,
+        mapped.accountId
       );
 
       console.log(`[${FILE_NAME}:autoConnect] NEAR connection successful:`, {
-        accountId: walletData.accountId,
+        accountId: mapped.accountId,
         accountExists: !!nearAccount,
       });
 
       setAccount(nearAccount);
-      setAccountId(walletData.accountId);
+      setAccountId(mapped.accountId);
       setIsConnected(true);
       console.log(
         `[${FILE_NAME}:autoConnect] Auto-connected wallet:`,
-        walletData.accountId
+        mapped.accountId
       );
     } catch (err) {
       const errorMessage =
@@ -357,6 +369,28 @@ export const PrivateKeyWalletProvider = ({
     disconnect,
     autoConnect,
     refreshSolviumWallet,
+    signAndSendTransaction: async (receiverId, actions) => {
+      if (!account) throw new Error("NEAR account not initialized");
+      const first = actions?.[0];
+      if (!first || first.type !== "FunctionCall") {
+        throw new Error("Unsupported action");
+      }
+      return (account as any).functionCall({
+        contractId: receiverId,
+        methodName: first.params.methodName,
+        args: first.params.args || {},
+        gas: first.params.gas,
+        attachedDeposit: first.params.deposit,
+      });
+    },
+    checkTokenRegistration: async (_tokenId: string) => {
+      // TODO: Implement proper check via view function if needed
+      return true;
+    },
+    registerToken: async (_tokenId: string) => {
+      // TODO: Implement proper registration call if needed
+      return true;
+    },
   };
 
   console.log(`[${FILE_NAME}:render] Context value updated:`, {
