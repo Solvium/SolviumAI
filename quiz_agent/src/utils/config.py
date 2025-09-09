@@ -162,6 +162,9 @@ class Config:
     # Account Verification Configuration
     ACCOUNT_VERIFICATION_TIMEOUT = int(os.getenv("ACCOUNT_VERIFICATION_TIMEOUT", "15"))
     ACCOUNT_VERIFICATION_RETRIES = int(os.getenv("ACCOUNT_VERIFICATION_RETRIES", "2"))
+    ACCOUNT_VERIFICATION_MAX_ATTEMPTS = int(
+        os.getenv("ACCOUNT_VERIFICATION_MAX_ATTEMPTS", "3")
+    )
 
     # Wallet Creation Queue Configuration
     WALLET_CREATION_QUEUE_ENABLED = (

@@ -81,7 +81,9 @@ class RPCRetryHandler:
 
     def __init__(self):
         self.circuit_breakers: Dict[str, CircuitBreaker] = {}
-        self.current_endpoint_index: Dict[str, int] = {}  # Track current endpoint for each network
+        self.current_endpoint_index: Dict[str, int] = (
+            {}
+        )  # Track current endpoint for each network
 
     def _get_circuit_breaker(self, endpoint: str) -> CircuitBreaker:
         """Get or create circuit breaker for an endpoint"""
@@ -93,26 +95,28 @@ class RPCRetryHandler:
         """Get the next available endpoint for a network"""
         if network not in self.current_endpoint_index:
             self.current_endpoint_index[network] = 0
-        
+
         current_index = self.current_endpoint_index[network]
         if current_index >= len(endpoints):
             # Reset to first endpoint if we've tried all
             self.current_endpoint_index[network] = 0
             current_index = 0
-        
+
         return endpoints[current_index]
 
-    def _switch_to_next_endpoint(self, network: str, endpoints: List[str]) -> Optional[str]:
+    def _switch_to_next_endpoint(
+        self, network: str, endpoints: List[str]
+    ) -> Optional[str]:
         """Switch to the next endpoint for a network"""
         if network not in self.current_endpoint_index:
             self.current_endpoint_index[network] = 0
-        
+
         self.current_endpoint_index[network] += 1
-        
+
         if self.current_endpoint_index[network] >= len(endpoints):
             # All endpoints exhausted
             return None
-        
+
         return endpoints[self.current_endpoint_index[network]]
 
     def _is_endpoint_available(self, endpoint: str) -> bool:
@@ -266,42 +270,46 @@ class RPCRetryHandler:
         raise last_exception
 
     async def execute_with_endpoint_fallback(
-        self, 
-        func: Callable, 
-        network: str, 
-        endpoints: List[str], 
+        self,
+        func: Callable,
+        network: str,
+        endpoints: List[str],
         max_retries_per_endpoint: int = None,
-        *args, 
-        **kwargs
+        *args,
+        **kwargs,
     ) -> Any:
         """
         Execute a function with automatic endpoint fallback
-        
+
         Args:
             func: The function to execute (should accept endpoint as first argument)
             network: Network type (e.g., 'mainnet', 'testnet')
             endpoints: List of RPC endpoints to try
             max_retries_per_endpoint: Max retries per endpoint (defaults to config)
             *args, **kwargs: Additional arguments to pass to the function
-            
+
         Returns:
             The result of the function call
-            
+
         Raises:
             Exception: If all endpoints and retries fail
         """
         max_retries_per_endpoint = max_retries_per_endpoint or Config.RPC_MAX_RETRIES
         last_exception = None
-        
+
         # Try each endpoint
         for endpoint_index, endpoint in enumerate(endpoints):
             # Skip if circuit breaker is open
             if not self._is_endpoint_available(endpoint):
-                logger.warning(f"Skipping endpoint {endpoint} - circuit breaker is open")
+                logger.warning(
+                    f"Skipping endpoint {endpoint} - circuit breaker is open"
+                )
                 continue
-            
-            logger.info(f"Trying endpoint {endpoint_index + 1}/{len(endpoints)}: {endpoint}")
-            
+
+            logger.info(
+                f"Trying endpoint {endpoint_index + 1}/{len(endpoints)}: {endpoint}"
+            )
+
             try:
                 # Try this endpoint with retries
                 result = await self.execute_with_retry(
@@ -309,18 +317,18 @@ class RPCRetryHandler:
                 )
                 logger.info(f"Success with endpoint: {endpoint}")
                 return result
-                
+
             except Exception as e:
                 last_exception = e
                 logger.warning(f"Endpoint {endpoint} failed: {str(e)}")
-                
+
                 # Mark this endpoint as failed in circuit breaker
                 circuit_breaker = self._get_circuit_breaker(endpoint)
                 circuit_breaker.record_failure()
-                
+
                 # Continue to next endpoint
                 continue
-        
+
         # All endpoints failed
         logger.error(f"All {len(endpoints)} endpoints failed for network {network}")
         if last_exception:
@@ -345,21 +353,17 @@ def get_rpc_endpoints(network: str) -> List[str]:
 
 
 async def execute_with_rpc_fallback(
-    func: Callable, 
-    network: str, 
-    max_retries_per_endpoint: int = None,
-    *args, 
-    **kwargs
+    func: Callable, network: str, max_retries_per_endpoint: int = None, *args, **kwargs
 ) -> Any:
     """
     Execute a function with automatic RPC endpoint fallback
-    
+
     Args:
         func: The function to execute (should accept endpoint as first argument)
         network: Network type ('mainnet' or 'testnet')
         max_retries_per_endpoint: Max retries per endpoint
         *args, **kwargs: Additional arguments to pass to the function
-        
+
     Returns:
         The result of the function call
     """
