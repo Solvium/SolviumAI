@@ -286,8 +286,14 @@ class WalletCreationError(Exception):
         retryable: bool = True,
     ):
         super().__init__(message)
+        self._message = message
         self.error_type = error_type
         self.retryable = retryable
+
+    @property
+    def message(self) -> str:
+        """Get the error message"""
+        return self._message
 
 
 class AccountVerificationError(Exception):
