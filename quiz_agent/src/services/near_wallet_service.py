@@ -20,6 +20,7 @@ from py_near.dapps.core import NEAR
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from utils.rpc_retry import (
     rpc_call_with_retry,
+    execute_with_rpc_fallback,
     WalletCreationError,
     RPCErrorType,
     AccountVerificationError,
@@ -1343,12 +1344,6 @@ class NEARWalletService:
             True if account exists, False otherwise
         """
         try:
-            # Choose RPC endpoint based on network
-            if network == "mainnet":
-                rpc_url = self.mainnet_rpc_url
-            else:
-                rpc_url = self.testnet_rpc_url
-
             # Use RPC to check if account exists
             payload = {
                 "jsonrpc": "2.0",
@@ -1361,7 +1356,7 @@ class NEARWalletService:
                 },
             }
 
-            async def _check_account():
+            async def _check_account(rpc_url):
                 response = requests.post(
                     rpc_url,
                     json=payload,
@@ -1370,10 +1365,11 @@ class NEARWalletService:
                 )
                 return response
 
-            response = await rpc_call_with_retry(
+            # Use RPC fallback system for better reliability
+            response = await execute_with_rpc_fallback(
                 _check_account,
-                f"verify_account_{network}",
-                max_retries=Config.ACCOUNT_VERIFICATION_RETRIES,
+                network,
+                max_retries_per_endpoint=Config.ACCOUNT_VERIFICATION_RETRIES,
             )
 
             if response.status_code == 200:
@@ -1426,23 +1422,19 @@ class NEARWalletService:
                 logger.debug(f"Using testnet RPC for balance query: {account_id}")
 
             # Always use RPC for balance queries as it's more reliable
-            return await self._get_balance_rpc_fallback(account_id, rpc_url)
+            return await self._get_balance_rpc_fallback(account_id, network)
 
         except Exception as e:
             logger.error(f"Error getting balance for {account_id} on {network}: {e}")
             return "0 NEAR"
 
     async def _get_balance_rpc_fallback(
-        self, account_id: str, rpc_url: str = None
+        self, account_id: str, network: str = "testnet"
     ) -> str:
         """
-        RPC method for getting account balance with retry logic
+        RPC method for getting account balance with retry logic and endpoint fallback
         """
         try:
-            # Use provided RPC URL or default to testnet
-            if rpc_url is None:
-                rpc_url = self.testnet_rpc_url
-
             payload = {
                 "jsonrpc": "2.0",
                 "id": "dontcare",
@@ -1455,10 +1447,10 @@ class NEARWalletService:
             }
 
             logger.debug(
-                f"Fetching balance for account: {account_id} using RPC: {rpc_url}"
+                f"Fetching balance for account: {account_id} on {network}"
             )
 
-            async def _balance_call():
+            async def _balance_call(rpc_url):
                 response = requests.post(
                     rpc_url,
                     json=payload,
@@ -1467,10 +1459,11 @@ class NEARWalletService:
                 )
                 return response
 
-            response = await rpc_call_with_retry(
+            # Use RPC fallback system for better reliability
+            response = await execute_with_rpc_fallback(
                 _balance_call,
-                "balance_check_general",  # Use general endpoint instead of per-account
-                max_retries=Config.RPC_MAX_RETRIES,
+                network,
+                max_retries_per_endpoint=Config.RPC_MAX_RETRIES,
             )
 
             if response.status_code == 200:
