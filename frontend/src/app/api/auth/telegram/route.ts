@@ -6,7 +6,7 @@ import { JWTService } from "@/lib/auth/jwt";
 export async function POST(request: NextRequest) {
   try {
     const { initData } = await request.json();
-    // if (!initData) {
+    if (!initData) {
       return NextResponse.json(
         { error: "Telegram data is required" },
         { status: 400 }
