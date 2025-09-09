@@ -176,9 +176,7 @@ export default function DepositMultiplier({ user }: any) {
                   <div className="loading loading-spinner loading-md"></div>
                 )}
                 {error && <p className="text-red-500 mt-2">{error}</p>}
-                <p className="text-sm text-gray-400 mt-4">
-                  Please wait while we connect to your NEAR wallet
-                </p>
+
                 {/* Our NEAR wallet context status */}
                 <div className="mt-4 text-left">
                   <p className="text-xs text-gray-400">
