@@ -334,7 +334,8 @@ class NEARWalletService:
                     )
 
             except WalletCreationError as e:
-                logger.error(f"Sub-account creation failed: {e.message}")
+                error_msg = getattr(e, "message", str(e))
+                logger.error(f"Sub-account creation failed: {error_msg}")
 
                 # Add to retry queue if retryable
                 if e.retryable and Config.WALLET_CREATION_QUEUE_ENABLED:
@@ -351,7 +352,7 @@ class NEARWalletService:
                         account_id=account_id,
                         public_key=near_public_key,
                         private_key=near_private_key,
-                        error_message=e.message,
+                        error_message=error_msg,
                     )
 
                 # Re-raise the error - no more silent fallbacks
@@ -433,7 +434,8 @@ class NEARWalletService:
                     )
 
             except WalletCreationError as e:
-                logger.error(f"Robust testnet sub-account creation failed: {e.message}")
+                error_msg = getattr(e, "message", str(e))
+                logger.error(f"Robust testnet sub-account creation failed: {error_msg}")
 
                 # Add to retry queue if retryable
                 if e.retryable and Config.WALLET_CREATION_QUEUE_ENABLED:
@@ -450,7 +452,7 @@ class NEARWalletService:
                         account_id=account_id,
                         public_key=near_public_key,
                         private_key=near_private_key,
-                        error_message=e.message,
+                        error_message=error_msg,
                     )
 
                 # Re-raise the error - no more silent fallbacks
@@ -549,7 +551,8 @@ class NEARWalletService:
                     )
 
             except WalletCreationError as e:
-                logger.error(f"Mainnet sub-account creation failed: {e.message}")
+                error_msg = getattr(e, "message", str(e))
+                logger.error(f"Mainnet sub-account creation failed: {error_msg}")
 
                 # Add to retry queue if retryable
                 if e.retryable and Config.WALLET_CREATION_QUEUE_ENABLED:
@@ -566,7 +569,7 @@ class NEARWalletService:
                         account_id=account_id,
                         public_key=near_public_key,
                         private_key=near_private_key,
-                        error_message=e.message,
+                        error_message=error_msg,
                     )
 
                 # Re-raise the error - no more silent fallbacks

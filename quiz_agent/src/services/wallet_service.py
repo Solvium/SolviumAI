@@ -135,13 +135,14 @@ class WalletService:
 
             except WalletCreationError as e:
                 last_error = e
+                error_msg = getattr(e, 'message', str(e))
                 logger.error(
-                    f"Wallet creation failed for user {user_id} (attempt {attempt + 1}): {e.message}"
+                    f"Wallet creation failed for user {user_id} (attempt {attempt + 1}): {error_msg}"
                 )
 
                 # Don't retry non-retryable errors
                 if not e.retryable:
-                    logger.error(f"Non-retryable error for user {user_id}: {e.message}")
+                    logger.error(f"Non-retryable error for user {user_id}: {error_msg}")
                     raise e
 
                 # Don't retry on last attempt
