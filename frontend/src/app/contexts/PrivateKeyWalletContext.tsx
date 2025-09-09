@@ -71,7 +71,6 @@ export const PrivateKeyWalletProvider = ({
   }, [user?.chatId, (user as any)?.telegramId]);
 
   const autoConnect = async () => {
-    console.log(user);
     const tgIdRaw =
       (user?.chatId as string) || ((user as any)?.telegramId as string);
     // "1870013901";
@@ -238,10 +237,6 @@ export const PrivateKeyWalletProvider = ({
   // Refresh solvium wallet when user changes
   useEffect(() => {
     if (user?.chatId || (user as any)?.telegramId) {
-      console.log(
-        `[${FILE_NAME}:useEffect] Refreshing solvium wallet for user:`,
-        user
-      );
       refreshSolviumWallet();
     }
   }, [user?.chatId, (user as any)?.telegramId, refreshSolviumWallet]);

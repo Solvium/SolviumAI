@@ -31,15 +31,6 @@ const WalletPage = () => {
   const [copied, setCopied] = useState(false);
   const { isConnected, isLoading, error, accountId, autoConnect, account } =
     usePrivateKeyWallet();
-
-  // Debug wallet connection state
-  console.log("WalletPage - Wallet state:", {
-    isConnected,
-    isLoading,
-    error,
-    accountId,
-    hasAccount: !!account,
-  });
   const [nearBalance, setNearBalance] = useState<string | null>(null);
   const [recentTxns, setRecentTxns] = useState<any[] | null>(null);
   const [nearUsd, setNearUsd] = useState<number | null>(null);
@@ -76,43 +67,26 @@ const WalletPage = () => {
   }, []);
 
   useEffect(() => {
-    if (!accountId) {
-      console.log("WalletPage - No accountId available");
-      return;
-    }
-
-    console.log("WalletPage - Fetching data for accountId:", accountId);
+    if (!accountId) return;
     let cancelled = false;
     (async () => {
       try {
         // FastNEAR first for balance and tokens
-        console.log("WalletPage - Fetching account full data...");
         const full = await getAccountFull(accountId);
         if (!cancelled && full?.state?.balance) {
           setNearBalance(formatYoctoToNear(full.state.balance));
-          console.log(
-            "WalletPage - Balance set from FastNEAR:",
-            formatYoctoToNear(full.state.balance)
-          );
         } else {
           // Fallback: Nearblocks
-          console.log("WalletPage - Using Nearblocks fallback...");
           const info = await getAccountInfo(accountId);
           if (!cancelled) {
             const bal = info?.account?.amount || info?.amount || info?.balance;
             if (bal) {
               setNearBalance(formatNearAmount(bal));
-              console.log(
-                "WalletPage - Balance set from Nearblocks:",
-                formatNearAmount(bal)
-              );
             }
           }
         }
 
-        console.log("WalletPage - Fetching transaction data...");
         const fast = await getAccountTxnsFastnear(accountId);
-        console.log("WalletPage - Transaction response:", fast);
 
         if (!cancelled && fast?.account_txs) {
           const normalized = fast.account_txs.map((row) => ({
@@ -126,16 +100,9 @@ const WalletPage = () => {
             status: "completed",
           }));
           setRecentTxns(normalized);
-          console.log(
-            "WalletPage - Transactions set:",
-            normalized.length,
-            "transactions"
-          );
-        } else {
-          console.log("WalletPage - No transactions found or error occurred");
         }
       } catch (error) {
-        console.error("WalletPage - Error fetching wallet data:", error);
+        console.error("Error fetching wallet data:", error);
       }
     })();
     return () => {

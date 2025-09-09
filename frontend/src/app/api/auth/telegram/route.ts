@@ -6,11 +6,7 @@ import { JWTService } from "@/lib/auth/jwt";
 export async function POST(request: NextRequest) {
   try {
     const { initData } = await request.json();
-
-    console.log("initData", initData);
-    // console.log("user", user);
-
-    if (!initData) {
+    // if (!initData) {
       return NextResponse.json(
         { error: "Telegram data is required" },
         { status: 400 }
@@ -65,10 +61,7 @@ export async function POST(request: NextRequest) {
           weeklyPoints: 0,
         },
       });
-
-      console.log("New Telegram user created:", user.username);
     } else {
-      console.log("Existing Telegram user logged in:", user.username);
     }
 
     // Parse wallet data if it exists
@@ -114,9 +107,6 @@ export async function POST(request: NextRequest) {
       chatId: user.chatId || undefined,
       wallet: walletData, // Include parsed wallet data
     };
-
-    console.log("Complete user data from Telegram auth:", userData);
-
     // Generate tokens
     const accessToken = JWTService.generateAccessToken(userData);
     const refreshToken = JWTService.generateRefreshToken(

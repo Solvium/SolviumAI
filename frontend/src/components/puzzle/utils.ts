@@ -12,7 +12,6 @@ export function round(n: number, c = 0) {
 }
 
 export function getUrl(blob: Blob) {
-  console.log(blob);
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(blob);

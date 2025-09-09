@@ -17,7 +17,7 @@ const banner = `
    ╚═╝    ╚══╝╚══╝ ╚═╝  ╚═╝       ╚═╝   ╚══════╝╚═╝     ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝
 `;
 
-console.log(banner);
+// logs removed
 
 let botUsername;
 

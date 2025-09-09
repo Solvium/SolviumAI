@@ -14,7 +14,6 @@ const CoinBalance: React.FC<CoinBalanceProps> = ({ balance, onAddCoins }) => {
   
   const handleBuyCoins = (amount: number) => {
     // In a real app, this would connect to payment processing
-    console.log(`Purchasing ${amount} coins`);
     setDialogOpen(false);
     onAddCoins();
   };

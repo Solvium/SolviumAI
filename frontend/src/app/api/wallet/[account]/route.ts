@@ -44,11 +44,6 @@ export async function GET(
     }
 
     const row = result[0];
-    console.log("[API] Wallet lookup", {
-      accountId: account,
-      hasSecurity: !!row.encrypted_private_key,
-    });
-
     let decryptedPrivateKey: string | null = null;
     if (
       shouldDecrypt &&
@@ -70,7 +65,6 @@ export async function GET(
           row.encryption_tag,
           key
         );
-        console.log("[API] Decrypted private key for account", account);
       } catch (e: any) {
         return NextResponse.json(
           { error: `Failed to decrypt private key: ${e?.message || e}` },

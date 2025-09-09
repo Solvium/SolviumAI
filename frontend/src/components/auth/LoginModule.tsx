@@ -37,37 +37,24 @@ export const LoginModule: React.FC<LoginModuleProps> = ({
         const tg = (window as any)?.Telegram?.WebApp;
         const webApp = WebApp;
 
-        console.log("Telegram detection:", {
-          windowTelegram: !!(window as any)?.Telegram,
-          webAppAvailable: !!webApp,
-          initDataUnsafe: webApp?.initDataUnsafe,
-          user: webApp?.initDataUnsafe?.user,
-          platform: webApp?.platform,
-          isExpanded: webApp?.isExpanded,
-        });
 
         // Check if we're in Telegram WebApp context
         if (webApp && webApp.platform !== "unknown") {
           setIsTelegramAvailable(true);
-          console.log("Telegram WebApp detected");
           return;
         }
 
         // Fallback check for window.Telegram
         if (tg && tg.platform !== "unknown") {
           setIsTelegramAvailable(true);
-          console.log("Telegram WebApp detected via window.Telegram");
           return;
         }
 
         // Additional check for user data
         if (webApp?.initDataUnsafe?.user || tg?.initDataUnsafe?.user) {
           setIsTelegramAvailable(true);
-          console.log("Telegram user data detected");
           return;
         }
-
-        console.log("Telegram WebApp not detected");
         setIsTelegramAvailable(false);
       } catch (error) {
         console.error("Error checking Telegram availability:", error);
@@ -116,9 +103,6 @@ export const LoginModule: React.FC<LoginModuleProps> = ({
       if (!userData) {
         throw new Error("Telegram user data not available");
       }
-
-      console.log("Telegram user data:", userData);
-
       await loginWithTelegram({ telegramData: userData });
       toast.success("Successfully logged in with Telegram!");
       onLoginSuccess?.();

@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
       const body = await request.json();
       refreshToken = body?.refreshToken;
     } catch (parseError) {
-      console.log("No JSON body provided, checking cookies...");
+
     }
 
     // If no refresh token in body, try to get it from cookies

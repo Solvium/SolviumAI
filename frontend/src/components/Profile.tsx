@@ -167,8 +167,7 @@ const Farming = () => {
     new Date(userDetails?.lastClaim || new Date()).getTime() -
     new Date().getTime();
 
-  // console.log(userDetails);
-  // Real claimPoints function that calls the API and refreshes user data
+  // // Real claimPoints function that calls the API and refreshes user data
   const claimPoints = async (
     type: string,
     setLoading: (loading: boolean) => void

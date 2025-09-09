@@ -80,7 +80,6 @@ export const MultiLoginProvider = ({
         setTasks(res.data);
       }
     } catch (error) {
-      console.log(error);
     }
   };
 
@@ -120,9 +119,6 @@ export const MultiLoginProvider = ({
         clearInterval(getTg);
       }
       _tg;
-
-      console.log(count);
-
       if (count > 10) {
         clearInterval(getTg);
       }
@@ -196,7 +192,6 @@ export const MultiLoginProvider = ({
     ).json();
 
     if (res.weeklyScore || res.id) {
-      console.log(res);
       checkAuthStatus();
       setLoading(false);
       getLeaderBoard();
@@ -209,7 +204,6 @@ export const MultiLoginProvider = ({
   };
 
   const claimPoints = async (type: string, func: (param: boolean) => void) => {
-    console.log(type);
     setLoading(true);
 
     // if (userDeposits?.deposits) {

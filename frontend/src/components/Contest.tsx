@@ -33,9 +33,6 @@ const ContestBoard = ({ user }: any) => {
         data: { type: "get leaderboard", userId: user.id },
         method: "POST",
       });
-
-      console.log(response);
-
       if (response.status != 200) {
         throw new Error("Failed to fetch leaderboard");
       }

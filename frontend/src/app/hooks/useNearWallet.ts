@@ -123,7 +123,7 @@ export const useNearWallet = () => {
         // Prefer existing connected NEAR wallet from context
         if (pkConnected && pkAccount && pkAccountId) {
           const contractId =
-            process.env.NEXT_PUBLIC_CONTRACT_ID || "solviumpuzzlegame.near";
+            process.env.NEXT_PUBLIC_CONTRACT_ID || "solviumpuzzle.near";
           const depositAmount = utils.format.parseNearAmount(amount);
           if (!depositAmount) throw new Error("Invalid amount");
           const methodCandidates = [
@@ -218,7 +218,7 @@ export const useNearWallet = () => {
         // Prefer existing connected NEAR wallet from context
         if (pkConnected && pkAccount && pkAccountId) {
           const contractId =
-            process.env.NEXT_PUBLIC_CONTRACT_ID || "solviumpuzzlegame.near";
+            process.env.NEXT_PUBLIC_CONTRACT_ID || "solviumpuzzle.near";
           const candidates = [
             { name: "getDeposits", args: { accountId: pkAccountId } },
             { name: "get_deposits", args: { account_id: pkAccountId } },

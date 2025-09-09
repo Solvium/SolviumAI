@@ -34,8 +34,6 @@ function Home() {
         clearInterval(getTg);
       }
 
-    
-
       if (count > 10) {
         clearInterval(getTg);
       }
@@ -56,13 +54,10 @@ function Home() {
     );
   }
 
-
-
   // Show login if not authenticated
   if (!isAuthenticated) {
     return <LoginModule />;
   }
-  console.log(user);
   return (
     <div className="min-h-screen bg-[#0B0B14]">
       <div>
