@@ -114,7 +114,6 @@ export class MainHandler {
 
   async updateImage(blobOrSrc: string | Blob) {
     const src = blobOrSrc instanceof Blob ? await getUrl(blobOrSrc) : blobOrSrc;
-    console.log(src);
     const { width, height } = await getImageDimensions(src);
     this.imageUrl = src;
     this.width = width;
@@ -138,7 +137,6 @@ export class MainHandler {
     await this.updateImage(location.origin + "/img.jpg");
 
     this.xCount = 4;
-    console.log(this.yCount);
     const unitSize = this._xc * 100;
 
     this.height *= unitSize / this.width;
@@ -163,8 +161,7 @@ export class MainHandler {
       fixedPattern: false,
     }).toSvgElements(this.document, this.pathGroup);
 
-    // console.log(paths);
-    const viewWidth = Math.max(640, this.width * 1.5);
+    // const viewWidth = Math.max(640, this.width * 1.5);
     const viewHeight = Math.max(480, this.height * 1.5);
     this.root.setAttribute("viewBox", `0 0 ${viewWidth} ${viewHeight}`);
     this.imageElement.href.baseVal = this.imageUrl!;

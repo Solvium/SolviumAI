@@ -43,18 +43,13 @@ async function main() {
     },
   ];
 
-  console.log("Start seeding tasks...");
-
   for (const task of tasks) {
     const result = await prisma.task.upsert({
       where: { name: task.name },
       update: {},
       create: task,
     });
-    console.log(`Created task: ${result.name} (${result.points} points)`);
   }
-
-  console.log("Seeding finished.");
 }
 
 main()

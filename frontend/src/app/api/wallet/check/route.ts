@@ -18,21 +18,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(
-      `[API] Checking wallet for Telegram user: ${telegram_user_id}${
-        force_refresh ? " (force refresh)" : ""
-      }`
-    );
-
     // Use the secure API client to check wallet information with caching
     const walletInfo = await getWalletInfo(
       telegram_user_id,
       force_refresh || false
     );
 
-    console.log("walletInfo", walletInfo);
     if (!walletInfo) {
-      console.log("walletInfo", walletInfo);
+
       return NextResponse.json(
         {
           has_wallet: false,

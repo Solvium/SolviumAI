@@ -99,8 +99,6 @@ export async function sendTokensToUser(
       transaction,
       [backendKeypair]
     );
-
-    console.log(`Tokens transferred successfully. Signature: ${txSignature}`);
     return txSignature;
   } catch (error) {
     console.error("Error sending tokens:", error);

@@ -62,9 +62,6 @@ export class SecureWalletStorage {
   private encryptionKey: Buffer;
 
   constructor() {
-    console.log(
-      `[${FILE_NAME}:constructor] SecureWalletStorage constructor called`
-    );
 
     const key = process.env.WALLET_ENCRYPTION_KEY;
     if (!key) {
@@ -73,11 +70,6 @@ export class SecureWalletStorage {
       );
       throw new Error("WALLET_ENCRYPTION_KEY environment variable is required");
     }
-
-    console.log(
-      `[${FILE_NAME}:constructor] WALLET_ENCRYPTION_KEY found, length:`,
-      key.length
-    );
 
     const parsedKey = parseEncryptionKey(key);
     if (!parsedKey) {
@@ -88,10 +80,7 @@ export class SecureWalletStorage {
     }
 
     this.encryptionKey = parsedKey;
-    console.log(
-      `[${FILE_NAME}:constructor] Encryption key initialized, length:`,
-      this.encryptionKey.length
-    );
+
   }
 
   /**
@@ -102,10 +91,6 @@ export class SecureWalletStorage {
     iv: string;
     tag: string;
   } {
-    console.log(
-      `[${FILE_NAME}:encryptWalletData] encryptWalletData called, data length:`,
-      data.length
-    );
 
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv("aes-256-gcm", this.encryptionKey, iv);
@@ -121,12 +106,6 @@ export class SecureWalletStorage {
       tag: cipher.getAuthTag().toString("base64"),
     };
 
-    console.log(`[${FILE_NAME}:encryptWalletData] Encryption completed:`, {
-      encryptedLength: result.encrypted.length,
-      ivLength: result.iv.length,
-      tagLength: result.tag.length,
-    });
-
     return result;
   }
 
@@ -138,11 +117,6 @@ export class SecureWalletStorage {
     iv: string,
     tag: string
   ): string {
-    console.log(`[${FILE_NAME}:decryptWalletData] decryptWalletData called:`, {
-      encryptedLength: encrypted.length,
-      ivLength: iv.length,
-      tagLength: tag.length,
-    });
 
     try {
       const encryptedBuffer = Buffer.from(encrypted, "base64");
@@ -162,10 +136,6 @@ export class SecureWalletStorage {
       ]);
 
       const result = decrypted.toString("utf8");
-      console.log(
-        `[${FILE_NAME}:decryptWalletData] Decryption completed, result length:`,
-        result.length
-      );
 
       return result;
     } catch (error) {
@@ -184,14 +154,10 @@ export class SecureWalletStorage {
     telegramUserId: number,
     walletInfo: WalletInfo
   ): Promise<void> {
-    console.log(
-      `[${FILE_NAME}:storeWalletData] storeWalletData called for user:`,
-      telegramUserId
-    );
 
     try {
       // Encrypt the private key
-      console.log(`[${FILE_NAME}:storeWalletData] Encrypting private key...`);
+
       const { encrypted, iv, tag } = this.encryptWalletData(
         walletInfo.private_key
       );
@@ -212,9 +178,6 @@ export class SecureWalletStorage {
       // Store in database (you'll need to implement this based on your database)
       await this.saveToDatabase(secureData);
 
-      console.log(
-        `[${FILE_NAME}:storeWalletData] Stored wallet data for user ${telegramUserId}`
-      );
     } catch (error) {
       console.error(
         `[${FILE_NAME}:storeWalletData] Failed to store wallet data:`,
@@ -228,33 +191,24 @@ export class SecureWalletStorage {
    * Retrieve wallet data from database
    */
   async getWalletData(telegramUserId: number): Promise<WalletInfo | null> {
-    console.log(
-      `[${FILE_NAME}:getWalletData] getWalletData called for user:`,
-      telegramUserId
-    );
 
     try {
       const secureData = await this.getFromDatabase(telegramUserId);
 
       if (!secureData) {
-        console.log(
-          `[${FILE_NAME}:getWalletData] No secure data found for user:`,
-          telegramUserId
-        );
+
         return null;
       }
 
       // Check if data is expired
       if (new Date() > secureData.expiresAt) {
-        console.log(
-          `[${FILE_NAME}:getWalletData] Wallet data expired for user ${telegramUserId}`
-        );
+
         await this.deleteFromDatabase(telegramUserId);
         return null;
       }
 
       // Decrypt the private key
-      console.log(`[${FILE_NAME}:getWalletData] Decrypting private key...`);
+
       const decryptedPrivateKey = this.decryptWalletData(
         secureData.encryptedPrivateKey,
         secureData.encryptionIv,
@@ -266,10 +220,6 @@ export class SecureWalletStorage {
         private_key: decryptedPrivateKey,
       };
 
-      console.log(
-        `[${FILE_NAME}:getWalletData] Wallet data retrieved successfully for user:`,
-        telegramUserId
-      );
       return result;
     } catch (error) {
       console.error(
@@ -284,16 +234,10 @@ export class SecureWalletStorage {
    * Clear wallet data from database
    */
   async clearWalletData(telegramUserId: number): Promise<void> {
-    console.log(
-      `[${FILE_NAME}:clearWalletData] clearWalletData called for user:`,
-      telegramUserId
-    );
 
     try {
       await this.deleteFromDatabase(telegramUserId);
-      console.log(
-        `[${FILE_NAME}:clearWalletData] Cleared wallet data for user ${telegramUserId}`
-      );
+
     } catch (error) {
       console.error(
         `[${FILE_NAME}:clearWalletData] Failed to clear wallet data:`,
@@ -306,10 +250,6 @@ export class SecureWalletStorage {
    * Save wallet data to database
    */
   private async saveToDatabase(data: SecureWalletData): Promise<void> {
-    console.log(
-      `[${FILE_NAME}:saveToDatabase] saveToDatabase called for user:`,
-      data.telegramUserId
-    );
 
     try {
       const { prisma } = await import("@/lib/prisma");
@@ -341,10 +281,6 @@ export class SecureWalletStorage {
         },
       });
 
-      console.log(
-        `[${FILE_NAME}:saveToDatabase] Database save successful for user:`,
-        data.telegramUserId
-      );
     } catch (error) {
       console.error(
         `[${FILE_NAME}:saveToDatabase] Database save error:`,
@@ -360,10 +296,6 @@ export class SecureWalletStorage {
   private async getFromDatabase(
     telegramUserId: number
   ): Promise<SecureWalletData | null> {
-    console.log(
-      `[${FILE_NAME}:getFromDatabase] getFromDatabase called for user:`,
-      telegramUserId
-    );
 
     try {
       const { prisma } = await import("@/lib/prisma");
@@ -373,17 +305,10 @@ export class SecureWalletStorage {
       });
 
       if (!cachedData) {
-        console.log(
-          `[${FILE_NAME}:getFromDatabase] No cached data found for user:`,
-          telegramUserId
-        );
+
         return null;
       }
 
-      console.log(
-        `[${FILE_NAME}:getFromDatabase] Cached data found for user:`,
-        telegramUserId
-      );
       return {
         telegramUserId: cachedData.telegramUserId,
         walletInfo: {
@@ -412,10 +337,6 @@ export class SecureWalletStorage {
    * Delete wallet data from database
    */
   private async deleteFromDatabase(telegramUserId: number): Promise<void> {
-    console.log(
-      `[${FILE_NAME}:deleteFromDatabase] deleteFromDatabase called for user:`,
-      telegramUserId
-    );
 
     try {
       const { prisma } = await import("@/lib/prisma");
@@ -424,10 +345,6 @@ export class SecureWalletStorage {
         where: { telegramUserId },
       });
 
-      console.log(
-        `[${FILE_NAME}:deleteFromDatabase] Database deletion successful for user:`,
-        telegramUserId
-      );
     } catch (error) {
       console.error(
         `[${FILE_NAME}:deleteFromDatabase] Database deletion error:`,
@@ -445,13 +362,6 @@ export class SolviumWalletAPI {
   private secureStorage: SecureWalletStorage;
 
   constructor(baseUrl?: string, apiKey?: string) {
-    console.log(
-      `[${FILE_NAME}:constructor] SolviumWalletAPI constructor called:`,
-      {
-        baseUrl: baseUrl || SOLVIUM_API_BASE_URL,
-        hasApiKey: !!apiKey,
-      }
-    );
 
     this.baseUrl = baseUrl || SOLVIUM_API_BASE_URL;
     this.apiKey = apiKey || process.env.SOLVIUM_API_KEY;
@@ -468,25 +378,16 @@ export class SolviumWalletAPI {
     telegramUserId: number,
     forceRefresh: boolean = false
   ): Promise<WalletCheckResponse> {
-    console.log(`[${FILE_NAME}:checkWallet] checkWallet called:`, {
-      telegramUserId,
-      forceRefresh,
-    });
 
     try {
       // First, try to get from cache if not forcing refresh
       if (!forceRefresh) {
-        console.log(
-          `[${FILE_NAME}:checkWallet] Checking cache for user:`,
-          telegramUserId
-        );
+
         const cachedWallet = await this.secureStorage.getWalletData(
           telegramUserId
         );
         if (cachedWallet) {
-          console.log(
-            `[${FILE_NAME}:checkWallet] Using cached wallet data for user ${telegramUserId}`
-          );
+
           return {
             has_wallet: true,
             message: "Wallet data retrieved from cache",
@@ -499,11 +400,6 @@ export class SolviumWalletAPI {
       const requestBody: WalletCheckRequest = {
         telegram_user_id: telegramUserId,
       };
-
-      console.log(
-        `[${FILE_NAME}:checkWallet] Fetching wallet data from API for user`,
-        telegramUserId
-      );
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -545,17 +441,12 @@ export class SolviumWalletAPI {
       // If wallet was found, store it securely
       if (walletResponse.has_wallet && walletResponse.wallet_info) {
         try {
-          console.log(
-            `[${FILE_NAME}:checkWallet] Storing wallet data in cache for user:`,
-            telegramUserId
-          );
+
           await this.secureStorage.storeWalletData(
             telegramUserId,
             walletResponse.wallet_info
           );
-          console.log(
-            `[${FILE_NAME}:checkWallet] Stored wallet data for user ${telegramUserId}`
-          );
+
         } catch (storageError) {
           console.warn(
             `[${FILE_NAME}:checkWallet] Failed to store wallet data:`,
@@ -589,7 +480,6 @@ export class SolviumWalletAPI {
    * @returns Promise<boolean>
    */
   async checkHealth(): Promise<boolean> {
-    console.log(`[${FILE_NAME}:checkHealth] checkHealth called`);
 
     try {
       const response = await fetch(`${this.baseUrl}/health`, {
@@ -602,17 +492,13 @@ export class SolviumWalletAPI {
       });
 
       if (!response.ok) {
-        console.log(
-          `[${FILE_NAME}:checkHealth] Health check failed, status:`,
-          response.status
-        );
+
         return false;
       }
 
       const data = await response.json();
       const isHealthy = data.status === "healthy";
 
-      console.log(`[${FILE_NAME}:checkHealth] Health check result:`, isHealthy);
       return isHealthy;
     } catch (error) {
       console.error(`[${FILE_NAME}:checkHealth] Health check failed:`, error);
@@ -629,10 +515,7 @@ export class SolviumWalletAPI {
     telegramUserId: number,
     walletInfo: WalletInfo
   ): Promise<void> {
-    console.log(
-      `[${FILE_NAME}:storeWalletInfo] storeWalletInfo called for user:`,
-      telegramUserId
-    );
+
     await this.secureStorage.storeWalletData(telegramUserId, walletInfo);
   }
 
@@ -642,10 +525,7 @@ export class SolviumWalletAPI {
    * @returns Promise<WalletInfo | null>
    */
   async getWalletInfo(telegramUserId: number): Promise<WalletInfo | null> {
-    console.log(
-      `[${FILE_NAME}:getWalletInfo] getWalletInfo called for user:`,
-      telegramUserId
-    );
+
     return this.secureStorage.getWalletData(telegramUserId);
   }
 
@@ -654,10 +534,7 @@ export class SolviumWalletAPI {
    * @param telegramUserId - The Telegram user ID
    */
   async clearWalletInfo(telegramUserId: number): Promise<void> {
-    console.log(
-      `[${FILE_NAME}:clearWalletInfo] clearWalletInfo called for user:`,
-      telegramUserId
-    );
+
     await this.secureStorage.clearWalletData(telegramUserId);
   }
 }
@@ -675,15 +552,11 @@ export async function getWalletInfo(
   telegramUserId: number,
   forceRefresh: boolean = false
 ): Promise<WalletCheckResponse | null> {
-  console.log(`[${FILE_NAME}:getWalletInfo] getWalletInfo called:`, {
-    telegramUserId,
-    forceRefresh,
-  });
 
   try {
     // First check if the API is healthy (only if not using cache)
     if (forceRefresh) {
-      console.log(`[${FILE_NAME}:getWalletInfo] Checking API health...`);
+
       const isHealthy = await solviumWalletAPI.checkHealth();
       if (!isHealthy) {
         console.warn(
@@ -699,10 +572,6 @@ export async function getWalletInfo(
       forceRefresh
     );
 
-    console.log(
-      `[${FILE_NAME}:getWalletInfo] getWalletInfo completed for user:`,
-      telegramUserId
-    );
     return walletInfo;
   } catch (error) {
     console.error(
@@ -714,13 +583,9 @@ export async function getWalletInfo(
 }
 
 export function parseEncryptionKey(keyInput?: string): Buffer | null {
-  console.log(`[${FILE_NAME}:parseEncryptionKey] parseEncryptionKey called:`, {
-    hasKeyInput: !!keyInput,
-    keyInputLength: keyInput?.length || 0,
-  });
 
   if (!keyInput) {
-    console.log(`[${FILE_NAME}:parseEncryptionKey] No key input provided`);
+
     return null;
   }
 
@@ -728,32 +593,23 @@ export function parseEncryptionKey(keyInput?: string): Buffer | null {
   try {
     const b64 = Buffer.from(keyInput, "base64");
     if (b64.length === 32) {
-      console.log(
-        `[${FILE_NAME}:parseEncryptionKey] Successfully parsed base64 key, length:`,
-        b64.length
-      );
+
       return b64;
     }
   } catch (e) {
-    console.log(`[${FILE_NAME}:parseEncryptionKey] Base64 parsing failed:`, e);
+
   }
 
   try {
     const hex = Buffer.from(keyInput, "hex");
     if (hex.length === 32) {
-      console.log(
-        `[${FILE_NAME}:parseEncryptionKey] Successfully parsed hex key, length:`,
-        hex.length
-      );
+
       return hex;
     }
   } catch (e) {
-    console.log(`[${FILE_NAME}:parseEncryptionKey] Hex parsing failed:`, e);
+
   }
 
-  console.log(
-    `[${FILE_NAME}:parseEncryptionKey] Failed to parse key in any format`
-  );
   return null;
 }
 
@@ -763,24 +619,12 @@ export function decryptAes256Gcm(
   tag: string,
   keyBytes: Buffer
 ): string {
-  console.log(`[${FILE_NAME}:decryptAes256Gcm] decryptAes256Gcm called:`, {
-    encryptedLength: encryptedPrivateKey.length,
-    ivLength: iv.length,
-    tagLength: tag.length,
-    keyLength: keyBytes.length,
-  });
 
   try {
     // Decode base64 strings to bytes (matching Python's base64.b64decode)
     const encryptedBytes = Buffer.from(encryptedPrivateKey, "base64");
     const ivBytes = Buffer.from(iv, "base64");
     const tagBytes = Buffer.from(tag, "base64");
-
-    console.log(`[${FILE_NAME}:decryptAes256Gcm] Decoded base64 data:`, {
-      encryptedBytesLength: encryptedBytes.length,
-      ivBytesLength: ivBytes.length,
-      tagBytesLength: tagBytes.length,
-    });
 
     // Decrypt data using AES-256-GCM (matching Python's Cipher/decryptor)
     const decipher = crypto.createDecipheriv("aes-256-gcm", keyBytes, ivBytes);
@@ -792,10 +636,6 @@ export function decryptAes256Gcm(
     ]);
 
     const result = plaintext.toString("utf8");
-    console.log(
-      `[${FILE_NAME}:decryptAes256Gcm] Decryption successful, result length:`,
-      result.length
-    );
 
     // Return as UTF-8 string (matching Python's plaintext.decode())
     return result;

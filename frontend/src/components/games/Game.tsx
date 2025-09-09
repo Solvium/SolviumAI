@@ -209,10 +209,6 @@ export const Game = () => {
         );
         setSolved(true);
         // TODO: Implement claim points with new auth system
-        console.log(
-          "Claiming points:",
-          points * userDetails.level * (multiplier > 0 ? multiplier : 1)
-        );
         setSaving(true);
         setTimeout(() => setSaving(false), 2000);
       }, 1500);

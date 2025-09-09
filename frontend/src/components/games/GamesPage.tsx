@@ -145,8 +145,6 @@ const GamesPage = () => {
   const handleTabChange = (page: string) => {
     setActiveTab(page);
   };
-
-  console.log(activeGame);
   return (
     <>
       {activeGame == null ? (

@@ -56,7 +56,7 @@ export default function DepositMultiplier({ user }: any) {
   // Connect wallet when modal opens
   useEffect(() => {
     if (isOpen && !isConnected) {
-      console.log("Connecting to NEAR wallet...");
+
       connectWallet(); // Uses test private key automatically
     }
   }, [isOpen, isConnected, connectWallet]);
@@ -64,7 +64,7 @@ export default function DepositMultiplier({ user }: any) {
   // Load deposits when wallet is connected
   useEffect(() => {
     if (isOpen && isConnected) {
-      console.log("Loading deposits...");
+
       getDeposits(); // Uses test private key automatically
     }
   }, [isOpen, isConnected, getDeposits]);
@@ -84,8 +84,6 @@ export default function DepositMultiplier({ user }: any) {
     try {
       const numAmount = parseFloat(amount);
       if (isNaN(numAmount)) throw new Error("Invalid amount");
-
-      console.log("Making NEAR deposit:", amount, "NEAR");
 
       const result = await makeDeposit(amount); // Uses test private key automatically
 

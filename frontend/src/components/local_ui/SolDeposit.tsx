@@ -78,7 +78,6 @@ export function SolDepositModal({
       }
 
       // This would be handled by the backend
-      console.log("Update factor:", factor);
       setNewFactor("");
     } catch (err) {
       console.error("Update factor error:", err);

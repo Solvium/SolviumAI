@@ -66,9 +66,8 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      console.log("New user created:", user.email);
     } else {
-      console.log("Existing user logged in:", user.email);
+
     }
 
     // Parse wallet data if it exists
@@ -114,8 +113,6 @@ export async function POST(request: NextRequest) {
       chatId: user.chatId || undefined,
       wallet: walletData, // Include parsed wallet data
     };
-
-    console.log("Complete user data from Google auth:", userData);
 
     // Create response with simple cookie (without JWT for now)
     const response = NextResponse.json({

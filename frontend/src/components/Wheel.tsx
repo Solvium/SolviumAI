@@ -96,7 +96,6 @@ export const WheelOfFortune = () => {
 
     try {
       const result = await checkTokenRegistration(MEME_TOKEN_ADDRESS);
-      console.log("Token registration check result:", result);
       return result;
     } catch (error) {
       console.error("Token registration check failed:", error);
@@ -115,8 +114,7 @@ export const WheelOfFortune = () => {
     }
   };
 
-  // console.log(user);
-  // Add useEffect to check last played time
+  // // Add useEffect to check last played time
   useEffect(() => {
     setSpinningSound(new Audio(location.origin + "/spin.mp3"));
     setLastPlayed(Number(user?.lastSpinClaim));
@@ -124,8 +122,6 @@ export const WheelOfFortune = () => {
     const cooldownEnd = new Date(
       new Date(user?.lastSpinClaim ?? 0).getTime() + 24 * 60 * 60 * 1000
     );
-    console.log(now);
-    console.log(cooldownEnd);
     if (now < cooldownEnd) {
       setCooldownTime(cooldownEnd);
     }
@@ -156,14 +152,9 @@ export const WheelOfFortune = () => {
 
     try {
       let isRegistered = await checkTokenRegistrationCallback();
-      console.log("isRegistered", isRegistered);
-
       if (!isRegistered) {
         await registerTokenCallback(MEME_TOKEN_ADDRESS);
       }
-
-      console.log(rewardAmount, MEME_TOKEN_ADDRESS, "rewardAmount");
-
       // Claim wheel transaction
       const claimTransaction = await signAndSendTransaction(CONTRACTID!, [
         {
@@ -263,7 +254,6 @@ export const WheelOfFortune = () => {
   const handleClaim = async () => {
     if (!winner) return;
     setIsClaimLoading(true);
-    console.log(data[prizeNumber].option, "data infor   ");
     try {
       await handleClaimRewardImproved({
         rewardAmount: data[prizeNumber].option,
@@ -287,8 +277,6 @@ export const WheelOfFortune = () => {
       console.error("Claim failed:", error);
     }
   };
-
-  console.log(hasPlayed);
   return (
     <div className="min-h-screen w-full  bg-[#0B0B14] py-4 px-4 md:py-6">
       <div className="max-w-xl mx-auto">

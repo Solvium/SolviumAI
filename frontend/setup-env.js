@@ -2,8 +2,6 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-console.log("🔐 Setting up environment variables for secure login system...\n");
-
 // Generate secure secrets
 const jwtAccessSecret = crypto.randomBytes(32).toString("hex");
 const jwtRefreshSecret = crypto.randomBytes(32).toString("hex");
@@ -66,21 +64,8 @@ const envPath = path.join(__dirname, ".env.local");
 
 try {
   fs.writeFileSync(envPath, envContent);
-  console.log("✅ Environment file created: .env.local");
-  console.log("📝 Please update the following values:");
-  console.log("   - DATABASE_URL: Your PostgreSQL connection string");
-  console.log("   - GOOGLE_CLIENT_ID: Your Google OAuth client ID");
-  console.log("   - GOOGLE_CLIENT_SECRET: Your Google OAuth client secret");
-  console.log("   - TELEGRAM_BOT_TOKEN: Your Telegram bot token");
-  console.log("   - TELEGRAM_BOT_USERNAME: Your Telegram bot username");
-  console.log("\n🔑 Secure secrets have been generated automatically:");
-  console.log("   - JWT_SECRET:", jwtSecret);
-  console.log("   - WALLET_ENCRYPTION_KEY:", walletEncryptionKey);
-  console.log("\n🚀 You can now run the application with secure authentication!");
+  /* logs removed */
 } catch (error) {
   console.error("❌ Failed to create environment file:", error.message);
-  console.log(
-    "\n📋 Please create .env.local manually with the following content:"
-  );
-  console.log(envContent);
+  /* logs removed */
 }
