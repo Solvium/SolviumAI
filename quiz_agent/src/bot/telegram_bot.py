@@ -168,17 +168,17 @@ class TelegramBot:
             play_quiz_selection_callback,  # New multi-quiz selection handler
             quiz_answer_handler,
             private_message_handler,
-            winners_handler,
+            # winners_handler,
             distribute_rewards_handler,
             start_reward_setup_callback,  # Import new reward setup handlers
             handle_reward_method_choice,
-            show_all_active_leaderboards_command,
             handle_quiz_interaction_callback,  # New quiz interaction handler
             handle_enhanced_quiz_start_callback,  # Enhanced quiz handlers
             handle_poll_answer,
             stop_enhanced_quiz,
             announce_quiz_end_handler,  # Quiz end announcement handler
             debug_sessions_handler,  # Debug sessions handler
+            handle_wallet_retry_callback,  # Wallet retry callback handler
         )
 
         # Import menu handlers
@@ -327,33 +327,26 @@ class TelegramBot:
             )
         )
 
+        # Handle wallet creation retry callbacks
+        self.app.add_handler(
+            CallbackQueryHandler(
+                handle_wallet_retry_callback,
+                pattern="^retry_wallet_creation:",
+            )
+        )
+
         # THEN register other command handlers
         logger.info("Registering command handlers")
         self.app.add_handler(
             CommandHandler("start", start_handler)
         )  # Register start handler
-        # self.app.add_handler(CommandHandler("linkwallet", link_wallet_handler))
-        # self.app.add_handler(
-        #     CommandHandler("unlinkwallet", unlink_wallet_handler)
-        # )  # Register the new handler
-        # self.app.add_handler(CommandHandler("playquiz", play_quiz_handler))
-        # self.app.add_handler(CommandHandler("winners", winners_handler))
-        self.app.add_handler(
-            CommandHandler("leaderboards", show_all_active_leaderboards_command)
-        )
-        # self.app.add_handler(
-        #     CommandHandler("resetwallet", handle_reset_wallet)
-        # )  # Development command
+
         self.app.add_handler(
             CommandHandler("announcement", announce_quiz_end_handler)
         )  # Quiz end announcement command
         # self.app.add_handler(
         #     CommandHandler("debug", debug_sessions_handler)
         # )  # Debug sessions command
-
-        # self.app.add_handler(
-        #     CommandHandler("distributerewards", distribute_rewards_handler)
-        # )
 
         # Handle callback queries for quiz answers
         self.app.add_handler(
@@ -428,6 +421,12 @@ class TelegramBot:
         # Start the message queue for rate limiting
         logger.info("Starting message queue for rate limiting...")
         await message_queue.start()
+
+        # Start the message cleanup service for anti-spam features
+        logger.info("Starting message cleanup service...")
+        from services.message_cleanup_service import start_message_cleanup_service
+
+        await start_message_cleanup_service(self.app)
 
         await self.app.initialize()
         await self.app.start()

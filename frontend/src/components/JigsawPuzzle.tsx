@@ -12,7 +12,6 @@ const JigsawPuzzle = () => {
 
       // Create container for SVG
       const container = containerRef.current;
-      console.log(container);
       if (!container) return;
 
       // Clear any existing content
@@ -55,10 +54,6 @@ const JigsawPuzzle = () => {
       try {
         const game = new MainHandler(container);
         gameRef.current = game;
-
-        console.log(game);
-        console.log(gameRef);
-
         // Load a sample image (replace with your actual image URL)
         const imageUrl = "";
         // await game.updateImage(imageUrl);

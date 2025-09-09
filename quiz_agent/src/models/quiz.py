@@ -57,6 +57,23 @@ class Quiz(Base):
     )  # Timestamp for when quiz becomes active
     duration_seconds = Column(BigInteger, nullable=True)  # Store the intended duration
 
+    # Message tracking for anti-spam features
+    announcement_message_id = Column(
+        BigInteger, nullable=True
+    )  # Track announcement message ID
+    leaderboard_message_id = Column(
+        BigInteger, nullable=True
+    )  # Track leaderboard message ID
+    announcement_deleted_at = Column(
+        DateTime, nullable=True
+    )  # When announcement was deleted
+    leaderboard_deleted_at = Column(
+        DateTime, nullable=True
+    )  # When leaderboard was deleted
+    leaderboard_created_at = Column(
+        DateTime, nullable=True
+    )  # When leaderboard was created
+
     answers = relationship("QuizAnswer", back_populates="quiz")  # Add relationship
 
 

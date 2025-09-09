@@ -27,8 +27,6 @@ export const useMultiLogin = () => {
   const checkAuthStatus = async () => {
     try {
       const response = await axios.get("/api/user?type=getme");
-
-      console.log(response);
       if (response.data.authenticated) {
         setIsAuthenticated(true);
         setUserData(response.data.user);
@@ -121,9 +119,6 @@ export const useMultiLogin = () => {
             ref: data.ref,
           }),
         });
-
-        console.log(response);
-
         if (response.status == 200) {
           setIsAuthenticated(true);
           setUserData(response.data.user);

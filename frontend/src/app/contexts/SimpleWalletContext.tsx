@@ -49,10 +49,6 @@ export function SimpleWalletProvider({
           publicKeyB64: cachedPub,
           hasKey: true,
         });
-        console.log(
-          "[SimpleWallet] Restored cached private key for account:",
-          cachedAcc
-        );
       }
     } catch {}
   }, []);
@@ -75,7 +71,6 @@ export function SimpleWalletProvider({
     }
     const data = await res.json();
     if (!data?.privateKey) throw new Error("Private key missing");
-    console.log("[SimpleWallet] Fetched private key for account:", accountId);
     return {
       privB64: Buffer.from(data.privateKey, "utf8").toString("base64"),
       pubB64: data.publicKey,
@@ -90,10 +85,6 @@ export function SimpleWalletProvider({
       sessionStorage.setItem(KEY_ACC, accountId);
       if (pubB64) sessionStorage.setItem(KEY_PUB, pubB64);
     } catch {}
-    console.log(
-      "[SimpleWallet] Cached private key in session for account:",
-      accountId
-    );
     setState({ accountId, publicKeyB64: pubB64 ?? null, hasKey: true });
   }
 
@@ -120,10 +111,6 @@ export function SimpleWalletProvider({
       sessionStorage.setItem(KEY_ACC, data.accountId);
       if (data.publicKey) sessionStorage.setItem(KEY_PUB, data.publicKey);
     } catch {}
-    console.log(
-      "[SimpleWallet] Cached private key in session for TG user, account:",
-      data.accountId
-    );
     setState({
       accountId: data.accountId,
       publicKeyB64: data.publicKey ?? null,
@@ -161,10 +148,6 @@ export function SimpleWalletProvider({
     const msg =
       typeof message === "string" ? new TextEncoder().encode(message) : message;
     const signature = await ed.sign(msg, seed);
-    console.log(
-      "[SimpleWallet] Locally signed message for account",
-      state.accountId
-    );
     return Buffer.from(signature).toString("base64");
   }
 

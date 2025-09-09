@@ -1,50 +1,41 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
-export async function POST(request: NextRequest) {
+const RPC_URLS: Record<string, string> = {
+  mainnet: "https://rpc.mainnet.near.org",
+  testnet: "https://rpc.testnet.near.org",
+};
+
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
-    const { method, params, id } = body;
+    const url = new URL(req.url);
+    const network = (
+      url.searchParams.get("network") ||
+      process.env.NEXT_PUBLIC_NEAR_NETWORK_ID ||
+      "mainnet"
+    ).toLowerCase();
+    const target = RPC_URLS[network] || RPC_URLS.mainnet;
 
-    const response = await fetch("https://rpc.testnet.near.org/", {
+    const body = await req.text();
+    const upstream = await fetch(target, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
       },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: id || 1,
-        method,
-        params: params || [],
-      }),
+      body,
+      cache: "no-store",
     });
 
-    const data = await response.json();
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error("NEAR RPC proxy error:", error);
-    return NextResponse.json(
-      { error: "Failed to proxy NEAR RPC call" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function GET(request: NextRequest) {
-  try {
-    const response = await fetch("https://rpc.testnet.near.org/", {
-      method: "GET",
+    return new Response(await upstream.text(), {
+      status: upstream.status,
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type":
+          upstream.headers.get("content-type") || "application/json",
       },
     });
-
-    const data = await response.json();
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error("NEAR RPC proxy error:", error);
-    return NextResponse.json(
-      { error: "Failed to proxy NEAR RPC call" },
-      { status: 500 }
-    );
+  } catch (e) {
+    return Response.json({ error: "near_rpc_proxy_error" }, { status: 500 });
   }
 }
+
+// Removed duplicate POST/GET handlers; single POST above handles proxying

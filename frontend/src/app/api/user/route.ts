@@ -8,7 +8,6 @@ import { NextRequest, NextResponse } from "next/server";
 const FILE_NAME = "user/route.ts";
 
 export async function POST(req: NextRequest) {
-  console.log(`[${FILE_NAME}:POST] POST request received`);
 
   try {
     const {
@@ -24,19 +23,7 @@ export async function POST(req: NextRequest) {
       userMultipler,
     } = await req.json();
 
-    console.log(`[${FILE_NAME}:POST] Request data:`, {
-      type,
-      username,
-      id,
-      hasWallet: !!wallet,
-      hasData: !!data,
-    });
-
     if (type == "loginWithTg") {
-      console.log(
-        `[${FILE_NAME}:POST] Processing Telegram login for username:`,
-        username
-      );
 
       try {
         if (!username) {
@@ -48,15 +35,13 @@ export async function POST(req: NextRequest) {
         }
 
         // Find or create user
-        console.log(`[${FILE_NAME}:POST] Looking up user in database...`);
+
         let user = await prisma.user.findUnique({
           where: { username },
         });
 
         if (!user) {
-          console.log(
-            `[${FILE_NAME}:POST] User not found, creating new user...`
-          );
+
           // Create new user if doesn't exist
           user = await prisma.user.create({
             data: {
@@ -71,16 +56,13 @@ export async function POST(req: NextRequest) {
               lastSpinClaim: new Date(),
             },
           });
-          console.log(`[${FILE_NAME}:POST] New user created with ID:`, user.id);
+
         } else {
-          console.log(
-            `[${FILE_NAME}:POST] Existing user found with ID:`,
-            user.id
-          );
+
         }
 
         // Create JWT token
-        console.log(`[${FILE_NAME}:POST] Creating JWT token...`);
+
         const token = sign(
           {
             id: user.id,
@@ -90,8 +72,6 @@ export async function POST(req: NextRequest) {
           process.env.JWT_SECRET!, // Make sure to set this in your .env file
           { expiresIn: "7d" }
         );
-
-        console.log(`[${FILE_NAME}:POST] JWT token created successfully`);
 
         // Set HTTP-only cookie
         const response = NextResponse.json(
@@ -123,10 +103,7 @@ export async function POST(req: NextRequest) {
         });
 
         response.headers.set("Set-Cookie", serialized);
-        console.log(
-          `[${FILE_NAME}:POST] Login successful, cookie set for user:`,
-          user.username
-        );
+
         return response;
       } catch (error) {
         console.error(`[${FILE_NAME}:POST] Login error:`, error);
@@ -146,7 +123,6 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        console.log(email);
         // Find or create user
         let user = await prisma.user.findUnique({
           where: { email },
@@ -328,63 +304,38 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  console.log(`[${FILE_NAME}:GET] GET request received`);
 
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type");
 
-  console.log(`[${FILE_NAME}:GET] Request parameters:`, {
-    type,
-    searchParams: Object.fromEntries(searchParams.entries()),
-  });
 
   // Get token from cookies - fix cookie name to match what's set in POST
   const auth_token = req.cookies.get("auth_token");
 
-  console.log(`[${FILE_NAME}:GET] Cookie check:`, {
-    hasAuthToken: !!auth_token,
-    authTokenValue: auth_token?.value ? "present" : "missing",
-  });
-
   if (!auth_token) {
-    console.log(`[${FILE_NAME}:GET] No auth token found, returning 401`);
+
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 
   if (type == "getme") {
-    console.log(`[${FILE_NAME}:GET] Processing getme request...`);
 
     try {
       // Verify token
-      console.log(`[${FILE_NAME}:GET] Verifying JWT token...`);
+
       const decoded = verify(auth_token.value, process.env.JWT_SECRET!) as {
         id: number;
       };
-      console.log(
-        `[${FILE_NAME}:GET] JWT token verified, user ID:`,
-        decoded.id
-      );
 
       // Get user data
-      console.log(`[${FILE_NAME}:GET] Fetching user data from database...`);
+
       const user = await prisma.user.findUnique({
         where: { id: decoded.id },
       });
 
       if (!user) {
-        console.log(
-          `[${FILE_NAME}:GET] User not found in database for ID:`,
-          decoded.id
-        );
+
         return NextResponse.json({ authenticated: false }, { status: 401 });
       }
-
-      console.log(`[${FILE_NAME}:GET] User data retrieved:`, {
-        id: user.id,
-        username: user.username,
-        hasChatId: !!user.chatId,
-        chatId: user.chatId,
-      });
 
       const response = {
         authenticated: true,
@@ -402,10 +353,6 @@ export async function GET(req: NextRequest) {
         },
       };
 
-      console.log(
-        `[${FILE_NAME}:GET] Sending authenticated response for user:`,
-        user.username
-      );
       return NextResponse.json(response, { status: 200 });
     } catch (error) {
       console.error(`[${FILE_NAME}:GET] Authentication error:`, error);
@@ -413,6 +360,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  console.log(`[${FILE_NAME}:GET] Unknown request type:`, type);
   return NextResponse.json({ error: "Unknown request type" }, { status: 400 });
 }

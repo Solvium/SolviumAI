@@ -41,7 +41,7 @@ const WordleGame: React.FC = () => {
     setGameOver(false);
     setGameWon(false);
     setHintUsed(false);
-    console.log(`Target word: ${WORDS[randomIndex]}`); // For debugging
+    // For debugging
   };
 
   const handleKeyPress = (key: string) => {

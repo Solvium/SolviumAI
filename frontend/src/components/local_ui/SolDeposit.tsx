@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useUserWallet } from "@/app/hooks/useUserWallet";
+import { usePrivateKeyWallet } from "@/app/contexts/PrivateKeyWalletContext";
 
 // Modal component
 export function SolDepositModal({
@@ -24,6 +25,7 @@ export function SolDepositModal({
   onClose: () => void;
 }) {
   const { sendTransaction, balance } = useUserWallet();
+  const { isConnected, accountId, autoConnect } = usePrivateKeyWallet();
   const [depositAmount, setDepositAmount] = useState<string>("");
   const [withdrawAmount, setWithdrawAmount] = useState<string>("");
   const [newFactor, setNewFactor] = useState<string>("");
@@ -76,7 +78,6 @@ export function SolDepositModal({
       }
 
       // This would be handled by the backend
-      console.log("Update factor:", factor);
       setNewFactor("");
     } catch (err) {
       console.error("Update factor error:", err);
@@ -169,6 +170,47 @@ export function SolDepositModal({
             {/* Deposit Tab */}
             {activeTab === "deposit" && (
               <div className="space-y-6">
+                {/* NEAR Wallet Info */}
+                <div className="bg-card border rounded-xl p-6 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm text-muted-foreground mb-1">
+                        NEAR Wallet
+                      </h3>
+                      <p className="font-mono text-sm">
+                        {accountId || "Not connected"}
+                      </p>
+                      {!isConnected && (
+                        <button
+                          onClick={() => autoConnect()}
+                          className="mt-2 text-xs text-primary hover:underline"
+                        >
+                          Connect NEAR wallet
+                        </button>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        if (!accountId) return;
+                        try {
+                          await navigator.clipboard.writeText(accountId);
+                        } catch {
+                          const ta = document.createElement("textarea");
+                          ta.value = accountId;
+                          document.body.appendChild(ta);
+                          ta.select();
+                          document.execCommand("copy");
+                          document.body.removeChild(ta);
+                        }
+                      }}
+                    >
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="bg-card border rounded-xl p-6 shadow-sm">
                   <h2 className="text-xl font-semibold mb-4">Make a Deposit</h2>
                   <form onSubmit={handleDeposit}>

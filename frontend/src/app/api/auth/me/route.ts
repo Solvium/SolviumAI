@@ -101,8 +101,6 @@ export async function GET(request: NextRequest) {
       wallet: walletData, // Include parsed wallet data
     };
 
-    console.log("User data from /api/auth/me:", userData);
-
     return NextResponse.json({
       authenticated: true,
       user: userData,

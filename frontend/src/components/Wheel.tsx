@@ -136,9 +136,8 @@ export const WheelOfFortune = () => {
     if (!nearAddress) return null
 
     try {
-      const result = await checkTokenRegistration(MEME_TOKEN_ADDRESS)
-      console.log("Token registration check result:", result)
-      return result
+      const result = await checkTokenRegistration(MEME_TOKEN_ADDRESS);
+      return result;
     } catch (error) {
       console.error("Token registration check failed:", error)
       return null
@@ -156,13 +155,14 @@ export const WheelOfFortune = () => {
     }
   }
 
+  // // Add useEffect to check last played time
   useEffect(() => {
-    setSpinningSound(new Audio(location.origin + "/spin.mp3"))
-    setLastPlayed(Number(user?.lastSpinClaim))
-    const now = new Date(Date.now())
-    const cooldownEnd = new Date(new Date(user?.lastSpinClaim ?? 0).getTime() + 24 * 60 * 60 * 1000)
-    console.log(now)
-    console.log(cooldownEnd)
+    setSpinningSound(new Audio(location.origin + "/spin.mp3"));
+    setLastPlayed(Number(user?.lastSpinClaim));
+    const now = new Date(Date.now());
+    const cooldownEnd = new Date(
+      new Date(user?.lastSpinClaim ?? 0).getTime() + 24 * 60 * 60 * 1000
+    );
     if (now < cooldownEnd) {
       setCooldownTime(cooldownEnd)
     }
@@ -188,15 +188,11 @@ export const WheelOfFortune = () => {
     }
 
     try {
-      const isRegistered = await checkTokenRegistrationCallback()
-      console.log("isRegistered", isRegistered)
-
+      let isRegistered = await checkTokenRegistrationCallback();
       if (!isRegistered) {
         await registerTokenCallback(MEME_TOKEN_ADDRESS)
       }
-
-      console.log(rewardAmount, MEME_TOKEN_ADDRESS, "rewardAmount")
-
+      // Claim wheel transaction
       const claimTransaction = await signAndSendTransaction(CONTRACTID!, [
         {
           type: "FunctionCall",
@@ -283,9 +279,8 @@ export const WheelOfFortune = () => {
   }
 
   const handleClaim = async () => {
-    if (!winner) return
-    setIsClaimLoading(true)
-    console.log(data[prizeNumber].option, "data infor   ")
+    if (!winner) return;
+    setIsClaimLoading(true);
     try {
       await handleClaimRewardImproved({
         rewardAmount: data[prizeNumber].option,
@@ -308,9 +303,7 @@ export const WheelOfFortune = () => {
       setIsClaimLoading(false)
       console.error("Claim failed:", error)
     }
-  }
-
-  console.log(hasPlayed)
+  };
   return (
     <div
       className="max-h-screen w-full py-2 px-4 pb-24 relative overflow-hidden"

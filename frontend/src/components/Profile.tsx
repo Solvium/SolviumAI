@@ -90,30 +90,9 @@ const Link = ({ userDetails }: any) => {
   const { toast } = useToast()
 
   useEffect(() => {
-    setLink(location.href)
-  }, [])
-
-  const handleCopy = async () => {
-    const textToCopy = `${link}?ref=${userDetails?.username}`
-
-    try {
-      await navigator.clipboard.writeText(textToCopy)
-      setCopyState("Copied")
-      toast({
-        title: "Copied!",
-        description: "Invite link copied to clipboard",
-        variant: "default",
-      })
-      setTimeout(() => setCopyState("Copy"), 2000)
-    } catch (err) {
-      console.error("Failed to copy: ", err)
-      toast({
-        title: "Copy Failed",
-        description: "Failed to copy to clipboard",
-        variant: "destructive",
-      })
-    }
-  }
+    // Generate Telegram bot referral link with start parameter
+    setLink(`https://t.me/solviumquizbot?start=${userDetails?.username}`);
+  }, [userDetails?.username]);
 
   return (
     <div className="space-y-4">
@@ -126,17 +105,19 @@ const Link = ({ userDetails }: any) => {
         </div>
         <h2 className="text-lg font-black text-white uppercase tracking-wider">Invite Link</h2>
       </div>
-      <div className="bg-gradient-to-br from-blue-700/50 to-blue-800/50 rounded-2xl p-4 border-2 border-blue-400/20 backdrop-blur-sm">
-        <p className="text-white/90 break-all text-center mb-3 font-medium text-sm">
-          {`${link}?ref=${userDetails?.username}`}
-        </p>
-        <button
-          onClick={handleCopy}
-          className="w-full px-4 py-3 bg-gradient-to-r from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 text-white rounded-2xl transition-all flex items-center justify-center gap-2 text-sm font-black uppercase tracking-wider shadow-2xl hover:shadow-orange-500/25 transform hover:scale-105 disabled:opacity-50 disabled:transform-none border-2 border-orange-300/30"
-        >
-          <span>{copyState}</span>
-          <Copy className="w-4 h-4" />
-        </button>
+      <div className="bg-[#1A1A2F] rounded-lg p-3 border border-[#2A2A45] relative overflow-hidden">
+        <div className="absolute inset-0 bg-[#4C6FFF] blur-2xl opacity-5"></div>
+        <div className="relative">
+          <p className="text-sm text-[#8E8EA8] break-all text-center md:text-left mb-3">
+            {link}
+          </p>
+          <CopyToClipboard text={link} onCopy={() => setCopyState("Copied")}>
+            <button className="w-full px-4 py-3 bg-[#4C6FFF] hover:bg-[#4C6FFF]/90 text-white rounded-lg transition-all flex items-center justify-center gap-2 text-sm font-medium">
+              <span>{copyState}</span>
+              <img src={copy.src} alt="copy" className="w-4 h-4 invert" />
+            </button>
+          </CopyToClipboard>
+        </div>
       </div>
     </div>
   )
@@ -153,8 +134,12 @@ const Farming = () => {
   const hashRate = 0.0035
   const remainingTime = new Date(userDetails?.lastClaim || new Date()).getTime() - new Date().getTime()
 
-  const claimPoints = async (type: string, setLoading: (loading: boolean) => void) => {
-    setLoading(true)
+  // // Real claimPoints function that calls the API and refreshes user data
+  const claimPoints = async (
+    type: string,
+    setLoading: (loading: boolean) => void
+  ) => {
+    setLoading(true);
     try {
       const response = await fetch("/api/claim", {
         method: "POST",

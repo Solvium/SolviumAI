@@ -59,8 +59,6 @@ function Home() {
   if (!isAuthenticated) {
     return <LoginModule />
   }
-
-  console.log(user)
   return (
     <div className="min-h-screen tropical-gradient">
       <div>

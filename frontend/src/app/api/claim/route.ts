@@ -65,8 +65,6 @@ export async function POST(req: NextRequest) {
     if (type == "daily claim") {
       const lastClaim = new Date(user?.lastClaim ?? Date.now());
       const nextClaim = new Date(new Date().getTime() + 1000 * 60 * 60 * 24);
-
-      console.log(user);
       if (new Date(Date.now()) > lastClaim) {
         let day = ((user?.claimCount ?? 0) + 1) * 2;
         day = day - 2;
@@ -161,7 +159,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (type.includes("game claim") && user) {
-      console.log(type);
       const np = type.split("--")[1];
 
       const res = await addLeaderboard(user, np, "game");
@@ -190,8 +187,6 @@ export async function GET(req: any) {
 const addLeaderboard = async (user: any, np: number, type: any) => {
   const userId = user?.id;
   const points = np;
-
-  console.log(np);
   try {
     if (!userId || points === undefined) {
       return NextResponse.json(

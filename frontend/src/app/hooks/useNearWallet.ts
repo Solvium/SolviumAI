@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { connect, keyStores, KeyPair, utils, providers } from "near-api-js";
+import { usePrivateKeyWallet } from "@/app/contexts/PrivateKeyWalletContext";
 
 // Test private key for development - replace with real keys in production
 const TEST_PRIVATE_KEY =
@@ -28,6 +29,11 @@ export interface Deposit {
 }
 
 export const useNearWallet = () => {
+  const {
+    isConnected: pkConnected,
+    accountId: pkAccountId,
+    account: pkAccount,
+  } = usePrivateKeyWallet();
   const [state, setState] = useState<WalletState>({
     isConnected: false,
     accountId: "",
@@ -44,11 +50,22 @@ export const useNearWallet = () => {
       setState((prev) => ({ ...prev, error: null }));
 
       try {
+        // Prefer existing connected NEAR wallet from context
+        if (pkConnected && pkAccount && pkAccountId) {
+          const balance = await pkAccount.getAccountBalance();
+          const balanceInNEAR = utils.format.formatNearAmount(balance.total);
+          setState({
+            isConnected: true,
+            accountId: pkAccountId,
+            balance: balanceInNEAR,
+            error: null,
+          });
+          setIsLoading(false);
+          return;
+        }
         // Use test private key for development, fallback to provided key
         const keyToUse = privateKey || TEST_PRIVATE_KEY;
         const accountToUse = accountId || TEST_ACCOUNT_ID;
-
-        console.log("Connecting to NEAR wallet with test key:", accountToUse);
 
         const keyStore = new keyStores.InMemoryKeyStore();
         const keyPair = KeyPair.fromString(keyToUse as any);
@@ -72,9 +89,6 @@ export const useNearWallet = () => {
           balance: balanceInNEAR,
           error: null,
         });
-
-        console.log("Wallet connected successfully:", accountToUse);
-        console.log("Balance:", balanceInNEAR, "NEAR");
       } catch (error) {
         console.error("Failed to connect wallet:", error);
         setState((prev) => ({
@@ -106,10 +120,42 @@ export const useNearWallet = () => {
       accountId?: string
     ): Promise<DepositResult> => {
       try {
+        // Prefer existing connected NEAR wallet from context
+        if (pkConnected && pkAccount && pkAccountId) {
+          const contractId =
+            process.env.NEXT_PUBLIC_CONTRACT_ID || "solviumpuzzle.near";
+          const depositAmount = utils.format.parseNearAmount(amount);
+          if (!depositAmount) throw new Error("Invalid amount");
+          const methodCandidates = [
+            "depositToGame",
+            "deposit",
+            "make_deposit",
+            "deposit_to_game",
+          ];
+          let result: any = null;
+          let lastErr: any = null;
+          for (const methodName of methodCandidates) {
+            try {
+              result = await (pkAccount as any).functionCall({
+                contractId,
+                methodName,
+                args: {},
+                gas: BigInt("30000000000000"),
+                attachedDeposit: BigInt(depositAmount),
+              });
+              break;
+            } catch (e) {
+              lastErr = e;
+            }
+          }
+          if (!result) throw lastErr || new Error("Deposit method not found");
+          return {
+            success: true,
+            transactionHash: (result as any)?.transaction?.hash,
+          };
+        }
         const keyToUse = privateKey || TEST_PRIVATE_KEY;
         const accountToUse = accountId || TEST_ACCOUNT_ID;
-
-        console.log("Making deposit:", amount, "NEAR to", accountToUse);
 
         const keyStore = new keyStores.InMemoryKeyStore();
         const keyPair = KeyPair.fromString(keyToUse as any);
@@ -151,8 +197,6 @@ export const useNearWallet = () => {
         // Sign and send transaction
         const result = await account.signAndSendTransaction(transaction as any);
 
-        console.log("Deposit successful:", result.transaction.hash);
-
         return {
           success: true,
           transactionHash: result.transaction.hash,
@@ -171,10 +215,43 @@ export const useNearWallet = () => {
   const getDeposits = useCallback(
     async (privateKey?: string, accountId?: string) => {
       try {
+        // Prefer existing connected NEAR wallet from context
+        if (pkConnected && pkAccount && pkAccountId) {
+          const contractId =
+            process.env.NEXT_PUBLIC_CONTRACT_ID || "solviumpuzzle.near";
+          const candidates = [
+            { name: "getDeposits", args: { accountId: pkAccountId } },
+            { name: "get_deposits", args: { account_id: pkAccountId } },
+            { name: "deposits_of", args: { account_id: pkAccountId } },
+            { name: "deposits", args: {} },
+          ];
+          let depositsResult: any = [];
+          for (const c of candidates) {
+            try {
+              depositsResult = await (pkAccount as any).viewFunction({
+                contractId,
+                methodName: c.name,
+                args: c.args,
+              });
+              if (Array.isArray(depositsResult)) break;
+            } catch (e) {
+              // try next
+            }
+          }
+          const transformedDeposits: Deposit[] = (depositsResult || []).map(
+            (deposit: any) => ({
+              id: deposit.id,
+              amount: utils.format.formatNearAmount(deposit.amount),
+              startTime: Number(deposit.startTime) / 1000000,
+              multiplier: Number(deposit.multiplier) / 1e16,
+              active: true,
+            })
+          );
+          setDeposits(transformedDeposits);
+          return;
+        }
         const keyToUse = privateKey || TEST_PRIVATE_KEY;
         const accountToUse = accountId || TEST_ACCOUNT_ID;
-
-        console.log("Fetching deposits for:", accountToUse);
 
         const keyStore = new keyStores.InMemoryKeyStore();
         const keyPair = KeyPair.fromString(keyToUse as any);
@@ -196,8 +273,6 @@ export const useNearWallet = () => {
           methodName: "getDeposits",
           args: { accountId: accountToUse },
         });
-
-        console.log("Deposits fetched:", depositsResult);
 
         // Transform deposits data
         const transformedDeposits: Deposit[] = depositsResult.map(
@@ -222,6 +297,13 @@ export const useNearWallet = () => {
   const getBalance = useCallback(
     async (privateKey?: string, accountId?: string) => {
       try {
+        // Prefer existing connected NEAR wallet from context
+        if (pkConnected && pkAccount) {
+          const balance = await pkAccount.getAccountBalance();
+          const balanceInNEAR = utils.format.formatNearAmount(balance.total);
+          setState((prev) => ({ ...prev, balance: balanceInNEAR }));
+          return balanceInNEAR;
+        }
         const keyToUse = privateKey || TEST_PRIVATE_KEY;
         const accountToUse = accountId || TEST_ACCOUNT_ID;
 

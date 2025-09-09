@@ -27,14 +27,11 @@ export default function BuySpin({ setBuySpins }: { setBuySpins: any }) {
       setSolvBalance(user.totalPoints);
     }
   }, [user]);
-
-  console.log(isProcessing);
   const handlePurchase = async (config: PurchaseButtonConfig) => {
     setIsProcessing(true);
 
     try {
       // TODO: Implement claim points with new auth system
-      console.log("Buying spins:", config);
       toast.success(`Successfully purchased ${config.spinCount} spin(s)!`);
       setBuySpins(false);
     } catch (error) {

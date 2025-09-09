@@ -1,6 +1,7 @@
-"use client"
+"use client";
 
-import { useState } from "react"
+import { useEffect, useState } from "react";
+import { usePrivateKeyWallet } from "@/app/contexts/PrivateKeyWalletContext";
 import {
   Wallet,
   Send,
@@ -14,86 +15,145 @@ import {
   Settings,
   History,
   QrCode,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getAccountInfo, formatNearAmount } from "@/lib/nearblocks";
+import { getAccountFull, formatYoctoToNear } from "@/lib/fastnear";
+import { getNearUsd } from "@/lib/prices";
+import { getAccountTxnsFastnear } from "@/lib/fastnearExplorer";
 
 const WalletPage = () => {
-  const [selectedNetwork, setSelectedNetwork] = useState("NEAR")
-  const [showBalance, setShowBalance] = useState(true)
-  const [isConnected, setIsConnected] = useState(false)
+  const [selectedNetwork, setSelectedNetwork] = useState("NEAR");
+  const [showBalance, setShowBalance] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const { isConnected, isLoading, error, accountId, autoConnect, account } =
+    usePrivateKeyWallet();
+  const [nearBalance, setNearBalance] = useState<string | null>(null);
+  const [recentTxns, setRecentTxns] = useState<any[] | null>(null);
+  const [nearUsd, setNearUsd] = useState<number | null>(null);
 
   // Mock data
-  const walletAddress = "solvium.near"
+  const walletAddress = "solvium.near";
   const balances = {
-    NEAR: { amount: "125.45", usd: "892.15" },
-    TON: { amount: "2,340.12", usd: "4,680.24" },
-    SOL: { amount: "45.67", usd: "3,654.36" },
-  }
+    NEAR: {
+      amount: nearBalance ?? "••••",
+      usd:
+        nearUsd && nearBalance && /^[0-9]+(\.[0-9]+)?$/.test(nearBalance)
+          ? (Number(nearBalance) * nearUsd).toFixed(2)
+          : "—",
+    },
+  };
 
-  const transactions = [
-    {
-      id: 1,
-      type: "receive",
-      amount: "25.50",
-      token: "NEAR",
-      from: "alice.near",
-      timestamp: "2 hours ago",
-      status: "completed",
-    },
-    {
-      id: 2,
-      type: "send",
-      amount: "100.00",
-      token: "TON",
-      to: "bob.ton",
-      timestamp: "1 day ago",
-      status: "completed",
-    },
-    {
-      id: 3,
-      type: "receive",
-      amount: "5.25",
-      token: "SOL",
-      from: "charlie.sol",
-      timestamp: "3 days ago",
-      status: "completed",
-    },
-  ]
+  const networks = [{ name: "NEAR", color: "bg-green-500", icon: "🟢" }];
 
-  const networks = [
-    { name: "NEAR", color: "bg-green-500", icon: "🟢" },
-    { name: "TON", color: "bg-blue-500", icon: "🔵" },
-    { name: "SOL", color: "bg-purple-500", icon: "🟣" },
-  ]
+  useEffect(() => {
+    if (!isConnected && !isLoading) {
+      autoConnect().catch(() => {});
+    }
+  }, [isConnected, isLoading, autoConnect]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const price = await getNearUsd();
+      if (!cancelled && price) setNearUsd(price);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!accountId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        // FastNEAR first for balance and tokens
+        const full = await getAccountFull(accountId);
+        if (!cancelled && full?.state?.balance) {
+          setNearBalance(formatYoctoToNear(full.state.balance));
+        } else {
+          // Fallback: Nearblocks
+          const info = await getAccountInfo(accountId);
+          if (!cancelled) {
+            const bal = info?.account?.amount || info?.amount || info?.balance;
+            if (bal) {
+              setNearBalance(formatNearAmount(bal));
+            }
+          }
+        }
+
+        const fast = await getAccountTxnsFastnear(accountId);
+
+        if (!cancelled && fast?.account_txs) {
+          const normalized = fast.account_txs.map((row) => ({
+            id: row.transaction_hash,
+            type: row.signer_id === accountId ? "send" : "receive",
+            amount: "",
+            token: "NEAR",
+            from: row.signer_id,
+            to: accountId,
+            timestamp: row.tx_block_timestamp,
+            status: "completed",
+          }));
+          setRecentTxns(normalized);
+        }
+      } catch (error) {
+        console.error("Error fetching wallet data:", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId]);
+
+  // Fallback: read balance from connected NEAR account if API didn't return
+  useEffect(() => {
+    if (!account || nearBalance) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const b = await account.getAccountBalance?.();
+        if (!cancelled && b?.available) {
+          setNearBalance(formatNearAmount(b.available));
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [account, nearBalance]);
 
   const WalletConnectSection = () => (
-    <div className="flex flex-col items-center justify-center min-h-[400px] space-y-6">
-      <div className="w-24 h-24 bg-[#1A1A2F] rounded-full flex items-center justify-center border-2 border-[#4C6FFF]">
-        <Wallet className="w-12 h-12 text-[#4C6FFF]" />
+    <div className="flex flex-col items-center justify-center min-h-[300px] space-y-4">
+      <div className="w-16 h-16 bg-[#1A1A2F] rounded-full flex items-center justify-center border-2 border-[#4C6FFF]">
+        <Wallet className="w-8 h-8 text-[#4C6FFF]" />
       </div>
-      <div className="text-center space-y-2">
-        <h3 className="text-xl font-semibold text-white">Connect Your Wallet</h3>
-        <p className="text-[#8E8EA8] text-sm max-w-xs">
-          Connect your wallet to view balances, send tokens, and manage your assets
-        </p>
+      <div className="text-center space-y-1">
+        <h3 className="text-lg font-semibold text-white">
+          Connecting NEAR Wallet…
+        </h3>
+        {error ? (
+          <p className="text-red-400 text-sm">{error}</p>
+        ) : (
+          <p className="text-[#8E8EA8] text-sm">
+            Please wait while we auto-connect your wallet.
+          </p>
+        )}
       </div>
-      <div className="space-y-3 w-full max-w-xs">
-        {networks.map((network) => (
-          <Button
-            key={network.name}
-            onClick={() => setIsConnected(true)}
-            className="w-full bg-[#1A1A2F] hover:bg-[#2A2A45] border border-[#2A2A45] text-white"
-          >
-            <span className="mr-2">{network.icon}</span>
-            Connect {network.name} Wallet
-          </Button>
-        ))}
-      </div>
+      {error && (
+        <Button
+          onClick={() => autoConnect()}
+          className="bg-[#4C6FFF] hover:bg-[#3B5BEF] text-white"
+        >
+          Retry Auto-Connect
+        </Button>
+      )}
     </div>
-  )
+  );
 
   const WalletHeader = () => (
     <div className="space-y-4">
@@ -106,9 +166,17 @@ const WalletPage = () => {
             onClick={() => setShowBalance(!showBalance)}
             className="text-[#8E8EA8] hover:text-white"
           >
-            {showBalance ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+            {showBalance ? (
+              <Eye className="w-4 h-4" />
+            ) : (
+              <EyeOff className="w-4 h-4" />
+            )}
           </Button>
-          <Button variant="ghost" size="sm" className="text-[#8E8EA8] hover:text-white">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-[#8E8EA8] hover:text-white"
+          >
             <Settings className="w-4 h-4" />
           </Button>
         </div>
@@ -134,7 +202,7 @@ const WalletPage = () => {
         ))}
       </div>
     </div>
-  )
+  );
 
   const BalanceCard = () => (
     <Card className="bg-gradient-to-br from-[#1A1A2F] to-[#151524] border-[#2A2A45]">
@@ -142,8 +210,14 @@ const WalletPage = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <div className={`w-3 h-3 rounded-full ${networks.find((n) => n.name === selectedNetwork)?.color}`} />
-              <span className="text-[#8E8EA8] text-sm">{selectedNetwork} Balance</span>
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  networks.find((n) => n.name === selectedNetwork)?.color
+                }`}
+              />
+              <span className="text-[#8E8EA8] text-sm">
+                {selectedNetwork} Balance
+              </span>
             </div>
             <Badge variant="secondary" className="bg-[#0B0B14] text-[#4C6FFF]">
               Connected
@@ -153,27 +227,59 @@ const WalletPage = () => {
           <div className="space-y-1">
             <div className="text-3xl font-bold text-white">
               {showBalance
-                ? `${balances[selectedNetwork as keyof typeof balances].amount} ${selectedNetwork}`
+                ? `${
+                    balances[selectedNetwork as keyof typeof balances].amount
+                  } ${selectedNetwork}`
                 : "••••••"}
             </div>
             <div className="text-[#8E8EA8] text-sm">
-              {showBalance ? `≈ $${balances[selectedNetwork as keyof typeof balances].usd}` : "••••••"}
+              {showBalance
+                ? `≈ $${balances[selectedNetwork as keyof typeof balances].usd}`
+                : "••••••"}
             </div>
           </div>
 
           <div className="flex items-center justify-between pt-2">
             <div className="flex items-center space-x-2 text-xs text-[#8E8EA8]">
               <Copy className="w-3 h-3" />
-              <span className="font-mono">{walletAddress}</span>
+              <span className="font-mono">{accountId || walletAddress}</span>
             </div>
-            <Button variant="ghost" size="sm" className="text-[#8E8EA8] hover:text-white p-1">
-              <Copy className="w-3 h-3" />
+            <Button
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(
+                    accountId || walletAddress
+                  );
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                } catch (e) {
+                  const textarea = document.createElement("textarea");
+                  textarea.value = accountId || walletAddress;
+                  document.body.appendChild(textarea);
+                  textarea.select();
+                  document.execCommand("copy");
+                  document.body.removeChild(textarea);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                }
+              }}
+              variant="ghost"
+              size="sm"
+              className="text-[#8E8EA8] hover:text-white p-1"
+              aria-label={copied ? "Copied" : "Copy address"}
+              title={copied ? "Copied" : "Copy address"}
+            >
+              {copied ? (
+                <span className="text-green-500 text-xs px-1">Copied</span>
+              ) : (
+                <Copy className="w-3 h-3" />
+              )}
             </Button>
           </div>
         </div>
       </CardContent>
     </Card>
-  )
+  );
 
   const ActionButtons = () => (
     <div className="grid grid-cols-4 gap-3">
@@ -194,7 +300,9 @@ const WalletPage = () => {
         <span className="text-xs text-white">Scan</span>
       </Button>
     </div>
-  )
+  );
+
+  const transactions = recentTxns ?? [];
 
   const TransactionItem = ({ transaction }: { transaction: any }) => (
     <div className="flex items-center justify-between p-4 bg-[#1A1A2F] rounded-lg border border-[#2A2A45]">
@@ -211,29 +319,42 @@ const WalletPage = () => {
           )}
         </div>
         <div>
-          <div className="text-white font-medium">{transaction.type === "receive" ? "Received" : "Sent"}</div>
+          <div className="text-white font-medium">
+            {transaction.type === "receive" ? "Received" : "Sent"}
+          </div>
           <div className="text-[#8E8EA8] text-sm">
-            {transaction.type === "receive" ? `From ${transaction.from}` : `To ${transaction.to}`}
+            {transaction.type === "receive"
+              ? `From ${transaction.from}`
+              : `To ${transaction.to}`}
           </div>
           <div className="text-[#8E8EA8] text-xs">{transaction.timestamp}</div>
         </div>
       </div>
       <div className="text-right">
-        <div className={`font-medium ${transaction.type === "receive" ? "text-green-500" : "text-red-500"}`}>
+        <div
+          className={`font-medium ${
+            transaction.type === "receive" ? "text-green-500" : "text-red-500"
+          }`}
+        >
           {transaction.type === "receive" ? "+" : "-"}
           {transaction.amount} {transaction.token}
         </div>
-        <Badge variant="secondary" className="bg-green-500/20 text-green-500 text-xs">
+        <Badge
+          variant="secondary"
+          className="bg-green-500/20 text-green-500 text-xs"
+        >
           {transaction.status}
         </Badge>
       </div>
     </div>
-  )
+  );
 
   const TransactionsSection = () => (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">Recent Transactions</h3>
+        <h3 className="text-lg font-semibold text-white">
+          Recent Transactions
+        </h3>
         <Button variant="ghost" size="sm" className="text-[#4C6FFF]">
           <History className="w-4 h-4 mr-1" />
           View All
@@ -245,7 +366,7 @@ const WalletPage = () => {
         ))}
       </div>
     </div>
-  )
+  );
 
   const TokensList = () => (
     <div className="space-y-4">
@@ -267,7 +388,11 @@ const WalletPage = () => {
               <div>
                 <div className="text-white font-medium">{token}</div>
                 <div className="text-[#8E8EA8] text-sm">
-                  {token === "NEAR" ? "NEAR Protocol" : token === "TON" ? "The Open Network" : "Solana"}
+                  {token === "NEAR"
+                    ? "NEAR Protocol"
+                    : token === "TON"
+                    ? "The Open Network"
+                    : "Solana"}
                 </div>
               </div>
             </div>
@@ -279,14 +404,14 @@ const WalletPage = () => {
         ))}
       </div>
     </div>
-  )
+  );
 
   if (!isConnected) {
     return (
       <div className="p-4">
         <WalletConnectSection />
       </div>
-    )
+    );
   }
 
   return (
@@ -297,10 +422,16 @@ const WalletPage = () => {
 
       <Tabs defaultValue="transactions" className="w-full">
         <TabsList className="grid w-full grid-cols-2 bg-[#1A1A2F] border border-[#2A2A45]">
-          <TabsTrigger value="transactions" className="data-[state=active]:bg-[#4C6FFF] data-[state=active]:text-white">
+          <TabsTrigger
+            value="transactions"
+            className="data-[state=active]:bg-[#4C6FFF] data-[state=active]:text-white"
+          >
             Transactions
           </TabsTrigger>
-          <TabsTrigger value="tokens" className="data-[state=active]:bg-[#4C6FFF] data-[state=active]:text-white">
+          <TabsTrigger
+            value="tokens"
+            className="data-[state=active]:bg-[#4C6FFF] data-[state=active]:text-white"
+          >
             Tokens
           </TabsTrigger>
         </TabsList>
@@ -312,7 +443,7 @@ const WalletPage = () => {
         </TabsContent>
       </Tabs>
     </div>
-  )
-}
+  );
+};
 
-export default WalletPage
+export default WalletPage;

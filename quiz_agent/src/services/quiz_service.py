@@ -260,49 +260,6 @@ class QuizSession:
         }
 
 
-async def question_timeout(
-    application: "Application",
-    user_id: str,
-    quiz_id: str,
-    question_index: int,
-    message_id: int,
-):
-    """Handle the timeout for a specific question."""
-    await asyncio.sleep(Config.QUESTION_TIMER_SECONDS)
-    timer_key = (user_id, quiz_id, question_index)
-
-    # Check if the timer is still active before proceeding
-    if timer_key in active_question_timers:
-        logger.info(
-            f"Timeout for user {user_id}, quiz {quiz_id}, question {question_index}"
-        )
-        # Clean up the timer task from the dictionary
-        active_question_timers.pop(timer_key, None)
-
-        # Simulate a timeout answer by calling a simplified answer handler
-        # We pass a mock update and context, as the full objects are not available
-        # A more robust implementation might refactor handle_quiz_answer
-        # to not depend so heavily on the Update and Context objects.
-        await safe_edit_message_text(
-            application.bot,
-            user_id,
-            message_id,
-            "Time's up! Moving to the next question.",
-            reply_markup=None,
-        )
-        # This is a simplified call to the answer handling logic.
-        # It bypasses the direct need for `update` and `context` objects from a user interaction.
-        await handle_quiz_answer_logic(
-            application,
-            user_id,
-            quiz_id,
-            question_index,
-            "TIMEOUT",
-            message_id,
-            username=None,
-        )
-
-
 async def create_quiz(update: Update, context: CallbackContext):
     # Store message for reply reference
     message = update.message
@@ -617,20 +574,6 @@ async def process_questions(
         f"Sent reward setup prompt for quiz ID: {quiz_id} to user {update.effective_user.id}"
     )
 
-    # If quiz has an end time, schedule auto distribution task - THIS LOGIC MOVES
-    # The scheduling of auto_distribution will now happen when the quiz becomes ACTIVE
-    # if end_time:
-    #     seconds_until_end = (end_time - datetime.utcnow()).total_seconds()
-    #     if seconds_until_end > 0:
-    #         context.application.create_task(
-    #             schedule_auto_distribution(
-    #                 context.application, quiz_id, seconds_until_end
-    #             )
-    #         )
-    #         logger.info(
-    #             f"Scheduled auto distribution for quiz {quiz_id} in {seconds_until_end} seconds"
-    #         )
-
 
 async def save_quiz_reward_details(
     quiz_id: str, reward_type: str, reward_text: str
@@ -884,248 +827,6 @@ async def get_quiz_details(quiz_id: str) -> Optional[dict]:
         session.close()
 
 
-async def play_quiz(update: Update, context: CallbackContext):
-    """Handler for /playquiz command; DM quiz questions to a player."""
-    user_id = str(update.effective_user.id)
-    user_username = update.effective_user.username or update.effective_user.first_name
-    # Wallet check can be added here if needed:
-    if not await check_wallet_linked(user_id):
-        await safe_send_message(
-            context.bot,
-            update.effective_chat.id,
-            "Please link your wallet first using /linkwallet <wallet_address>.",
-        )
-        return
-
-    quiz_id_to_play = None
-    if context.args:
-        quiz_id_to_play = context.args[0]
-        logger.info(f"Quiz ID provided via args: {quiz_id_to_play}")
-
-    session = SessionLocal()
-    try:
-        group_chat_id = None
-        if update.effective_chat.type in ["group", "supergroup"]:
-            group_chat_id = update.effective_chat.id
-
-        if not quiz_id_to_play and group_chat_id:
-            # PERFORMANCE OPTIMIZATION: Check cache for active quizzes first
-            redis_client = RedisClient()
-            try:
-                cached_active_quizzes = await redis_client.get_cached_active_quizzes(
-                    str(group_chat_id)
-                )
-                if cached_active_quizzes:
-                    # Convert cached data back to quiz objects for processing
-                    active_quizzes = []
-                    for quiz_data in cached_active_quizzes:
-                        quiz = (
-                            session.query(Quiz)
-                            .filter(Quiz.id == quiz_data["id"])
-                            .first()
-                        )
-                        if quiz:
-                            active_quizzes.append(quiz)
-                else:
-                    # Cache miss - query database
-                    active_quizzes = (
-                        session.query(Quiz)
-                        .filter(
-                            Quiz.status == QuizStatus.ACTIVE,
-                            Quiz.group_chat_id == group_chat_id,
-                            Quiz.end_time > datetime.utcnow(),
-                        )
-                        .order_by(Quiz.end_time)
-                        .all()
-                    )
-
-                    # Cache the results for future lookups
-                    quiz_cache_data = [
-                        {
-                            "id": q.id,
-                            "topic": q.topic,
-                            "end_time": q.end_time.isoformat() if q.end_time else None,
-                            "questions_count": len(q.questions) if q.questions else 0,
-                        }
-                        for q in active_quizzes
-                    ]
-                    await redis_client.cache_active_quizzes(
-                        str(group_chat_id), quiz_cache_data, ttl_seconds=300
-                    )
-
-                await redis_client.close()
-            except Exception as cache_error:
-                logger.warning(
-                    f"Cache error, falling back to database query: {cache_error}"
-                )
-                # Fallback to database query if cache fails
-                active_quizzes = (
-                    session.query(Quiz)
-                    .filter(
-                        Quiz.status == QuizStatus.ACTIVE,
-                        Quiz.group_chat_id == group_chat_id,
-                        Quiz.end_time > datetime.utcnow(),
-                    )
-                    .order_by(Quiz.end_time)
-                    .all()
-                )
-                await redis_client.close()
-
-            if len(active_quizzes) > 1:
-                buttons = []
-                for i, q in enumerate(active_quizzes):
-                    num_questions = len(q.questions) if q.questions else 0
-                    time_remaining_str = ""
-                    if q.end_time:
-                        now_utc = datetime.utcnow()
-                        if q.end_time > now_utc:
-                            delta = q.end_time - now_utc
-                            total_seconds = int(
-                                delta.total_seconds()
-                            )  # Ensure it's an int
-
-                            days = total_seconds // (3600 * 24)
-                            remaining_seconds_after_days = total_seconds % (3600 * 24)
-                            hours = remaining_seconds_after_days // 3600
-                            minutes = (remaining_seconds_after_days % 3600) // 60
-
-                            if days > 0:
-                                time_remaining_str = (
-                                    f"ends in {days}d {hours}h {minutes}m"
-                                )
-                            elif hours > 0:
-                                time_remaining_str = f"ends in {hours}h {minutes}m"
-                            elif minutes > 0:
-                                time_remaining_str = f"ends in {minutes}m"
-                            else:
-                                time_remaining_str = (
-                                    "ends very soon"  # e.g., < 1 minute
-                                )
-                        else:
-                            time_remaining_str = "ended"
-                    else:
-                        time_remaining_str = "no end time"
-
-                    button_text = (
-                        f"{i + 1}. {q.topic} — {num_questions} Q — {time_remaining_str}"
-                    )
-                    buttons.append(
-                        [
-                            InlineKeyboardButton(
-                                button_text,
-                                callback_data=f"playquiz_select:{q.id}:{user_id}",
-                            )
-                        ]
-                    )
-
-                if buttons:
-                    reply_markup = InlineKeyboardMarkup(buttons)
-                    await safe_send_message(
-                        context.bot,
-                        update.effective_chat.id,
-                        "Multiple active quizzes found. Please select one to play:",
-                        reply_markup=reply_markup,
-                    )
-                    return
-            elif len(active_quizzes) == 1:
-                quiz_id_to_play = active_quizzes[0].id
-            else:
-                await safe_send_message(
-                    context.bot,
-                    update.effective_chat.id,
-                    "No active quizzes found in this group.",
-                )
-                return
-
-        if not quiz_id_to_play:
-            await safe_send_message(
-                context.bot,
-                update.effective_chat.id,
-                "Please specify a quiz ID to play (e.g., /playquiz <quiz_id>), or use /playquiz in a group with active quizzes.",
-            )
-            return
-
-        # Check if the user has already played this quiz
-        existing_answers = (
-            session.query(QuizAnswer)
-            .filter(
-                QuizAnswer.quiz_id == quiz_id_to_play, QuizAnswer.user_id == user_id
-            )
-            .first()
-        )
-        if existing_answers:
-            await safe_send_message(
-                context.bot,
-                update.effective_chat.id,
-                f"@{user_username}, you have already played this quiz. You cannot play it again.",
-            )
-            return
-
-        quiz_to_dm = session.query(Quiz).filter(Quiz.id == quiz_id_to_play).first()
-
-        # ANTI-CHEAT: Shuffle questions for each user
-        questions = quiz_to_dm.questions
-        question_indices = list(range(len(questions)))
-        random.shuffle(question_indices)
-
-        # Store the shuffled order and initial position in Redis
-        redis_client = RedisClient()
-        await redis_client.set_user_quiz_data(
-            user_id, quiz_id_to_play, "question_order", question_indices
-        )
-        await redis_client.set_user_quiz_data(
-            user_id, quiz_id_to_play, "current_position", 0
-        )
-        await redis_client.close()
-
-        if not quiz_to_dm:
-            await safe_send_message(
-                context.bot,
-                update.effective_chat.id,
-                f"No quiz found with ID {quiz_id_to_play}.",
-            )
-            return
-
-        if quiz_to_dm.status != QuizStatus.ACTIVE or (
-            quiz_to_dm.end_time and quiz_to_dm.end_time <= datetime.utcnow()
-        ):
-            await safe_send_message(
-                context.bot,
-                update.effective_chat.id,
-                f"Quiz '{quiz_to_dm.topic}' (ID: {quiz_id_to_play[:8]}...) is not currently active or has ended.",
-            )
-            return
-
-        if update.effective_chat.type != "private":
-            await safe_send_message(
-                context.bot,
-                update.effective_chat.id,
-                f"@{user_username}, I'll send you the quiz '{quiz_to_dm.topic}' (ID: {quiz_id_to_play[:8]}...) in a private message!",
-            )
-
-        # Send the first question from the shuffled list
-        first_question_shuffled_index = question_indices[0]
-        await send_quiz_question(
-            context.application,
-            user_id,
-            quiz_to_dm,
-            first_question_shuffled_index,
-            0,
-            len(questions),
-        )
-
-    except Exception as e:
-        logger.error(f"Error in play_quiz: {e}", exc_info=True)
-        await safe_send_message(
-            context.bot,
-            update.effective_chat.id,
-            "An error occurred while trying to play the quiz. Please try again later.",
-        )
-    finally:
-        if session:  # Ensure session is not None before closing
-            session.close()
-
-
 async def send_quiz_question(
     application: "Application",
     user_id,
@@ -1223,279 +924,6 @@ async def send_quiz_question(
             )
         )
         active_question_timers[timer_key] = timer_task
-
-
-async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Process quiz answers from inline keyboard callbacks."""
-    query = update.callback_query
-    await query.answer()  # Acknowledge the button press
-
-    # Parse callback data to get quiz ID, question index, and answer
-    try:
-        _, quiz_id, question_index_str, answer = query.data.split(":")
-        question_index = int(question_index_str)
-    except ValueError:
-        await safe_edit_message_text(
-            context.bot,
-            query.message.chat_id,
-            query.message.message_id,
-            "Invalid answer format.",
-        )
-        return
-
-    user_id = str(update.effective_user.id)
-    # Get the actual username for proper display
-    user_username = (
-        update.effective_user.username
-        or update.effective_user.first_name
-        or f"user_{user_id}"
-    )
-
-    # Cancel the timer for this question
-    timer_key = (user_id, quiz_id, question_index)
-    if timer_key in active_question_timers:
-        active_question_timers[timer_key].cancel()
-        active_question_timers.pop(timer_key, None)
-
-    await handle_quiz_answer_logic(
-        context.application,
-        user_id,
-        quiz_id,
-        question_index,
-        answer,
-        query.message.message_id,
-        query.message.text,
-        username=user_username,
-    )
-
-
-async def handle_quiz_answer_logic(
-    application: "Application",
-    user_id: str,
-    quiz_id: str,
-    question_index: int,
-    answer: str,
-    message_id: int,
-    original_message_text: Optional[str] = None,
-    username: Optional[str] = None,
-):
-    """Core logic to process a quiz answer, reusable by timeout and callback handlers."""
-    async with track_quiz_answer_submission({"user_id": user_id}):
-        # Get quiz from database with optimized query
-        session = SessionLocal()
-        try:
-            # PERFORMANCE OPTIMIZATION: Use more specific query with only needed columns
-            start_time = time.time()
-            # Load only essential fields for better performance
-            quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
-            query_time = (time.time() - start_time) * 1000
-            if query_time > 500:  # Log if query takes more than 500ms
-                logger.warning(
-                    f"Slow database query: get_quiz_for_answer took {query_time:.2f}ms"
-                )
-
-            if not quiz:
-                if original_message_text:  # Only edit if we have the original message
-                    await safe_edit_message_text(
-                        application.bot,
-                        user_id,
-                        message_id,
-                        "Quiz not found.",
-                    )
-                return
-
-            # Get questions list, handling legacy format
-            questions_list = quiz.questions
-            if isinstance(questions_list, dict):
-                questions_list = [questions_list]
-
-            # Validate question index early
-            if question_index >= len(questions_list):
-                if original_message_text:
-                    await safe_edit_message_text(
-                        application.bot,
-                        user_id,
-                        message_id,
-                        "Invalid question index.",
-                    )
-                return
-
-            # For a timeout, correctness is always False.
-            if answer == "TIMEOUT":
-                is_correct = False
-            else:
-                current_q = questions_list[question_index]
-                correct_answer_label = current_q.get("correct", "")
-
-                # Get the label mapping for this user's question from Redis
-                redis_client = RedisClient()
-                label_mapping = await redis_client.get_user_quiz_data(
-                    user_id, quiz_id, f"label_mapping_{question_index}"
-                )
-                await redis_client.close()
-
-                if label_mapping:
-                    # Find which shuffled label corresponds to the original correct answer
-                    correct_shuffled_label = label_mapping.get(correct_answer_label, "")
-                    is_correct = answer == correct_shuffled_label
-                else:
-                    # Fallback to original logic if no mapping found (shouldn't happen)
-                    is_correct = answer == correct_answer_label
-                    logger.warning(
-                        f"No label mapping found for user {user_id}, quiz {quiz_id}, question {question_index}. "
-                        f"Using fallback logic: {answer} == {correct_answer_label} = {is_correct}"
-                    )
-
-            # Get user info - use provided username or fallback
-            if username:
-                user_display_name = username
-            else:
-                # Fallback username for timeouts or when username not available
-                user_display_name = f"user_{user_id}"
-
-            # PERFORMANCE OPTIMIZATION: Use efficient exists() query instead of first()
-            start_time = time.time()
-            answer_exists = session.query(
-                session.query(QuizAnswer)
-                .filter(
-                    QuizAnswer.quiz_id == quiz_id,
-                    QuizAnswer.user_id == user_id,
-                    QuizAnswer.question_index == question_index,
-                )
-                .exists()
-            ).scalar()
-            query_time = (time.time() - start_time) * 1000
-            if query_time > 500:  # Log if query takes more than 500ms
-                logger.warning(
-                    f"Slow database query: check_duplicate_answer took {query_time:.2f}ms"
-                )
-
-            if answer_exists:
-                if original_message_text:
-                    await safe_edit_message_text(
-                        application.bot,
-                        user_id,
-                        message_id,
-                        "You have already answered this question.",
-                    )
-                return
-
-            quiz_answer = QuizAnswer(
-                quiz_id=quiz_id,
-                user_id=user_id,
-                username=user_display_name,
-                answer=answer,
-                question_index=question_index,  # Add question index for duplicate prevention
-                is_correct=str(
-                    is_correct
-                ),  # Store as string 'True' or 'False', not boolean
-            )
-            session.add(quiz_answer)
-
-            # PERFORMANCE OPTIMIZATION: Add answer to session
-            session.add(quiz_answer)
-
-            # ANTI-CHEAT FEATURE: Prepare a neutral confirmation message instead of revealing the answer.
-            result_message = "Answer recorded. Moving to the next question..."
-            if answer == "TIMEOUT":
-                result_message = (
-                    "Time's up! Your answer was not recorded in time. Moving on..."
-                )
-
-            # PERFORMANCE OPTIMIZATION: Execute operations concurrently where possible
-            # Get the user's shuffled question order and new position from Redis
-            redis_client = RedisClient()
-            question_order = await redis_client.get_user_quiz_data(
-                user_id, quiz_id, "question_order"
-            )
-            current_position = await redis_client.get_user_quiz_data(
-                user_id, quiz_id, "current_position"
-            )
-            await redis_client.close()
-
-            next_position = current_position + 1
-
-            # Create concurrent tasks for performance optimization
-            async def commit_database():
-                """Commit database changes in background."""
-                try:
-                    session.flush()  # Validate first
-                    session.commit()
-                except Exception as e:
-                    logger.error(f"Database commit error: {e}")
-                    session.rollback()
-                    raise
-
-            async def invalidate_cache():
-                """Invalidate quiz cache in background."""
-                redis_client = RedisClient()
-                try:
-                    async with track_cache_operation(
-                        "invalidate_quiz_cache", {"quiz_id": quiz_id}
-                    ):
-                        await redis_client.invalidate_quiz_cache(quiz_id)
-                except Exception as cache_error:
-                    logger.warning(f"Cache invalidation failed: {cache_error}")
-                finally:
-                    await redis_client.close()
-
-            # Execute UI updates immediately, database/cache operations in background
-            if original_message_text:
-                await safe_edit_message_text(
-                    application.bot,
-                    user_id,
-                    message_id,
-                    result_message,
-                    reply_markup=None,
-                )
-
-            # Start next question immediately for better UX
-            if question_order and next_position < len(question_order):
-                next_question_index = question_order[next_position]
-                # Update the user's position for the next question
-                redis_client = RedisClient()
-                await redis_client.set_user_quiz_data(
-                    user_id, quiz_id, "current_position", next_position
-                )
-                await redis_client.close()
-
-                next_question_task = asyncio.create_task(
-                    send_quiz_question(
-                        application,
-                        user_id,
-                        quiz,
-                        next_question_index,
-                        next_position,
-                        len(question_order),
-                    )
-                )
-            else:
-                # Quiz is finished for this user
-                await safe_send_message(
-                    application.bot,
-                    user_id,
-                    f"You've tackled all {len(question_order)} questions in the '{quiz.topic}' quiz! Your answers are saved. Eager to see the results? Use `/winners {quiz.id}`.",
-                )
-                next_question_task = asyncio.create_task(asyncio.sleep(0))  # No-op task
-
-            # Run database and cache operations concurrently
-            db_cache_tasks = [
-                asyncio.create_task(commit_database()),
-                asyncio.create_task(invalidate_cache()),
-            ]
-
-            # Wait for next question to be sent, then background tasks
-            await next_question_task
-            await asyncio.gather(*db_cache_tasks, return_exceptions=True)
-
-        except Exception as e:
-            logger.error(f"Error handling quiz answer: {e}", exc_info=True)
-            # Rollback on error to ensure data consistency
-            session.rollback()
-
-            traceback.print_exc()
-        finally:
-            session.close()
 
 
 async def handle_reward_structure(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1728,113 +1156,6 @@ async def handle_transaction_hash(update: Update, context: CallbackContext):
 
     finally:
         await redis_client.close()
-
-
-async def get_winners(update: Update, context: CallbackContext):
-    """Display current or past quiz winners."""
-    session = SessionLocal()
-    try:
-        # Find specific quiz if ID provided, otherwise get latest active or closed quiz
-        if context.args:
-            quiz_id = context.args[0]
-            quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
-            if not quiz:
-                await safe_send_message(
-                    context.bot,
-                    update.effective_chat.id,
-                    f"No quiz found with ID {quiz_id}",
-                )
-                return
-        else:
-            # Get most recent active or closed quiz
-            quiz = (
-                session.query(Quiz)
-                .filter(Quiz.status.in_([QuizStatus.ACTIVE, QuizStatus.CLOSED]))
-                .order_by(Quiz.last_updated.desc())
-                .first()
-            )
-            if not quiz:
-                await safe_send_message(
-                    context.bot,
-                    update.effective_chat.id,
-                    "No active or completed quizzes found.",
-                )
-                return
-
-        # Use the new cached function
-        quiz_details = await get_quiz_details(quiz.id)
-        if not quiz_details:
-            await safe_send_message(
-                context.bot,
-                update.effective_chat.id,
-                f"Quiz with ID {quiz.id} not found.",
-            )
-            return
-
-        # Calculate winners for the quiz using comprehensive participant ranking
-        winners = QuizAnswer.get_quiz_participants_ranking(session, quiz.id)
-
-        if not winners:
-            await safe_send_message(
-                context.bot,
-                update.effective_chat.id,
-                f"No participants have answered the '{quiz.topic}' quiz yet.",
-            )
-            return
-
-        # Generate leaderboard message
-        message = f"📊 Leaderboard for quiz: *{quiz.topic}*\n"
-
-        # Display winners with rewards if available
-        reward_schedule = quiz.reward_schedule or {}
-
-        for i, winner in enumerate(winners[:10]):  # Show top 10 max
-            rank = i + 1
-            # Improve username display and tagging
-            username = winner.get("username")
-            if not username:
-                winner_user_id = winner.get("user_id", "UnknownUser")
-                username = f"User_{winner_user_id[:8]}"
-
-            correct = winner["correct_count"]
-            rank_emoji = ["🥇", "🥈", "🥉"][i] if i < 3 else "🏅"
-
-            # Show reward if this position has a reward and quiz is active/closed
-            reward_text = ""
-            if str(rank) in reward_schedule:
-                reward_text = f" - {reward_schedule[str(rank)]} NEAR"
-            elif rank in reward_schedule:
-                reward_text = f" - {reward_schedule[rank]} NEAR"
-
-            message += f"{rank_emoji} {rank}. @{username}: {correct} correct answers{reward_text}\n"
-
-        # Add quiz status info
-        status = f"Quiz is {quiz.status.value.lower()}"
-        if quiz.status == QuizStatus.CLOSED:
-            status += " and rewards have been distributed."
-        elif quiz.status == QuizStatus.ACTIVE:
-            status += ". Participate with /playquiz"
-
-        message += f"\n{status}"
-
-        await safe_send_message(
-            context.bot, update.effective_chat.id, message, parse_mode="Markdown"
-        )
-
-        # Note: We do NOT mark the quiz as closed or winners_announced here
-        # That should only happen when rewards are actually distributed
-        # This allows users to check leaderboards without affecting auto-distribution
-
-    except Exception as e:
-        await safe_send_message(
-            context.bot, update.effective_chat.id, f"Error retrieving winners: {str(e)}"
-        )
-        logger.error(f"Error retrieving winners: {e}", exc_info=True)
-        import traceback
-
-        traceback.print_exc()
-    finally:
-        session.close()
 
 
 async def distribute_quiz_rewards(
@@ -2228,24 +1549,38 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
             # Get the actual number of questions in the quiz
             num_questions_in_quiz = len(quiz.questions) if quiz.questions else 0
 
-            # Add leaderboard
-            winners_announcement += "\n🏆 <b>FINAL LEADERBOARD:</b>\n"
-            for i, participant in enumerate(all_participants[:10]):  # Show top 10
-                medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "🏅"
-                username = participant.get(
-                    "username", f"User_{participant.get('user_id', 'Unknown')[:8]}"
-                )
-                correct_count = participant.get("correct_count", 0)
-                # Use the total questions in quiz instead of questions_answered
-                accuracy = (
-                    (correct_count / num_questions_in_quiz * 100)
-                    if num_questions_in_quiz > 0
-                    else 0
-                )
+            # Filter out participants with 0 correct answers from winners display
+            winners_with_scores = [
+                p for p in all_participants if p.get("correct_count", 0) > 0
+            ]
 
-                winners_announcement += f"{medal} <b>{i+1}.</b> @{username}\n"
+            if winners_with_scores:
+                # Add leaderboard
+                winners_announcement += "\n🏆 <b>FINAL LEADERBOARD:</b>\n"
+                for i, participant in enumerate(
+                    winners_with_scores[:10]
+                ):  # Show top 10
+                    medal = (
+                        "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "🏅"
+                    )
+                    username = participant.get(
+                        "username", f"User_{participant.get('user_id', 'Unknown')[:8]}"
+                    )
+                    correct_count = participant.get("correct_count", 0)
+                    # Use the total questions in quiz instead of questions_answered
+                    accuracy = (
+                        (correct_count / num_questions_in_quiz * 100)
+                        if num_questions_in_quiz > 0
+                        else 0
+                    )
+
+                    winners_announcement += f"{medal} <b>{i+1}.</b> @{username}\n"
+                    winners_announcement += f"   📊 {correct_count}/{num_questions_in_quiz} ({accuracy:.1f}%)\n"
+            else:
+                # No one got any questions right
+                winners_announcement += "\n🏆 <b>FINAL LEADERBOARD:</b>\n"
                 winners_announcement += (
-                    f"   📊 {correct_count}/{num_questions_in_quiz} ({accuracy:.1f}%)\n"
+                    "📊 No correct answers this round! Better luck next time! 🍀\n"
                 )
 
             # Add participation stats
@@ -2277,27 +1612,22 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                 winners_announcement += "\n💰 <b>Reward Type:</b> Custom Rewards"
 
             # Add DM notification for winners when there are rewards
-            if all_participants:
+            if winners_with_scores:
                 # Determine who gets rewards based on reward type
                 winners_to_notify = []
 
                 if reward_type == "wta_amount":
-                    # Winner takes all - only the top participant
-                    if all_participants:
-                        winners_to_notify = [all_participants[0]]
+                    # Winner takes all - only the top participant with correct answers
+                    winners_to_notify = [winners_with_scores[0]]
                 elif reward_type == "top3_details":
-                    # Top 3 winners
-                    winners_to_notify = all_participants[:3]
+                    # Top 3 winners with correct answers
+                    winners_to_notify = winners_with_scores[:3]
                 elif reward_type == "custom_details":
-                    # Custom rewards - assume all participants with correct answers
-                    winners_to_notify = [
-                        p for p in all_participants if p.get("correct_count", 0) > 0
-                    ]
+                    # Custom rewards - all participants with correct answers
+                    winners_to_notify = winners_with_scores
                 else:
-                    # For other reward types, assume participants with correct answers
-                    winners_to_notify = [
-                        p for p in all_participants if p.get("correct_count", 0) > 0
-                    ]
+                    # For other reward types, all participants with correct answers
+                    winners_to_notify = winners_with_scores
 
                 # Add DM notification message for winners
                 if winners_to_notify:
@@ -2313,14 +1643,24 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         winners_announcement += "\n🎯 <b>Thanks to all participants!</b> 🎯"
 
         # Send second announcement (winners)
-        await safe_send_message(
+        message = await safe_send_message(
             application.bot,
             announcement_chat_id,
             winners_announcement,
             parse_mode="HTML",
         )
 
-        logger.info(f"Quiz end announcements (both parts) sent for quiz {quiz_id}")
+        if message:
+            # Store announcement message ID for cleanup (this is the main end announcement)
+            quiz.announcement_message_id = message.message_id
+            session.commit()
+            logger.info(
+                f"Quiz end announcements sent for quiz {quiz_id} with message ID: {message.message_id}"
+            )
+        else:
+            logger.warning(
+                f"Quiz end announcements sent for quiz {quiz_id} but no message object returned"
+            )
 
         # Debug logging to diagnose reward distribution issue
         logger.info(f"Quiz {quiz_id} reward_schedule: {quiz.reward_schedule}")
@@ -2510,8 +1850,6 @@ async def schedule_quiz_end_announcement(
             )
 
 
-# ... rest of the file
-
 
 def parse_multiple_questions(raw_questions):
     """Parse multiple questions from raw text into a list of structured questions."""
@@ -2635,8 +1973,7 @@ def parse_questions(raw_questions):
     return result
 
 
-import logging  # Ensure logging is imported if not already
-from sqlalchemy.orm import joinedload, selectinload
+
 from models.user import User  # Assuming User model is in models.user
 from models.quiz import Quiz, QuizAnswer, QuizStatus  # Ensure QuizStatus is imported
 from typing import Dict, List, Any  # Ensure these are imported
@@ -2755,48 +2092,6 @@ async def _generate_leaderboard_data_for_quiz(
         "end_time": quiz.end_time.isoformat() if quiz.end_time else None,
     }
 
-
-async def get_leaderboards_for_all_active_quizzes() -> List[Dict[str, Any]]:
-    """
-    Fetches and generates leaderboard data for all quizzes with status 'ACTIVE'.
-    """
-    logger.info("Fetching leaderboards for all active quizzes.")
-    all_active_leaderboards = []
-    session = SessionLocal()
-    try:
-        now = datetime.now(timezone.utc)
-        active_quizzes = (
-            session.query(Quiz)
-            .filter(
-                Quiz.status == QuizStatus.ACTIVE,
-                ((Quiz.end_time == None) | (Quiz.end_time > now)),
-            )
-            .all()
-        )
-
-        if not active_quizzes:
-            logger.info("No active quizzes found.")
-            return []
-
-        logger.info(f"Found {len(active_quizzes)} active quizzes.")
-        for quiz_obj in active_quizzes:  # Renamed to avoid conflict with 'quiz' module
-            # Pass the quiz_obj (SQLAlchemy model instance) and session
-            leaderboard_data = await _generate_leaderboard_data_for_quiz(
-                quiz_obj, session
-            )
-            if (
-                leaderboard_data
-            ):  # Always add, even if no participants, to show it's active
-                all_active_leaderboards.append(leaderboard_data)
-
-    except Exception as e:
-        logger.error(f"Error fetching active quiz leaderboards: {e}", exc_info=True)
-        return []
-    finally:
-        session.close()
-
-    logger.info(f"Returning {len(all_active_leaderboards)} active leaderboards.")
-    return all_active_leaderboards
 
 
 async def start_enhanced_quiz(
@@ -3153,10 +2448,12 @@ async def finish_enhanced_quiz(
 
     results_text = f"""🏁 Quiz '{quiz.topic}' completed!
 
-✅ You have finished answering the quiz.
-� Monitor the group chat to see results when the quiz period ends!
+✅ Yaay! You have finished answering the quiz.
+Take a moment to reflect on your performance.
+Monitor the group chat to see results when the quiz period ends!
 
-🎯 Thank you for participating!"""
+🎯 Thank you for participating!
+Good luck with your next quiz!"""
 
     # Save results to database
     session = SessionLocal()

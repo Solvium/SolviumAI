@@ -37,8 +37,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json("error", { status: 404 });
     }
 
-    console.log("username", username);
-
     const user = await prisma.user.findUnique({
       where: {
         username: username,
@@ -47,15 +45,12 @@ export async function POST(req: NextRequest) {
 
     if (message) {
       if (user) {
-        console.log(user);
+
         await replyStart(message, user);
         return NextResponse.json(user);
       }
       if (message.text?.startsWith("/start")) {
         const id = message.text.split("/start ");
-
-        console.log(message);
-        console.log(id);
 
         if (id.length > 1) {
           if (!user) {
@@ -439,7 +434,7 @@ const completeTasks = async (data: any) => {
       },
     });
   } catch (error) {
-    console.log(error);
+
   }
 };
 
@@ -455,7 +450,7 @@ const registerForTasks = async (data: any) => {
       },
     });
   } catch (error) {
-    console.log(error);
+
   }
 };
 
@@ -471,7 +466,7 @@ const getUserTasks = async (data: any) => {
       },
     });
   } catch (error) {
-    console.log(error);
+
     return null;
   }
 };
