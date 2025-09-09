@@ -25,6 +25,7 @@ from utils.rpc_retry import (
     RPCErrorType,
     AccountVerificationError,
 )
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -1331,79 +1332,121 @@ class NEARWalletService:
             )
 
     async def verify_account_exists(
-        self, account_id: str, network: str = "testnet"
+        self,
+        account_id: str,
+        network: str = "testnet",
+        max_verification_attempts: int = None,
     ) -> bool:
         """
-        Verify that an account exists on the blockchain
+        Verify that an account exists on the blockchain with retry logic and timing delays
 
         Args:
             account_id: The account ID to verify
             network: Network to check (testnet or mainnet)
+            max_verification_attempts: Maximum number of verification attempts
 
         Returns:
             True if account exists, False otherwise
         """
-        try:
-            # Use RPC to check if account exists
-            payload = {
-                "jsonrpc": "2.0",
-                "id": "dontcare",
-                "method": "query",
-                "params": {
-                    "request_type": "view_account",
-                    "finality": "final",
-                    "account_id": account_id,
-                },
-            }
+        import asyncio
 
-            async def _check_account(rpc_url):
-                response = requests.post(
-                    rpc_url,
-                    json=payload,
-                    headers={"Content-Type": "application/json"},
-                    timeout=Config.ACCOUNT_VERIFICATION_TIMEOUT,
+        # Use config value if not specified
+        if max_verification_attempts is None:
+            max_verification_attempts = Config.ACCOUNT_VERIFICATION_MAX_ATTEMPTS
+
+        for attempt in range(max_verification_attempts):
+            try:
+                # Add delay before verification to allow RPC synchronization
+                if attempt > 0:
+                    delay = 2**attempt  # Exponential backoff: 2, 4, 8 seconds
+                    logger.info(
+                        f"Waiting {delay} seconds before verification attempt {attempt + 1}"
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    # First attempt - short delay to allow immediate RPC sync
+                    await asyncio.sleep(1)
+
+                # Use RPC to check if account exists
+                payload = {
+                    "jsonrpc": "2.0",
+                    "id": "dontcare",
+                    "method": "query",
+                    "params": {
+                        "request_type": "view_account",
+                        "finality": "final",
+                        "account_id": account_id,
+                    },
+                }
+
+                async def _check_account(rpc_url):
+                    response = httpx.post(
+                        rpc_url,
+                        json=payload,
+                        headers={"Content-Type": "application/json"},
+                        timeout=Config.ACCOUNT_VERIFICATION_TIMEOUT,
+                    )
+                    return response
+
+                # Use RPC fallback system for better reliability
+                response = await execute_with_rpc_fallback(
+                    _check_account,
+                    network,
+                    max_retries_per_endpoint=Config.ACCOUNT_VERIFICATION_RETRIES,
                 )
-                return response
 
-            # Use RPC fallback system for better reliability
-            response = await execute_with_rpc_fallback(
-                _check_account,
-                network,
-                max_retries_per_endpoint=Config.ACCOUNT_VERIFICATION_RETRIES,
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                if "result" in data:
-                    logger.info(f"Account {account_id} exists on {network}")
-                    return True
-                elif "error" in data:
-                    error_msg = data["error"].get("message", "")
-                    if "does not exist" in error_msg or "UnknownAccount" in error_msg:
-                        logger.warning(
-                            f"Account {account_id} does not exist on {network}"
+                if response.status_code == 200:
+                    data = response.json()
+                    if "result" in data:
+                        logger.info(
+                            f"Account {account_id} exists on {network} (attempt {attempt + 1})"
                         )
-                        return False
-                    else:
-                        logger.error(
-                            f"RPC error checking account {account_id}: {error_msg}"
-                        )
+                        return True
+                    elif "error" in data:
+                        error_msg = data["error"].get("message", "")
+                        if (
+                            "does not exist" in error_msg
+                            or "UnknownAccount" in error_msg
+                        ):
+                            logger.warning(
+                                f"Account {account_id} does not exist on {network} (attempt {attempt + 1})"
+                            )
+                            return False
+                        else:
+                            logger.warning(
+                                f"RPC error checking account {account_id} (attempt {attempt + 1}): {error_msg}"
+                            )
+                            if attempt == max_verification_attempts - 1:
+                                raise AccountVerificationError(
+                                    f"RPC error: {error_msg}", account_id
+                                )
+                            continue  # Try again
+                else:
+                    logger.warning(
+                        f"HTTP error checking account {account_id} (attempt {attempt + 1}): {response.status_code}"
+                    )
+                    if attempt == max_verification_attempts - 1:
                         raise AccountVerificationError(
-                            f"RPC error: {error_msg}", account_id
+                            f"HTTP error: {response.status_code}", account_id
                         )
-            else:
-                logger.error(
-                    f"HTTP error checking account {account_id}: {response.status_code}"
-                )
-                raise AccountVerificationError(
-                    f"HTTP error: {response.status_code}", account_id
-                )
+                    continue  # Try again
 
-        except AccountVerificationError:
-            raise
-        except Exception as e:
-            logger.error(f"Error verifying account {account_id} on {network}: {e}")
-            raise AccountVerificationError(f"Verification failed: {str(e)}", account_id)
+            except AccountVerificationError:
+                raise
+            except Exception as e:
+                logger.warning(
+                    f"Error verifying account {account_id} on {network} (attempt {attempt + 1}): {e}"
+                )
+                if attempt == max_verification_attempts - 1:
+                    raise AccountVerificationError(
+                        f"Verification failed: {str(e)}", account_id
+                    )
+                continue  # Try again
+
+        # This should never be reached, but just in case
+        raise AccountVerificationError(
+            f"All verification attempts failed for {account_id}", account_id
+        )
 
     async def get_account_balance(
         self, account_id: str, network: str = "testnet"
@@ -1446,9 +1489,7 @@ class NEARWalletService:
                 },
             }
 
-            logger.debug(
-                f"Fetching balance for account: {account_id} on {network}"
-            )
+            logger.debug(f"Fetching balance for account: {account_id} on {network}")
 
             async def _balance_call(rpc_url):
                 response = requests.post(
