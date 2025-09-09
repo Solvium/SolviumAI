@@ -67,8 +67,6 @@ export const useNearWallet = () => {
         const keyToUse = privateKey || TEST_PRIVATE_KEY;
         const accountToUse = accountId || TEST_ACCOUNT_ID;
 
-        console.log("Connecting to NEAR wallet with test key:", accountToUse);
-
         const keyStore = new keyStores.InMemoryKeyStore();
         const keyPair = KeyPair.fromString(keyToUse as any);
         await keyStore.setKey("testnet", accountToUse, keyPair);
@@ -91,9 +89,6 @@ export const useNearWallet = () => {
           balance: balanceInNEAR,
           error: null,
         });
-
-        console.log("Wallet connected successfully:", accountToUse);
-        console.log("Balance:", balanceInNEAR, "NEAR");
       } catch (error) {
         console.error("Failed to connect wallet:", error);
         setState((prev) => ({
@@ -162,8 +157,6 @@ export const useNearWallet = () => {
         const keyToUse = privateKey || TEST_PRIVATE_KEY;
         const accountToUse = accountId || TEST_ACCOUNT_ID;
 
-        console.log("Making deposit:", amount, "NEAR to", accountToUse);
-
         const keyStore = new keyStores.InMemoryKeyStore();
         const keyPair = KeyPair.fromString(keyToUse as any);
         await keyStore.setKey("testnet", accountToUse, keyPair);
@@ -203,8 +196,6 @@ export const useNearWallet = () => {
 
         // Sign and send transaction
         const result = await account.signAndSendTransaction(transaction as any);
-
-        console.log("Deposit successful:", result.transaction.hash);
 
         return {
           success: true,
@@ -262,8 +253,6 @@ export const useNearWallet = () => {
         const keyToUse = privateKey || TEST_PRIVATE_KEY;
         const accountToUse = accountId || TEST_ACCOUNT_ID;
 
-        console.log("Fetching deposits for:", accountToUse);
-
         const keyStore = new keyStores.InMemoryKeyStore();
         const keyPair = KeyPair.fromString(keyToUse as any);
         await keyStore.setKey("testnet", accountToUse, keyPair);
@@ -284,8 +273,6 @@ export const useNearWallet = () => {
           methodName: "getDeposits",
           args: { accountId: accountToUse },
         });
-
-        console.log("Deposits fetched:", depositsResult);
 
         // Transform deposits data
         const transformedDeposits: Deposit[] = depositsResult.map(

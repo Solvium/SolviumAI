@@ -11,6 +11,7 @@ import { Account } from "near-api-js";
 import { initializeNearWithPrivateKey } from "@/lib/nearWallet";
 import { useMultiLoginContext } from "./MultiLoginContext";
 import { WalletCheckResponse } from "@/lib/crypto";
+import { useAuth } from "./AuthContext";
 
 const FILE_NAME = "PrivateKeyWalletContext.tsx";
 
@@ -60,83 +61,44 @@ export const PrivateKeyWalletProvider = ({
   const [solviumWallet, setSolviumWallet] =
     useState<WalletCheckResponse | null>(null);
 
-  const { userData: user } = useMultiLoginContext();
+  const { user } = useAuth();
 
   // Auto-connect when user data is available
   useEffect(() => {
-    console.log(`[${FILE_NAME}:useEffect] useEffect triggered - user:`, {
-      chatId: user?.chatId,
-      telegramId: (user as any)?.telegramId,
-      isConnected,
-      userId: user?.id,
-      username: user?.username,
-    });
-
-    // if ((user?.chatId || (user as any)?.telegramId) && !isConnected) {
     if (!isConnected) {
-      console.log(
-        `[${FILE_NAME}:useEffect] Auto-connect triggered for user:`,
-        user
-      );
       autoConnect();
-    } else {
-      console.log(`[${FILE_NAME}:useEffect] Auto-connect conditions not met:`, {
-        hasChatId: !!user?.chatId,
-        hasTelegramId: !!(user as any)?.telegramId,
-        isConnected,
-        userExists: !!user,
-      });
     }
   }, [user?.chatId, (user as any)?.telegramId]);
 
   const autoConnect = async () => {
-    console.log(`[${FILE_NAME}:autoConnect] autoConnect() called`);
-
+    console.log(user);
     const tgIdRaw =
       (user?.chatId as string) || ((user as any)?.telegramId as string);
     // "1870013901";
 
-    console.log(`[${FILE_NAME}:autoConnect] Raw Telegram ID:`, tgIdRaw);
-
     if (!tgIdRaw) {
-      console.log(
-        `[${FILE_NAME}:autoConnect] No Telegram ID found, returning early`
-      );
       return;
     }
 
     // Coerce to number string for API that expects numeric id
     const tgId = String(parseInt(tgIdRaw, 10));
-    console.log(`[${FILE_NAME}:autoConnect] Parsed Telegram ID:`, tgId);
 
     if (!tgId || tgId === "NaN") {
       const errorMsg = "Invalid Telegram ID";
-      console.error(`[${FILE_NAME}:autoConnect] ${errorMsg}:`, tgIdRaw);
+
       setError(errorMsg);
       return;
     }
 
     setIsLoading(true);
     setError(null);
-    console.log(
-      `[${FILE_NAME}:autoConnect] Starting wallet fetch for Telegram ID:`,
-      tgId
-    );
 
     try {
       // Try primary route
-      console.log(
-        `[${FILE_NAME}:autoConnect] Trying primary wallet API route...`
-      );
+
       let response = await fetch(`/api/wallet/check`, {
         method: "POST",
         body: JSON.stringify({ telegram_user_id: Number(tgId) }),
-      });
-
-      console.log(`[${FILE_NAME}:autoConnect] Primary route response:`, {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
       });
 
       if (!response.ok) {
@@ -144,12 +106,12 @@ export const PrivateKeyWalletProvider = ({
         const errorMsg = `Failed to fetch wallet (${response.status}): ${
           text || response.statusText
         }`;
-        console.error(`[${FILE_NAME}:autoConnect] ${errorMsg}`);
+
         throw new Error(errorMsg);
       }
 
       const walletData = (await response.json()).wallet_info;
-      console.log("walletData ", walletData);
+
       // Map snake_case API response to camelCase fields used locally
       const mapped = walletData
         ? {
@@ -161,48 +123,27 @@ export const PrivateKeyWalletProvider = ({
           }
         : null;
 
-      console.log(`[${FILE_NAME}:autoConnect] Wallet data received:`, {
-        hasPrivateKey: !!mapped?.privateKey,
-        hasAccountId: !!mapped?.accountId,
-        accountId: mapped?.accountId,
-        privateKeyLength: mapped?.privateKey?.length || 0,
-      });
-
       if (!mapped?.privateKey || !mapped?.accountId) {
         const errorMsg = "Wallet not found for this user";
-        console.error(`[${FILE_NAME}:autoConnect] ${errorMsg}:`, walletData);
+
         throw new Error(errorMsg);
       }
 
-      console.log(`[${FILE_NAME}:autoConnect] Initializing NEAR connection...`);
       const { account: nearAccount } = await initializeNearWithPrivateKey(
         mapped.privateKey,
         mapped.accountId
       );
 
-      console.log(`[${FILE_NAME}:autoConnect] NEAR connection successful:`, {
-        accountId: mapped.accountId,
-        accountExists: !!nearAccount,
-      });
-
       setAccount(nearAccount);
       setAccountId(mapped.accountId);
       setIsConnected(true);
-      console.log(
-        `[${FILE_NAME}:autoConnect] Auto-connected wallet:`,
-        mapped.accountId
-      );
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to auto-connect wallet";
-      console.error(`[${FILE_NAME}:autoConnect] Auto-connect error:`, err);
+
       setError(errorMessage);
     } finally {
       setIsLoading(false);
-      console.log(
-        `[${FILE_NAME}:autoConnect] Auto-connect completed, loading:`,
-        false
-      );
     }
   };
 
@@ -210,32 +151,13 @@ export const PrivateKeyWalletProvider = ({
     privateKey: string,
     accountId: string
   ) => {
-    console.log(
-      `[${FILE_NAME}:connectWithPrivateKey] connectWithPrivateKey() called with:`,
-      {
-        accountId,
-        privateKeyLength: privateKey.length,
-      }
-    );
-
     setIsLoading(true);
     setError(null);
 
     try {
-      console.log(
-        `[${FILE_NAME}:connectWithPrivateKey] Initializing NEAR with private key...`
-      );
       const { account: nearAccount } = await initializeNearWithPrivateKey(
         privateKey,
         accountId
-      );
-
-      console.log(
-        `[${FILE_NAME}:connectWithPrivateKey] NEAR initialization successful:`,
-        {
-          accountId,
-          accountExists: !!nearAccount,
-        }
       );
 
       setAccount(nearAccount);
@@ -245,18 +167,10 @@ export const PrivateKeyWalletProvider = ({
       // Save credentials (consider encrypting in production)
       localStorage.setItem("near_private_key", privateKey);
       localStorage.setItem("near_account_id", accountId);
-
-      console.log(
-        `[${FILE_NAME}:connectWithPrivateKey] Wallet connected successfully:`,
-        accountId
-      );
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to connect wallet";
-      console.error(
-        `[${FILE_NAME}:connectWithPrivateKey] Wallet connection error:`,
-        err
-      );
+
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -264,8 +178,6 @@ export const PrivateKeyWalletProvider = ({
   };
 
   const disconnect = () => {
-    console.log(`[${FILE_NAME}:disconnect] disconnect() called`);
-
     setAccount(null);
     setAccountId(null);
     setIsConnected(false);
@@ -274,14 +186,9 @@ export const PrivateKeyWalletProvider = ({
     // Clear stored credentials
     localStorage.removeItem("near_private_key");
     localStorage.removeItem("near_account_id");
-
-    console.log(`[${FILE_NAME}:disconnect] Wallet disconnected`);
   };
 
   const refreshSolviumWallet = useCallback(async () => {
-    console.log(
-      `[${FILE_NAME}:refreshSolviumWallet] refreshSolviumWallet() called`
-    );
     setIsLoading(true);
     setError(null);
 
@@ -293,32 +200,15 @@ export const PrivateKeyWalletProvider = ({
         throw new Error("Invalid Telegram ID for decrypted wallet fetch");
       }
 
-      console.log(
-        `[${FILE_NAME}:refreshSolviumWallet] Fetching decrypted wallet via byTelegram route...`
-      );
       let response = await fetch(
         `/api/wallet/byTelegram/${encodeURIComponent(tgId)}?decrypt=1`
       );
-      console.log(
-        `[${FILE_NAME}:refreshSolviumWallet] Primary byTelegram response:`,
-        {
-          ok: response.ok,
-          status: response.status,
-          statusText: response.statusText,
-        }
-      );
 
       if (!response.ok) {
-        console.log(
-          `[${FILE_NAME}:refreshSolviumWallet] Primary failed, trying fallback by-telegram...`
-        );
         const alt = await fetch(
           `/api/wallet/by-telegram/${encodeURIComponent(tgId)}?decrypt=1`
         );
-        console.log(
-          `[${FILE_NAME}:refreshSolviumWallet] Fallback by-telegram response:`,
-          { ok: alt.ok, status: alt.status, statusText: alt.statusText }
-        );
+
         if (alt.ok) response = alt;
       }
 
@@ -327,21 +217,18 @@ export const PrivateKeyWalletProvider = ({
         const errorMsg = `Failed to fetch decrypted wallet (${
           response.status
         }): ${text || response.statusText}`;
-        console.error(`[${FILE_NAME}:refreshSolviumWallet] ${errorMsg}`);
+
         throw new Error(errorMsg);
       }
 
       const decrypted = await response.json();
-      console.log(
-        `[${FILE_NAME}:refreshSolviumWallet] Decrypted wallet payload:`,
-        decrypted
-      );
+
       // Not mutating solviumWallet state here since this route returns decrypted credentials,
       // which differ from WalletCheckResponse. We only log as requested.
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to fetch decrypted wallet";
-      console.error(`[${FILE_NAME}:refreshSolviumWallet] Error:`, err);
+
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -393,13 +280,6 @@ export const PrivateKeyWalletProvider = ({
       return true;
     },
   };
-
-  console.log(`[${FILE_NAME}:render] Context value updated:`, {
-    isConnected,
-    accountId,
-    isLoading,
-    hasError: !!error,
-  });
 
   return (
     <PrivateKeyWalletContext.Provider value={contextValue}>

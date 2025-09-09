@@ -118,8 +118,9 @@ const Link = ({ userDetails }: any) => {
   const [copyState, setCopyState] = useState("Copy");
   const [link, setLink] = useState("");
   useEffect(() => {
-    setLink(location.href);
-  }, []);
+    // Generate Telegram bot referral link with start parameter
+    setLink(`https://t.me/solviumquizbot?start=${userDetails?.username}`);
+  }, [userDetails?.username]);
 
   return (
     <div className="space-y-4">
@@ -138,12 +139,9 @@ const Link = ({ userDetails }: any) => {
         <div className="absolute inset-0 bg-[#4C6FFF] blur-2xl opacity-5"></div>
         <div className="relative">
           <p className="text-sm text-[#8E8EA8] break-all text-center md:text-left mb-3">
-            {`${link}?ref=${userDetails?.username}`}
+            {link}
           </p>
-          <CopyToClipboard
-            text={`${link}?ref=${userDetails?.username}`}
-            onCopy={() => setCopyState("Copied")}
-          >
+          <CopyToClipboard text={link} onCopy={() => setCopyState("Copied")}>
             <button className="w-full px-4 py-3 bg-[#4C6FFF] hover:bg-[#4C6FFF]/90 text-white rounded-lg transition-all flex items-center justify-center gap-2 text-sm font-medium">
               <span>{copyState}</span>
               <img src={copy.src} alt="copy" className="w-4 h-4 invert" />
