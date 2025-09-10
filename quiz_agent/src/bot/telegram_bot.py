@@ -164,6 +164,7 @@ class TelegramBot:
             PAYMENT_METHOD_SELECTION,
             TOKEN_SELECTION,
             TOKEN_AMOUNT_SELECTION,
+            TOKEN_AMOUNT_CUSTOM_INPUT,
             TOKEN_PAYMENT_VERIFICATION,
             PAYMENT_VERIFICATION,
             CONFIRM,
@@ -191,6 +192,7 @@ class TelegramBot:
             show_token_selection,  # Token selection display
             handle_token_selection,  # Token selection handler
             handle_token_amount_selection,  # Token amount selection handler
+            handle_token_custom_amount_input,  # Custom token amount input handler
             process_token_payment,  # Token payment processor
         )
 
@@ -318,6 +320,13 @@ class TelegramBot:
                 TOKEN_AMOUNT_SELECTION: [
                     CallbackQueryHandler(
                         handle_token_amount_selection, pattern="^token_amount_"
+                    )
+                ],
+                # Token custom amount input
+                TOKEN_AMOUNT_CUSTOM_INPUT: [
+                    MessageHandler(
+                        filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
+                        handle_token_custom_amount_input,
                     )
                 ],
                 # Token payment verification

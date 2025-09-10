@@ -198,10 +198,11 @@ def _escape_markdown_v2_specials(text: str) -> str:
     PAYMENT_METHOD_SELECTION,
     TOKEN_SELECTION,
     TOKEN_AMOUNT_SELECTION,
+    TOKEN_AMOUNT_CUSTOM_INPUT,
     TOKEN_PAYMENT_VERIFICATION,
     PAYMENT_VERIFICATION,
     CONFIRM,
-) = range(18)
+) = range(19)
 
 # States for reward configuration
 (
@@ -1120,23 +1121,25 @@ async def reward_structure_choice(update, context):
             await redis_client.get_user_data_key(user_id, "reward_amount"),
         )
         return await payment_method_choice(update, context)
-    
+
     elif choice == "token_structure_wta":
         # Handle token winner takes all
         await redis_client.set_user_data_key(
             user_id, "reward_structure", "winner_takes_all"
         )
-        token_amount = await redis_client.get_user_data_key(user_id, "token_reward_amount")
+        token_amount = await redis_client.get_user_data_key(
+            user_id, "token_reward_amount"
+        )
         await redis_client.set_user_data_key(user_id, "reward_amount", token_amount)
         await redis_client.set_user_data_key(user_id, "total_cost", token_amount)
         return await payment_verification(update, context)
-    
+
     elif choice == "token_structure_top3":
         # Handle token top 3 structure
-        await redis_client.set_user_data_key(
-            user_id, "reward_structure", "top_3"
+        await redis_client.set_user_data_key(user_id, "reward_structure", "top_3")
+        token_amount = await redis_client.get_user_data_key(
+            user_id, "token_reward_amount"
         )
-        token_amount = await redis_client.get_user_data_key(user_id, "token_reward_amount")
         await redis_client.set_user_data_key(user_id, "reward_amount", token_amount)
         await redis_client.set_user_data_key(user_id, "total_cost", token_amount)
         return await payment_verification(update, context)
@@ -1378,30 +1381,34 @@ async def handle_token_selection(update, context):
         await account.startup()
 
         balance = await token_service.get_token_balance(account, token_contract)
-        
+
         # Show token amount selection options
         await query.edit_message_text(
             f"💰 **Token Balance:** {balance}\n"
             f"✅ **Status:** Sufficient balance\n\n"
             f"Select the amount of tokens for the quiz reward:",
-            reply_markup=InlineKeyboardMarkup([
+            reply_markup=InlineKeyboardMarkup(
                 [
-                    InlineKeyboardButton("0.1", callback_data="token_amount_0.1"),
-                    InlineKeyboardButton("0.5", callback_data="token_amount_0.5"),
-                ],
-                [
-                    InlineKeyboardButton("1.0", callback_data="token_amount_1.0"),
-                    InlineKeyboardButton("2.0", callback_data="token_amount_2.0"),
-                ],
-                [
-                    InlineKeyboardButton("3.0", callback_data="token_amount_3.0"),
-                    InlineKeyboardButton("5.0", callback_data="token_amount_5.0"),
-                ],
-                [
-                    InlineKeyboardButton("Custom amount", callback_data="token_amount_custom"),
-                ],
-            ]),
-            parse_mode="Markdown"
+                    [
+                        InlineKeyboardButton("100", callback_data="token_amount_100"),
+                        InlineKeyboardButton("200", callback_data="token_amount_200"),
+                    ],
+                    [
+                        InlineKeyboardButton("300", callback_data="token_amount_300"),
+                        InlineKeyboardButton("500", callback_data="token_amount_500"),
+                    ],
+                    [
+                        InlineKeyboardButton("1000", callback_data="token_amount_1000"),
+                        InlineKeyboardButton("2000", callback_data="token_amount_2000"),
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "Custom amount", callback_data="token_amount_custom"
+                        ),
+                    ],
+                ]
+            ),
+            parse_mode="Markdown",
         )
         return TOKEN_AMOUNT_SELECTION
 
@@ -1416,17 +1423,15 @@ async def handle_token_amount_selection(update, context):
     query = update.callback_query
     user_id = update.effective_user.id
     redis_client = RedisClient()
-    
+
     try:
         choice = query.data
         await query.answer()
-        
+
         if choice == "token_amount_custom":
-            await query.edit_message_text(
-                "Enter custom token amount (e.g., 1.5):"
-            )
-            return TOKEN_AMOUNT_SELECTION  # We'll handle custom input in a separate handler
-        
+            await query.edit_message_text("Enter custom token amount (e.g., 1500):")
+            return TOKEN_AMOUNT_CUSTOM_INPUT
+
         # Extract amount from callback data
         amount_str = choice.replace("token_amount_", "")
         try:
@@ -1434,36 +1439,131 @@ async def handle_token_amount_selection(update, context):
         except ValueError:
             await query.edit_message_text("❌ Invalid amount. Please try again.")
             return TOKEN_AMOUNT_SELECTION
+
+        # Store the token amount
+        await redis_client.set_user_data_key(
+            user_id, "token_reward_amount", token_amount
+        )
+
+        # Get token contract for display
+        token_contract = await redis_client.get_user_data_key(
+            user_id, "selected_token_contract"
+        )
+
+        # Get token metadata for display
+        from services.wallet_service import WalletService
+
+        wallet_service = WalletService()
+        wallet = await wallet_service.get_user_wallet(user_id)
+
+        if wallet:
+            from services.near_wallet_service import NEARWalletService
+
+            near_service = NEARWalletService()
+            private_key = near_service.decrypt_private_key(
+                wallet["encrypted_private_key"], wallet["iv"], wallet["tag"]
+            )
+
+            from py_near.account import Account
+
+            account = Account(
+                account_id=wallet["account_id"],
+                private_key=private_key,
+                rpc_addr=Config.NEAR_RPC_ENDPOINT,
+            )
+            await account.startup()
+
+            from services.token_service import TokenService
+
+            token_service = TokenService()
+            metadata = await token_service.get_token_metadata(account, token_contract)
+            token_symbol = metadata["symbol"]
+        else:
+            token_symbol = "TOKEN"
+
+        # Show reward structure options
+        await query.edit_message_text(
+            f"💰 **Token Amount:** {token_amount} {token_symbol}\n\n"
+            f"Choose reward structure:",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "🏆 Winner Takes All", callback_data="token_structure_wta"
+                        ),
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "🥇🥈🥉 Top 3 (50%-30%-20%)",
+                            callback_data="token_structure_top3",
+                        ),
+                    ],
+                ]
+            ),
+            parse_mode="Markdown",
+        )
+        return REWARD_STRUCTURE_CHOICE
+
+    except Exception as e:
+        logger.error(f"Error handling token amount selection: {e}")
+        await query.edit_message_text("❌ An error occurred. Please try again.")
+        return ConversationHandler.END
+
+
+async def handle_token_custom_amount_input(update, context):
+    """Handle custom token amount input"""
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+    
+    try:
+        # Get the custom amount from user input
+        custom_amount_text = update.message.text.strip()
+        
+        # Validate the input
+        try:
+            token_amount = float(custom_amount_text)
+            if token_amount <= 0:
+                await update.message.reply_text("❌ Amount must be greater than 0. Please try again:")
+                return TOKEN_AMOUNT_CUSTOM_INPUT
+        except ValueError:
+            await update.message.reply_text("❌ Invalid amount format. Please enter a number (e.g., 1500):")
+            return TOKEN_AMOUNT_CUSTOM_INPUT
         
         # Store the token amount
-        await redis_client.set_user_data_key(user_id, "token_reward_amount", token_amount)
+        await redis_client.set_user_data_key(
+            user_id, "token_reward_amount", token_amount
+        )
         
         # Get token contract for display
-        token_contract = await redis_client.get_user_data_key(user_id, "selected_token_contract")
+        token_contract = await redis_client.get_user_data_key(
+            user_id, "selected_token_contract"
+        )
         
         # Get token metadata for display
         from services.wallet_service import WalletService
+        
         wallet_service = WalletService()
         wallet = await wallet_service.get_user_wallet(user_id)
         
         if wallet:
             from services.near_wallet_service import NEARWalletService
+            
             near_service = NEARWalletService()
             private_key = near_service.decrypt_private_key(
-                wallet["encrypted_private_key"], 
-                wallet["iv"], 
-                wallet["tag"]
+                wallet["encrypted_private_key"], wallet["iv"], wallet["tag"]
             )
             
             from py_near.account import Account
+            
             account = Account(
                 account_id=wallet["account_id"],
                 private_key=private_key,
-                rpc_addr=Config.NEAR_RPC_ENDPOINT
+                rpc_addr=Config.NEAR_RPC_ENDPOINT,
             )
             await account.startup()
             
             from services.token_service import TokenService
+            
             token_service = TokenService()
             metadata = await token_service.get_token_metadata(account, token_contract)
             token_symbol = metadata["symbol"]
@@ -1471,24 +1571,31 @@ async def handle_token_amount_selection(update, context):
             token_symbol = "TOKEN"
         
         # Show reward structure options
-        await query.edit_message_text(
+        await update.message.reply_text(
             f"💰 **Token Amount:** {token_amount} {token_symbol}\n\n"
             f"Choose reward structure:",
-            reply_markup=InlineKeyboardMarkup([
+            reply_markup=InlineKeyboardMarkup(
                 [
-                    InlineKeyboardButton("🏆 Winner Takes All", callback_data="token_structure_wta"),
-                ],
-                [
-                    InlineKeyboardButton("🥇🥈🥉 Top 3 (50%-30%-20%)", callback_data="token_structure_top3"),
-                ],
-            ]),
-            parse_mode="Markdown"
+                    [
+                        InlineKeyboardButton(
+                            "🏆 Winner Takes All", callback_data="token_structure_wta"
+                        ),
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "🥇🥈🥉 Top 3 (50%-30%-20%)",
+                            callback_data="token_structure_top3",
+                        ),
+                    ],
+                ]
+            ),
+            parse_mode="Markdown",
         )
         return REWARD_STRUCTURE_CHOICE
         
     except Exception as e:
-        logger.error(f"Error handling token amount selection: {e}")
-        await query.edit_message_text("❌ An error occurred. Please try again.")
+        logger.error(f"Error handling custom token amount input: {e}")
+        await update.message.reply_text("❌ An error occurred. Please try again.")
         return ConversationHandler.END
 
 

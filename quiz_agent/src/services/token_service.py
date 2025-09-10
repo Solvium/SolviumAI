@@ -33,7 +33,7 @@ class TokenService:
             # First get metadata to get the decimal places
             temp_ft_model = FtModel(contract_id=token_contract, decimal=6)
             metadata = await account.ft.get_metadata(temp_ft_model)
-            
+
             # Return proper FtModel with correct decimal
             return FtModel(contract_id=token_contract, decimal=metadata.decimals)
         except Exception as e:
@@ -54,7 +54,7 @@ class TokenService:
                             return FtModel(contract_id=token_contract, decimal=decimals)
             except Exception as api_error:
                 logger.error(f"Error getting metadata from NearBlocks API: {api_error}")
-            
+
             # Final fallback to default decimal
             return FtModel(contract_id=token_contract, decimal=6)
 
