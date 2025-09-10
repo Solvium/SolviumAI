@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 class CustomFtTokenMetadata(BaseModel):
     """Custom metadata model that handles None values for optional fields"""
+
     spec: str
     name: str
     symbol: str
@@ -42,9 +43,9 @@ class TokenService:
     async def _get_ft_model(self, account: Account, token_contract: str) -> FtModel:
         """Helper method to get FtModel with correct decimal places"""
         try:
-            # First get metadata to get the decimal places
+            # First try to get metadata using our safe method
             temp_ft_model = FtModel(contract_id=token_contract, decimal=6)
-            metadata = await account.ft.get_metadata(temp_ft_model)
+            metadata = await self._get_metadata_safe(account, temp_ft_model)
 
             # Return proper FtModel with correct decimal
             return FtModel(contract_id=token_contract, decimal=metadata.decimals)
@@ -70,33 +71,35 @@ class TokenService:
             # Final fallback to default decimal
             return FtModel(contract_id=token_contract, decimal=6)
 
-    async def _get_metadata_safe(self, account: Account, ft_model: FtModel) -> CustomFtTokenMetadata:
+    async def _get_metadata_safe(
+        self, account: Account, ft_model: FtModel
+    ) -> CustomFtTokenMetadata:
         """Safely get metadata with custom model that handles None values"""
         try:
             # Try to get metadata using py-near's method
             metadata = await account.ft.get_metadata(ft_model)
-            
+
             # Convert to our custom model that handles None values
             return CustomFtTokenMetadata(
-                spec=getattr(metadata, 'spec', ''),
-                name=getattr(metadata, 'name', 'Unknown'),
-                symbol=getattr(metadata, 'symbol', 'UNKNOWN'),
-                icon=getattr(metadata, 'icon', None),
-                reference=getattr(metadata, 'reference', None),
-                reference_hash=getattr(metadata, 'reference_hash', None),
-                decimals=getattr(metadata, 'decimals', 6)
+                spec=getattr(metadata, "spec", ""),
+                name=getattr(metadata, "name", "Unknown"),
+                symbol=getattr(metadata, "symbol", "UNKNOWN"),
+                icon=getattr(metadata, "icon", None),
+                reference=getattr(metadata, "reference", None),
+                reference_hash=getattr(metadata, "reference_hash", None),
+                decimals=getattr(metadata, "decimals", 6),
             )
         except Exception as e:
             logger.error(f"Error getting token metadata: {e}")
             # Return default metadata
             return CustomFtTokenMetadata(
-                spec='',
-                name='Unknown',
-                symbol='UNKNOWN',
+                spec="",
+                name="Unknown",
+                symbol="UNKNOWN",
                 icon=None,
                 reference=None,
                 reference_hash=None,
-                decimals=6
+                decimals=6,
             )
 
     async def get_user_token_inventory(self, account_id: str) -> List[Dict]:

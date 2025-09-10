@@ -1132,7 +1132,7 @@ async def reward_structure_choice(update, context):
         )
         await redis_client.set_user_data_key(user_id, "reward_amount", token_amount)
         await redis_client.set_user_data_key(user_id, "total_cost", token_amount)
-        return await payment_verification(update, context)
+        return await process_token_payment(update, context)
 
     elif choice == "token_structure_top3":
         # Handle token top 3 structure
@@ -1142,7 +1142,7 @@ async def reward_structure_choice(update, context):
         )
         await redis_client.set_user_data_key(user_id, "reward_amount", token_amount)
         await redis_client.set_user_data_key(user_id, "total_cost", token_amount)
-        return await payment_verification(update, context)
+        return await process_token_payment(update, context)
 
     elif choice == "structure_top3":
         reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
