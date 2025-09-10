@@ -1514,62 +1514,66 @@ async def handle_token_custom_amount_input(update, context):
     """Handle custom token amount input"""
     user_id = update.effective_user.id
     redis_client = RedisClient()
-    
+
     try:
         # Get the custom amount from user input
         custom_amount_text = update.message.text.strip()
-        
+
         # Validate the input
         try:
             token_amount = float(custom_amount_text)
             if token_amount <= 0:
-                await update.message.reply_text("❌ Amount must be greater than 0. Please try again:")
+                await update.message.reply_text(
+                    "❌ Amount must be greater than 0. Please try again:"
+                )
                 return TOKEN_AMOUNT_CUSTOM_INPUT
         except ValueError:
-            await update.message.reply_text("❌ Invalid amount format. Please enter a number (e.g., 1500):")
+            await update.message.reply_text(
+                "❌ Invalid amount format. Please enter a number (e.g., 1500):"
+            )
             return TOKEN_AMOUNT_CUSTOM_INPUT
-        
+
         # Store the token amount
         await redis_client.set_user_data_key(
             user_id, "token_reward_amount", token_amount
         )
-        
+
         # Get token contract for display
         token_contract = await redis_client.get_user_data_key(
             user_id, "selected_token_contract"
         )
-        
+
         # Get token metadata for display
         from services.wallet_service import WalletService
-        
+
         wallet_service = WalletService()
         wallet = await wallet_service.get_user_wallet(user_id)
-        
+
         if wallet:
             from services.near_wallet_service import NEARWalletService
-            
+
             near_service = NEARWalletService()
             private_key = near_service.decrypt_private_key(
                 wallet["encrypted_private_key"], wallet["iv"], wallet["tag"]
             )
-            
+
             from py_near.account import Account
-            
+
             account = Account(
                 account_id=wallet["account_id"],
                 private_key=private_key,
                 rpc_addr=Config.NEAR_RPC_ENDPOINT,
             )
             await account.startup()
-            
+
             from services.token_service import TokenService
-            
+
             token_service = TokenService()
             metadata = await token_service.get_token_metadata(account, token_contract)
             token_symbol = metadata["symbol"]
         else:
             token_symbol = "TOKEN"
-        
+
         # Show reward structure options
         await update.message.reply_text(
             f"💰 **Token Amount:** {token_amount} {token_symbol}\n\n"
@@ -1592,7 +1596,7 @@ async def handle_token_custom_amount_input(update, context):
             parse_mode="Markdown",
         )
         return REWARD_STRUCTURE_CHOICE
-        
+
     except Exception as e:
         logger.error(f"Error handling custom token amount input: {e}")
         await update.message.reply_text("❌ An error occurred. Please try again.")

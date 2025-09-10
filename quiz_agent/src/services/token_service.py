@@ -2,6 +2,7 @@ import logging
 import requests
 import asyncio
 from typing import Dict, List, Optional, Any
+from pydantic import BaseModel
 from py_near.account import Account
 from py_near.dapps.fts import FTS
 from py_near.dapps.fts import FtModel
@@ -9,6 +10,17 @@ from utils.config import Config
 from utils.rpc_retry import rpc_call_with_retry, execute_with_rpc_fallback
 
 logger = logging.getLogger(__name__)
+
+
+class CustomFtTokenMetadata(BaseModel):
+    """Custom metadata model that handles None values for optional fields"""
+    spec: str
+    name: str
+    symbol: str
+    icon: Optional[str] = None
+    reference: Optional[str] = None
+    reference_hash: Optional[str] = None
+    decimals: int
 
 
 class TokenService:
@@ -57,6 +69,35 @@ class TokenService:
 
             # Final fallback to default decimal
             return FtModel(contract_id=token_contract, decimal=6)
+
+    async def _get_metadata_safe(self, account: Account, ft_model: FtModel) -> CustomFtTokenMetadata:
+        """Safely get metadata with custom model that handles None values"""
+        try:
+            # Try to get metadata using py-near's method
+            metadata = await account.ft.get_metadata(ft_model)
+            
+            # Convert to our custom model that handles None values
+            return CustomFtTokenMetadata(
+                spec=getattr(metadata, 'spec', ''),
+                name=getattr(metadata, 'name', 'Unknown'),
+                symbol=getattr(metadata, 'symbol', 'UNKNOWN'),
+                icon=getattr(metadata, 'icon', None),
+                reference=getattr(metadata, 'reference', None),
+                reference_hash=getattr(metadata, 'reference_hash', None),
+                decimals=getattr(metadata, 'decimals', 6)
+            )
+        except Exception as e:
+            logger.error(f"Error getting token metadata: {e}")
+            # Return default metadata
+            return CustomFtTokenMetadata(
+                spec='',
+                name='Unknown',
+                symbol='UNKNOWN',
+                icon=None,
+                reference=None,
+                reference_hash=None,
+                decimals=6
+            )
 
     async def get_user_token_inventory(self, account_id: str) -> List[Dict]:
         """Get all tokens for a user using NearBlocks API"""
@@ -120,8 +161,8 @@ class TokenService:
                 ft_model, account_id=account.account_id
             )
 
-            # Get metadata for symbol
-            metadata = await account.ft.get_metadata(ft_model)
+            # Get metadata for symbol using safe method
+            metadata = await self._get_metadata_safe(account, ft_model)
 
             return f"{balance:.6f} {metadata.symbol}"
 
@@ -215,7 +256,7 @@ class TokenService:
         """Get token metadata using py-near FTS"""
         try:
             ft_model = await self._get_ft_model(account, token_contract)
-            metadata = await account.ft.get_metadata(ft_model)
+            metadata = await self._get_metadata_safe(account, ft_model)
 
             return {
                 "name": metadata.name,
