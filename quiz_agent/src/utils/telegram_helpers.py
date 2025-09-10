@@ -306,7 +306,7 @@ async def safe_send_message(bot, chat_id, text, timeout=10.0, use_queue=True, **
 
 
 async def safe_send_photo(
-    bot, chat_id, photo_path, caption=None, timeout=10.0, use_queue=True, **kwargs
+    bot, chat_id, photo_path, caption=None, timeout=30.0, use_queue=True, **kwargs
 ):
     """
     Safely send a photo with proper error handling and optional queuing.

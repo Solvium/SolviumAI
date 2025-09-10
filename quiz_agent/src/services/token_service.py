@@ -48,12 +48,15 @@ class TokenService:
             metadata = await self._get_metadata_safe(account, temp_ft_model)
 
             # Return proper FtModel with correct decimal
+            logger.info(
+                f"Created FtModel for {token_contract} with {metadata.decimals} decimals"
+            )
             return FtModel(contract_id=token_contract, decimal=metadata.decimals)
         except Exception as e:
             logger.error(f"Error getting FtModel for {token_contract}: {e}")
             # For validation errors, try to get metadata from NearBlocks API as fallback
             try:
-                # Get metadata from NearBlocks API
+                # Get metadata from NearBlocks API - try direct contract metadata endpoint
                 url = f"{self.nearblocks_api_url}/{token_contract}/inventory"
                 response = requests.get(url, timeout=10)
                 if response.status_code == 200:
@@ -64,11 +67,25 @@ class TokenService:
                         if ft.get("contract") == token_contract:
                             meta = ft.get("ft_meta", {})
                             decimals = meta.get("decimals", 6)
+                            logger.info(f"Got decimals from NearBlocks API: {decimals}")
                             return FtModel(contract_id=token_contract, decimal=decimals)
+
+                # If inventory doesn't work, try to get contract info directly
+                contract_url = f"{self.nearblocks_api_url}/{token_contract}"
+                contract_response = requests.get(contract_url, timeout=10)
+                if contract_response.status_code == 200:
+                    contract_data = contract_response.json()
+                    # Look for token metadata in contract data
+                    if "ft_meta" in contract_data:
+                        decimals = contract_data["ft_meta"].get("decimals", 6)
+                        logger.info(f"Got decimals from contract API: {decimals}")
+                        return FtModel(contract_id=token_contract, decimal=decimals)
+
             except Exception as api_error:
                 logger.error(f"Error getting metadata from NearBlocks API: {api_error}")
 
             # Final fallback to default decimal
+            logger.warning(f"Using default 6 decimals for {token_contract}")
             return FtModel(contract_id=token_contract, decimal=6)
 
     async def _get_metadata_safe(
@@ -91,6 +108,26 @@ class TokenService:
             )
         except Exception as e:
             logger.error(f"Error getting token metadata: {e}")
+
+            # If py-near fails due to validation errors, try NearBlocks API as fallback
+            try:
+                token_contract = ft_model.contract_id
+                api_metadata = await self.get_token_metadata_from_api(token_contract)
+
+                return CustomFtTokenMetadata(
+                    spec="",
+                    name=api_metadata["name"],
+                    symbol=api_metadata["symbol"],
+                    icon=api_metadata["icon"],
+                    reference=api_metadata["reference"],
+                    reference_hash=None,  # API doesn't provide this
+                    decimals=api_metadata["decimals"],
+                )
+            except Exception as api_error:
+                logger.error(
+                    f"Error getting metadata from NearBlocks API fallback: {api_error}"
+                )
+
             # Return default metadata
             return CustomFtTokenMetadata(
                 spec="",
@@ -231,7 +268,16 @@ class TokenService:
         try:
             ft_model = await self._get_ft_model(account, token_contract)
 
+            # Get metadata to ensure we have the correct decimal places
+            metadata = await self._get_metadata_safe(account, ft_model)
+
+            # Log the transfer details for debugging
+            logger.info(
+                f"Transferring {amount} tokens with {metadata.decimals} decimals"
+            )
+
             # Use py-near's transfer method with force_register
+            # py-near handles the decimal conversion internally
             result = await account.ft.transfer(
                 ft_model,
                 recipient_account_id,
@@ -244,7 +290,8 @@ class TokenService:
                 "success": True,
                 "transaction_hash": result,
                 "amount": amount,
-                "message": f"Successfully transferred {amount} tokens",
+                "decimals": metadata.decimals,
+                "message": f"Successfully transferred {amount} {metadata.symbol} tokens",
             }
 
         except Exception as e:
@@ -291,3 +338,63 @@ class TokenService:
         except Exception as e:
             logger.error(f"Error getting supported tokens for user: {e}")
             return []
+
+    async def get_token_metadata_from_api(self, token_contract: str) -> Dict:
+        """Get token metadata directly from NearBlocks API as fallback"""
+        try:
+            # Try to get contract metadata directly
+            contract_url = f"{self.nearblocks_api_url}/{token_contract}"
+            response = requests.get(contract_url, timeout=10)
+
+            if response.status_code == 200:
+                data = response.json()
+                if "ft_meta" in data:
+                    meta = data["ft_meta"]
+                    return {
+                        "name": meta.get("name", "Unknown"),
+                        "symbol": meta.get("symbol", "UNKNOWN"),
+                        "decimals": meta.get("decimals", 6),
+                        "icon": meta.get("icon"),
+                        "reference": meta.get("reference"),
+                    }
+
+            # If direct contract doesn't work, try inventory approach
+            inventory_url = f"{self.nearblocks_api_url}/{token_contract}/inventory"
+            inventory_response = requests.get(inventory_url, timeout=10)
+
+            if inventory_response.status_code == 200:
+                inventory_data = inventory_response.json()
+                inventory = inventory_data.get("inventory", {})
+                fts = inventory.get("fts", [])
+
+                for ft in fts:
+                    if ft.get("contract") == token_contract:
+                        meta = ft.get("ft_meta", {})
+                        return {
+                            "name": meta.get("name", "Unknown"),
+                            "symbol": meta.get("symbol", "UNKNOWN"),
+                            "decimals": meta.get("decimals", 6),
+                            "icon": meta.get("icon"),
+                            "reference": meta.get("reference"),
+                        }
+
+            logger.warning(f"Could not get metadata for {token_contract} from API")
+            return {
+                "name": "Unknown",
+                "symbol": "UNKNOWN",
+                "decimals": 6,
+                "icon": None,
+                "reference": None,
+            }
+
+        except Exception as e:
+            logger.error(
+                f"Error getting token metadata from API for {token_contract}: {e}"
+            )
+            return {
+                "name": "Unknown",
+                "symbol": "UNKNOWN",
+                "decimals": 6,
+                "icon": None,
+                "reference": None,
+            }
