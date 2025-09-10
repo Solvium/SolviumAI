@@ -74,6 +74,11 @@ class Quiz(Base):
         DateTime, nullable=True
     )  # When leaderboard was created
 
+    # Token payment fields
+    payment_method = Column(String, default="NEAR")  # "NEAR" or "TOKEN"
+    token_contract_address = Column(String, nullable=True)  # e.g., "usdt.near"
+    token_payment_amount = Column(String, nullable=True)  # Amount paid in tokens
+
     answers = relationship("QuizAnswer", back_populates="quiz")  # Add relationship
 
 

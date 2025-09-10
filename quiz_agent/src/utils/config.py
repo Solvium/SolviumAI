@@ -220,6 +220,24 @@ class Config:
         """Check if mainnet is enabled"""
         return os.getenv("ENABLE_NEAR_MAINNET", "false").lower() == "true"
 
+    @classmethod
+    def get_current_network(cls) -> str:
+        """Determine current network based on RPC endpoint"""
+        rpc_endpoint = cls.NEAR_RPC_ENDPOINT.lower()
+        if "testnet" in rpc_endpoint or "test" in rpc_endpoint:
+            return "testnet"
+        else:
+            return "mainnet"
+
+    @classmethod
+    def get_nearblocks_api_url(cls) -> str:
+        """Get the correct NearBlocks API URL based on current network"""
+        network = cls.get_current_network()
+        if network == "testnet":
+            return "https://api-testnet.nearblocks.io"
+        else:
+            return "https://api.nearblocks.io"
+
     # Testnet robust mode configuration
     TESTNET_ROBUST_MODE_ENABLED = (
         os.getenv("TESTNET_ROBUST_MODE_ENABLED", "false").lower() == "true"

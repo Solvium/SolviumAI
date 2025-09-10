@@ -157,9 +157,14 @@ class TelegramBot:
             CONTEXT_INPUT,
             DURATION_CHOICE,
             DURATION_INPUT,
+            QUIZ_TYPE_CHOICE,
             REWARD_CHOICE,
             REWARD_CUSTOM_INPUT,
             REWARD_STRUCTURE_CHOICE,
+            PAYMENT_METHOD_SELECTION,
+            TOKEN_SELECTION,
+            TOKEN_AMOUNT_SELECTION,
+            TOKEN_PAYMENT_VERIFICATION,
             PAYMENT_VERIFICATION,
             CONFIRM,
             # link_wallet_handler,
@@ -179,6 +184,14 @@ class TelegramBot:
             announce_quiz_end_handler,  # Quiz end announcement handler
             debug_sessions_handler,  # Debug sessions handler
             handle_wallet_retry_callback,  # Wallet retry callback handler
+            quiz_type_choice,  # Quiz type selection (Free vs Paid)
+            payment_method_choice,  # Payment method selection
+            handle_payment_method_selection,  # Payment method handler
+            show_near_amount_options,  # NEAR amount options display
+            show_token_selection,  # Token selection display
+            handle_token_selection,  # Token selection handler
+            handle_token_amount_selection,  # Token amount selection handler
+            process_token_payment,  # Token payment processor
         )
 
         # Import menu handlers
@@ -252,11 +265,15 @@ class TelegramBot:
                         duration_input,
                     )
                 ],
+                # Quiz type choice state - callback queries for free vs paid
+                QUIZ_TYPE_CHOICE: [
+                    CallbackQueryHandler(quiz_type_choice, pattern="^quiz_type_")
+                ],
                 # Reward choice state - callback queries for reward options
                 REWARD_CHOICE: [
                     CallbackQueryHandler(
                         reward_choice,
-                        pattern="^(reward_free|reward_0\\.1|reward_0\\.5|reward_1\\.0|reward_2\\.0|reward_3\\.0|reward_5\\.0|reward_custom)$",
+                        pattern="^(reward_0\\.1|reward_0\\.5|reward_1\\.0|reward_2\\.0|reward_3\\.0|reward_5\\.0|reward_custom)$",
                     ),
                     MessageHandler(
                         filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
@@ -274,7 +291,7 @@ class TelegramBot:
                 REWARD_STRUCTURE_CHOICE: [
                     CallbackQueryHandler(
                         reward_structure_choice,
-                        pattern="^(structure_wta|structure_top3|structure_custom)$",
+                        pattern="^(structure_wta|structure_top3|structure_custom|token_structure_wta|token_structure_top3)$",
                     )
                 ],
                 # Payment verification state
@@ -283,6 +300,35 @@ class TelegramBot:
                         handle_payment_verification_callback,
                         pattern="^(check_balance|retry_payment|cancel_quiz)$",
                     )
+                ],
+                # Payment method selection
+                PAYMENT_METHOD_SELECTION: [
+                    CallbackQueryHandler(
+                        handle_payment_method_selection,
+                        pattern="^payment_method_(NEAR|TOKEN)$",
+                    )
+                ],
+                # Token selection
+                TOKEN_SELECTION: [
+                    CallbackQueryHandler(
+                        handle_token_selection, pattern="^select_token_"
+                    )
+                ],
+                # Token amount selection
+                TOKEN_AMOUNT_SELECTION: [
+                    CallbackQueryHandler(
+                        handle_token_amount_selection, pattern="^token_amount_"
+                    )
+                ],
+                # Token payment verification
+                TOKEN_PAYMENT_VERIFICATION: [
+                    CallbackQueryHandler(
+                        process_token_payment, pattern="^proceed_token_payment$"
+                    ),
+                    CallbackQueryHandler(
+                        lambda update, context: ConversationHandler.END,
+                        pattern="^cancel_payment$",
+                    ),
                 ],
                 # Final confirmation is a callback query
                 CONFIRM: [CallbackQueryHandler(confirm_choice, pattern="^(yes|no)$")],
