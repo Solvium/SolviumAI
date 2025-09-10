@@ -155,48 +155,32 @@ export const WheelOfFortune = () => {
       if (!isRegistered) {
         await registerTokenCallback(MEME_TOKEN_ADDRESS);
       }
-      // Claim wheel transaction
-      const claimTransaction = await signAndSendTransaction(CONTRACTID!, [
-        {
-          type: "FunctionCall",
-          params: {
-            methodName: "claimWheel",
-            args: {
-              rewardAmount: rewardAmount,
-              tokenAddress: MEME_TOKEN_ADDRESS!,
-            },
-            gas: "300000000000000",
-            deposit: "0",
-          },
-        },
-      ]);
+     // Claim wheel transaction
+const claimTransaction = await signAndSendTransaction(CONTRACTID!, [
+  {
+    type: "FunctionCall",
+    params: {
+      methodName: "claimWheel",
+      args: {
+        rewardAmount: rewardAmount,
+        tokenAddress: MEME_TOKEN_ADDRESS!,
+      },
+      gas: "300000000000000", // 300 TGas
+      deposit: "0",
+    },
+  },
+]);
 
-      // Wait for transaction completion
-      await claimTransaction;
+// Wait for transaction completion
+await claimTransaction;
 
-      // Execute the transfer transaction immediately after claimWheel
-      const executeTransferTx = await signAndSendTransaction(CONTRACTID!, [
-        {
-          type: "FunctionCall",
-          params: {
-            methodName: "execute_transfer",
-            args: {},
-            gas: "300000000000000",
-            deposit: "0",
-          },
-        },
-      ]);
-
-      // Wait for the execute_transfer transaction to complete
-      await executeTransferTx;
-
-      localStorage.setItem("lastClaimed", Date.now().toString());
-      localStorage.setItem(
-        "transaction",
-        JSON.stringify({ claimTransaction, executeTransferTx })
-      );
-      onSuccess?.();
-      return { claimTransaction, executeTransferTx };
+localStorage.setItem("lastClaimed", Date.now().toString());
+localStorage.setItem(
+  "transaction",
+  JSON.stringify({ claimTransaction })
+);
+onSuccess?.();
+return { claimTransaction };
     } catch (error: any) {
       console.error("Failed to claim reward:", error.message);
       onError?.(error as Error);
