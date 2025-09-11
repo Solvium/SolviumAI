@@ -338,6 +338,17 @@ async def safe_send_photo(
             # Fall back to direct sending
 
     try:
+        # Check if file exists before trying to open it
+        import os
+        if not os.path.exists(photo_path):
+            logger.error(f"Photo file not found: {photo_path}")
+            logger.error(f"Current working directory: {os.getcwd()}")
+            logger.error(f"File exists check: {os.path.exists(photo_path)}")
+            logger.error(
+                f"Directory contents: {os.listdir(os.path.dirname(photo_path)) if os.path.exists(os.path.dirname(photo_path)) else 'Directory not found'}"
+            )
+            return None
+
         # Open the photo file
         with open(photo_path, "rb") as photo_file:
             # Add timeout to prevent hanging
@@ -357,6 +368,9 @@ async def safe_send_photo(
         logger.error(
             f"Directory contents: {os.listdir(os.path.dirname(photo_path)) if os.path.exists(os.path.dirname(photo_path)) else 'Directory not found'}"
         )
+        return None
+    except asyncio.TimeoutError:
+        logger.error(f"Timeout sending photo to {chat_id} after {timeout} seconds")
         return None
     except BadRequest as e:
         if "can't parse entities" in str(e).lower() and caption:

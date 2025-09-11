@@ -27,6 +27,11 @@ class CustomFtTokenMetadata(BaseModel):
 class TokenService:
     """Robust token service using py-near FTS and NearBlocks API"""
 
+    # Class-level caches shared across all instances
+    _class_metadata_cache = {}
+    _class_inventory_cache = {}
+    _cache_ttl = 300  # 5 minutes cache TTL
+
     def __init__(self):
         # Use the correct NearBlocks API URL based on current network
         self.nearblocks_api_url = f"{Config.get_nearblocks_api_url()}/v1/account"
@@ -34,11 +39,81 @@ class TokenService:
         self.main_wallet_address = Config.NEAR_WALLET_ADDRESS
         self.main_wallet_private_key = Config.NEAR_WALLET_PRIVATE_KEY
 
+        # Use class-level caches
+        self._metadata_cache = TokenService._class_metadata_cache
+        self._inventory_cache = TokenService._class_inventory_cache
+
         # Log which network we're using
         current_network = Config.get_current_network()
         logger.info(
             f"TokenService initialized for {current_network} network using API: {self.nearblocks_api_url}"
         )
+
+    def _is_cache_valid(self, cache_entry: Dict) -> bool:
+        """Check if cache entry is still valid"""
+        import time
+
+        return time.time() - cache_entry.get("timestamp", 0) < TokenService._cache_ttl
+
+    def _get_cached_metadata(self, token_contract: str) -> Optional[Dict]:
+        """Get cached metadata if valid"""
+        if token_contract in self._metadata_cache:
+            cache_entry = self._metadata_cache[token_contract]
+            if self._is_cache_valid(cache_entry):
+                logger.info(f"Using cached metadata for {token_contract}")
+                return cache_entry["data"]
+            else:
+                # Remove expired cache entry
+                del self._metadata_cache[token_contract]
+        return None
+
+    def _cache_metadata(self, token_contract: str, metadata: Dict):
+        """Cache metadata with timestamp"""
+        import time
+
+        self._metadata_cache[token_contract] = {
+            "data": metadata,
+            "timestamp": time.time(),
+        }
+        logger.info(f"Cached metadata for {token_contract}")
+
+    def _get_cached_inventory(self, account_id: str) -> Optional[List[Dict]]:
+        """Get cached inventory if valid"""
+        if account_id in self._inventory_cache:
+            cache_entry = self._inventory_cache[account_id]
+            if self._is_cache_valid(cache_entry):
+                logger.info(f"Using cached inventory for {account_id}")
+                return cache_entry["data"]
+            else:
+                # Remove expired cache entry
+                del self._inventory_cache[account_id]
+        return None
+
+    def _cache_inventory(self, account_id: str, inventory: List[Dict]):
+        """Cache inventory with timestamp"""
+        import time
+
+        self._inventory_cache[account_id] = {
+            "data": inventory,
+            "timestamp": time.time(),
+        }
+        logger.info(f"Cached inventory for {account_id}")
+
+    @classmethod
+    def clear_cache(cls):
+        """Clear all cached data"""
+        cls._class_metadata_cache.clear()
+        cls._class_inventory_cache.clear()
+        logger.info("TokenService cache cleared")
+
+    @classmethod
+    def get_cache_stats(cls):
+        """Get cache statistics"""
+        return {
+            "metadata_cache_size": len(cls._class_metadata_cache),
+            "inventory_cache_size": len(cls._class_inventory_cache),
+            "cache_ttl": cls._cache_ttl,
+        }
 
     async def _get_ft_model(self, account: Account, token_contract: str) -> FtModel:
         """Helper method to get FtModel with correct decimal places"""
@@ -140,8 +215,18 @@ class TokenService:
             )
 
     async def get_user_token_inventory(self, account_id: str) -> List[Dict]:
-        """Get all tokens for a user using NearBlocks API"""
+        """Get all tokens for a user using NearBlocks API with caching and rate limiting handling"""
         try:
+            # Check cache first
+            cached_inventory = self._get_cached_inventory(account_id)
+            if cached_inventory is not None:
+                return cached_inventory
+
+            # Add a small delay to avoid rate limiting
+            import asyncio
+
+            await asyncio.sleep(0.3)
+
             url = f"{self.nearblocks_api_url}/{account_id}/inventory"
 
             async def _api_call():
@@ -181,6 +266,8 @@ class TokenService:
                         }
                     )
 
+                # Cache the result
+                self._cache_inventory(account_id, tokens)
                 return tokens
             else:
                 logger.error(f"NearBlocks API error: {response.status_code}")
@@ -191,24 +278,51 @@ class TokenService:
             return []
 
     async def get_token_balance(self, account: Account, token_contract: str) -> str:
-        """Get token balance using py-near FTS"""
+        """Get token balance using NearBlocks API (more reliable)"""
         try:
-            # Get FtModel with correct decimal places
-            ft_model = await self._get_ft_model(account, token_contract)
+            # Get user's token inventory from NearBlocks API
+            tokens = await self.get_user_token_inventory(account.account_id)
 
-            # Get balance using py-near
-            balance = await account.ft.get_ft_balance(
-                ft_model, account_id=account.account_id
+            logger.info(
+                f"Found {len(tokens)} tokens in inventory for {account.account_id}"
             )
 
-            # Get metadata for symbol using safe method
-            metadata = await self._get_metadata_safe(account, ft_model)
+            # Find the specific token
+            for token in tokens:
+                logger.info(
+                    f"Checking token: {token['contract_address']} vs {token_contract}"
+                )
+                if token["contract_address"] == token_contract:
+                    balance_str = f"{token['balance']} {token['symbol']}"
+                    logger.info(f"Found token balance: {balance_str}")
+                    return balance_str
 
-            return f"{balance:.6f} {metadata.symbol}"
+            # If token not found in inventory, it means balance is 0
+            # Get metadata for symbol
+            logger.info(
+                f"Token {token_contract} not found in inventory, getting metadata..."
+            )
+            metadata = await self.get_token_metadata_from_api(token_contract)
+            balance_str = f"0.000000 {metadata['symbol']}"
+            logger.info(f"Returning zero balance: {balance_str}")
+            return balance_str
 
         except Exception as e:
-            logger.error(f"Error getting token balance: {e}")
-            return "0.000000 UNKNOWN"
+            logger.error(f"Error getting token balance from NearBlocks API: {e}")
+            # Fallback to py-near method
+            try:
+                logger.info(f"Falling back to py-near for token balance...")
+                ft_model = await self._get_ft_model(account, token_contract)
+                balance = await account.ft.get_ft_balance(
+                    ft_model, account_id=account.account_id
+                )
+                metadata = await self._get_metadata_safe(account, ft_model)
+                return f"{balance:.6f} {metadata.symbol}"
+            except Exception as py_near_error:
+                logger.error(
+                    f"Error getting token balance from py-near fallback: {py_near_error}"
+                )
+                return "0.000000 UNKNOWN"
 
     async def check_storage_deposit(
         self, account: Account, token_contract: str
@@ -264,24 +378,32 @@ class TokenService:
         amount: float,
         force_register: bool = True,
     ) -> Dict:
-        """Transfer tokens using py-near FTS"""
+        """Transfer tokens using py-near FTS with NearBlocks API for metadata"""
         try:
-            ft_model = await self._get_ft_model(account, token_contract)
+            # Get metadata using NearBlocks API (more reliable)
+            metadata = await self.get_token_metadata_from_api(token_contract)
 
-            # Get metadata to ensure we have the correct decimal places
-            metadata = await self._get_metadata_safe(account, ft_model)
+            # Create FtModel with correct decimals from NearBlocks API
+            ft_model = FtModel(contract_id=token_contract, decimal=metadata["decimals"])
 
             # Log the transfer details for debugging
             logger.info(
-                f"Transferring {amount} tokens with {metadata.decimals} decimals"
+                f"Transferring {amount} tokens with {metadata['decimals']} decimals"
             )
 
-            # Use py-near's transfer method with force_register
-            # py-near handles the decimal conversion internally
+            # Manually convert amount to the smallest unit (considering decimals)
+            # For example: 200 tokens with 24 decimals = 200 * 10^24
+            amount_in_smallest_unit = int(amount * (10 ** metadata["decimals"]))
+
+            logger.info(
+                f"Converted {amount} tokens to {amount_in_smallest_unit} smallest units"
+            )
+
+            # Use py-near's transfer method with the converted amount
             result = await account.ft.transfer(
                 ft_model,
                 recipient_account_id,
-                amount,
+                amount,  # Use the converted amount
                 force_register=force_register,
                 nowait=True,  # Return transaction hash immediately
             )
@@ -290,8 +412,9 @@ class TokenService:
                 "success": True,
                 "transaction_hash": result,
                 "amount": amount,
-                "decimals": metadata.decimals,
-                "message": f"Successfully transferred {amount} {metadata.symbol} tokens",
+                "amount_in_smallest_unit": amount_in_smallest_unit,
+                "decimals": metadata["decimals"],
+                "message": f"Successfully transferred {amount} {metadata['symbol']} tokens",
             }
 
         except Exception as e:
@@ -303,28 +426,38 @@ class TokenService:
             }
 
     async def get_token_metadata(self, account: Account, token_contract: str) -> Dict:
-        """Get token metadata using py-near FTS"""
+        """Get token metadata using NearBlocks API (more reliable than py-near)"""
         try:
-            ft_model = await self._get_ft_model(account, token_contract)
-            metadata = await self._get_metadata_safe(account, ft_model)
-
-            return {
-                "name": metadata.name,
-                "symbol": metadata.symbol,
-                "decimals": metadata.decimals,
-                "icon": metadata.icon,
-                "reference": metadata.reference,
-            }
+            # Use NearBlocks API for metadata - it's more reliable and doesn't have validation issues
+            metadata = await self.get_token_metadata_from_api(token_contract)
+            logger.info(f"Got token metadata from NearBlocks API for {token_contract}")
+            return metadata
 
         except Exception as e:
-            logger.error(f"Error getting token metadata: {e}")
-            return {
-                "name": "Unknown",
-                "symbol": "UNKNOWN",
-                "decimals": 6,
-                "icon": None,
-                "reference": None,
-            }
+            logger.error(f"Error getting token metadata from NearBlocks API: {e}")
+            # Fallback to py-near if API fails
+            try:
+                ft_model = await self._get_ft_model(account, token_contract)
+                metadata = await self._get_metadata_safe(account, ft_model)
+
+                return {
+                    "name": metadata.name,
+                    "symbol": metadata.symbol,
+                    "decimals": metadata.decimals,
+                    "icon": metadata.icon,
+                    "reference": metadata.reference,
+                }
+            except Exception as py_near_error:
+                logger.error(
+                    f"Error getting token metadata from py-near fallback: {py_near_error}"
+                )
+                return {
+                    "name": "Unknown",
+                    "symbol": "UNKNOWN",
+                    "decimals": 6,
+                    "icon": None,
+                    "reference": None,
+                }
 
     async def get_supported_tokens_for_user(self, account_id: str) -> List[Dict]:
         """Get tokens that user actually has (non-zero balance)"""
@@ -340,27 +473,61 @@ class TokenService:
             return []
 
     async def get_token_metadata_from_api(self, token_contract: str) -> Dict:
-        """Get token metadata directly from NearBlocks API as fallback"""
+        """Get token metadata directly from NearBlocks API with caching and rate limiting handling"""
         try:
+            # Check cache first
+            cached_metadata = self._get_cached_metadata(token_contract)
+            if cached_metadata is not None:
+                return cached_metadata
+
+            # Add a small delay to avoid rate limiting
+            import asyncio
+
+            await asyncio.sleep(0.5)
+
             # Try to get contract metadata directly
             contract_url = f"{self.nearblocks_api_url}/{token_contract}"
-            response = requests.get(contract_url, timeout=10)
+            response = requests.get(contract_url, timeout=15)
 
             if response.status_code == 200:
                 data = response.json()
                 if "ft_meta" in data:
                     meta = data["ft_meta"]
-                    return {
+                    metadata = {
                         "name": meta.get("name", "Unknown"),
                         "symbol": meta.get("symbol", "UNKNOWN"),
                         "decimals": meta.get("decimals", 6),
                         "icon": meta.get("icon"),
                         "reference": meta.get("reference"),
                     }
+                    # Cache the result
+                    self._cache_metadata(token_contract, metadata)
+                    return metadata
+            elif response.status_code == 429:
+                logger.warning(
+                    f"NearBlocks API rate limited (429) for {token_contract}, waiting and retrying..."
+                )
+                # Wait longer and retry once
+                await asyncio.sleep(3)
+                response = requests.get(contract_url, timeout=15)
+                if response.status_code == 200:
+                    data = response.json()
+                    if "ft_meta" in data:
+                        meta = data["ft_meta"]
+                        metadata = {
+                            "name": meta.get("name", "Unknown"),
+                            "symbol": meta.get("symbol", "UNKNOWN"),
+                            "decimals": meta.get("decimals", 6),
+                            "icon": meta.get("icon"),
+                            "reference": meta.get("reference"),
+                        }
+                        # Cache the result
+                        self._cache_metadata(token_contract, metadata)
+                        return metadata
 
             # If direct contract doesn't work, try inventory approach
             inventory_url = f"{self.nearblocks_api_url}/{token_contract}/inventory"
-            inventory_response = requests.get(inventory_url, timeout=10)
+            inventory_response = requests.get(inventory_url, timeout=15)
 
             if inventory_response.status_code == 200:
                 inventory_data = inventory_response.json()
@@ -370,13 +537,20 @@ class TokenService:
                 for ft in fts:
                     if ft.get("contract") == token_contract:
                         meta = ft.get("ft_meta", {})
-                        return {
+                        metadata = {
                             "name": meta.get("name", "Unknown"),
                             "symbol": meta.get("symbol", "UNKNOWN"),
                             "decimals": meta.get("decimals", 6),
                             "icon": meta.get("icon"),
                             "reference": meta.get("reference"),
                         }
+                        # Cache the result
+                        self._cache_metadata(token_contract, metadata)
+                        return metadata
+            elif inventory_response.status_code == 429:
+                logger.warning(
+                    f"NearBlocks API rate limited (429) for inventory, using fallback"
+                )
 
             logger.warning(f"Could not get metadata for {token_contract} from API")
             return {

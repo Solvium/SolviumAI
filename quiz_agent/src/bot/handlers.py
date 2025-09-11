@@ -1120,7 +1120,8 @@ async def reward_structure_choice(update, context):
             "total_cost",
             await redis_client.get_user_data_key(user_id, "reward_amount"),
         )
-        return await payment_method_choice(update, context)
+        # Proceed directly to payment verification for NEAR
+        return await payment_verification(update, context)
 
     elif choice == "token_structure_wta":
         # Handle token winner takes all
@@ -1151,7 +1152,8 @@ async def reward_structure_choice(update, context):
         )  # Total amount is the base, not multiplied by 3
         await redis_client.set_user_data_key(user_id, "reward_structure", "top_3")
         await redis_client.set_user_data_key(user_id, "total_cost", total_cost)
-        return await payment_method_choice(update, context)
+        # Proceed directly to payment verification for NEAR
+        return await payment_verification(update, context)
 
     elif choice == "structure_custom":
         await update.callback_query.message.reply_text(
@@ -3187,6 +3189,29 @@ async def process_questions_with_payment(
         # Get bot username from config
         from utils.config import Config
 
+        # Get payment method and token info for proper currency display
+        payment_method = (
+            await redis_client.get_user_data_key(user_id, "payment_method") or "NEAR"
+        )
+        token_contract = await redis_client.get_user_data_key(
+            user_id, "selected_token_contract"
+        )
+        token_symbol = None
+
+        # Get token symbol if it's a token payment
+        if payment_method == "TOKEN" and token_contract:
+            try:
+                from services.token_service import TokenService
+
+                token_service = TokenService()
+                metadata = await token_service.get_token_metadata_from_api(
+                    token_contract
+                )
+                token_symbol = metadata.get("symbol", "TOKEN")
+            except Exception as e:
+                logger.error(f"Error getting token symbol for announcement: {e}")
+                token_symbol = "TOKEN"
+
         # Create rich announcement card with image
         image_path, announcement_msg, announcement_keyboard = (
             create_quiz_announcement_card(
@@ -3198,6 +3223,8 @@ async def process_questions_with_payment(
                 quiz_id=str(quiz_id),
                 is_free=not (reward_amount and float(reward_amount) > 0),
                 bot_username=Config.BOT_USERNAME,
+                payment_method=payment_method,
+                token_symbol=token_symbol,
             )
         )
 
@@ -3210,6 +3237,19 @@ async def process_questions_with_payment(
             parse_mode="Markdown",
             reply_markup=announcement_keyboard,
         )
+
+        # If photo sending failed, fallback to text message
+        if not announcement_message:
+            logger.warning(
+                f"Failed to send photo announcement, falling back to text message for quiz {quiz_id}"
+            )
+            announcement_message = await safe_send_message(
+                context.bot,
+                group_chat_id,
+                announcement_msg,
+                parse_mode="Markdown",
+                reply_markup=announcement_keyboard,
+            )
 
         # Store announcement message ID for cleanup
         if announcement_message:
