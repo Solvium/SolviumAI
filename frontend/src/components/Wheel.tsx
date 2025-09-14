@@ -189,6 +189,7 @@ export const WheelOfFortune = () => {
       if (!isRegistered) {
         await registerTokenCallback(MEME_TOKEN_ADDRESS)
       }
+
       const claimTransaction = await signAndSendTransaction(CONTRACTID!, [
         {
           type: "FunctionCall",
@@ -198,13 +199,14 @@ export const WheelOfFortune = () => {
               rewardAmount: rewardAmount,
               tokenAddress: MEME_TOKEN_ADDRESS!,
             },
-            gas: "300000000000000",
+            gas: "300000000000000", // 300 TGas - should work with optimizations
             deposit: "0",
           },
         },
       ])
 
       await claimTransaction
+
 
       const executeTransferTx = await signAndSendTransaction(CONTRACTID!, [
         {
@@ -224,6 +226,7 @@ export const WheelOfFortune = () => {
       localStorage.setItem("transaction", JSON.stringify({ claimTransaction, executeTransferTx }))
       onSuccess?.()
       return { claimTransaction, executeTransferTx }
+
     } catch (error: any) {
       console.error("Failed to claim reward:", error.message)
       onError?.(error as Error)
