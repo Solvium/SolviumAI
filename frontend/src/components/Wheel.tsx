@@ -7,7 +7,7 @@ import { Bounce, toast, ToastContainer } from "react-toastify"
 import BuySpin from "./BuySpin"
 import { useMultiLoginContext } from "@/app/contexts/MultiLoginContext"
 import { usePrivateKeyWallet } from "@/app/contexts/PrivateKeyWalletContext"
-import WalletConnect from "./WalletConnect"
+import StatusBar3D from "./StatusBar3D"
 const Wheel = dynamic(() => import("react-custom-roulette").then((mod) => mod.Wheel), { ssr: false })
 
 interface ClaimProps {
@@ -136,8 +136,8 @@ export const WheelOfFortune = () => {
     if (!nearAddress) return null
 
     try {
-      const result = await checkTokenRegistration(MEME_TOKEN_ADDRESS);
-      return result;
+      const result = await checkTokenRegistration(MEME_TOKEN_ADDRESS)
+      return result
     } catch (error) {
       console.error("Token registration check failed:", error)
       return null
@@ -155,14 +155,11 @@ export const WheelOfFortune = () => {
     }
   }
 
-  // // Add useEffect to check last played time
   useEffect(() => {
-    setSpinningSound(new Audio(location.origin + "/spin.mp3"));
-    setLastPlayed(Number(user?.lastSpinClaim));
-    const now = new Date(Date.now());
-    const cooldownEnd = new Date(
-      new Date(user?.lastSpinClaim ?? 0).getTime() + 24 * 60 * 60 * 1000
-    );
+    setSpinningSound(new Audio(location.origin + "/spin.mp3"))
+    setLastPlayed(Number(user?.lastSpinClaim))
+    const now = new Date(Date.now())
+    const cooldownEnd = new Date(new Date(user?.lastSpinClaim ?? 0).getTime() + 24 * 60 * 60 * 1000)
     if (now < cooldownEnd) {
       setCooldownTime(cooldownEnd)
     }
@@ -188,11 +185,10 @@ export const WheelOfFortune = () => {
     }
 
     try {
-      let isRegistered = await checkTokenRegistrationCallback();
+      const isRegistered = await checkTokenRegistrationCallback()
       if (!isRegistered) {
         await registerTokenCallback(MEME_TOKEN_ADDRESS)
       }
-      // Claim wheel transaction
       const claimTransaction = await signAndSendTransaction(CONTRACTID!, [
         {
           type: "FunctionCall",
@@ -279,8 +275,8 @@ export const WheelOfFortune = () => {
   }
 
   const handleClaim = async () => {
-    if (!winner) return;
-    setIsClaimLoading(true);
+    if (!winner) return
+    setIsClaimLoading(true)
     try {
       await handleClaimRewardImproved({
         rewardAmount: data[prizeNumber].option,
@@ -303,98 +299,61 @@ export const WheelOfFortune = () => {
       setIsClaimLoading(false)
       console.error("Claim failed:", error)
     }
-  };
+  }
+
   return (
     <div
       className="max-h-screen w-full py-2 px-4 pb-24 relative overflow-hidden"
       style={{
-        backgroundImage: "url('/casino-background.png')",
+        backgroundImage: "url('/tropical-adventure-bg.jpg')",
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
-        height: "calc(100vh - 50px)",
+        height: "calc(100vh - 80px)",
       }}
     >
       <div className="absolute inset-0 bg-blue-900/20"></div>
 
       <div className="relative z-10 max-w-xl mx-auto h-full flex flex-col">
+        {/* <StatusBar3D className="mb-4" /> */}
+
         <div className="bg-white-600/30 backdrop-blur-sm rounded-3xl p-3 shadow-xl border border-blue-400/20 flex-1 flex flex-col min-h-1">
           <h2
-            className="text-4xl font-black text-center text-white mb-2 drop-shadow-2xl bg-gradient-to-r from-yellow-400 via-orange-500 to-yellow-400 bg-clip-text text-transparent"
+            className="text-4xl font-black text-center text-white mb-2 drop-shadow-2xl"
             style={{ fontFamily: 'Impact, "Arial Black", sans-serif', letterSpacing: "2px" }}
           >
             SPIN THE WHEEL
           </h2>
           <p
-            className="mb-2 text-base text-center font-black drop-shadow-2xl bg-gradient-to-r from-orange-400 via-yellow-400 to-orange-400 bg-clip-text text-transparent"
+            className="mb-4 text-xl text-center font-black drop-shadow-2xl text-white"
             style={{ fontFamily: 'Impact, "Arial Black", sans-serif', letterSpacing: "1px" }}
           >
-            YOU NEED TO HAVE MADE AT LEAST A DEPOSIT BEFORE PLAYING
-          </p>
-          <p
-            className="mb-4 text-xl text-center font-black drop-shadow-2xl"
-            style={{ fontFamily: 'Impact, "Arial Black", sans-serif', letterSpacing: "1px" }}
-          >
-            <span className="bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
-              SPINS LEFT:{" "}
-            </span>
-            <span className="text-3xl font-black bg-gradient-to-r from-yellow-300 via-orange-400 to-yellow-300 bg-clip-text text-transparent drop-shadow-2xl">
+            <span className="text-blue-300">SPINS LEFT: </span>
+            <span className="text-3xl font-black text-yellow-300 drop-shadow-2xl">
               {new Date(cooldownTime) > new Date(Date.now()) ? user?.dailySpinCount : 2}
             </span>
           </p>
 
-          <WalletConnect />
-
           <div className="relative flex justify-center mb-2 flex-1 items-center min-h-0">
-            <div className="relative flex items-center justify-center ">
-              <Wheel
-                mustStartSpinning={mustSpin}
-                prizeNumber={prizeNumber}
-                data={data}
-                backgroundColors={[
-                  "#8B0000", // Dark Red
-                  "#000000", // Black
-                  "#006400", // Dark Green
-                  "#000080", // Navy Blue
-                  "#8B0000", // Dark Red
-                  "#2F2F2F", // Dark Gray
-                  "#228B22", // Forest Green
-                  "#4169E1", // Royal Blue
-                  "#DC143C", // Crimson Red
-                ]}
-                textColors={["#FFFFFF"]}
-                outerBorderColor="#FFD700"
-                outerBorderWidth={6}
-                innerRadius={30}
-                innerBorderColor="#FFD700"
-                innerBorderWidth={4}
-                radiusLineColor="#FFD700"
-                radiusLineWidth={3}
-                fontSize={16}
-                perpendicularText={true}
-                textDistance={70}
-                spinDuration={1.2}
-                onStopSpinning={() => {
-                  setMustSpin(false)
-                  const prize = {
-                    winner: data[prizeNumber].option,
-                    prizeNumber: prizeNumber,
-                  }
-                  localStorage.setItem("unclaimedPrize", JSON.stringify(prize))
-                  setUnclaimed(prize)
-                  setIsClaimed(false)
-                  setWinner(prize.winner)
-                  spinningSound.pause()
-                  spinningSound.currentTime = 0
-                }}
-              />
+            <div className="relative flex items-center justify-center">
+              <div className="relative w-64 h-64 flex items-center justify-center">
+                <img
+                  src="/casino-wheel-3d.png"
+                  alt="Casino Wheel"
+                  className={`w-full h-full object-contain transition-transform duration-[3000ms] ease-out ${
+                    mustSpin ? "animate-spin-wheel" : ""
+                  }`}
+                  style={{
+                    transform: mustSpin ? `rotate(${prizeNumber * 40 + 1800}deg)` : "rotate(0deg)",
+                  }}
+                />
 
-              <div className="absolute -inset-[50px] bg-gradient-radial from-yellow-400/40 via-orange-400/20 to-transparent blur-2xl animate-pulse pointer-events-none" />
-
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 shadow-2xl border-3 border-white flex items-center justify-center">
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-red-600 to-red-800 shadow-inner" />
+                <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20">
+                  <div className="w-0 h-0 border-l-[12px] border-r-[12px] border-b-[20px] border-l-transparent border-r-transparent border-b-yellow-400 drop-shadow-lg"></div>
+                  <div className="w-0 h-0 border-l-[8px] border-r-[8px] border-b-[14px] border-l-transparent border-r-transparent border-b-white absolute top-1 left-1/2 transform -translate-x-1/2"></div>
                 </div>
+
+                <div className="absolute -inset-[50px] bg-gradient-radial from-yellow-400/40 via-orange-400/20 to-transparent blur-2xl animate-pulse pointer-events-none" />
               </div>
             </div>
           </div>

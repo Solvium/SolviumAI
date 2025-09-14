@@ -10,36 +10,49 @@ import { Wallet } from "lucide-react"
 import { useAuth } from "@/app/contexts/AuthContext"
 import { useToast } from "@/app/hooks/use-toast"
 import DepositMultiplier from "./DepositMultiplier"
+import StatusBar3D from "./StatusBar3D"
 
 const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
   const { user: userDetails } = useAuth()
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 py-3 px-3 md:py-4">
-      <div className="max-w-4xl mx-auto space-y-4">
+    <div
+      className="min-h-screen w-full py-3 px-3 md:py-4 relative overflow-hidden"
+      style={{
+        backgroundImage: "url('/tropical-adventure-bg.jpg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+      }}
+    >
+      <div className="absolute inset-0 bg-none-transparent  pointer-events-none"></div>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(34,211,238,0.1),transparent_50%)] pointer-events-none"></div>
+
+      <div className="max-w-2xl mx-auto space-y-4 relative z-10">
+      {/* <StatusBar3D className="mb-6" /> */}
         <div className="flex justify-end">
           {/* <UnifiedWalletConnector /> */}
           {/* <WalletMultiButton /> */}
         </div>
 
         {/* Profile Header */}
-        <div className="bg-gradient-to-br from-blue-800/95 to-blue-900/95 backdrop-blur-md rounded-3xl p-4 border-2 border-blue-400/30 shadow-2xl">
+        <div className="bg-none  border-0">
           <ProfileHeader userDetails={userDetails} />
         </div>
 
         {/* Invite Link */}
-        <div className="bg-gradient-to-br from-blue-800/95 to-blue-900/95 backdrop-blur-md rounded-3xl p-4 border-2 border-blue-400/30 shadow-2xl">
+        <div className="bg-none border-0">
           <Link userDetails={userDetails} />
         </div>
 
         {/* Farming Section */}
-        <div className="bg-gradient-to-br from-blue-800/95 to-blue-900/95 backdrop-blur-md rounded-3xl p-4 border-2 border-blue-400/30 shadow-2xl">
+        <div className="mt-20 bg-none">
           <Farming />
         </div>
 
         {/* Tasks Section */}
-        <div className="bg-gradient-to-br from-blue-800/95 to-blue-900/95 backdrop-blur-md rounded-3xl p-4 border-2 border-blue-400/30 shadow-2xl">
+        {/* <div className="mt-20 bg-none">
           <Tasks tg={tg} />
-        </div>
+        </div> */}
       </div>
     </div>
   )
@@ -49,34 +62,73 @@ const ProfileHeader = ({ userDetails }: any) => {
   return (
     <div className="flex flex-col items-center gap-4">
       <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-orange-500 rounded-full blur-xl opacity-50 scale-110"></div>
-        <div className="relative bg-gradient-to-br from-orange-400 to-orange-500 p-1 rounded-full shadow-2xl">
-          <div className="bg-white rounded-full w-16 h-16 flex items-center justify-center text-xl font-black text-orange-500 shadow-inner">
+        <div className="relative mb-4">
+          <img
+            src="/crown.png"
+            alt="Crown"
+            className="w-20 h-20 mx-auto drop-shadow-2xl hover:scale-110 transition-transform duration-500 filter "
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-brown-400/30 to-green-500/30 rounded-full blur-xl animate-pulse"></div>
+        </div>
+
+        {/* <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-full blur-xl opacity-50 scale-110"></div> */}
+<div className="relative bg-gradient-to-br from-yellow-400 to-yellow-600 p-1 rounded-full shadow-2xl transform hover:scale-105 transition-transform duration-300">
+  <div className="bg-white rounded-full w-16 h-16 flex items-center justify-center text-xl font-black text-yellow-600 shadow-inner">
+
             {userDetails?.username?.slice(0, 2).toUpperCase()}
           </div>
         </div>
       </div>
 
       <div className="text-center">
-        <h2 className="text-xl font-black text-white mb-4 tracking-wide drop-shadow-lg">{userDetails?.username}</h2>
-        <div className="grid grid-cols-3 gap-3 w-full max-w-md">
-          <div className="bg-gradient-to-br from-orange-400/20 to-orange-500/20 rounded-2xl p-3 border-2 border-orange-400/30 backdrop-blur-sm">
-            <div className="text-center">
-              <p className="text-lg font-black text-orange-400 mb-0">{userDetails?.totalPoints || 0}</p>
-              <p className="text-xs font-bold text-white/80 uppercase tracking-wider">Points</p>
+        <h2 className="text-xl font-black text-cyan-100 mb-4 tracking-wide drop-shadow-lg">{userDetails?.username}</h2>
+        <div className="grid grid-cols-3 gap-6 w-full max-w-md">
+          <div className="relative group flex flex-col items-center">
+            <div className="relative">
+              <img
+                src="/assets/profile/coins.webp"
+                alt="Points"
+                className="w-20 h-20 mx-auto drop-shadow-2xl group-hover:scale-110 transition-transform duration-300 filter brightness-110"
+              />
+              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2">
+                <div className=" px-3 py-1 rounded-full text-sm font-black shadow-lg border-2 border-amber-300">
+                  {userDetails?.totalPoints || 0}
+                </div>
+              </div>
             </div>
+            <p className="text-xs font-bold text-cyan-100 uppercase tracking-wider mt-2">Points</p>
           </div>
-          <div className="bg-gradient-to-br from-blue-400/20 to-blue-500/20 rounded-2xl p-3 border-2 border-blue-400/30 backdrop-blur-sm">
-            <div className="text-center">
-              <p className="text-lg font-black text-blue-400 mb-0">{userDetails?.referralCount || 0}</p>
-              <p className="text-xs font-bold text-white/80 uppercase tracking-wider">Refs</p>
+
+          <div className="relative group flex flex-col items-center">
+            <div className="relative">
+              <img
+                src="/assets/profile/referral.webp"
+                alt="Referrals"
+                className="w-20 h-20 mx-auto drop-shadow-2xl group-hover:scale-110 transition-transform duration-300 filter brightness-110"
+              />
+              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2">
+                <div className=" px-3 py-1 rounded-full text-sm font-black shadow-lg border-2 border-blue-300">
+                  {userDetails?.referralCount || 0}
+                </div>
+              </div>
             </div>
+            <p className="text-xs font-bold text-cyan-100 uppercase tracking-wider mt-2">Refs</p>
           </div>
-          <div className="bg-gradient-to-br from-green-400/20 to-green-500/20 rounded-2xl p-3 border-2 border-green-400/30 backdrop-blur-sm">
-            <div className="text-center">
-              <p className="text-lg font-black text-green-400 mb-0">{userDetails?.multiplier || 0}</p>
-              <p className="text-xs font-bold text-white/80 uppercase tracking-wider">Multi</p>
+
+          <div className="relative group flex flex-col items-center">
+            <div className="relative">
+              <img
+                src="/assets/profile/boost.webp"
+                alt="Multiplier"
+                className="w-20 h-20 mx-auto drop-shadow-2xl group-hover:scale-110 transition-transform duration-300 filter brightness-110"
+              />
+              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2">
+                <div className=" px-3 py-1 rounded-full text-sm font-black shadow-lg border-2 border-purple-300">
+                  {userDetails?.multiplier || 0}
+                </div>
+              </div>
             </div>
+            <p className="text-xs font-bold text-cyan-100 uppercase tracking-wider mt-2">Boost</p>
           </div>
         </div>
       </div>
@@ -90,36 +142,54 @@ const Link = ({ userDetails }: any) => {
   const { toast } = useToast()
 
   useEffect(() => {
-    // Generate Telegram bot referral link with start parameter
-    setLink(`https://t.me/solviumquizbot?start=${userDetails?.username}`);
-  }, [userDetails?.username]);
+    setLink(location.href)
+  }, [])
+
+  const handleCopy = async () => {
+    const textToCopy = `${link}?ref=${userDetails?.username}`
+
+    try {
+      await navigator.clipboard.writeText(textToCopy)
+      setCopyState("Copied")
+      toast({
+        title: "Copied!",
+        description: "Invite link copied to clipboard",
+        variant: "default",
+      })
+      setTimeout(() => setCopyState("Copy"), 2000)
+    } catch (err) {
+      console.error("Failed to copy: ", err)
+      toast({
+        title: "Copy Failed",
+        description: "Failed to copy to clipboard",
+        variant: "destructive",
+      })
+    }
+  }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-center gap-3">
-        <div className="w-6 h-6 bg-gradient-to-br from-blue-400 to-blue-500 rounded-lg flex items-center justify-center">
-          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-            <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-          </svg>
-        </div>
-        <h2 className="text-lg font-black text-white uppercase tracking-wider">Invite Link</h2>
-      </div>
-      <div className="bg-[#1A1A2F] rounded-lg p-3 border border-[#2A2A45] relative overflow-hidden">
-        <div className="absolute inset-0 bg-[#4C6FFF] blur-2xl opacity-5"></div>
-        <div className="relative">
-          <p className="text-sm text-[#8E8EA8] break-all text-center md:text-left mb-3">
-            {link}
-          </p>
-          <CopyToClipboard text={link} onCopy={() => setCopyState("Copied")}>
-            <button className="w-full px-4 py-3 bg-[#4C6FFF] hover:bg-[#4C6FFF]/90 text-white rounded-lg transition-all flex items-center justify-center gap-2 text-sm font-medium">
-              <span>{copyState}</span>
-              <img src={copy.src} alt="copy" className="w-4 h-4 invert" />
-            </button>
-          </CopyToClipboard>
-        </div>
-      </div>
+    <div className="mt-10 space-y-4">
+    <div className="flex items-center justify-center gap-3">
+      <h2 className="text-lg font-black text-cyan-100 uppercase tracking-wider">Invite Link</h2>
     </div>
+    <div className="bg-none">
+    <button
+  onClick={handleCopy}
+  className="relative w-30 mb-10 mx-auto px-6 py-4 text-amber-900 rounded-2xl transition-all flex items-center justify-center gap-2 text-sm font-black uppercase tracking-wider transform hover:scale-105 hover:-translate-y-1 hover:rotate-1 disabled:opacity-50 disabled:transform-none active:scale-95 active:translate-y-0"
+  style={{
+    backgroundImage: "url('/assets/buttons/wooden-button.png')",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
+    boxShadow: "none", // removed shadow completely
+  }}
+>
+  <span>{copyState}</span>
+  <Copy className="w-4 h-4" />
+</button>
+
+    </div>
+  </div>
   )
 }
 
@@ -134,12 +204,8 @@ const Farming = () => {
   const hashRate = 0.0035
   const remainingTime = new Date(userDetails?.lastClaim || new Date()).getTime() - new Date().getTime()
 
-  // // Real claimPoints function that calls the API and refreshes user data
-  const claimPoints = async (
-    type: string,
-    setLoading: (loading: boolean) => void
-  ) => {
-    setLoading(true);
+  const claimPoints = async (type: string, setLoading: (loading: boolean) => void) => {
+    setLoading(true)
     try {
       const response = await fetch("/api/claim", {
         method: "POST",
@@ -192,56 +258,56 @@ const Farming = () => {
   }, [count, userDetails?.multiplier])
 
   return (
-    <div className="space-y-4">
+    <div className="mt-10 space-y-4">
       <div className="flex items-center justify-center gap-3">
-        <div className="w-6 h-6 bg-gradient-to-br from-green-400 to-green-500 rounded-lg flex items-center justify-center">
-          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M9 2a1 1 0 000 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-            <path
-              fillRule="evenodd"
-              d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </div>
-        <h2 className="text-lg font-black text-white uppercase tracking-wider">Farming</h2>
+        {/* <img src="/axe.png" alt="Treasure Chest" className="w-12 h-12 drop-shadow-lg" /> */}
+        <h2 className="text-lg font-black text-cyan-100 uppercase tracking-wider">Farming</h2>
       </div>
       <div className="flex justify-center">
-        <button
-          disabled={remainingTime > 0 && userDetails?.isMining}
-          style={{
-            opacity: remainingTime > 0 && userDetails?.isMining ? 0.6 : 1,
-          }}
-          onClick={async () => {
-            setLoadingFarm(true)
-            if (userDetails?.isMining) {
-              if (remainingTime <= 0) claimPoints("farm claim--" + Math.round(amount), setLoadingFarm)
-              return
-            }
-            claimPoints("start farming", setLoadingFarm)
-          }}
-          className="px-6 py-3 bg-gradient-to-r from-green-400 to-green-500 hover:from-green-500 hover:to-green-600 text-white rounded-2xl transition-all text-sm font-black uppercase tracking-wider shadow-2xl hover:shadow-green-500/25 transform hover:scale-105 disabled:opacity-50 disabled:transform-none border-2 border-green-300/30"
-        >
-          {loadingFarm ? (
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 border-t-2 border-white animate-spin rounded-full"></div>
-              <span>Processing...</span>
-            </div>
-          ) : userDetails?.isMining ? (
-            <>
-              {remainingTime > 0 ? (
-                <div className="flex items-center gap-2">
-                  <span>{`Mining ${amount > 1 ? amount.toFixed(2) : amount.toFixed(4)} SOLV`}</span>
-                  <TimerCountdown setCount={setCount} time={new Date(userDetails?.lastClaim || new Date()).getTime()} />
-                </div>
-              ) : (
-                <span>Claim {amount.toFixed(2)} SOLV</span>
-              )}
-            </>
-          ) : (
-            <span>Start Mining</span>
-          )}
-        </button>
+      <button
+  disabled={remainingTime > 0 && userDetails?.isMining}
+  className="relative px-6 py-4 text-amber-900 rounded-xl transition-all text-sm font-black uppercase tracking-wider transform hover:scale-105 hover:-translate-y-1 hover:rotate-1 disabled:opacity-50 disabled:transform-none  active:scale-95 active:translate-y-0"
+  style={{
+    backgroundImage: "url('/assets/buttons/wooden-button.png')",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
+    opacity: remainingTime > 0 && userDetails?.isMining ? 0.6 : 1,
+    boxShadow: "none", // removed shadow completely
+  }}
+  onClick={async () => {
+    setLoadingFarm(true);
+    if (userDetails?.isMining) {
+      if (remainingTime <= 0) claimPoints("farm claim--" + Math.round(amount), setLoadingFarm);
+      return;
+    }
+    claimPoints("start farming", setLoadingFarm);
+  }}
+>
+  {loadingFarm ? (
+    <div className="flex items-center gap-1">
+      <div className="w-3 h-3 border-t-2 border-amber-900 animate-spin rounded-full"></div>
+      <span>Processing...</span>
+    </div>
+  ) : userDetails?.isMining ? (
+    <>
+      {remainingTime > 0 ? (
+        <div className="flex items-center gap-2">
+          <span>{`Mining ${amount > 1 ? amount.toFixed(2) : amount.toFixed(4)} SOLV`}</span>
+          <TimerCountdown
+            setCount={setCount}
+            time={new Date(userDetails?.lastClaim || new Date()).getTime()}
+          />
+        </div>
+      ) : (
+        <span>Claim {amount.toFixed(2)} SOLV</span>
+      )}
+    </>
+  ) : (
+    <span>Start Mining</span>
+  )}
+</button>
+
       </div>
     </div>
   )
@@ -463,27 +529,22 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-center gap-3">
-        <div className="w-6 h-6 bg-gradient-to-br from-purple-400 to-purple-500 rounded-lg flex items-center justify-center">
-          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M9 2a1 1 0 000 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-            <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-          </svg>
-        </div>
-        <h2 className="text-lg font-black text-white uppercase tracking-wider">Tasks</h2>
+        <img src="/key.png" alt="Key" className="w-8 h-8 drop-shadow-lg" />
+        <h2 className="text-lg font-black text-cyan-100 uppercase tracking-wider">Tasks</h2>
       </div>
 
       <div className="space-y-3">
-        <div className="bg-gradient-to-br from-blue-700/50 to-blue-800/50 rounded-2xl p-4 border-2 border-blue-400/20 backdrop-blur-sm">
-          <p className="text-lg font-bold text-white mb-3 uppercase tracking-wider">Purchase Multiplier</p>
+        <div className="bg-gradient-to-br from-blue-700/50 to-cyan-800/50 rounded-2xl p-4 border-2 border-cyan-400/20 backdrop-blur-sm">
+          <p className="text-lg font-bold text-cyan-100 mb-3 uppercase tracking-wider">Purchase Multiplier</p>
           <DepositMultiplier user={userDetails} />
         </div>
         {isLoadingTasks ? (
           <div className="flex justify-center items-center py-8">
-            <div className="w-8 h-8 border-t-4 border-orange-400 animate-spin rounded-full"></div>
-            <span className="ml-3 text-white text-lg font-bold">Loading tasks...</span>
+            <div className="w-8 h-8 border-t-4 border-cyan-400 animate-spin rounded-full"></div>
+            <span className="ml-3 text-cyan-100 text-lg font-bold">Loading tasks...</span>
           </div>
         ) : tasks?.length === 0 ? (
-          <div className="text-center text-white text-lg font-bold py-6">No tasks available.</div>
+          <div className="text-center text-cyan-100 text-lg font-bold py-6">No tasks available.</div>
         ) : (
           <div className="space-y-3">
             {tasks?.map((task: any, i: number) => {
@@ -495,12 +556,12 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                   icon = <FaXTwitter className="text-tropical-blue text-xl" />
                   curCat = "x"
                   break
-                case "Follow Facebook".toLowerCase():
-                case "Join Facebook Group".toLowerCase():
+                case "follow facebook".toLowerCase():
+                case "join facebook group".toLowerCase():
                   curCat = "fb"
                   icon = <FaFacebook className="text-tropical-blue text-xl" />
                   break
-                case "Subscribe to Youtube".toLowerCase():
+                case "subscribe to youtube".toLowerCase():
                   curCat = "yt"
                   icon = <FaYoutube className="text-tropical-blue text-xl" />
                   break
@@ -529,16 +590,27 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
               return (
                 <div
                   key={"bbb" + task.name + "task" + i}
-                  className="bg-gradient-to-br from-blue-700/50 to-blue-800/50 rounded-2xl p-4 border-2 border-blue-400/20 backdrop-blur-sm hover:border-orange-400/40 transition-all duration-300 hover:shadow-xl hover:shadow-orange-500/10"
+                  className="bg-gradient-to-br from-blue-700/50 to-cyan-800/50 rounded-2xl p-4 border-2 border-cyan-400/20 backdrop-blur-sm hover:border-cyan-300/60 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10 transform hover:scale-102"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-400/20 to-orange-500/20 border-2 border-orange-400/30 flex items-center justify-center">
+                    <div
+                      className="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-400/20 to-blue-500/20 border-2 border-cyan-400/30 flex items-center justify-center transform hover:scale-110 transition-transform duration-300"
+                      style={{
+                        boxShadow:
+                          "0 6px 15px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.2)",
+                      }}
+                    >
                       <div className="text-lg">{icon}</div>
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-bold text-white mb-1">{task.name}</p>
+                      <p className="text-sm font-bold text-cyan-100 mb-1">{task.name}</p>
                       <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 bg-gradient-to-br from-orange-400 to-orange-500 rounded-lg flex items-center justify-center">
+                        <div
+                          className="w-5 h-5 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center"
+                          style={{
+                            boxShadow: "0 4px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3)",
+                          }}
+                        >
                           <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
                             <path
@@ -548,7 +620,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                             />
                           </svg>
                         </div>
-                        <p className="text-sm font-black text-orange-400">{task.points} SOLV</p>
+                        <p className="text-sm font-black text-yellow-300">{task.points} SOLV</p>
                       </div>
                     </div>
                     <button
@@ -556,7 +628,11 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                         setLoading({ id: task.id, status: true })
                         onGoing ? Verify(task) : ProcessLink(task)
                       }}
-                      className="px-4 py-2 bg-gradient-to-r from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 text-white rounded-xl transition-all font-black uppercase tracking-wider disabled:opacity-50 shadow-lg hover:shadow-orange-500/25 transform hover:scale-105 border-2 border-orange-300/30 text-xs"
+                      className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-xl transition-all font-black uppercase tracking-wider disabled:opacity-50 transform hover:scale-105 hover:-translate-y-1 hover:rotate-1 border-2 border-cyan-300/30 text-xs active:scale-95 active:translate-y-0"
+                      style={{
+                        boxShadow:
+                          "0 8px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -2px 0 rgba(0,0,0,0.2)",
+                      }}
                       disabled={loading.id == task.id && loading.status}
                     >
                       {loading.id == task.id && loading.status ? (
