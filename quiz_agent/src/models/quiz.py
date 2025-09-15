@@ -28,7 +28,9 @@ class Quiz(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     topic = Column(String, nullable=False)
     questions = Column(JSON, default=[])
-    creator_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)  # Track quiz creator
+    creator_id = Column(
+        String, ForeignKey("users.id"), nullable=True, index=True
+    )  # Track quiz creator
     status = Column(
         Enum(QuizStatus), default=QuizStatus.DRAFT, index=True
     )  # Added index
