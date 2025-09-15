@@ -17,6 +17,8 @@ def create_quiz_announcement_card(
     quiz_id: str,
     is_free: bool = False,
     bot_username: str = None,
+    payment_method: str = "NEAR",
+    token_symbol: str = None,
 ) -> tuple[str, str, InlineKeyboardMarkup]:
     """
     Create a rich announcement card for a new quiz with image
@@ -47,18 +49,25 @@ def create_quiz_announcement_card(
     # Sanitize bot_username if provided
     safe_bot_username = sanitize_markdown(bot_username) if bot_username else None
 
+    # Determine the correct currency symbol
+    if payment_method == "TOKEN" and token_symbol:
+        currency_display = f"{reward_amount} {token_symbol}"
+    else:
+        currency_display = f"{reward_amount} NEAR"
+
+    # Make the announcement more catchy and engaging
     card = f"""
-🔥🎉 **WELCOME TO THE {safe_topic.upper()} QUIZ CHALLENGE!** 🎉🔥
+🚀⚡ **{safe_topic.upper()} QUIZ BATTLE ROYALE!** ⚡🚀
 
-📚 **{num_questions} Mind-Bending Questions**
-⏳ **{duration_minutes} Minutes on the Clock**
-💰 **{reward_amount} NEAR** Up for Grabs!
-🏆 Reward Structure: **{safe_reward_structure}**
+🧠 **{num_questions} Brain-Busting Questions**
+⏰ **{duration_minutes} Minutes to Dominate**
+💰 **{currency_display}** Prize Pool!
+🏆 **{safe_reward_structure}** Winner Takes All!
 
-⚡ Think you got what it takes?
-💡 Show off your knowledge, race against time, and claim your spot on the leaderboard!
+🔥 Ready to prove you're the smartest in the room?
+💎 Test your knowledge, beat the clock, and climb the leaderboard!
 
-👉 **Are you in? Lets GO!** 🚀
+🎯 **Challenge Accepted? Let's GO!** 🎯
 """
 
     # Create interactive buttons

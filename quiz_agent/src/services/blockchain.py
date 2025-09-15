@@ -388,6 +388,11 @@ class BlockchainMonitor:
             # Track successful transfers
             successful_transfers = []
 
+            # Check if this is a token reward quiz
+            is_token_reward = (
+                quiz.payment_method == "TOKEN" and quiz.token_contract_address
+            )
+
             # Process each winner according to reward schedule
             if (
                 reward_schedule
@@ -455,50 +460,115 @@ class BlockchainMonitor:
 
                             if reward_amount_yoctonear_final > 0:
                                 recipient_wallet = wallet_address
-                                logger.info(
-                                    f"[distribute_rewards] WTA: Attempting to send {reward_amount_near_str_final} NEAR ({reward_amount_yoctonear_final} yoctoNEAR) to {recipient_wallet} (User: {winner_data.get('username', 'N/A')})"
-                                )
-                                try:
-                                    # Use nowait=True to get transaction hash directly as string
-                                    tx_hash_str = await self.near_account.send_money(
-                                        recipient_wallet,
-                                        reward_amount_yoctonear_final,
-                                        nowait=True,
-                                    )
 
-                                    # tx_hash_str is now directly the transaction hash string
-                                    if not tx_hash_str or tx_hash_str == "N/A":
-                                        tx_hash_str = "UNKNOWN_HASH"
+                                if is_token_reward:
+                                    # Handle token reward distribution
+                                    try:
+                                        from services.token_service import TokenService
 
+                                        token_service = TokenService()
+
+                                        # Get token metadata
+                                        metadata = (
+                                            await token_service.get_token_metadata(
+                                                self.near_account,
+                                                quiz.token_contract_address,
+                                            )
+                                        )
+                                        token_symbol = metadata["symbol"]
+
+                                        logger.info(
+                                            f"[distribute_rewards] WTA: Attempting to send {reward_amount_near_str_final} {token_symbol} to {recipient_wallet} (User: {winner_data.get('username', 'N/A')})"
+                                        )
+
+                                        # Transfer tokens using py-near FTS
+                                        transfer_result = await token_service.transfer_tokens(
+                                            account=self.near_account,
+                                            token_contract=quiz.token_contract_address,
+                                            recipient_account_id=recipient_wallet,
+                                            amount=reward_amount_near_float,
+                                            force_register=True,  # Automatically handle storage deposits
+                                        )
+
+                                        if transfer_result["success"]:
+                                            tx_hash_str = transfer_result[
+                                                "transaction_hash"
+                                            ]
+                                            logger.info(
+                                                f"[distribute_rewards] WTA: Successfully sent {reward_amount_near_str_final} {token_symbol} to {recipient_wallet}. Tx hash: {tx_hash_str}"
+                                            )
+
+                                            successful_transfers.append(
+                                                {
+                                                    "user_id": user_id,
+                                                    "username": winner_data.get(
+                                                        "username", "N/A"
+                                                    ),
+                                                    "wallet_address": recipient_wallet,
+                                                    "amount": reward_amount_near_str_final,
+                                                    "currency": token_symbol,
+                                                    "transaction_hash": tx_hash_str,
+                                                    "reward_type": "token",
+                                                }
+                                            )
+                                        else:
+                                            logger.error(
+                                                f"[distribute_rewards] WTA: Failed to send {reward_amount_near_str_final} {token_symbol} to {recipient_wallet}. Error: {transfer_result['error']}"
+                                            )
+                                    except Exception as e:
+                                        logger.error(
+                                            f"[distribute_rewards] WTA: Error distributing token reward: {e}"
+                                        )
+                                else:
+                                    # Handle NEAR reward distribution (existing logic)
                                     logger.info(
-                                        f"[distribute_rewards] WTA: Successfully sent {reward_amount_near_str_final} NEAR to {recipient_wallet}. Tx hash: {tx_hash_str}"
+                                        f"[distribute_rewards] WTA: Attempting to send {reward_amount_near_str_final} NEAR ({reward_amount_yoctonear_final} yoctoNEAR) to {recipient_wallet} (User: {winner_data.get('username', 'N/A')})"
                                     )
+                                    try:
+                                        # Use nowait=True to get transaction hash directly as string
+                                        tx_hash_str = (
+                                            await self.near_account.send_money(
+                                                recipient_wallet,
+                                                reward_amount_yoctonear_final,
+                                                nowait=True,
+                                            )
+                                        )
 
-                                    successful_transfers.append(
-                                        {
-                                            "user_id": user_id,
-                                            "username": winner_data.get(
-                                                "username", "N/A"
-                                            ),
-                                            "wallet_address": recipient_wallet,
-                                            "amount_near": reward_amount_near_str_final,
-                                            "tx_hash": tx_hash_str,
-                                        }
-                                    )
-                                except Exception as e:
-                                    error_msg = str(e)
-                                    if "RPC not available" in error_msg:
-                                        logger.error(
-                                            f"[distribute_rewards] WTA: NEAR RPC connection failed. This is likely a temporary network issue. Reward distribution will be retried automatically."
+                                        # tx_hash_str is now directly the transaction hash string
+                                        if not tx_hash_str or tx_hash_str == "N/A":
+                                            tx_hash_str = "UNKNOWN_HASH"
+
+                                        logger.info(
+                                            f"[distribute_rewards] WTA: Successfully sent {reward_amount_near_str_final} NEAR to {recipient_wallet}. Tx hash: {tx_hash_str}"
                                         )
-                                        logger.error(
-                                            f"[distribute_rewards] WTA: Failed to send reward to {recipient_wallet}: RPC not available"
+
+                                        successful_transfers.append(
+                                            {
+                                                "user_id": user_id,
+                                                "username": winner_data.get(
+                                                    "username", "N/A"
+                                                ),
+                                                "wallet_address": recipient_wallet,
+                                                "amount": reward_amount_near_str_final,
+                                                "currency": "NEAR",
+                                                "transaction_hash": tx_hash_str,
+                                                "reward_type": "near",
+                                            }
                                         )
-                                    else:
-                                        logger.error(
-                                            f"[distribute_rewards] WTA: Failed to send reward to {recipient_wallet}: {e}"
-                                        )
-                                    traceback.print_exc()
+                                    except Exception as e:
+                                        error_msg = str(e)
+                                        if "RPC not available" in error_msg:
+                                            logger.error(
+                                                f"[distribute_rewards] WTA: NEAR RPC connection failed. This is likely a temporary network issue. Reward distribution will be retried automatically."
+                                            )
+                                            logger.error(
+                                                f"[distribute_rewards] WTA: Failed to send reward to {recipient_wallet}: RPC not available"
+                                            )
+                                        else:
+                                            logger.error(
+                                                f"[distribute_rewards] WTA: Failed to send reward to {recipient_wallet}: {e}"
+                                            )
+                                        traceback.print_exc()
                             else:
                                 logger.warning(
                                     f"[distribute_rewards] WTA: Calculated reward amount for user {user_id} is zero or negative after fee ({reward_amount_near_str_final} NEAR), skipping transfer."

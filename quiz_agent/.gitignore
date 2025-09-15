@@ -2,6 +2,8 @@
 .github/prompts/*
 old_code.py
 migrations/
+src/scripts/*
+scripts/*
 dev-requirements.txt
 docker-entrypoint.sh
 fix_quiz_deposit_addresses.py
