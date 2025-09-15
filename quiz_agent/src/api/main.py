@@ -227,10 +227,15 @@ def create_app():
 
         logger.info("Successfully imported wallet router")
 
+        from api.routes.points import router as points_router
+
+        logger.info("Successfully imported points router")
+
         app.include_router(webhook_router, prefix="/webhook", tags=["webhook"])
         app.include_router(health_router, prefix="/health", tags=["health"])
         app.include_router(monitoring_router, prefix="/monitoring", tags=["monitoring"])
         app.include_router(wallet_router, prefix="/wallet", tags=["wallet"])
+        app.include_router(points_router, prefix="/points", tags=["points"])
 
         # Add Prometheus metrics endpoint
         @app.get("/metrics")
@@ -414,6 +419,7 @@ if FASTAPI_AVAILABLE:
                 "health": "/health",
                 "webhook": "/webhook",
                 "wallet": "/wallet",
+                "points": "/points",
                 "monitoring": "/monitoring",
                 "metrics": "/metrics",
                 "dashboard": "/dashboard",

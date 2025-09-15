@@ -33,3 +33,6 @@ class User(Base):
     # Relationships
     quiz_answers = relationship("QuizAnswer", back_populates="user")
     wallets = relationship("UserWallet", back_populates="user")
+    point_transactions = relationship("PointTransaction", back_populates="user")
+    user_points = relationship("UserPoints", back_populates="user", uselist=False)
+    created_quizzes = relationship("Quiz", back_populates="creator")

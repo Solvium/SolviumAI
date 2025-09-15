@@ -28,6 +28,7 @@ class Quiz(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     topic = Column(String, nullable=False)
     questions = Column(JSON, default=[])
+    creator_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)  # Track quiz creator
     status = Column(
         Enum(QuizStatus), default=QuizStatus.DRAFT, index=True
     )  # Added index
@@ -80,6 +81,8 @@ class Quiz(Base):
     token_payment_amount = Column(String, nullable=True)  # Amount paid in tokens
 
     answers = relationship("QuizAnswer", back_populates="quiz")  # Add relationship
+    point_transactions = relationship("PointTransaction", back_populates="quiz")
+    creator = relationship("User", back_populates="created_quizzes")
 
 
 class QuizAnswer(Base):

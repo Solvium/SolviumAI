@@ -256,6 +256,8 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         await handle_leaderboards(update, context)
     elif message_text == "💰 My Rewards":
         await handle_rewards(update, context)
+    elif message_text == "🎯 My Points":
+        await handle_my_points(update, context)
     elif message_text == "⬅️ Back to Main Menu":
         await show_main_menu(update, context)
     elif message_text == "⬅️ Back to Games":
@@ -344,6 +346,65 @@ async def handle_rewards(update: Update, context: CallbackContext) -> None:
         "💰 Manage your rewards:", reply_markup=create_rewards_keyboard()
     )
     await redis_client.set_user_data_key(user_id, "current_menu", "rewards")
+
+
+async def handle_my_points(update: Update, context: CallbackContext) -> None:
+    """Handle 'My Points' button press"""
+    user_id = str(update.effective_user.id)
+    username = update.effective_user.username or update.effective_user.first_name or "User"
+    
+    try:
+        from services.point_service import PointService
+        
+        # Get user's points
+        points_data = await PointService.get_user_points(user_id)
+        
+        if not points_data:
+            await update.message.reply_text(
+                "🎯 **Your Points**\n\n"
+                "You haven't earned any points yet!\n"
+                "Start playing quizzes to earn points:\n"
+                "• +5 points for each correct answer\n"
+                "• +3 bonus points for first correct answer in timed quizzes\n"
+                "• +2 points for each unique player who answers your quiz\n"
+                "• +1 bonus point for each correct answer in your quiz",
+                parse_mode="Markdown",
+                reply_markup=create_main_menu_keyboard()
+            )
+            return
+        
+        # Format points display
+        points_text = f"🎯 **{username}'s Points**\n\n"
+        points_text += f"💰 **Total Points:** {points_data['total_points']}\n"
+        points_text += f"📊 **Breakdown:**\n"
+        points_text += f"   • Quiz Taker Points: {points_data['quiz_taker_points']}\n"
+        points_text += f"   • Quiz Creator Points: {points_data['quiz_creator_points']}\n\n"
+        points_text += f"📈 **Statistics:**\n"
+        points_text += f"   • Correct Answers: {points_data['total_correct_answers']}\n"
+        points_text += f"   • Quizzes Created: {points_data['total_quizzes_created']}\n"
+        points_text += f"   • Quizzes Taken: {points_data['total_quizzes_taken']}\n"
+        points_text += f"   • First Correct Answers: {points_data['first_correct_answers']}\n\n"
+        points_text += f"🕒 **Last Updated:** {points_data['last_updated'][:19] if points_data['last_updated'] else 'Never'}\n\n"
+        points_text += "💡 **How to earn more points:**\n"
+        points_text += "• Answer quiz questions correctly (+5 points each)\n"
+        points_text += "• Be first to answer correctly in timed quizzes (+3 bonus)\n"
+        points_text += "• Create quizzes that others play (+2 per unique player)\n"
+        points_text += "• Get bonus points when players answer correctly (+1 each)"
+        
+        await update.message.reply_text(
+            points_text,
+            parse_mode="Markdown",
+            reply_markup=create_main_menu_keyboard()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting user points for {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ **Error loading your points**\n\n"
+            "There was an error retrieving your point information. Please try again later.",
+            parse_mode="Markdown",
+            reply_markup=create_main_menu_keyboard()
+        )
 
 
 async def handle_back_to_games(update: Update, context: CallbackContext) -> None:

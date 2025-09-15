@@ -500,6 +500,7 @@ async def process_questions(
         quiz = Quiz(
             topic=topic,
             questions=questions_list,
+            creator_id=str(update.effective_user.id),  # Track the quiz creator
             status=QuizStatus.DRAFT,  # Initial status is DRAFT
             group_chat_id=group_chat_id,
             duration_seconds=duration_seconds,  # Store the duration
@@ -511,6 +512,20 @@ async def process_questions(
         logger.info(
             f"Created quiz with ID: {quiz_id} in DRAFT status with duration {duration_seconds} seconds and deposit address {Config.DEPOSIT_ADDRESS}."
         )
+        
+        # Update creator's quiz creation statistics
+        try:
+            from services.point_service import PointService
+            await PointService._update_user_points(
+                session=session,
+                user_id=str(update.effective_user.id),
+                quizzes_created_to_add=1
+            )
+            session.commit()
+            logger.info(f"Updated quiz creation statistics for user {update.effective_user.id}")
+        except Exception as e:
+            logger.error(f"Error updating quiz creation statistics: {e}")
+            session.rollback()
     finally:
         session.close()
 
@@ -2807,6 +2822,73 @@ Good luck with your next quiz!"""
                     session.rollback()
         else:
             logger.info("✅ Database verification passed - all answers saved correctly")
+
+        # Award points for quiz completion
+        try:
+            from services.point_service import PointService
+            
+            # Calculate points for quiz taker
+            total_points_awarded = 0
+            correct_answers = results.get("correct", 0)
+            
+            # Award points for each correct answer
+            for question_index, answer_data in results["answers"].items():
+                is_correct = answer_data.get("correct", False)
+                if is_correct:
+                    question_idx = int(question_index)
+                    
+                    # Check if this is a timed quiz
+                    is_timed_quiz = quiz.duration_seconds is not None and quiz.duration_seconds > 0
+                    
+                    # Check if this was the first correct answer for this question
+                    is_first_correct = await PointService.check_first_correct_answer(quiz.id, question_idx)
+                    
+                    # Award points to quiz taker
+                    taker_result = await PointService.award_quiz_taker_points(
+                        user_id=user_id,
+                        quiz_id=quiz.id,
+                        is_correct=True,
+                        is_first_correct=is_first_correct,
+                        is_timed_quiz=is_timed_quiz
+                    )
+                    
+                    total_points_awarded += taker_result["points_awarded"]
+                    
+                    # Award points to quiz creator (if different from taker)
+                    if quiz.creator_id and quiz.creator_id != user_id:
+                        creator_result = await PointService.award_quiz_creator_points(
+                            creator_user_id=quiz.creator_id,
+                            quiz_id=quiz.id,
+                            answering_user_id=user_id,
+                            is_correct=True
+                        )
+                        logger.info(f"Awarded {creator_result['points_awarded']} points to quiz creator {quiz.creator_id}")
+            
+            # Update user's quiz statistics
+            if total_points_awarded > 0:
+                from services.point_service import PointService
+                session = SessionLocal()
+                try:
+                    await PointService._update_user_points(
+                        session=session,
+                        user_id=user_id,
+                        quizzes_taken_to_add=1
+                    )
+                    session.commit()
+                except Exception as e:
+                    logger.error(f"Error updating user quiz statistics: {e}")
+                    session.rollback()
+                finally:
+                    session.close()
+                
+                logger.info(f"Awarded {total_points_awarded} total points to user {user_id} for quiz {quiz.id}")
+                
+                # Update results text to include points information
+                results_text += f"\n\n🎯 Points earned: {total_points_awarded}"
+                
+        except Exception as point_error:
+            logger.error(f"Error awarding points: {point_error}")
+            # Don't fail the quiz completion if points fail
 
     except Exception as e:
         logger.error(f"Error saving enhanced quiz results: {e}")

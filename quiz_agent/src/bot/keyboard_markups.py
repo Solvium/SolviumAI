@@ -14,6 +14,9 @@ def create_main_menu_keyboard() -> ReplyKeyboardMarkup:
             KeyboardButton("🏆 Leaderboards"),
             KeyboardButton("💰 My Rewards")
         ],
+        [
+            KeyboardButton("🎯 My Points")
+        ],
 
     ],
     resize_keyboard=True,  # Makes buttons smaller to fit better
@@ -33,6 +36,9 @@ def create_game_selection_keyboard() -> ReplyKeyboardMarkup:
         [
             KeyboardButton("🏆 Leaderboards"),
             KeyboardButton("💰 My Rewards")
+        ],
+        [
+            KeyboardButton("🎯 My Points")
         ],
         [
             KeyboardButton("⬅️ Back to Main Menu")
@@ -270,6 +276,12 @@ def create_inline_main_menu_keyboard() -> InlineKeyboardMarkup:
                 "💰 My Rewards",
                 callback_data="menu:rewards"
             )
+        ],
+        [
+            InlineKeyboardButton(
+                "🎯 My Points",
+                callback_data="menu:my_points"
+            )
         ]
     ])
 
@@ -296,6 +308,12 @@ def create_inline_game_selection_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 "💰 My Rewards",
                 callback_data="game:rewards"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🎯 My Points",
+                callback_data="game:my_points"
             )
         ],
         [
