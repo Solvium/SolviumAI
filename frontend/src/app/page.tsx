@@ -13,6 +13,7 @@ import { useAuth } from "./contexts/AuthContext";
 import GamesPage from "@/components/games/GamesPage";
 import { WheelOfFortune } from "@/components/Wheel";
 import { LogOut } from "lucide-react";
+import Image from "next/image";
 
 // Force dynamic rendering since this page uses client-side features
 export const dynamic = "force-dynamic";
@@ -60,20 +61,20 @@ function Home() {
     return <LoginModule />;
   }
   return (
-    <div className="min-h-screen tropical-gradient">
+    <div className="max-h-screen tropical-gradient">
       <div>
         <div className="max-w-[430px] no-scrollbar mx-auto relative min-h-screen">
           <div className="flex flex-col no-scrollbar h-screen">
-          <button
+          {/* <button
                 onClick={() => logout()}
                 className="absolute top-6 mt-10 right-6 z-50 w-12 h-12 bg-cover bg-center bg-no-repeat hover:scale-110 transition-all duration-200 shadow-lg"
                 style={{
                   backgroundImage: "url('/assets/buttons/power-button.png')",
                 }}
                 title="Logout"
-              ></button>
+              ></button> */}
 
-            <div className="flex-1 overflow-y-auto no-scrollbar pb-20 h-[90vh]">
+            <div className="flex-1 overflow-y-auto no-scrollbar pb-20">
               {selectedTab === "Home" && <UserProfile tg={tg} />}
               {selectedTab === "Contest" && <ContestBoard />}
               {selectedTab === "Wheel" && <WheelOfFortune />}
@@ -91,7 +92,13 @@ function Home() {
                       selectedTab === "Home" ? "bg-orange-100 scale-105" : "hover:bg-gray-50 hover:scale-105"
                     }`}
                   >
-                    <img src="/assets/nav/profile.png" alt="Profile" className="w-8 h-8 mb-1" />
+                    <Image
+  src="/assets/nav/profile.png"
+  alt="Profile"
+  width={32}
+  height={32}
+  className="w-8 h-8 mb-1"
+/>
                     <span
                       className={`text-xs font-semibold ${
                         selectedTab === "Home" ? "text-orange-600" : "text-gray-600"
@@ -107,7 +114,13 @@ function Home() {
                       selectedTab === "Wheel" ? "bg-orange-100 scale-105" : "hover:bg-gray-50 hover:scale-105"
                     }`}
                   >
-                    <img src="/assets/nav/wheel.webp" alt="Wheel" className="w-8 h-8 mb-1" />
+                    <Image
+  src="/assets/nav/wheel.webp"
+  alt="Wheel"
+  width={32}
+  height={32}
+  className="w-8 h-8 mb-1"
+/>
                     <span
                       className={`text-xs font-semibold ${
                         selectedTab === "Wheel" ? "text-orange-600" : "text-gray-600"
@@ -123,9 +136,15 @@ function Home() {
                       selectedTab === "Game" ? "bg-orange-100 scale-105" : "hover:bg-gray-50 hover:scale-105"
                     }`}
                   >
-                    <img src="/assets/nav/games.webp" alt="Games" className="w-8 h-8 mb-1" />
+                    <Image
+  src="/assets/nav/games.webp"
+  alt="Games"
+  width={32}
+  height={32}
+  className="w-8 h-8 mb-1"
+/>
                     <span
-                      className={`text-xs font-semibold ${
+                     className={`text-xs font-semibold ${
                         selectedTab === "Game" ? "text-orange-600" : "text-gray-600"
                       }`}
                     >
@@ -139,7 +158,13 @@ function Home() {
                       selectedTab === "Leaderboard" ? "bg-orange-100 scale-105" : "hover:bg-gray-50 hover:scale-105"
                     }`}
                   >
-                    <img src="/assets/nav/rank.png" alt="Ranks" className="w-8 h-8 mb-1" />
+                    <Image
+  src="/assets/nav/rank.png"
+  alt="Ranks"
+  width={32}
+  height={32}
+  className="w-8 h-8 mb-1"
+/>
                     <span
                       className={`text-xs font-semibold ${
                         selectedTab === "Leaderboard" ? "text-orange-600" : "text-gray-600"
@@ -155,7 +180,13 @@ function Home() {
                       selectedTab === "Wallet" ? "bg-orange-100 scale-105" : "hover:bg-gray-50 hover:scale-105"
                     }`}
                   >
-                    <img src="/assets/nav/wallet.webp" alt="Wallet" className="w-8 h-8 mb-1" />
+                    <Image
+  src="/assets/nav/wallet.webp"
+  alt="Wallet"
+  width={32}
+  height={32}
+  className="w-8 h-8 mb-1"
+/>
                     <span
                       className={`text-xs font-semibold ${
                         selectedTab === "Wallet" ? "text-orange-600" : "text-gray-600"

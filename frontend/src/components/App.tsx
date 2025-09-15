@@ -1,6 +1,8 @@
 "use client";
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Script from "next/script";
+import Head from "next/head";
 import { useEffect } from "react";
 import { MultiLoginProvider } from "@/app/contexts/MultiLoginContext";
 import { SimpleWalletProvider } from "@/app/contexts/SimpleWalletContext";
@@ -51,16 +53,16 @@ export default function App({
 
   return (
     <QueryClientProvider client={queryClient}>
-      <html lang="en">
-        <head>
-          <Script src="https://telegram.org/js/telegram-web-app.js"></Script>
-        </head>
-        <SimpleWalletProvider>
-          <MultiLoginProvider>
-            <body>{children}</body>
-          </MultiLoginProvider>
-        </SimpleWalletProvider>
-      </html>
+      <Head>
+        <title>My App</title>
+      </Head>
+
+      {/* ✅ Load script AFTER hydration to avoid ESLint warning */}
+      <Script src="https://telegram.org/js/telegram-web-app.js" strategy="afterInteractive" />
+
+      <SimpleWalletProvider>
+        <MultiLoginProvider>{children}</MultiLoginProvider>
+      </SimpleWalletProvider>
     </QueryClientProvider>
   );
 }

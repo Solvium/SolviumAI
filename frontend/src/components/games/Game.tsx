@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { GameTimer } from "../Timer";
 import { useAuth } from "@/app/contexts/AuthContext";
+import Image from "next/image";
 
 const headbreaker = require("headbreaker");
 
@@ -146,14 +147,15 @@ export const Game = () => {
   }, [solved]);
 
   const preloadImage = (src: string) => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = document.createElement("img"); // ✅ Properly typed
       img.src = src;
       img.onload = () => resolve(img);
       img.onerror = (err) => reject(err);
     });
   };
-
+  
+  
   const playGame = async () => {
     setSolved(false);
     setIsPlaying(true);
@@ -253,7 +255,9 @@ export const Game = () => {
   if (!userDetails) {
     return (
       <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"
+         style={{ backgroundImage: "url('/tropical-adventure-bg.jpg')" }}
+        ></div>
       </div>
     );
   } else
@@ -319,7 +323,7 @@ export const Game = () => {
             You have earned{" "}
             <span className="text-[#4C6FFF] font-bold">{points} SOLV</span>
           </p>
-          <img
+          <Image
             className="my-4 rounded-lg border border-[#2A2A45] max-w-full h-auto"
             src={displayImg?.src}
             alt="Completed puzzle"

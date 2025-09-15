@@ -8,6 +8,7 @@ import BuySpin from "./BuySpin"
 import { useMultiLoginContext } from "@/app/contexts/MultiLoginContext"
 import { usePrivateKeyWallet } from "@/app/contexts/PrivateKeyWalletContext"
 import StatusBar3D from "./StatusBar3D"
+import Image from "next/image"
 const Wheel = dynamic(() => import("react-custom-roulette").then((mod) => mod.Wheel), { ssr: false })
 
 interface ClaimProps {
@@ -336,25 +337,30 @@ export const WheelOfFortune = () => {
 
           <div className="relative flex justify-center mb-2 flex-1 items-center min-h-0">
             <div className="relative flex items-center justify-center">
-              <div className="relative w-64 h-64 flex items-center justify-center">
-                <img
-                  src="/casino-wheel-3d.png"
-                  alt="Casino Wheel"
-                  className={`w-full h-full object-contain transition-transform duration-[3000ms] ease-out ${
-                    mustSpin ? "animate-spin-wheel" : ""
-                  }`}
-                  style={{
-                    transform: mustSpin ? `rotate(${prizeNumber * 40 + 1800}deg)` : "rotate(0deg)",
-                  }}
-                />
+            <div className="relative w-64 h-64 flex items-center justify-center">
+  <Image
+    src="/casino-wheel-3d.png"
+    alt="Casino Wheel"
+    fill
+    className={`object-contain transition-transform duration-[3000ms] ease-out ${
+      mustSpin ? "animate-spin-wheel" : ""
+    }`}
+    style={{
+      transform: mustSpin
+        ? `rotate(${prizeNumber * 40 + 1800}deg)`
+        : "rotate(0deg)",
+    }}
+    priority
+  />
 
-                <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20">
-                  <div className="w-0 h-0 border-l-[12px] border-r-[12px] border-b-[20px] border-l-transparent border-r-transparent border-b-yellow-400 drop-shadow-lg"></div>
-                  <div className="w-0 h-0 border-l-[8px] border-r-[8px] border-b-[14px] border-l-transparent border-r-transparent border-b-white absolute top-1 left-1/2 transform -translate-x-1/2"></div>
-                </div>
+  <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20">
+    <div className="w-0 h-0 border-l-[12px] border-r-[12px] border-b-[20px] border-l-transparent border-r-transparent border-b-yellow-400 drop-shadow-lg"></div>
+    <div className="w-0 h-0 border-l-[8px] border-r-[8px] border-b-[14px] border-l-transparent border-r-transparent border-b-white absolute top-1 left-1/2 transform -translate-x-1/2"></div>
+  </div>
 
-                <div className="absolute -inset-[50px] bg-gradient-radial from-yellow-400/40 via-orange-400/20 to-transparent blur-2xl animate-pulse pointer-events-none" />
-              </div>
+  <div className="absolute -inset-[50px] bg-gradient-radial from-yellow-400/40 via-orange-400/20 to-transparent blur-2xl animate-pulse pointer-events-none" />
+</div>
+
             </div>
           </div>
 
@@ -363,15 +369,23 @@ export const WheelOfFortune = () => {
               <CountdownTimer targetTime={cooldownTime} />
             ) : (
               <button
-                onClick={handleSpinClick}
-                disabled={(hasPlayed && new Date(cooldownTime) > new Date(Date.now())) || mustSpin}
-                className="w-full py-3 bg-gradient-to-r from-orange-500 via-red-500 to-orange-600 text-white text-lg font-black rounded-2xl
-                     hover:from-orange-600 hover:via-red-600 hover:to-orange-700 transition-all duration-300 transform hover:scale-105
-                     disabled:opacity-50 disabled:cursor-not-allowed
-                     shadow-2xl border-2 border-yellow-400"
-              >
-                <span className="drop-shadow-lg">🎯 SPIN NOW! 🎯</span>
-              </button>
+  onClick={handleSpinClick}
+  disabled={(hasPlayed && new Date(cooldownTime) > new Date(Date.now())) || mustSpin}
+  className="relative w-full h-20 bg-cover bg-center bg-no-repeat transform transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-yellow-400/50 disabled:opacity-50 disabled:cursor-not-allowed"
+  style={{
+    backgroundImage: "url('/assets/buttons/wooden-button.png')",
+  }}
+>
+  {/* Button Text Overlay */}
+  <div className="absolute inset-0 flex items-center justify-center">
+    <span className="text-2xl md:text-3xl font-bold text-amber-900 drop-shadow-lg tracking-wider">
+     SPIN NOW!
+    </span>
+  </div>
+
+  {/* Subtle glow effect on hover */}
+  <div className="absolute inset-0 bg-yellow-400/0 hover:bg-yellow-400/10 transition-all duration-200 rounded-lg" />
+</button>
             )}
 
             {isClaimed && (
@@ -396,11 +410,12 @@ export const WheelOfFortune = () => {
       </div>
 
       <WinPopup
-        isVisible={(winner || unclaimed) && !isClaimed}
-        prize={winner}
-        onClaim={handleClaim}
-        isClaimLoading={isClaimLoading}
-      />
+  isVisible={Boolean((winner || unclaimed) && !isClaimed)}
+  prize={winner}
+  onClaim={handleClaim}
+  isClaimLoading={isClaimLoading}
+/>
+
 
       <ToastContainer
         position="bottom-right"

@@ -1,6 +1,7 @@
 "use client"
 
 import { useAuth } from "@/app/contexts/AuthContext"
+import Image from "next/image"
 import { useEffect, useState } from "react"
 
 interface StatusBar3DProps {
@@ -50,7 +51,7 @@ const StatusBar3D = ({ className = "" }: StatusBar3DProps) => {
     <div className={`flex items-center justify-between gap-2 sm:gap-4 p-2 sm:p-4 ${className}`}>
       <div className="relative flex items-center">
         <div className="relative">
-          <img src="/assets/status/gifts-bar.png" alt="Points" className="h-10 sm:h-8 w-auto" />
+          <Image src="/assets/status/gifts-bar.png" alt="Points" className="h-10 sm:h-8 w-auto" />
           <div
             className="absolute top-1/2 left-8 h-2 bg-gradient-to-r from-orange-400 to-orange-600 rounded-full transition-all duration-1000 ease-out transform -translate-y-1/2"
             style={{
@@ -65,8 +66,8 @@ const StatusBar3D = ({ className = "" }: StatusBar3DProps) => {
       </div>
 
       <div className="relative flex items-center">
-        <div className="relative">
-          <img src="/assets/status/coin-progress.png" alt="Refs" className="h-10 sm:h-8 w-auto" />
+        <div className="  relative">
+          <Image src="/assets/status/coin-progress.png" alt="Refs" className="h-10 sm:h-8 w-auto" />
           <div
             className="absolute top-1/2 left-6 h-2 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full transition-all duration-1000 ease-out transform -translate-y-1/2"
             style={{
@@ -82,7 +83,7 @@ const StatusBar3D = ({ className = "" }: StatusBar3DProps) => {
 
       <div className="relative flex items-center">
         <div className="relative">
-          <img src="/assets/status/star-bar.png" alt="Multiplier" className="h-10 sm:h-8 w-auto" />
+          <Image src="/assets/status/star-bar.png" alt="Multiplier" className="h-10 sm:h-8 w-auto" />
           <div
             className="absolute top-1/2 left-8 h-2 bg-gradient-to-r from-yellow-300 to-yellow-500 rounded-full transition-all duration-1000 ease-out transform -translate-y-1/2"
             style={{

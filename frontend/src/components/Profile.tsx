@@ -11,12 +11,13 @@ import { useAuth } from "@/app/contexts/AuthContext"
 import { useToast } from "@/app/hooks/use-toast"
 import DepositMultiplier from "./DepositMultiplier"
 import StatusBar3D from "./StatusBar3D"
+import Image from "next/image"
 
 const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
-  const { user: userDetails } = useAuth()
+  const { user: userDetails, logout } = useAuth()
   return (
     <div
-      className="min-h-screen w-full py-3 px-3 md:py-4 relative overflow-hidden"
+      className="max-h-screen w-full py-3 px-3 md:py-4 pb-5 relative overflow-hidden"
       style={{
         backgroundImage: "url('/tropical-adventure-bg.jpg')",
         backgroundSize: "cover",
@@ -26,6 +27,14 @@ const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
     >
       <div className="absolute inset-0 bg-none-transparent  pointer-events-none"></div>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(34,211,238,0.1),transparent_50%)] pointer-events-none"></div>
+      <button
+        onClick={() => logout()}
+        className="absolute top-6 right-6 z-50 w-12 h-12 bg-cover bg-center bg-no-repeat hover:scale-110 transition-all duration-200 shadow-lg"
+        style={{
+          backgroundImage: "url('/assets/buttons/power-button.png')",
+        }}
+        title="Logout"
+      ></button>
 
       <div className="max-w-2xl mx-auto space-y-4 relative z-10">
       {/* <StatusBar3D className="mb-6" /> */}
@@ -63,11 +72,13 @@ const ProfileHeader = ({ userDetails }: any) => {
     <div className="flex flex-col items-center gap-4">
       <div className="relative">
         <div className="relative mb-4">
-          <img
-            src="/crown.png"
-            alt="Crown"
-            className="w-20 h-20 mx-auto drop-shadow-2xl hover:scale-110 transition-transform duration-500 filter "
-          />
+        <Image
+  src="/crown.png"
+  alt="Crown"
+  width={80}
+  height={80}
+  className="w-20 h-20 mx-auto drop-shadow-2xl hover:scale-110 transition-transform duration-500 filter"
+/>
           <div className="absolute inset-0 bg-gradient-to-r from-brown-400/30 to-green-500/30 rounded-full blur-xl animate-pulse"></div>
         </div>
 
@@ -85,48 +96,57 @@ const ProfileHeader = ({ userDetails }: any) => {
         <div className="grid grid-cols-3 gap-6 w-full max-w-md">
           <div className="relative group flex flex-col items-center">
             <div className="relative">
-              <img
-                src="/assets/profile/coins.webp"
-                alt="Points"
-                className="w-20 h-20 mx-auto drop-shadow-2xl group-hover:scale-110 transition-transform duration-300 filter brightness-110"
-              />
-              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2">
-                <div className=" px-3 py-1 rounded-full text-sm font-black shadow-lg border-2 border-amber-300">
-                  {userDetails?.totalPoints || 0}
-                </div>
-              </div>
+            <Image
+  src="/assets/profile/coins.webp"
+  alt="Points"
+  width={80}
+  height={80}
+  className="w-20 h-20 mx-auto drop-shadow-2xl group-hover:scale-110 transition-transform duration-300 filter brightness-110"
+/>
+<div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2">
+  <div className="px-3 py-1 rounded-full text-sm font-black shadow-lg border-2 border-amber-300 !text-white bg-black/40">
+    {userDetails?.totalPoints || 0}
+  </div>
+</div>
+
             </div>
             <p className="text-xs font-bold text-cyan-100 uppercase tracking-wider mt-2">Points</p>
           </div>
 
           <div className="relative group flex flex-col items-center">
             <div className="relative">
-              <img
-                src="/assets/profile/referral.webp"
-                alt="Referrals"
-                className="w-20 h-20 mx-auto drop-shadow-2xl group-hover:scale-110 transition-transform duration-300 filter brightness-110"
-              />
-              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2">
-                <div className=" px-3 py-1 rounded-full text-sm font-black shadow-lg border-2 border-blue-300">
-                  {userDetails?.referralCount || 0}
-                </div>
-              </div>
+            <Image
+  src="/assets/profile/referral.webp"
+  alt="Referrals"
+  width={80}
+  height={80}
+  className="w-20 h-20 mx-auto drop-shadow-2xl group-hover:scale-110 transition-transform duration-300 filter brightness-110"
+/>
+<div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2">
+  <div className="px-3 py-1 rounded-full text-sm font-black shadow-lg border-2 border-blue-300 !text-white bg-black/40">
+    {userDetails?.referralCount || 0}
+  </div>
+</div>
+
             </div>
             <p className="text-xs font-bold text-cyan-100 uppercase tracking-wider mt-2">Refs</p>
           </div>
 
           <div className="relative group flex flex-col items-center">
             <div className="relative">
-              <img
-                src="/assets/profile/boost.webp"
-                alt="Multiplier"
-                className="w-20 h-20 mx-auto drop-shadow-2xl group-hover:scale-110 transition-transform duration-300 filter brightness-110"
-              />
-              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2">
-                <div className=" px-3 py-1 rounded-full text-sm font-black shadow-lg border-2 border-purple-300">
-                  {userDetails?.multiplier || 0}
-                </div>
-              </div>
+            <Image
+  src="/assets/profile/boost.webp"
+  alt="Multiplier"
+  width={80}
+  height={80}
+  className="w-20 h-20 mx-auto drop-shadow-2xl group-hover:scale-110 transition-transform duration-300 filter brightness-110"
+/>
+<div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2">
+  <div className="px-3 py-1 rounded-full text-sm font-black shadow-lg border-2 border-purple-300 !text-white bg-black/40">
+    {userDetails?.multiplier || 0}
+  </div>
+</div>
+
             </div>
             <p className="text-xs font-bold text-cyan-100 uppercase tracking-wider mt-2">Boost</p>
           </div>
@@ -529,7 +549,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-center gap-3">
-        <img src="/key.png" alt="Key" className="w-8 h-8 drop-shadow-lg" />
+        <Image src="/key.png" alt="Key" className="w-8 h-8 drop-shadow-lg" />
         <h2 className="text-lg font-black text-cyan-100 uppercase tracking-wider">Tasks</h2>
       </div>
 

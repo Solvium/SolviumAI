@@ -1,187 +1,96 @@
-"use client";
-import React, { useState, useEffect } from "react";
-// import { toast } from "sonner";
-import { useRouter } from "next/navigation";
-import GameTabs from "./GameTabs";
-import GameGrid from "./GameGrid";
-import WordleGame from "./wordle/WordleGame";
-import LogicQuizGame from "./quiz/LogicQuizGame";
-import QuizGame from "./quiz/QuizGame";
-import { PicturePuzzle } from "./puzzle/Game";
-import { ArrowLeft } from "lucide-react";
-
-// Layout Components
-
-// Mock data - using the same data structure as the Index page
-const getGamesForCategory = (category: string) => {
-  const allGames = {
-    wordle: [
-      {
-        id: "wordle",
-        title: "Wordle",
-        description:
-          "Guess the 5-letter word in 6 tries. A new puzzle each day!",
-        emoji: "🧠",
-      },
-    ],
-    puzzles: [
-      {
-        id: "picture_puzzle",
-        title: "Picture Puzzle",
-        description:
-          "Arrange the image tiles in the correct order by matching them.",
-        emoji: "🧩",
-      },
-      //   {
-      //     id: "memory-match",
-      //     title: "Memory Match",
-      //     description:
-      //       "Find matching pairs of cards in the least number of moves.",
-      //     emoji: "🔍",
-      //   },
-      //   {
-      //     id: "sudoku",
-      //     title: "Sudoku",
-      //     description: "Fill the grid so each row, column, and box contains 1-9.",
-      //     emoji: "🔢",
-      //   },
-    ],
-
-    daily: [
-      {
-        id: "daily-wordle",
-        title: "Today's Wordle",
-        description:
-          "The official daily word challenge that everyone is playing.",
-        emoji: "📅",
-      },
-      {
-        id: "daily-puzzle",
-        title: "Daily Brain Teaser",
-        description: "A new logic puzzle every day to keep your mind sharp.",
-        emoji: "🧠",
-      },
-      {
-        id: "daily-bonus",
-        title: "Daily Bonus Game",
-        description: "Play for extra points and rewards. Changes every day!",
-        emoji: "🎁",
-      },
-    ],
-    quiz: [
-      {
-        id: "quiz-trivia",
-        title: "Trivia Quiz",
-        description:
-          "Test your knowledge with trivia questions from various topics.",
-        emoji: "❓",
-      },
-      {
-        id: "quiz-logic",
-        title: "Logic Challenge",
-        description:
-          "Advanced puzzles that test your reasoning and deduction skills.",
-        emoji: "🧩",
-      },
-      // {
-      //   id: "quiz-daily",
-      //   title: "Daily Quiz",
-      //   description:
-      //     "New set of questions every day with bonus rewards for completion.",
-      //   emoji: "🏆",
-      // },
-    ],
-  };
-
-  return allGames[category as keyof typeof allGames] || [];
-};
+"use client"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import WordleGame from "./wordle/WordleGame"
+import QuizGame from "./quiz/QuizGame"
+import { PicturePuzzle } from "./puzzle/Game"
+import { ArrowLeft } from "lucide-react"
 
 const GamesPage = () => {
-  // State
-  const navigate = useRouter();
-  const [activeTab, setActiveTab] = useState("wordle");
-  const [activeGame, setActiveGame] = useState<Element | any>(null);
-  const [games, setGames] = useState(getGamesForCategory("wordle"));
-  const [currentSection, setCurrentSection] = useState("Games");
-  const [coinBalance, setCoinBalance] = useState(150);
+  const navigate = useRouter()
+  const [activeGame, setActiveGame] = useState<Element | any>(null)
 
-  // Update games when tab changes
-  useEffect(() => {
-    setGames(getGamesForCategory(activeTab));
+  const games = [
+    {
+      id: "wordle",
+      title: "WORDLE",
+      component: <WordleGame />,
+    },
+    {
+      id: "quiz",
+      title: "QUIZ",
+      component: <QuizGame />,
+    },
+    {
+      id: "puzzle",
+      title: "PUZZLE",
+      component: <PicturePuzzle />,
+    },
+  ]
 
-    // Update the current section based on active tab
-    const tabLabels: Record<string, string> = {
-      wordle: "Wordle",
-      puzzles: "Puzzle",
-      // daily: "Daily Challenges",
-      quiz: "Quizzes",
-    };
+  const handleGameSelect = (game: any) => {
+    setActiveGame(game.component)
+  }
 
-    setCurrentSection(tabLabels[activeTab] || "Games");
-  }, [activeTab]);
-
-  // Handle play game
-  const handlePlayGame = (id: string) => {
-    // Route to the appropriate game page based on the game id
-    if (id === "wordle") {
-      //   navigate.push("/wordle");
-      setActiveGame(<WordleGame />);
-      return;
-    } else if (id.startsWith("quiz-")) {
-      if (id.includes("logic")) {
-        setActiveGame(<LogicQuizGame />);
-      }
-      if (id.includes("trivia")) {
-        setActiveGame(<QuizGame />);
-      }
-      //   navigate.push("/quiz");
-      return;
-    } else if (id.startsWith("picture")) {
-      setActiveGame(<PicturePuzzle />);
-    }
-  };
-
-  // Handle page change
-  const handleTabChange = (page: string) => {
-    setActiveTab(page);
-  };
   return (
     <>
       {activeGame == null ? (
-        <div className="min-h-screen bg-background pb-16 animate-fade-in">
-          {/* Top Navigation Bar */}
-          {/* <TopNavBar currentSection={currentSection}>
-        <CoinBalance
-          balance={coinBalance}
-          onAddCoins={() => navigate.push("/store")}
-        />
-      </TopNavBar> */}
+        <div
+          className="max-h-screen flex flex-col items-center justify-center pb-32 pt-20 p-6 bg-cover bg-center bg-no-repeat relative"
+          style={{
+            backgroundImage: "url('/tropical-adventure-bg.jpg')",
+          }}
+        >
+          <div className="absolute inset-0 bg-black/30" />
 
-          {/* Game Category Tabs */}
-          <GameTabs activeTab={activeTab} onTabChange={handleTabChange} />
+          <div className="relative z-10 flex flex-col items-center">
+            {/* Select Game Title */}
+            <h1 className="text-4xl md:text-5xl font-bold text-white mb-12 text-center tracking-wide drop-shadow-2xl">
+              SELECT GAME
+            </h1>
 
-          {/* Main Content Area */}
-          <main className="pb-4">
-            <GameGrid games={games} onPlayGame={handlePlayGame} />
-          </main>
+            {/* Game Selection Buttons */}
+            <div className="flex flex-col gap-6 w-full max-w-sm">
+              {games.map((game) => (
+                <button
+                  key={game.id}
+                  onClick={() => handleGameSelect(game)}
+                  className="relative w-full h-20 bg-cover bg-center bg-no-repeat transform transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-yellow-400/50"
+                  style={{
+                    backgroundImage: "url('/assets/buttons/wooden-button.png')",
+                  }}
+                >
+                  {/* Button Text Overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-2xl md:text-3xl font-bold text-amber-900 drop-shadow-lg tracking-wider">
+                      {game.title}
+                    </span>
+                  </div>
 
-          {/* Floating Action Button */}
-          {/* <FloatingActionButton onClick={handlePlayRandom} /> */}
+                  {/* Subtle glow effect on hover */}
+                  <div className="absolute inset-0 bg-yellow-400/0 hover:bg-yellow-400/10 transition-all duration-200 rounded-lg" />
+                </button>
+              ))}
+            </div>
 
-          {/* Bottom Navigation Bar */}
-          {/* <BottomNavBar activePage={activePage} onPageChange={handlePageChange} /> */}
+            {/* Decorative elements */}
+            <div className="mt-12 text-center">
+              <p className="text-white/90 text-lg drop-shadow-lg">Choose your adventure</p>
+            </div>
+          </div>
         </div>
       ) : (
-        <div className="block">
+        <div className="relative w-full pb-2 max-h-screen">
+          {/* Back arrow positioned absolutely within the game area */}
           <ArrowLeft
-            className="cursor-pointer mb-2"
+            className="absolute top-4 left-4 z-20 cursor-pointer text-white hover:text-yellow-400 transition-colors w-6 h-6 md:w-8 md:h-8 mt-3"
             onClick={() => setActiveGame(null)}
           />
-          <div className="w-full">{activeGame}</div>
+          <div className="w-full mmax-h-screen">{activeGame}</div>
         </div>
       )}
     </>
-  );
-};
+  )
+}
 
-export default GamesPage;
+export default GamesPage
