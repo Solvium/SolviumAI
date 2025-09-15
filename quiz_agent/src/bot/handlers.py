@@ -710,10 +710,7 @@ async def size_received(update, context):
     try:
         n = int(update.message.text.strip())
     except ValueError:
-        await update.message.reply_text(
-            "Please send a valid number of questions.",
-            reply_markup=create_main_menu_keyboard(),
-        )
+        await update.message.reply_text("Please send a valid number of questions.")
         return SIZE
 
     await redis_client.set_user_data_key(user_id, "num_questions", n)
@@ -1608,10 +1605,7 @@ async def handle_token_custom_amount_input(update, context):
 
     except Exception as e:
         logger.error(f"Error handling custom token amount input: {e}")
-        await update.message.reply_text(
-            "❌ An error occurred. Please try again.",
-            reply_markup=create_main_menu_keyboard(),
-        )
+        await update.message.reply_text("❌ An error occurred. Please try again.")
         return ConversationHandler.END
 
 
@@ -2903,9 +2897,7 @@ async def confirm_choice(update, context):
             return ConversationHandler.END
 
     # yes: generate and post
-    await update.callback_query.message.reply_text(
-        "🛠 Generating your quiz—one moment…", reply_markup=create_main_menu_keyboard()
-    )
+    await update.callback_query.message.reply_text("🛠 Generating your quiz—one moment…")
 
     # Fetch all necessary data from Redis
     topic = await redis_client.get_user_data_key(user_id, "topic")
@@ -3799,9 +3791,7 @@ async def private_message_handler(update: Update, context: CallbackContext):
         )
 
         if not verification_success:
-            await update.message.reply_text(
-                f"❌ {verification_message}", reply_markup=create_main_menu_keyboard()
-            )
+            await update.message.reply_text(f"❌ {verification_message}")
             return
 
         # Only if blockchain verification succeeds, save to database
@@ -3912,9 +3902,7 @@ async def private_message_handler(update: Update, context: CallbackContext):
             finally:
                 session.close()
         else:
-            await update.message.reply_text(
-                f"❌ {save_message}", reply_markup=create_main_menu_keyboard()
-            )
+            await update.message.reply_text(f"❌ {save_message}")
             return
         await RedisClient.delete_user_data_key(  # Use static method
             user_id, "awaiting_payment_hash_for_quiz_id"

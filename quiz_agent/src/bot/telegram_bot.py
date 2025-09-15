@@ -361,19 +361,23 @@ class TelegramBot:
         self.app.add_handler(conv, group=0)  # Highest priority - conversation handler
 
         # Handle confirmation callbacks globally to catch any that might be missed by the conversation handler
-        self.app.add_handler(CallbackQueryHandler(confirm_choice, pattern="^(yes|no)$"), group=0)
+        self.app.add_handler(
+            CallbackQueryHandler(confirm_choice, pattern="^(yes|no)$"), group=0
+        )
 
         # Handle reward setup initiation callback
         self.app.add_handler(
             CallbackQueryHandler(
                 start_reward_setup_callback, pattern="^reward_setup_start:"
             ),
-            group=0
+            group=0,
         )
         # Handle reward method choices
         self.app.add_handler(
-            CallbackQueryHandler(handle_reward_method_choice, pattern="^reward_method:"),
-            group=0
+            CallbackQueryHandler(
+                handle_reward_method_choice, pattern="^reward_method:"
+            ),
+            group=0,
         )
 
         # Handle menu callbacks - this should be registered before other callback handlers
@@ -382,7 +386,7 @@ class TelegramBot:
                 handle_menu_callback,
                 pattern="^(menu:|game:|challenge:|app:|quiz:|cancel|back)",
             ),
-            group=0
+            group=0,
         )
 
         # Handle wallet creation retry callbacks
@@ -391,7 +395,7 @@ class TelegramBot:
                 handle_wallet_retry_callback,
                 pattern="^retry_wallet_creation:",
             ),
-            group=0
+            group=0,
         )
 
         # THEN register other command handlers

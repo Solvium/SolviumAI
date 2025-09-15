@@ -265,6 +265,54 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
 
     logger.info(f"Text message from user {user_id}: {message_text}")
 
+    # Only process messages that are actual menu button presses
+    # If it's not a menu button, let other handlers deal with it
+    menu_buttons = [
+        "🎯 Create Quiz",
+        "🎲 Play Quiz",
+        "🏆 Leaderboards",
+        "💰 My Rewards",
+        "🎯 My Points",
+        "⬅️ Back to Main Menu",
+        "⬅️ Back to Games",
+        "⬅️ Back to Quiz Creation",
+        "👥 Challenge Group",
+        "👤 Challenge Friend",
+        "🏅 My Challenges",
+        "📊 Challenge Stats",
+        "📢 Join Announcements",
+        "💬 Join Discussion",
+        "🎮 Join Gaming",
+        "📈 Join Trading",
+        "🌐 Open Web App",
+        "📱 Download Mobile",
+        "💳 Connect Wallet",
+        "💰 View Rewards",
+        "📝 Quick Quiz",
+        "⚙️ Custom Quiz",
+        "📊 Quiz Templates",
+        "📈 My Quizzes",
+        "🎯 Active Quizzes",
+        "🏆 My Results",
+        "📊 Quiz History",
+        "🎖️ Achievements",
+        "💳 Connect Wallet",
+        "💰 View Balance",
+        "🏆 Claim Rewards",
+        "📈 Transaction History",
+        "🏆 Global Leaderboard",
+        "👥 Group Leaderboard",
+        "📊 Weekly Top",
+        "🎖️ All Time Best",
+        "❌ Cancel",
+        "⬅️ Back",
+    ]
+
+    if message_text not in menu_buttons:
+        logger.info(
+            f"Message '{message_text}' from user {user_id} is not a menu button, letting other handlers deal with it"
+        )
+        return  # Let other handlers process this message
 
     # Check if user has a wallet - if not, create one first
     wallet_service = WalletService()
