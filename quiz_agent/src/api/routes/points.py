@@ -94,7 +94,7 @@ async def get_leaderboard(
     leaderboard_type: str = Query(
         "total", description="Type of leaderboard: total, creator, or taker"
     ),
-    limit: int = Query(50, ge=1, le=100, description="Number of entries to return"),
+    limit: int = Query(10, ge=1, le=100, description="Number of entries to return"),
 ):
     """
     Get the points leaderboard.

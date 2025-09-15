@@ -78,6 +78,17 @@ def run_migration():
         else:
             logger.info("✅ point_transactions table already exists")
 
+            # Check if we need to rename the metadata column
+            if column_exists("point_transactions", "metadata"):
+                logger.info("Renaming 'metadata' column to 'transaction_metadata'...")
+                session.execute(
+                    text(
+                        "ALTER TABLE point_transactions RENAME COLUMN metadata TO transaction_metadata"
+                    )
+                )
+                session.commit()
+                logger.info("✅ Renamed metadata column to transaction_metadata")
+
         # 3. Create user_points table if it doesn't exist
         if not table_exists("user_points"):
             logger.info("Creating user_points table...")

@@ -3104,18 +3104,36 @@ async def process_questions_with_payment(
         session = SessionLocal()
         try:
             # Create quiz with ACTIVE status (not DRAFT)
+            logger.info(f"DEBUG: Creating quiz for user_id: {user_id} (type: {type(user_id)})")
             quiz = Quiz(
                 topic=topic,
                 questions=questions_list,
+                creator_id=str(user_id),  # Track the quiz creator
                 status=QuizStatus.ACTIVE,  # Directly activate the quiz
                 group_chat_id=group_chat_id,
                 duration_seconds=duration_seconds,
                 deposit_address=Config.DEPOSIT_ADDRESS,
             )
+            logger.info(f"DEBUG: Quiz object created with creator_id: {quiz.creator_id}")
             session.add(quiz)
             session.commit()
             quiz_id = quiz.id
-            logger.info(f"Created active quiz with ID: {quiz_id} for user {user_id}")
+            logger.info(f"Created active quiz with ID: {quiz_id} for user {user_id} with creator_id: {quiz.creator_id}")
+
+            # Update creator's quiz creation statistics
+            try:
+                from services.point_service import PointService
+
+                await PointService._update_user_points(
+                    session=session,
+                    user_id=str(user_id),
+                    quizzes_created_to_add=1,
+                )
+                session.commit()
+                logger.info(f"Updated quiz creation statistics for user {user_id}")
+            except Exception as e:
+                logger.error(f"Error updating quiz creation statistics: {e}")
+                session.rollback()
 
             # Set activation time and end time for all quizzes (free and paid)
             from datetime import datetime, timedelta, timezone

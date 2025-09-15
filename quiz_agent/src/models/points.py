@@ -35,7 +35,7 @@ class PointTransaction(Base):
     transaction_type = Column(Enum(PointTransactionType), nullable=False, index=True)
     points = Column(Integer, nullable=False)  # Can be positive or negative
     description = Column(Text, nullable=True)  # Human-readable description
-    metadata = Column(String, nullable=True)  # JSON string for additional data
+    transaction_metadata = Column(String, nullable=True)  # JSON string for additional data
     created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
 
     # Relationships

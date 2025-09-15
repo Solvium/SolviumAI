@@ -6,6 +6,7 @@ from models import Base
 from models.user import User
 from models.quiz import Quiz, QuizAnswer
 from models.wallet import UserWallet, WalletSecurity
+from models.points import PointTransaction, UserPoints
 import logging
 import os
 import time

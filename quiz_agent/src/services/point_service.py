@@ -82,6 +82,7 @@ class PointService:
                 user_id=user_id,
                 points_to_add=points_awarded,
                 correct_answers_to_add=1 if is_correct else 0,
+                taker_points_to_add=points_awarded,
             )
 
             session.commit()
@@ -233,7 +234,7 @@ class PointService:
             }
 
             # Cache for 5 minutes
-            await RedisClient.set_cached_object(cache_key, points_data, ttl=300)
+            await RedisClient.set_cached_object(cache_key, points_data, ex=300)
 
             return points_data
 
@@ -245,7 +246,7 @@ class PointService:
 
     @staticmethod
     async def get_leaderboard(
-        limit: int = 50, leaderboard_type: str = "total"
+        limit: int = 10, leaderboard_type: str = "total"
     ) -> List[Dict]:
         """
         Get points leaderboard
@@ -274,10 +275,11 @@ class PointService:
             else:  # total
                 sort_column = UserPoints.total_points
 
-            # Get leaderboard data
+            # Get leaderboard data - only include users with points > 0
             leaderboard_query = (
                 session.query(UserPoints, User.username, User.first_name)
                 .join(User, UserPoints.user_id == User.id)
+                .filter(UserPoints.total_points > 0)  # Only show users with points
                 .order_by(desc(sort_column), desc(UserPoints.last_updated))
                 .limit(limit)
             )
@@ -302,7 +304,7 @@ class PointService:
                 )
 
             # Cache for 2 minutes
-            await RedisClient.set_cached_object(cache_key, leaderboard, ttl=120)
+            await RedisClient.set_cached_object(cache_key, leaderboard, ex=120)
 
             return leaderboard
 
@@ -335,7 +337,7 @@ class PointService:
                         "description": transaction.description,
                         "quiz_id": transaction.quiz_id,
                         "created_at": transaction.created_at.isoformat(),
-                        "metadata": transaction.metadata,
+                        "metadata": transaction.transaction_metadata,
                     }
                 )
 
@@ -364,7 +366,7 @@ class PointService:
             transaction_type=transaction_type,
             points=points,
             description=description,
-            metadata=metadata,
+            transaction_metadata=metadata,
         )
         session.add(transaction)
         return transaction
