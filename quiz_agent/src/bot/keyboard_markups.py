@@ -9,9 +9,32 @@ from telegram import (
 from typing import List, Optional
 
 
+def get_menu_icon_placeholder() -> str:
+    """
+    Returns a consistent menu icon placeholder that will always show the menu icon
+    at the end of the input field.
+
+    IMPORTANT: The menu icon (📱) will only appear consistently when:
+    1. one_time_keyboard=False (keeps keyboard visible)
+    2. All messages include reply_markup parameter
+    3. No messages are sent without reply_markup (which removes the keyboard)
+
+    This ensures users always see the menu icon at the end of the input field.
+    """
+    return "📱 Choose an option..."
+
+
 def create_main_menu_keyboard() -> ReplyKeyboardMarkup:
     """
     Creates the main 2x2 grid menu that appears directly below the keyboard input.
+    The menu icon will always be visible at the end of the input field.
+
+    CRITICAL SETTINGS for menu icon consistency:
+    - resize_keyboard=True: Makes buttons smaller to fit better
+    - one_time_keyboard=False: Keeps keyboard visible (CRITICAL - prevents icon from disappearing)
+    - input_field_placeholder: Shows menu icon (📱) at end of input field
+
+    The menu icon will disappear if any message is sent without reply_markup parameter.
     """
     return ReplyKeyboardMarkup(
         [
@@ -20,8 +43,8 @@ def create_main_menu_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton("🎯 My Points")],
         ],
         resize_keyboard=True,  # Makes buttons smaller to fit better
-        one_time_keyboard=False,  # Keeps keyboard visible
-        input_field_placeholder="Choose an option...",  # Placeholder in input field
+        one_time_keyboard=False,  # Keeps keyboard visible - CRITICAL for menu icon consistency
+        input_field_placeholder=get_menu_icon_placeholder(),  # Menu icon placeholder
     )
 
 
@@ -38,7 +61,7 @@ def create_game_selection_keyboard() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
         one_time_keyboard=False,
-        input_field_placeholder="Select a game...",
+        input_field_placeholder="📱 Select a game...",
     )
 
 
@@ -54,7 +77,7 @@ def create_quiz_creation_keyboard() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
         one_time_keyboard=False,
-        input_field_placeholder="Quiz creation...",
+        input_field_placeholder="📱 Quiz creation...",
     )
 
 
@@ -74,7 +97,7 @@ def create_quiz_templates_keyboard() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
         one_time_keyboard=False,
-        input_field_placeholder="Choose template...",
+        input_field_placeholder="📱 Choose template...",
     )
 
 
@@ -90,7 +113,7 @@ def create_quiz_settings_keyboard() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
         one_time_keyboard=False,
-        input_field_placeholder="Configure quiz...",
+        input_field_placeholder="📱 Configure quiz...",
     )
 
 
@@ -106,7 +129,7 @@ def create_quiz_play_keyboard() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
         one_time_keyboard=False,
-        input_field_placeholder="Play quizzes...",
+        input_field_placeholder="📱 Play quizzes...",
     )
 
 
@@ -125,7 +148,7 @@ def create_rewards_keyboard() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
         one_time_keyboard=False,
-        input_field_placeholder="Manage rewards...",
+        input_field_placeholder="📱 Manage rewards...",
     )
 
 
@@ -144,7 +167,7 @@ def create_leaderboards_keyboard() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
         one_time_keyboard=False,
-        input_field_placeholder="View leaderboards...",
+        input_field_placeholder="📱 View leaderboards...",
     )
 
 
@@ -160,7 +183,7 @@ def create_community_keyboard() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
         one_time_keyboard=False,
-        input_field_placeholder="Join community...",
+        input_field_placeholder="📱 Join community...",
     )
 
 
@@ -176,7 +199,7 @@ def create_app_keyboard() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
         one_time_keyboard=False,
-        input_field_placeholder="App options...",
+        input_field_placeholder="📱 App options...",
     )
 
 
@@ -188,7 +211,7 @@ def create_cancel_keyboard() -> ReplyKeyboardMarkup:
         [[KeyboardButton("❌ Cancel"), KeyboardButton("⬅️ Back")]],
         resize_keyboard=True,
         one_time_keyboard=False,
-        input_field_placeholder="Navigation...",
+        input_field_placeholder="📱 Navigation...",
     )
 
 

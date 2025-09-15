@@ -47,6 +47,7 @@ from utils.telegram_helpers import (
     safe_edit_message_text,
     sanitize_markdown,
 )  # Ensure this is imported
+from .keyboard_markups import create_main_menu_keyboard
 import html  # Add this import
 from datetime import datetime, timezone, timedelta  # Add this import
 
@@ -144,16 +145,16 @@ async def start_handler(update, context):
             await handle_quiz_deep_link(update, context, quiz_id)
             return
 
-    # if chat_type == "private":
-    # In private chat, show the main menu
-    # from .menu_handlers import show_main_menu
+    if chat_type == "private":
+        # In private chat, show the main menu
+        from .menu_handlers import show_main_menu
 
-    # await show_main_menu(update, context)
-    # else:
-    # In group chat, show menu with DM suggestion
-    # from .menu_handlers import show_menu_in_group
+        await show_main_menu(update, context)
+    else:
+        # In group chat, show menu with DM suggestion
+        from .menu_handlers import show_menu_in_group
 
-    # await show_menu_in_group(update, context)
+        await show_menu_in_group(update, context)
 
 
 # Helper function to escape specific MarkdownV2 characters
@@ -350,7 +351,8 @@ async def start_createquiz_group(update, context):
 
         if chat_type != "private":
             await update.message.reply_text(
-                f"@{user.username}, I'll create a wallet for you first, then we'll set up your quiz in private chat."
+                f"@{user.username}, I'll create a wallet for you first, then we'll set up your quiz in private chat.",
+                reply_markup=create_main_menu_keyboard(),
             )
 
         # Send initial loading message
@@ -708,7 +710,10 @@ async def size_received(update, context):
     try:
         n = int(update.message.text.strip())
     except ValueError:
-        await update.message.reply_text("Please send a valid number of questions.")
+        await update.message.reply_text(
+            "Please send a valid number of questions.",
+            reply_markup=create_main_menu_keyboard(),
+        )
         return SIZE
 
     await redis_client.set_user_data_key(user_id, "num_questions", n)
@@ -1603,7 +1608,10 @@ async def handle_token_custom_amount_input(update, context):
 
     except Exception as e:
         logger.error(f"Error handling custom token amount input: {e}")
-        await update.message.reply_text("❌ An error occurred. Please try again.")
+        await update.message.reply_text(
+            "❌ An error occurred. Please try again.",
+            reply_markup=create_main_menu_keyboard(),
+        )
         return ConversationHandler.END
 
 
@@ -2876,7 +2884,9 @@ async def confirm_choice(update, context):
     await update.callback_query.answer()
 
     if choice == "no":
-        await update.callback_query.message.reply_text("Quiz creation canceled.")
+        await update.callback_query.message.reply_text(
+            "Quiz creation canceled.", reply_markup=create_main_menu_keyboard()
+        )
         await redis_client.clear_user_data(user_id)  # Clear data on cancellation
         return ConversationHandler.END
 
@@ -2893,7 +2903,9 @@ async def confirm_choice(update, context):
             return ConversationHandler.END
 
     # yes: generate and post
-    await update.callback_query.message.reply_text("🛠 Generating your quiz—one moment…")
+    await update.callback_query.message.reply_text(
+        "🛠 Generating your quiz—one moment…", reply_markup=create_main_menu_keyboard()
+    )
 
     # Fetch all necessary data from Redis
     topic = await redis_client.get_user_data_key(user_id, "topic")
@@ -3104,7 +3116,9 @@ async def process_questions_with_payment(
         session = SessionLocal()
         try:
             # Create quiz with ACTIVE status (not DRAFT)
-            logger.info(f"DEBUG: Creating quiz for user_id: {user_id} (type: {type(user_id)})")
+            logger.info(
+                f"DEBUG: Creating quiz for user_id: {user_id} (type: {type(user_id)})"
+            )
             quiz = Quiz(
                 topic=topic,
                 questions=questions_list,
@@ -3114,11 +3128,15 @@ async def process_questions_with_payment(
                 duration_seconds=duration_seconds,
                 deposit_address=Config.DEPOSIT_ADDRESS,
             )
-            logger.info(f"DEBUG: Quiz object created with creator_id: {quiz.creator_id}")
+            logger.info(
+                f"DEBUG: Quiz object created with creator_id: {quiz.creator_id}"
+            )
             session.add(quiz)
             session.commit()
             quiz_id = quiz.id
-            logger.info(f"Created active quiz with ID: {quiz_id} for user {user_id} with creator_id: {quiz.creator_id}")
+            logger.info(
+                f"Created active quiz with ID: {quiz_id} for user {user_id} with creator_id: {quiz.creator_id}"
+            )
 
             # Update creator's quiz creation statistics
             try:
@@ -3781,7 +3799,9 @@ async def private_message_handler(update: Update, context: CallbackContext):
         )
 
         if not verification_success:
-            await update.message.reply_text(f"❌ {verification_message}")
+            await update.message.reply_text(
+                f"❌ {verification_message}", reply_markup=create_main_menu_keyboard()
+            )
             return
 
         # Only if blockchain verification succeeds, save to database
@@ -3892,7 +3912,9 @@ async def private_message_handler(update: Update, context: CallbackContext):
             finally:
                 session.close()
         else:
-            await update.message.reply_text(f"❌ {save_message}")
+            await update.message.reply_text(
+                f"❌ {save_message}", reply_markup=create_main_menu_keyboard()
+            )
             return
         await RedisClient.delete_user_data_key(  # Use static method
             user_id, "awaiting_payment_hash_for_quiz_id"

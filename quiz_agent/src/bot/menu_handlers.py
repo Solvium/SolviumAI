@@ -34,6 +34,33 @@ from utils.config import Config
 logger = logging.getLogger(__name__)
 
 
+async def send_message_with_keyboard(
+    update: Update, context: CallbackContext, text: str, keyboard_func=None
+):
+    """
+    Helper function to ensure all messages include the appropriate keyboard.
+    This prevents the menu keyboard from disappearing.
+
+    Args:
+        update: Telegram update object
+        context: Callback context
+        text: Message text to send
+        keyboard_func: Function that returns the appropriate keyboard (defaults to main menu)
+    """
+    if keyboard_func is None:
+        keyboard_func = create_main_menu_keyboard
+
+    if update.callback_query:
+        # Handle callback query updates
+        await update.callback_query.answer()
+        await update.callback_query.message.reply_text(
+            text, reply_markup=keyboard_func()
+        )
+    else:
+        # Handle regular message updates
+        await update.message.reply_text(text, reply_markup=keyboard_func())
+
+
 async def handle_first_time_wallet_creation(
     update: Update, context: CallbackContext
 ) -> None:
@@ -237,6 +264,7 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
     message_text = update.message.text
 
     logger.info(f"Text message from user {user_id}: {message_text}")
+
 
     # Check if user has a wallet - if not, create one first
     wallet_service = WalletService()
@@ -565,7 +593,9 @@ async def handle_view_rewards(update: Update, context: CallbackContext) -> None:
 
 async def handle_quick_quiz(update: Update, context: CallbackContext) -> None:
     """Handle 'Quick Quiz' button press"""
-    await update.message.reply_text("📝 Quick quiz creation...")
+    await update.message.reply_text(
+        "📝 Quick quiz creation...", reply_markup=create_main_menu_keyboard()
+    )
     from bot.handlers import start_createquiz_group
 
     await start_createquiz_group(update, context)
@@ -573,7 +603,9 @@ async def handle_quick_quiz(update: Update, context: CallbackContext) -> None:
 
 async def handle_custom_quiz(update: Update, context: CallbackContext) -> None:
     """Handle 'Custom Quiz' button press"""
-    await update.message.reply_text("⚙️ Custom quiz creation...")
+    await update.message.reply_text(
+        "⚙️ Custom quiz creation...", reply_markup=create_main_menu_keyboard()
+    )
     from bot.handlers import start_createquiz_group
 
     await start_createquiz_group(update, context)
@@ -598,7 +630,9 @@ async def handle_my_quizzes(update: Update, context: CallbackContext) -> None:
 # Add handlers for new quiz-focused buttons
 async def handle_active_quizzes(update: Update, context: CallbackContext) -> None:
     """Handle 'Active Quizzes' button press"""
-    await update.message.reply_text("🎲 Loading available quizzes...")
+    await update.message.reply_text(
+        "🎲 Loading available quizzes...", reply_markup=create_main_menu_keyboard()
+    )
     from services.quiz_service import play_quiz
 
     context.args = []

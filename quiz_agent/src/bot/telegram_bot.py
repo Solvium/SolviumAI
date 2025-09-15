@@ -358,20 +358,22 @@ class TelegramBot:
             # Better mapping strategy for conversation states
             map_to_parent=True,
         )
-        self.app.add_handler(conv)
+        self.app.add_handler(conv, group=0)  # Highest priority - conversation handler
 
         # Handle confirmation callbacks globally to catch any that might be missed by the conversation handler
-        self.app.add_handler(CallbackQueryHandler(confirm_choice, pattern="^(yes|no)$"))
+        self.app.add_handler(CallbackQueryHandler(confirm_choice, pattern="^(yes|no)$"), group=0)
 
         # Handle reward setup initiation callback
         self.app.add_handler(
             CallbackQueryHandler(
                 start_reward_setup_callback, pattern="^reward_setup_start:"
-            )
+            ),
+            group=0
         )
         # Handle reward method choices
         self.app.add_handler(
-            CallbackQueryHandler(handle_reward_method_choice, pattern="^reward_method:")
+            CallbackQueryHandler(handle_reward_method_choice, pattern="^reward_method:"),
+            group=0
         )
 
         # Handle menu callbacks - this should be registered before other callback handlers
@@ -379,7 +381,8 @@ class TelegramBot:
             CallbackQueryHandler(
                 handle_menu_callback,
                 pattern="^(menu:|game:|challenge:|app:|quiz:|cancel|back)",
-            )
+            ),
+            group=0
         )
 
         # Handle wallet creation retry callbacks
@@ -387,7 +390,8 @@ class TelegramBot:
             CallbackQueryHandler(
                 handle_wallet_retry_callback,
                 pattern="^retry_wallet_creation:",
-            )
+            ),
+            group=0
         )
 
         # THEN register other command handlers
@@ -439,7 +443,8 @@ class TelegramBot:
             MessageHandler(
                 filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND,
                 handle_text_message,
-            )
+            ),
+            group=1,  # Higher priority group
         )
 
         # Handle private text messages (MUST BE LAST as it's the most generic)
@@ -449,7 +454,8 @@ class TelegramBot:
             MessageHandler(
                 filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND,
                 private_message_handler,
-            )
+            ),
+            group=2,  # Lower priority group
         )
 
         # Register error handler
