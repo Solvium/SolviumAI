@@ -107,6 +107,24 @@ class TokenService:
         logger.info("TokenService cache cleared")
 
     @classmethod
+    def invalidate_account_inventory_cache(cls, account_id: str):
+        """Invalidate inventory cache for a specific account"""
+        if account_id in cls._class_inventory_cache:
+            del cls._class_inventory_cache[account_id]
+            logger.info(f"Invalidated inventory cache for account {account_id}")
+        else:
+            logger.debug(f"No inventory cache found for account {account_id}")
+
+    @classmethod
+    def invalidate_account_metadata_cache(cls, token_contract: str):
+        """Invalidate metadata cache for a specific token contract"""
+        if token_contract in cls._class_metadata_cache:
+            del cls._class_metadata_cache[token_contract]
+            logger.info(f"Invalidated metadata cache for token {token_contract}")
+        else:
+            logger.debug(f"No metadata cache found for token {token_contract}")
+
+    @classmethod
     def get_cache_stats(cls):
         """Get cache statistics"""
         return {
@@ -114,6 +132,11 @@ class TokenService:
             "inventory_cache_size": len(cls._class_inventory_cache),
             "cache_ttl": cls._cache_ttl,
         }
+
+    @classmethod
+    def is_account_inventory_cached(cls, account_id: str) -> bool:
+        """Check if inventory is cached for a specific account"""
+        return account_id in cls._class_inventory_cache
 
     async def _get_ft_model(self, account: Account, token_contract: str) -> FtModel:
         """Helper method to get FtModel with correct decimal places"""
@@ -214,13 +237,16 @@ class TokenService:
                 decimals=6,
             )
 
-    async def get_user_token_inventory(self, account_id: str) -> List[Dict]:
+    async def get_user_token_inventory(
+        self, account_id: str, force_refresh: bool = False
+    ) -> List[Dict]:
         """Get all tokens for a user using NearBlocks API with caching and rate limiting handling"""
         try:
-            # Check cache first
-            cached_inventory = self._get_cached_inventory(account_id)
-            if cached_inventory is not None:
-                return cached_inventory
+            # Check cache first (unless force refresh is requested)
+            if not force_refresh:
+                cached_inventory = self._get_cached_inventory(account_id)
+                if cached_inventory is not None:
+                    return cached_inventory
 
             # Add a small delay to avoid rate limiting
             import asyncio
@@ -412,7 +438,7 @@ class TokenService:
                 "success": True,
                 "transaction_hash": result,
                 "amount": amount,
-                "amount_in_smallest_unit": amount_in_smallest_unit,
+                "amount_in_smallest_unit": amount,
                 "decimals": metadata["decimals"],
                 "message": f"Successfully transferred {amount} {metadata['symbol']} tokens",
             }
@@ -459,10 +485,14 @@ class TokenService:
                     "reference": None,
                 }
 
-    async def get_supported_tokens_for_user(self, account_id: str) -> List[Dict]:
+    async def get_supported_tokens_for_user(
+        self, account_id: str, force_refresh: bool = False
+    ) -> List[Dict]:
         """Get tokens that user actually has (non-zero balance)"""
         try:
-            tokens = await self.get_user_token_inventory(account_id)
+            tokens = await self.get_user_token_inventory(
+                account_id, force_refresh=force_refresh
+            )
             # Filter tokens with non-zero balance
             available_tokens = [
                 token for token in tokens if float(token["balance"]) > 0

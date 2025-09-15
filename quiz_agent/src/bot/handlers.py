@@ -1280,11 +1280,13 @@ async def show_token_selection(update, context):
             )
             return ConversationHandler.END
 
-        # Get user's token inventory
+        # Get user's token inventory (force refresh to get latest data)
         from services.token_service import TokenService
 
         token_service = TokenService()
-        tokens = await token_service.get_user_token_inventory(wallet["account_id"])
+        tokens = await token_service.get_user_token_inventory(
+            wallet["account_id"], force_refresh=True
+        )
 
         if not tokens:
             await update.callback_query.edit_message_text(

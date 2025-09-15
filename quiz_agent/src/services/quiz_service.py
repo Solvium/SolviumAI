@@ -1251,6 +1251,11 @@ async def distribute_quiz_rewards(
 
         success = await blockchain_monitor.distribute_rewards(quiz_id)
 
+        # Debug logging
+        logger.info(
+            f"Blockchain distribute_rewards returned: {success} (type: {type(success)})"
+        )
+
         # --- Start of new logic for custom winner announcement and status update ---
         session = SessionLocal()
         try:
@@ -1291,6 +1296,7 @@ async def distribute_quiz_rewards(
 
             elif success:
                 # Blockchain distribution was successful
+                logger.info(f"Processing successful transfers: {success}")
                 # Focus only on DMing winners with transaction details
                 try:
                     # Choose NEAR explorer URL based on environment (production = mainnet, development = testnet)
@@ -1305,13 +1311,22 @@ async def distribute_quiz_rewards(
                     # If the blockchain monitor returned a list of transfers, DM each winner
                     if isinstance(success, list) and success:
                         for transfer in success:
-                            tx_hash = transfer.get("tx_hash")
+                            tx_hash = transfer.get("tx_hash") or transfer.get(
+                                "transaction_hash"
+                            )
                             user_id = transfer.get("user_id")
                             username = transfer.get("username") or (
                                 f"User_{str(user_id)[:8]}"
                             )
                             wallet = transfer.get("wallet_address")
-                            amount = transfer.get("amount_near")
+
+                            # Handle both NEAR and token rewards
+                            amount = transfer.get("amount_near") or transfer.get(
+                                "amount"
+                            )
+                            currency = transfer.get("currency", "NEAR")
+                            reward_type = transfer.get("reward_type", "near")
+
                             tx_url = (
                                 explorer_tx_template.format(tx_hash=tx_hash)
                                 if tx_hash
@@ -1320,9 +1335,12 @@ async def distribute_quiz_rewards(
 
                             # Send DM to winner with transaction URL
                             try:
+                                logger.info(
+                                    f"Attempting to send DM to user {user_id}: user_id={user_id}, tx_url={tx_url}, bot_to_use={bot_to_use is not None}"
+                                )
                                 if user_id and tx_url and bot_to_use:
                                     dm_text = (
-                                        f"✅ Hi @{username}, you just received {amount} NEAR as a quiz reward for '{quiz.topic}'.\n"
+                                        f"✅ Hi @{username}, you just received {amount} {currency} as a quiz reward for '{quiz.topic}'.\n"
                                         f"🔗 Transaction: {tx_url}\n"
                                         f"📥 Wallet: {wallet}\n"
                                         f"Thank you for playing!"
@@ -1331,7 +1349,11 @@ async def distribute_quiz_rewards(
                                         bot_to_use, user_id, dm_text
                                     )
                                     logger.info(
-                                        f"Sent reward DM to user {user_id} for {amount} NEAR"
+                                        f"Sent reward DM to user {user_id} for {amount} {currency}"
+                                    )
+                                else:
+                                    logger.warning(
+                                        f"DM conditions not met: user_id={user_id}, tx_url={tx_url}, bot_to_use={bot_to_use is not None}"
                                     )
                             except Exception as e_dm:
                                 logger.warning(
@@ -1850,7 +1872,6 @@ async def schedule_quiz_end_announcement(
             )
 
 
-
 def parse_multiple_questions(raw_questions):
     """Parse multiple questions from raw text into a list of structured questions."""
     # Split by double newline or question number pattern
@@ -1973,7 +1994,6 @@ def parse_questions(raw_questions):
     return result
 
 
-
 from models.user import User  # Assuming User model is in models.user
 from models.quiz import Quiz, QuizAnswer, QuizStatus  # Ensure QuizStatus is imported
 from typing import Dict, List, Any  # Ensure these are imported
@@ -2091,7 +2111,6 @@ async def _generate_leaderboard_data_for_quiz(
         # Include end_time for leaderboard display
         "end_time": quiz.end_time.isoformat() if quiz.end_time else None,
     }
-
 
 
 async def start_enhanced_quiz(

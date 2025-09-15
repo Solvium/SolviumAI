@@ -501,6 +501,9 @@ class BlockchainMonitor:
                                             successful_transfers.append(
                                                 {
                                                     "user_id": user_id,
+                                                    "username": winner_data.get(
+                                                        "username", "N/A"
+                                                    ),
                                                     "wallet_address": recipient_wallet,
                                                     "amount": reward_amount_near_str_final,
                                                     "currency": token_symbol,

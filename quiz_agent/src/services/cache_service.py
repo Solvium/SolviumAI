@@ -84,6 +84,24 @@ class CacheService:
             await self.redis_client.delete_user_data_key(user_id, "wallet")
             await self.redis_client.delete_user_data_key(user_id, "wallet_created")
 
+            # Invalidate token inventory cache for this user's wallet
+            try:
+                from services.token_service import TokenService
+                from services.database_service import db_service
+
+                # Get the user's wallet to find the account_id
+                wallet = await db_service.get_user_wallet(user_id)
+                if wallet and wallet.get("account_id"):
+                    account_id = wallet["account_id"]
+                    TokenService.invalidate_account_inventory_cache(account_id)
+                    logger.info(
+                        f"Invalidated token inventory cache for account {account_id}"
+                    )
+            except Exception as token_error:
+                logger.warning(
+                    f"Could not invalidate token cache for user {user_id}: {token_error}"
+                )
+
             logger.info(f"Invalidated all wallet cache for user {user_id}")
             return True
         except Exception as e:
@@ -107,6 +125,22 @@ class CacheService:
         except Exception as e:
             logger.error(f"Error getting cached balance for {account_id}: {e}")
             return None
+
+    async def invalidate_token_inventory_cache(self, account_id: str) -> bool:
+        """
+        Invalidate token inventory cache for a specific account
+        """
+        try:
+            from services.token_service import TokenService
+
+            TokenService.invalidate_account_inventory_cache(account_id)
+            logger.info(f"Invalidated token inventory cache for account {account_id}")
+            return True
+        except Exception as e:
+            logger.error(
+                f"Error invalidating token inventory cache for account {account_id}: {e}"
+            )
+            return False
 
     async def set_cached_balance(self, account_id: str, balance: str) -> bool:
         """
