@@ -74,17 +74,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        Archivo_Regular: ["Archivo-Regular"],
-        "Archivo-Bold": ["Archivo-Bold"],
-        droid: ["droid"],
-        droidbold: ["droidbold"],
-        Archivo_thin: ["Archivo-thin"],
-        "Archivo_Condensed-Black": ["Archivo_Condensed-Black"],
-        Inter_Regular: ["Inter_Regular"],
-        Karla: ["Karla"],
-        "Karantina-Bold": ["Karantina-Bold"],
-        "Karantina-Light": ["Karantina-Light"],
-        "Karantina-Regular": ["Karantina-Regular"],
+        karla: ["Karla", "sans-serif"], // ✅ lowercase key
+        digitalt: ["Digitalt", "sans-serif"],
         sans: ["Space Grotesk", "system-ui", "sans-serif"],
       },
       backgroundImage: {
@@ -109,4 +100,5 @@ const config: Config = {
   },
   plugins: [require("tailwindcss-animate")],
 };
+
 export default config;

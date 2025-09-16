@@ -1,19 +1,24 @@
 "use client";
 import { GoHome } from "react-icons/go";
 import { MdOutlineLeaderboard } from "react-icons/md";
-import { useEffect, useState } from "react";
-import LeaderBoard from "@/components/LeaderBoard";
-import type WebApp from "@twa-dev/sdk";
-import UserProfile from "@/components/Profile";
+
+
+
 import ContestBoard from "@/components/Contest";
-import { Wallet } from "lucide-react";
-import WalletPage from "@/components/WalletPage";
-import LoginModule from "@/components/auth/LoginModule";
-import { useAuth } from "./contexts/AuthContext";
-import GamesPage from "@/components/games/GamesPage";
-import { WheelOfFortune } from "@/components/Wheel";
+import { useEffect, useState } from "react"
+import LeaderBoard from "@/components/LeaderBoard"
+import type WebApp from "@twa-dev/sdk"
+import UserProfile from "@/components/Profile"
+import Contest from "@/components/Contest"
+import WalletPage from "@/components/WalletPage"
+import LoginModule from "@/components/auth/LoginModule"
+import { useAuth } from "./contexts/AuthContext"
+import GamesPage from "@/components/games/GamesPage"
+import { WheelOfFortune } from "@/components/Wheel"
+import HomePage from "@/components/HomePage"
 import { LogOut } from "lucide-react";
 import Image from "next/image";
+import TasksPage from "@/components/TasksPage"
 
 // Force dynamic rendering since this page uses client-side features
 export const dynamic = "force-dynamic";
@@ -75,8 +80,10 @@ function Home() {
               ></button> */}
 
             <div className="flex-1 overflow-y-auto no-scrollbar pb-20">
-              {selectedTab === "Home" && <UserProfile tg={tg} />}
-              {selectedTab === "Contest" && <ContestBoard />}
+            {selectedTab === "Home" && <HomePage onNavigate={handlePageChange} />}
+              {selectedTab === "Profile" && <UserProfile tg={tg} />}
+              {selectedTab === "Tasks" && <TasksPage tg={tg} />}
+              {selectedTab === "Contest" && <Contest />}
               {selectedTab === "Wheel" && <WheelOfFortune />}
               {selectedTab === "Game" && <GamesPage />}
               {selectedTab === "Leaderboard" && <LeaderBoard />}
