@@ -164,7 +164,14 @@ class TokenService:
                     for ft in fts:
                         if ft.get("contract") == token_contract:
                             meta = ft.get("ft_meta", {})
-                            decimals = meta.get("decimals", 6)
+                            decimals = meta.get("decimals")
+                            if decimals is None:
+                                logger.error(
+                                    f"Token {token_contract} metadata missing decimals field in inventory - this will cause incorrect transfers"
+                                )
+                                raise ValueError(
+                                    f"Token {token_contract} metadata is missing decimals field"
+                                )
                             logger.info(f"Got decimals from NearBlocks API: {decimals}")
                             return FtModel(contract_id=token_contract, decimal=decimals)
 
@@ -175,16 +182,27 @@ class TokenService:
                     contract_data = contract_response.json()
                     # Look for token metadata in contract data
                     if "ft_meta" in contract_data:
-                        decimals = contract_data["ft_meta"].get("decimals", 6)
+                        decimals = contract_data["ft_meta"].get("decimals")
+                        if decimals is None:
+                            logger.error(
+                                f"Token {token_contract} metadata missing decimals field in contract API - this will cause incorrect transfers"
+                            )
+                            raise ValueError(
+                                f"Token {token_contract} metadata is missing decimals field"
+                            )
                         logger.info(f"Got decimals from contract API: {decimals}")
                         return FtModel(contract_id=token_contract, decimal=decimals)
 
             except Exception as api_error:
                 logger.error(f"Error getting metadata from NearBlocks API: {api_error}")
 
-            # Final fallback to default decimal
-            logger.warning(f"Using default 6 decimals for {token_contract}")
-            return FtModel(contract_id=token_contract, decimal=6)
+            # Final fallback - fail rather than use wrong decimals
+            logger.error(
+                f"Failed to get token metadata for {token_contract} - cannot proceed with unknown decimals"
+            )
+            raise ValueError(
+                f"Failed to retrieve token metadata for {token_contract} - cannot determine correct decimal places"
+            )
 
     async def _get_metadata_safe(
         self, account: Account, ft_model: FtModel
@@ -414,7 +432,7 @@ class TokenService:
 
             # Log the transfer details for debugging
             logger.info(
-                f"Transferring {amount} tokens with {metadata['decimals']} decimals"
+                f"Transferring {amount} tokens with {metadata['decimals']} decimals for token {token_contract}"
             )
 
             # Manually convert amount to the smallest unit (considering decimals)
@@ -422,8 +440,14 @@ class TokenService:
             amount_in_smallest_unit = int(amount * (10 ** metadata["decimals"]))
 
             logger.info(
-                f"Converted {amount} tokens to {amount_in_smallest_unit} smallest units"
+                f"Converted {amount} tokens to {amount_in_smallest_unit} smallest units (using {metadata['decimals']} decimals)"
             )
+
+            # Additional validation logging
+            if metadata["decimals"] != 24:
+                logger.warning(
+                    f"Token {token_contract} has {metadata['decimals']} decimals instead of expected 24 - verify this is correct"
+                )
 
             # Use py-near's transfer method with the converted amount
             result = await account.ft.transfer(
@@ -523,10 +547,20 @@ class TokenService:
                 data = response.json()
                 if "ft_meta" in data:
                     meta = data["ft_meta"]
+                    # Ensure we have decimals - fail if missing rather than using wrong default
+                    decimals = meta.get("decimals")
+                    if decimals is None:
+                        logger.error(
+                            f"Token {token_contract} metadata missing decimals field - this will cause incorrect transfers"
+                        )
+                        raise ValueError(
+                            f"Token {token_contract} metadata is missing decimals field"
+                        )
+
                     metadata = {
                         "name": meta.get("name", "Unknown"),
                         "symbol": meta.get("symbol", "UNKNOWN"),
-                        "decimals": meta.get("decimals", 6),
+                        "decimals": decimals,
                         "icon": meta.get("icon"),
                         "reference": meta.get("reference"),
                     }
@@ -544,10 +578,20 @@ class TokenService:
                     data = response.json()
                     if "ft_meta" in data:
                         meta = data["ft_meta"]
+                        # Ensure we have decimals - fail if missing rather than using wrong default
+                        decimals = meta.get("decimals")
+                        if decimals is None:
+                            logger.error(
+                                f"Token {token_contract} metadata missing decimals field in retry - this will cause incorrect transfers"
+                            )
+                            raise ValueError(
+                                f"Token {token_contract} metadata is missing decimals field"
+                            )
+
                         metadata = {
                             "name": meta.get("name", "Unknown"),
                             "symbol": meta.get("symbol", "UNKNOWN"),
-                            "decimals": meta.get("decimals", 6),
+                            "decimals": decimals,
                             "icon": meta.get("icon"),
                             "reference": meta.get("reference"),
                         }
@@ -567,10 +611,20 @@ class TokenService:
                 for ft in fts:
                     if ft.get("contract") == token_contract:
                         meta = ft.get("ft_meta", {})
+                        # Ensure we have decimals - fail if missing rather than using wrong default
+                        decimals = meta.get("decimals")
+                        if decimals is None:
+                            logger.error(
+                                f"Token {token_contract} metadata missing decimals field in inventory - this will cause incorrect transfers"
+                            )
+                            raise ValueError(
+                                f"Token {token_contract} metadata is missing decimals field"
+                            )
+
                         metadata = {
                             "name": meta.get("name", "Unknown"),
                             "symbol": meta.get("symbol", "UNKNOWN"),
-                            "decimals": meta.get("decimals", 6),
+                            "decimals": decimals,
                             "icon": meta.get("icon"),
                             "reference": meta.get("reference"),
                         }
