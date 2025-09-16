@@ -26,7 +26,7 @@ def get_menu_icon_placeholder() -> str:
 
 def create_main_menu_keyboard() -> ReplyKeyboardMarkup:
     """
-    Creates the main 2x2 grid menu that appears directly below the keyboard input.
+    Creates the main menu with prioritized wallet and points access.
     The menu icon will always be visible at the end of the input field.
 
     CRITICAL SETTINGS for menu icon consistency:
@@ -38,9 +38,9 @@ def create_main_menu_keyboard() -> ReplyKeyboardMarkup:
     """
     return ReplyKeyboardMarkup(
         [
-            [KeyboardButton("🎯 Create Quiz"), KeyboardButton("🎲 Play Quiz")],
-            [KeyboardButton("🏆 Leaderboards"), KeyboardButton("💰 My Rewards")],
-            [KeyboardButton("🎯 My Points")],
+            [KeyboardButton("💰 My Wallet"), KeyboardButton("🎯 My Points")],
+            [KeyboardButton("🎲 Play Quiz"), KeyboardButton("🎯 Create Quiz")],
+            [KeyboardButton("🏆 Leaderboards"), KeyboardButton("💸 Withdraw")],
         ],
         resize_keyboard=True,  # Makes buttons smaller to fit better
         one_time_keyboard=False,  # Keeps keyboard visible - CRITICAL for menu icon consistency
@@ -200,6 +200,25 @@ def create_app_keyboard() -> ReplyKeyboardMarkup:
         resize_keyboard=True,
         one_time_keyboard=False,
         input_field_placeholder="📱 App options...",
+    )
+
+
+def create_withdrawal_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a keyboard for withdrawal options
+    """
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton("💎 Withdraw NEAR"), KeyboardButton("🪙 Withdraw Token")],
+            [
+                KeyboardButton("🎯 Withdraw Points"),
+                KeyboardButton("📊 Transaction History"),
+            ],
+            [KeyboardButton("⬅️ Back to Main Menu")],
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=False,
+        input_field_placeholder="📱 Withdrawal options...",
     )
 
 
