@@ -34,6 +34,33 @@ from utils.config import Config
 logger = logging.getLogger(__name__)
 
 
+async def send_message_with_keyboard(
+    update: Update, context: CallbackContext, text: str, keyboard_func=None
+):
+    """
+    Helper function to ensure all messages include the appropriate keyboard.
+    This prevents the menu keyboard from disappearing.
+
+    Args:
+        update: Telegram update object
+        context: Callback context
+        text: Message text to send
+        keyboard_func: Function that returns the appropriate keyboard (defaults to main menu)
+    """
+    if keyboard_func is None:
+        keyboard_func = create_main_menu_keyboard
+
+    if update.callback_query:
+        # Handle callback query updates
+        await update.callback_query.answer()
+        await update.callback_query.message.reply_text(
+            text, reply_markup=keyboard_func()
+        )
+    else:
+        # Handle regular message updates
+        await update.message.reply_text(text, reply_markup=keyboard_func())
+
+
 async def handle_first_time_wallet_creation(
     update: Update, context: CallbackContext
 ) -> None:
@@ -238,6 +265,55 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
 
     logger.info(f"Text message from user {user_id}: {message_text}")
 
+    # Only process messages that are actual menu button presses
+    # If it's not a menu button, let other handlers deal with it
+    menu_buttons = [
+        "🎯 Create Quiz",
+        "🎲 Play Quiz",
+        "🏆 Leaderboards",
+        "💰 My Rewards",
+        "🎯 My Points",
+        "⬅️ Back to Main Menu",
+        "⬅️ Back to Games",
+        "⬅️ Back to Quiz Creation",
+        "👥 Challenge Group",
+        "👤 Challenge Friend",
+        "🏅 My Challenges",
+        "📊 Challenge Stats",
+        "📢 Join Announcements",
+        "💬 Join Discussion",
+        "🎮 Join Gaming",
+        "📈 Join Trading",
+        "🌐 Open Web App",
+        "📱 Download Mobile",
+        "💳 Connect Wallet",
+        "💰 View Rewards",
+        "📝 Quick Quiz",
+        "⚙️ Custom Quiz",
+        "📊 Quiz Templates",
+        "📈 My Quizzes",
+        "🎯 Active Quizzes",
+        "🏆 My Results",
+        "📊 Quiz History",
+        "🎖️ Achievements",
+        "💳 Connect Wallet",
+        "💰 View Balance",
+        "🏆 Claim Rewards",
+        "📈 Transaction History",
+        "🏆 Global Leaderboard",
+        "👥 Group Leaderboard",
+        "📊 Weekly Top",
+        "🎖️ All Time Best",
+        "❌ Cancel",
+        "⬅️ Back",
+    ]
+
+    if message_text not in menu_buttons:
+        logger.info(
+            f"Message '{message_text}' from user {user_id} is not a menu button, letting other handlers deal with it"
+        )
+        return  # Let other handlers process this message
+
     # Check if user has a wallet - if not, create one first
     wallet_service = WalletService()
     has_wallet = await wallet_service.has_wallet_robust(user_id)
@@ -256,6 +332,8 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         await handle_leaderboards(update, context)
     elif message_text == "💰 My Rewards":
         await handle_rewards(update, context)
+    elif message_text == "🎯 My Points":
+        await handle_my_points(update, context)
     elif message_text == "⬅️ Back to Main Menu":
         await show_main_menu(update, context)
     elif message_text == "⬅️ Back to Games":
@@ -344,6 +422,69 @@ async def handle_rewards(update: Update, context: CallbackContext) -> None:
         "💰 Manage your rewards:", reply_markup=create_rewards_keyboard()
     )
     await redis_client.set_user_data_key(user_id, "current_menu", "rewards")
+
+
+async def handle_my_points(update: Update, context: CallbackContext) -> None:
+    """Handle 'My Points' button press"""
+    user_id = str(update.effective_user.id)
+    username = (
+        update.effective_user.username or update.effective_user.first_name or "User"
+    )
+
+    try:
+        from services.point_service import PointService
+
+        # Get user's points
+        points_data = await PointService.get_user_points(user_id)
+
+        if not points_data:
+            await update.message.reply_text(
+                "🎯 **Your Points**\n\n"
+                "You haven't earned any points yet!\n"
+                "Start playing quizzes to earn points:\n"
+                "• +5 points for each correct answer\n"
+                "• +3 bonus points for first correct answer in timed quizzes\n"
+                "• +2 points for each unique player who answers your quiz\n"
+                "• +1 bonus point for each correct answer in your quiz",
+                parse_mode="Markdown",
+                reply_markup=create_main_menu_keyboard(),
+            )
+            return
+
+        # Format points display
+        points_text = f"🎯 **{username}'s Points**\n\n"
+        points_text += f"💰 **Total Points:** {points_data['total_points']}\n"
+        points_text += f"📊 **Breakdown:**\n"
+        points_text += f"   • Quiz Taker Points: {points_data['quiz_taker_points']}\n"
+        points_text += (
+            f"   • Quiz Creator Points: {points_data['quiz_creator_points']}\n\n"
+        )
+        points_text += f"📈 **Statistics:**\n"
+        points_text += f"   • Correct Answers: {points_data['total_correct_answers']}\n"
+        points_text += f"   • Quizzes Created: {points_data['total_quizzes_created']}\n"
+        points_text += f"   • Quizzes Taken: {points_data['total_quizzes_taken']}\n"
+        points_text += (
+            f"   • First Correct Answers: {points_data['first_correct_answers']}\n\n"
+        )
+        points_text += f"🕒 **Last Updated:** {points_data['last_updated'][:19] if points_data['last_updated'] else 'Never'}\n\n"
+        points_text += "💡 **How to earn more points:**\n"
+        points_text += "• Answer quiz questions correctly (+5 points each)\n"
+        points_text += "• Be first to answer correctly in timed quizzes (+3 bonus)\n"
+        points_text += "• Create quizzes that others play (+2 per unique player)\n"
+        points_text += "• Get bonus points when players answer correctly (+1 each)"
+
+        await update.message.reply_text(
+            points_text, parse_mode="Markdown", reply_markup=create_main_menu_keyboard()
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting user points for {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ **Error loading your points**\n\n"
+            "There was an error retrieving your point information. Please try again later.",
+            parse_mode="Markdown",
+            reply_markup=create_main_menu_keyboard(),
+        )
 
 
 async def handle_back_to_games(update: Update, context: CallbackContext) -> None:
@@ -500,7 +641,9 @@ async def handle_view_rewards(update: Update, context: CallbackContext) -> None:
 
 async def handle_quick_quiz(update: Update, context: CallbackContext) -> None:
     """Handle 'Quick Quiz' button press"""
-    await update.message.reply_text("📝 Quick quiz creation...")
+    await update.message.reply_text(
+        "📝 Quick quiz creation...", reply_markup=create_main_menu_keyboard()
+    )
     from bot.handlers import start_createquiz_group
 
     await start_createquiz_group(update, context)
@@ -508,7 +651,9 @@ async def handle_quick_quiz(update: Update, context: CallbackContext) -> None:
 
 async def handle_custom_quiz(update: Update, context: CallbackContext) -> None:
     """Handle 'Custom Quiz' button press"""
-    await update.message.reply_text("⚙️ Custom quiz creation...")
+    await update.message.reply_text(
+        "⚙️ Custom quiz creation...", reply_markup=create_main_menu_keyboard()
+    )
     from bot.handlers import start_createquiz_group
 
     await start_createquiz_group(update, context)
@@ -533,7 +678,9 @@ async def handle_my_quizzes(update: Update, context: CallbackContext) -> None:
 # Add handlers for new quiz-focused buttons
 async def handle_active_quizzes(update: Update, context: CallbackContext) -> None:
     """Handle 'Active Quizzes' button press"""
-    await update.message.reply_text("🎲 Loading available quizzes...")
+    await update.message.reply_text(
+        "🎲 Loading available quizzes...", reply_markup=create_main_menu_keyboard()
+    )
     from services.quiz_service import play_quiz
 
     context.args = []
@@ -768,6 +915,8 @@ async def handle_game_callback(
         await handle_leaderboards(update, context)
     elif callback_data == "game:rewards":
         await handle_rewards(update, context)
+    elif callback_data == "game:my_points":
+        await handle_my_points_inline(query, context)
     else:
         await query.edit_message_text("❌ Invalid game selection. Please try again.")
 
@@ -818,6 +967,76 @@ async def handle_main_menu_callback(
             "📱 Get our cash winning app:", reply_markup=create_inline_app_keyboard()
         )
         await redis_client.set_user_data_key(user_id, "current_menu", "app")
+
+    elif callback_data == "menu:my_points":
+        # Show user's points
+        await handle_my_points_inline(query, context)
+
+
+async def handle_my_points_inline(query, context: CallbackContext) -> None:
+    """Handle 'My Points' inline button press"""
+    user_id = str(query.from_user.id)
+    username = query.from_user.username or query.from_user.first_name or "User"
+
+    try:
+        from services.point_service import PointService
+
+        # Get user's points
+        points_data = await PointService.get_user_points(user_id)
+
+        if not points_data:
+            points_text = "🎯 **Your Points**\n\n"
+            points_text += "You haven't earned any points yet!\n"
+            points_text += "Start playing quizzes to earn points:\n"
+            points_text += "• +5 points for each correct answer\n"
+            points_text += (
+                "• +3 bonus points for first correct answer in timed quizzes\n"
+            )
+            points_text += "• +2 points for each unique player who answers your quiz\n"
+            points_text += "• +1 bonus point for each correct answer in your quiz"
+        else:
+            # Format points display
+            points_text = f"🎯 **{username}'s Points**\n\n"
+            points_text += f"💰 **Total Points:** {points_data['total_points']}\n"
+            points_text += f"📊 **Breakdown:**\n"
+            points_text += (
+                f"   • Quiz Taker Points: {points_data['quiz_taker_points']}\n"
+            )
+            points_text += (
+                f"   • Quiz Creator Points: {points_data['quiz_creator_points']}\n\n"
+            )
+            points_text += f"📈 **Statistics:**\n"
+            points_text += (
+                f"   • Correct Answers: {points_data['total_correct_answers']}\n"
+            )
+            points_text += (
+                f"   • Quizzes Created: {points_data['total_quizzes_created']}\n"
+            )
+            points_text += f"   • Quizzes Taken: {points_data['total_quizzes_taken']}\n"
+            points_text += f"   • First Correct Answers: {points_data['first_correct_answers']}\n\n"
+            points_text += f"🕒 **Last Updated:** {points_data['last_updated'][:19] if points_data['last_updated'] else 'Never'}\n\n"
+            points_text += "💡 **How to earn more points:**\n"
+            points_text += "• Answer quiz questions correctly (+5 points each)\n"
+            points_text += (
+                "• Be first to answer correctly in timed quizzes (+3 bonus)\n"
+            )
+            points_text += "• Create quizzes that others play (+2 per unique player)\n"
+            points_text += "• Get bonus points when players answer correctly (+1 each)"
+
+        await query.edit_message_text(
+            points_text,
+            parse_mode="Markdown",
+            reply_markup=create_inline_main_menu_keyboard(),
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting user points for {user_id}: {e}")
+        await query.edit_message_text(
+            "❌ **Error loading your points**\n\n"
+            "There was an error retrieving your point information. Please try again later.",
+            parse_mode="Markdown",
+            reply_markup=create_inline_main_menu_keyboard(),
+        )
 
 
 async def handle_challenge_callback(

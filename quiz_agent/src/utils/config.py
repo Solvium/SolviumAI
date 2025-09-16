@@ -112,6 +112,24 @@ class Config:
         "NEAR_MAINNET_HELPER_URL", "https://free.rpc.fastnear.com"
     )
 
+    # NEAR RPC Fallback Endpoints (ordered by preference)
+    NEAR_MAINNET_RPC_ENDPOINTS = [
+        "https://free.rpc.fastnear.com",  # Primary (current)
+        "https://near.drpc.org",  # dRPC
+        "https://rpc.ankr.com/near",  # Ankr
+        "https://near.blockpi.network/v1/rpc/public",  # BlockPI
+        "https://near.lava.build:443",  # Lava Network
+        "https://endpoints.omniatech.io/v1/near/mainnet/public",  # OMNIA
+        "https://1rpc.io/near",  # 1RPC
+        "https://near.lavenderfive.com/",  # Lavender.Five Nodes
+    ]
+
+    NEAR_TESTNET_RPC_ENDPOINTS = [
+        "https://test.rpc.fastnear.com",  # Primary
+        "https://rpc.testnet.near.org",  # Official NEAR testnet
+        "https://near-testnet.drpc.org",  # dRPC testnet
+    ]
+
     # Wallet Security Configuration
     WALLET_ENCRYPTION_KEY = os.getenv("WALLET_ENCRYPTION_KEY")
     WALLET_KEY_DERIVATION_ITERATIONS = int(
@@ -144,6 +162,9 @@ class Config:
     # Account Verification Configuration
     ACCOUNT_VERIFICATION_TIMEOUT = int(os.getenv("ACCOUNT_VERIFICATION_TIMEOUT", "15"))
     ACCOUNT_VERIFICATION_RETRIES = int(os.getenv("ACCOUNT_VERIFICATION_RETRIES", "2"))
+    ACCOUNT_VERIFICATION_MAX_ATTEMPTS = int(
+        os.getenv("ACCOUNT_VERIFICATION_MAX_ATTEMPTS", "3")
+    )
 
     # Wallet Creation Queue Configuration
     WALLET_CREATION_QUEUE_ENABLED = (
@@ -198,6 +219,24 @@ class Config:
     def is_mainnet_enabled(cls) -> bool:
         """Check if mainnet is enabled"""
         return os.getenv("ENABLE_NEAR_MAINNET", "false").lower() == "true"
+
+    @classmethod
+    def get_current_network(cls) -> str:
+        """Determine current network based on RPC endpoint"""
+        rpc_endpoint = cls.NEAR_RPC_ENDPOINT.lower()
+        if "testnet" in rpc_endpoint or "test" in rpc_endpoint:
+            return "testnet"
+        else:
+            return "mainnet"
+
+    @classmethod
+    def get_nearblocks_api_url(cls) -> str:
+        """Get the correct NearBlocks API URL based on current network"""
+        network = cls.get_current_network()
+        if network == "testnet":
+            return "https://api-testnet.nearblocks.io"
+        else:
+            return "https://api.nearblocks.io"
 
     # Testnet robust mode configuration
     TESTNET_ROBUST_MODE_ENABLED = (

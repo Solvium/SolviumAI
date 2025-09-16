@@ -500,6 +500,7 @@ async def process_questions(
         quiz = Quiz(
             topic=topic,
             questions=questions_list,
+            creator_id=str(update.effective_user.id),  # Track the quiz creator
             status=QuizStatus.DRAFT,  # Initial status is DRAFT
             group_chat_id=group_chat_id,
             duration_seconds=duration_seconds,  # Store the duration
@@ -511,6 +512,23 @@ async def process_questions(
         logger.info(
             f"Created quiz with ID: {quiz_id} in DRAFT status with duration {duration_seconds} seconds and deposit address {Config.DEPOSIT_ADDRESS}."
         )
+
+        # Update creator's quiz creation statistics
+        try:
+            from services.point_service import PointService
+
+            await PointService._update_user_points(
+                session=session,
+                user_id=str(update.effective_user.id),
+                quizzes_created_to_add=1,
+            )
+            session.commit()
+            logger.info(
+                f"Updated quiz creation statistics for user {update.effective_user.id}"
+            )
+        except Exception as e:
+            logger.error(f"Error updating quiz creation statistics: {e}")
+            session.rollback()
     finally:
         session.close()
 
@@ -1251,6 +1269,11 @@ async def distribute_quiz_rewards(
 
         success = await blockchain_monitor.distribute_rewards(quiz_id)
 
+        # Debug logging
+        logger.info(
+            f"Blockchain distribute_rewards returned: {success} (type: {type(success)})"
+        )
+
         # --- Start of new logic for custom winner announcement and status update ---
         session = SessionLocal()
         try:
@@ -1291,6 +1314,7 @@ async def distribute_quiz_rewards(
 
             elif success:
                 # Blockchain distribution was successful
+                logger.info(f"Processing successful transfers: {success}")
                 # Focus only on DMing winners with transaction details
                 try:
                     # Choose NEAR explorer URL based on environment (production = mainnet, development = testnet)
@@ -1305,13 +1329,22 @@ async def distribute_quiz_rewards(
                     # If the blockchain monitor returned a list of transfers, DM each winner
                     if isinstance(success, list) and success:
                         for transfer in success:
-                            tx_hash = transfer.get("tx_hash")
+                            tx_hash = transfer.get("tx_hash") or transfer.get(
+                                "transaction_hash"
+                            )
                             user_id = transfer.get("user_id")
                             username = transfer.get("username") or (
                                 f"User_{str(user_id)[:8]}"
                             )
                             wallet = transfer.get("wallet_address")
-                            amount = transfer.get("amount_near")
+
+                            # Handle both NEAR and token rewards
+                            amount = transfer.get("amount_near") or transfer.get(
+                                "amount"
+                            )
+                            currency = transfer.get("currency", "NEAR")
+                            reward_type = transfer.get("reward_type", "near")
+
                             tx_url = (
                                 explorer_tx_template.format(tx_hash=tx_hash)
                                 if tx_hash
@@ -1320,9 +1353,12 @@ async def distribute_quiz_rewards(
 
                             # Send DM to winner with transaction URL
                             try:
+                                logger.info(
+                                    f"Attempting to send DM to user {user_id}: user_id={user_id}, tx_url={tx_url}, bot_to_use={bot_to_use is not None}"
+                                )
                                 if user_id and tx_url and bot_to_use:
                                     dm_text = (
-                                        f"✅ Hi @{username}, you just received {amount} NEAR as a quiz reward for '{quiz.topic}'.\n"
+                                        f"✅ Hi @{username}, you just received {amount} {currency} as a quiz reward for '{quiz.topic}'.\n"
                                         f"🔗 Transaction: {tx_url}\n"
                                         f"📥 Wallet: {wallet}\n"
                                         f"Thank you for playing!"
@@ -1331,7 +1367,11 @@ async def distribute_quiz_rewards(
                                         bot_to_use, user_id, dm_text
                                     )
                                     logger.info(
-                                        f"Sent reward DM to user {user_id} for {amount} NEAR"
+                                        f"Sent reward DM to user {user_id} for {amount} {currency}"
+                                    )
+                                else:
+                                    logger.warning(
+                                        f"DM conditions not met: user_id={user_id}, tx_url={tx_url}, bot_to_use={bot_to_use is not None}"
                                     )
                             except Exception as e_dm:
                                 logger.warning(
@@ -1850,7 +1890,6 @@ async def schedule_quiz_end_announcement(
             )
 
 
-
 def parse_multiple_questions(raw_questions):
     """Parse multiple questions from raw text into a list of structured questions."""
     # Split by double newline or question number pattern
@@ -1973,7 +2012,6 @@ def parse_questions(raw_questions):
     return result
 
 
-
 from models.user import User  # Assuming User model is in models.user
 from models.quiz import Quiz, QuizAnswer, QuizStatus  # Ensure QuizStatus is imported
 from typing import Dict, List, Any  # Ensure these are imported
@@ -2091,7 +2129,6 @@ async def _generate_leaderboard_data_for_quiz(
         # Include end_time for leaderboard display
         "end_time": quiz.end_time.isoformat() if quiz.end_time else None,
     }
-
 
 
 async def start_enhanced_quiz(
@@ -2788,6 +2825,80 @@ Good luck with your next quiz!"""
                     session.rollback()
         else:
             logger.info("✅ Database verification passed - all answers saved correctly")
+
+        # Award points for quiz completion
+        try:
+            from services.point_service import PointService
+
+            # Calculate points for quiz taker
+            total_points_awarded = 0
+            correct_answers = results.get("correct", 0)
+
+            # Award points for each correct answer
+            for question_index, answer_data in results["answers"].items():
+                is_correct = answer_data.get("correct", False)
+                if is_correct:
+                    question_idx = int(question_index)
+
+                    # Check if this is a timed quiz
+                    is_timed_quiz = (
+                        quiz.duration_seconds is not None and quiz.duration_seconds > 0
+                    )
+
+                    # Check if this was the first correct answer for this question
+                    is_first_correct = await PointService.check_first_correct_answer(
+                        quiz.id, question_idx
+                    )
+
+                    # Award points to quiz taker
+                    taker_result = await PointService.award_quiz_taker_points(
+                        user_id=user_id,
+                        quiz_id=quiz.id,
+                        is_correct=True,
+                        is_first_correct=is_first_correct,
+                        is_timed_quiz=is_timed_quiz,
+                    )
+
+                    total_points_awarded += taker_result["points_awarded"]
+
+                    # Award points to quiz creator (if different from taker)
+                    if quiz.creator_id and quiz.creator_id != user_id:
+                        creator_result = await PointService.award_quiz_creator_points(
+                            creator_user_id=quiz.creator_id,
+                            quiz_id=quiz.id,
+                            answering_user_id=user_id,
+                            is_correct=True,
+                        )
+                        logger.info(
+                            f"Awarded {creator_result['points_awarded']} points to quiz creator {quiz.creator_id}"
+                        )
+
+            # Update user's quiz statistics
+            if total_points_awarded > 0:
+                from services.point_service import PointService
+
+                session = SessionLocal()
+                try:
+                    await PointService._update_user_points(
+                        session=session, user_id=user_id, quizzes_taken_to_add=1
+                    )
+                    session.commit()
+                except Exception as e:
+                    logger.error(f"Error updating user quiz statistics: {e}")
+                    session.rollback()
+                finally:
+                    session.close()
+
+                logger.info(
+                    f"Awarded {total_points_awarded} total points to user {user_id} for quiz {quiz.id}"
+                )
+
+                # Update results text to include points information
+                results_text += f"\n\n🎯 Points earned: {total_points_awarded}"
+
+        except Exception as point_error:
+            logger.error(f"Error awarding points: {point_error}")
+            # Don't fail the quiz completion if points fail
 
     except Exception as e:
         logger.error(f"Error saving enhanced quiz results: {e}")

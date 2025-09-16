@@ -77,16 +77,52 @@ class CircuitBreaker:
 
 
 class RPCRetryHandler:
-    """Handles RPC retries with exponential backoff and circuit breaker"""
+    """Handles RPC retries with exponential backoff, circuit breaker, and endpoint fallback"""
 
     def __init__(self):
         self.circuit_breakers: Dict[str, CircuitBreaker] = {}
+        self.current_endpoint_index: Dict[str, int] = (
+            {}
+        )  # Track current endpoint for each network
 
     def _get_circuit_breaker(self, endpoint: str) -> CircuitBreaker:
         """Get or create circuit breaker for an endpoint"""
         if endpoint not in self.circuit_breakers:
             self.circuit_breakers[endpoint] = CircuitBreaker()
         return self.circuit_breakers[endpoint]
+
+    def _get_next_endpoint(self, network: str, endpoints: List[str]) -> str:
+        """Get the next available endpoint for a network"""
+        if network not in self.current_endpoint_index:
+            self.current_endpoint_index[network] = 0
+
+        current_index = self.current_endpoint_index[network]
+        if current_index >= len(endpoints):
+            # Reset to first endpoint if we've tried all
+            self.current_endpoint_index[network] = 0
+            current_index = 0
+
+        return endpoints[current_index]
+
+    def _switch_to_next_endpoint(
+        self, network: str, endpoints: List[str]
+    ) -> Optional[str]:
+        """Switch to the next endpoint for a network"""
+        if network not in self.current_endpoint_index:
+            self.current_endpoint_index[network] = 0
+
+        self.current_endpoint_index[network] += 1
+
+        if self.current_endpoint_index[network] >= len(endpoints):
+            # All endpoints exhausted
+            return None
+
+        return endpoints[self.current_endpoint_index[network]]
+
+    def _is_endpoint_available(self, endpoint: str) -> bool:
+        """Check if an endpoint is available (circuit breaker not open)"""
+        circuit_breaker = self._get_circuit_breaker(endpoint)
+        return circuit_breaker.can_execute()
 
     def reset_circuit_breaker(self, endpoint: str) -> bool:
         """Reset a specific circuit breaker to CLOSED state"""
@@ -233,9 +269,108 @@ class RPCRetryHandler:
         circuit_breaker.record_failure()
         raise last_exception
 
+    async def execute_with_endpoint_fallback(
+        self,
+        func: Callable,
+        network: str,
+        endpoints: List[str],
+        max_retries_per_endpoint: int = None,
+        *args,
+        **kwargs,
+    ) -> Any:
+        """
+        Execute a function with automatic endpoint fallback
+
+        Args:
+            func: The function to execute (should accept endpoint as first argument)
+            network: Network type (e.g., 'mainnet', 'testnet')
+            endpoints: List of RPC endpoints to try
+            max_retries_per_endpoint: Max retries per endpoint (defaults to config)
+            *args, **kwargs: Additional arguments to pass to the function
+
+        Returns:
+            The result of the function call
+
+        Raises:
+            Exception: If all endpoints and retries fail
+        """
+        max_retries_per_endpoint = max_retries_per_endpoint or Config.RPC_MAX_RETRIES
+        last_exception = None
+
+        # Try each endpoint
+        for endpoint_index, endpoint in enumerate(endpoints):
+            # Skip if circuit breaker is open
+            if not self._is_endpoint_available(endpoint):
+                logger.warning(
+                    f"Skipping endpoint {endpoint} - circuit breaker is open"
+                )
+                continue
+
+            logger.info(
+                f"Trying endpoint {endpoint_index + 1}/{len(endpoints)}: {endpoint}"
+            )
+
+            try:
+                # Try this endpoint with retries
+                result = await self.execute_with_retry(
+                    func, endpoint, max_retries_per_endpoint, endpoint, *args, **kwargs
+                )
+                logger.info(f"Success with endpoint: {endpoint}")
+                return result
+
+            except Exception as e:
+                last_exception = e
+                logger.warning(f"Endpoint {endpoint} failed: {str(e)}")
+
+                # Mark this endpoint as failed in circuit breaker
+                circuit_breaker = self._get_circuit_breaker(endpoint)
+                circuit_breaker.record_failure()
+
+                # Continue to next endpoint
+                continue
+
+        # All endpoints failed
+        logger.error(f"All {len(endpoints)} endpoints failed for network {network}")
+        if last_exception:
+            raise last_exception
+        else:
+            raise Exception(f"No available endpoints for network {network}")
+
 
 # Global instance
 rpc_retry_handler = RPCRetryHandler()
+
+
+def get_rpc_endpoints(network: str) -> List[str]:
+    """Get RPC endpoints for a specific network"""
+    if network.lower() == "mainnet":
+        return Config.NEAR_MAINNET_RPC_ENDPOINTS
+    elif network.lower() == "testnet":
+        return Config.NEAR_TESTNET_RPC_ENDPOINTS
+    else:
+        # Default to mainnet
+        return Config.NEAR_MAINNET_RPC_ENDPOINTS
+
+
+async def execute_with_rpc_fallback(
+    func: Callable, network: str, max_retries_per_endpoint: int = None, *args, **kwargs
+) -> Any:
+    """
+    Execute a function with automatic RPC endpoint fallback
+
+    Args:
+        func: The function to execute (should accept endpoint as first argument)
+        network: Network type ('mainnet' or 'testnet')
+        max_retries_per_endpoint: Max retries per endpoint
+        *args, **kwargs: Additional arguments to pass to the function
+
+    Returns:
+        The result of the function call
+    """
+    endpoints = get_rpc_endpoints(network)
+    return await rpc_retry_handler.execute_with_endpoint_fallback(
+        func, network, endpoints, max_retries_per_endpoint, *args, **kwargs
+    )
 
 
 async def rpc_call_with_retry(
@@ -286,8 +421,14 @@ class WalletCreationError(Exception):
         retryable: bool = True,
     ):
         super().__init__(message)
+        self._message = message
         self.error_type = error_type
         self.retryable = retryable
+
+    @property
+    def message(self) -> str:
+        """Get the error message"""
+        return self._message
 
 
 class AccountVerificationError(Exception):
