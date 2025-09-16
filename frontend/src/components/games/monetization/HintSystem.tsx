@@ -1,87 +1,113 @@
-import React, { useState } from "react";
-import { Lightbulb, X } from "lucide-react";
+"use client"
 
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { PopoverClose, PopoverContent } from "@radix-ui/react-popover";
-import { Popover, PopoverTrigger } from "../../ui/popover";
+import type React from "react"
+import { useState } from "react"
+import { Lightbulb, X, Coins } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
 
 interface HintSystemProps {
-  hintCost: number;
-  hint: string;
-  userCoins: number;
-  onUseHint: () => void;
+  hintCost: number
+  hint: string
+  userCoins: number
+  onUseHint: () => void
 }
 
-const HintSystem: React.FC<HintSystemProps> = ({
-  hintCost,
-  hint,
-  userCoins,
-  onUseHint,
-}) => {
-  const [hintRevealed, setHintRevealed] = useState(false);
+const HintSystem: React.FC<HintSystemProps> = ({ hintCost, hint, userCoins, onUseHint }) => {
+  const [hintRevealed, setHintRevealed] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   const handleUseHint = () => {
     if (userCoins < hintCost) {
       toast.error("Not enough coins!", {
         description: "Purchase more coins to use hints.",
-      });
-      return;
+      })
+      return
     }
 
-    setHintRevealed(true);
-    onUseHint();
+    setHintRevealed(true)
+    onUseHint()
     toast.success("Hint unlocked!", {
       description: `${hintCost} coins have been deducted.`,
-    });
-  };
+    })
+  }
+
+  const openModal = () => setIsModalOpen(true)
+  const closeModal = () => setIsModalOpen(false)
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1 bg-yellow-50 hover:bg-yellow-100 border-yellow-200 text-yellow-700"
-        >
-          <Lightbulb className="h-4 w-4 text-yellow-500" />
-          Hint
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80" align="end">
-        <div className="space-y-3">
-          <div className="flex justify-between items-start">
-            <h4 className="font-medium">Need a hint?</h4>
-            <PopoverClose className="rounded-full p-1 hover:bg-gray-100">
-              <X className="h-4 w-4" />
-              <span className="sr-only">Close</span>
-            </PopoverClose>
-          </div>
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-1 bg-yellow-500/20 hover:bg-yellow-500/30 border-yellow-400/50 text-yellow-300 hover:text-yellow-200"
+        onClick={openModal}
+      >
+        <Lightbulb className="h-4 w-4" />
+        Hint
+      </Button>
 
-          {hintRevealed ? (
-            <div className="bg-yellow-50 p-3 rounded-md border border-yellow-100">
-              <p className="text-sm text-yellow-800">{hint}</p>
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="relative bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-2xl border border-slate-600/50 w-80 h-80 flex flex-col">
+            <button
+              onClick={closeModal}
+              className="absolute top-4 right-4 p-2 rounded-full bg-slate-700/50 hover:bg-slate-600/50 transition-colors"
+            >
+              <X className="h-4 w-4 text-slate-300" />
+            </button>
+
+            <div className="flex flex-col items-center pt-8 pb-6">
+              <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mb-4">
+                <Lightbulb className="h-8 w-8 text-yellow-400" />
+              </div>
+              <h3 className="text-xl font-bold text-white">Need a Hint?</h3>
             </div>
-          ) : (
-            <>
-              <p className="text-sm text-muted-foreground">
-                Stuck? Use {hintCost} coins to get a helpful hint.
-              </p>
-              <div className="flex justify-between items-center gap-2">
-                <div className="text-sm">
-                  Your balance:{" "}
-                  <span className="font-medium">{userCoins} coins</span>
+
+            <div className="flex-1 px-6 pb-6 flex flex-col justify-between">
+              {hintRevealed ? (
+                <div className="bg-yellow-500/10 border border-yellow-400/30 rounded-xl p-4 text-center">
+                  <p className="text-yellow-200 font-medium leading-relaxed">{hint}</p>
                 </div>
-                <Button size="sm" onClick={handleUseHint}>
-                  Use {hintCost} coins
+              ) : (
+                <div className="text-center space-y-4">
+                  <p className="text-slate-300 text-sm leading-relaxed">
+                    Stuck on this puzzle? Get a helpful hint to guide you in the right direction!
+                  </p>
+
+                  <div className="bg-slate-700/50 rounded-lg p-3 flex items-center justify-center gap-2">
+                    <Coins className="h-4 w-4 text-yellow-400" />
+                    <span className="text-white font-medium">{userCoins} coins</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3 mt-6">
+                {!hintRevealed && (
+                  <Button
+                    onClick={handleUseHint}
+                    className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-semibold py-3 rounded-xl transition-all duration-200 transform hover:scale-105"
+                    disabled={userCoins < hintCost}
+                  >
+                    Use {hintCost} Coins for Hint
+                  </Button>
+                )}
+
+                <Button
+                  onClick={closeModal}
+                  variant="outline"
+                  className="w-full border-slate-600 text-slate-300 hover:bg-slate-700/50 py-3 rounded-xl bg-transparent"
+                >
+                  {hintRevealed ? "Continue Playing" : "Maybe Later"}
                 </Button>
               </div>
-            </>
-          )}
+            </div>
+          </div>
         </div>
-      </PopoverContent>
-    </Popover>
-  );
-};
+      )}
+    </>
+  )
+}
 
-export default HintSystem;
+export default HintSystem

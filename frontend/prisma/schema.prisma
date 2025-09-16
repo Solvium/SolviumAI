@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,45 +8,41 @@ datasource db {
 }
 
 model User {
-  id            Int      @id @default(autoincrement())
-  username      String   @unique
-  email         String?  @unique
-  name          String?
-  wallet        Json?
-  level         Int      @default(1)
-  difficulty    Int      @default(1)
-  puzzleCount   Int      @default(0)
-  referralCount Int      @default(0)
-  spinCount     Int      @default(0)
-  dailySpinCount Int     @default(0)
-  claimCount    Int      @default(0)
-  isOfficial    Boolean  @default(false)
-  isMining      Boolean  @default(false)
-  isPremium     Boolean  @default(false)
-  weeklyPoints  Int      @default(0)
-  lastSpinClaim DateTime?
-  lastClaim     DateTime?
-  chatId        String?
-  totalPoints   Int      @default(0)
-  referredBy    String?  // Add referral field
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now()) @updatedAt
-  
-  // Relations
-  userTasks     UserTask[]
-  weeklyScores  WeeklyScore[]
+  id             Int           @id @default(autoincrement())
+  username       String        @unique
+  name           String?
+  referredBy     String?
+  referralCount  Int           @default(0)
+  chatId         String?
+  claimCount     Int           @default(0)
+  totalPoints    Int           @default(0)
+  isOfficial     Boolean       @default(false)
+  isPremium      Boolean       @default(false)
+  lastClaim      DateTime?
+  weeklyPoints   Int           @default(0)
+  isMining       Boolean       @default(false)
+  difficulty     Int           @default(1)
+  level          Int           @default(1)
+  puzzleCount    Int           @default(0)
+  spinCount      Int           @default(0)
+  email          String?       @unique
+  dailySpinCount Int           @default(0)
+  lastSpinClaim  DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @default(now()) @updatedAt
+  wallet         Json?
+  userTasks      UserTask[]
+  weeklyScores   WeeklyScore[]
 }
 
 model Task {
-  id          Int       @id @default(autoincrement())
-  name        String    @unique
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
   points      Int
   link        String?
-  isCompleted Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @default(now()) @updatedAt
-  
-  // Relations
+  isCompleted Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @default(now()) @updatedAt
   userTasks   UserTask[]
 }
 
@@ -60,11 +53,9 @@ model UserTask {
   isCompleted Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
-  
-  // Relations
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([userId, taskId])
 }
 
@@ -76,10 +67,8 @@ model WeeklyScore {
   points     Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @default(now()) @updatedAt
-  
-  // Relations
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@unique([userId, weekNumber, year])
 }
 
@@ -95,6 +84,6 @@ model WalletCache {
   network             String
   lastUpdated         DateTime @default(now())
   expiresAt           DateTime
-  
+
   @@map("wallet_cache")
 }
