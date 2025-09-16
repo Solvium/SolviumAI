@@ -17,9 +17,9 @@ const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
   const { user: userDetails, logout } = useAuth()
   return (
     <div
-      className="max-h-screen w-full py-3 px-3 md:py-4 pb-5 relative overflow-hidden"
+      className="max-h-screen w-full py-3 px-3 md:py-4 pb-16 relative overflow-hidden"
       style={{
-        backgroundImage: "url('/tropical-adventure-bg.jpg')",
+        backgroundImage: "url('/tropical-adventure-bg.png')",
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
@@ -27,14 +27,14 @@ const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
     >
       <div className="absolute inset-0 bg-none-transparent  pointer-events-none"></div>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(34,211,238,0.1),transparent_50%)] pointer-events-none"></div>
-      <button
+      {/* <button
         onClick={() => logout()}
         className="absolute top-6 right-6 z-50 w-12 h-12 bg-cover bg-center bg-no-repeat hover:scale-110 transition-all duration-200 shadow-lg"
         style={{
           backgroundImage: "url('/assets/buttons/power-button.png')",
         }}
         title="Logout"
-      ></button>
+      ></button> */}
 
       <div className="max-w-2xl mx-auto space-y-4 relative z-10">
       {/* <StatusBar3D className="mb-6" /> */}
@@ -69,21 +69,37 @@ const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
 
 const ProfileHeader = ({ userDetails }: any) => {
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div
+    className="flex flex-col items-center gap-4"
+    // style={{
+    //   width: "fit-content",             // set width
+    //   height: "fit-content",            // set height
+    //   borderRadius: "16px",
+    //   marginLeft: "20px",
+    //   padding: "10px",
+    //   paddingBottom: "20px",
+    //          // set roundness
+    //   overflow: "hidden",         // apply rounded corners to bg
+    //   backgroundImage: "url('/card_bg.png')",
+    //   backgroundSize: "cover",
+    //   backgroundPosition: "center",
+    //   backgroundRepeat: "no-repeat",
+    // }}
+  >
       <div className="relative">
         <div className="relative mb-4">
         <Image
   src="/crown.png"
   alt="Crown"
-  width={80}
-  height={80}
-  className="w-20 h-20 mx-auto drop-shadow-2xl hover:scale-110 transition-transform duration-500 filter"
+  width={112}
+  height={31}
+  className="mx-auto drop-shadow-2xl hover:scale-110 transition-transform duration-500 filter"
 />
           <div className="absolute inset-0 bg-gradient-to-r from-brown-400/30 to-green-500/30 rounded-full blur-xl animate-pulse"></div>
         </div>
 
         {/* <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-full blur-xl opacity-50 scale-110"></div> */}
-<div className="relative bg-gradient-to-br from-yellow-400 to-yellow-600 p-1 rounded-full shadow-2xl transform hover:scale-105 transition-transform duration-300">
+<div className="relative border-4 border-white  bg-gradient-to-br from-blue-400 to-blue-600 p-1 rounded-full shadow-0 transform hover:scale-105 transition-transform duration-300">
   <div className="bg-white rounded-full w-16 h-16 flex items-center justify-center text-xl font-black text-yellow-600 shadow-inner">
 
             {userDetails?.username?.slice(0, 2).toUpperCase()}
@@ -92,7 +108,10 @@ const ProfileHeader = ({ userDetails }: any) => {
       </div>
 
       <div className="text-center">
-        <h2 className="text-xl font-black text-cyan-100 mb-4 tracking-wide drop-shadow-lg">{userDetails?.username}</h2>
+      <h2 className="text-xl font-black text-white shadow-inner mb-4 tracking-wide drop-shadow-lg">
+  {userDetails?.username}
+</h2>
+
         <div className="grid grid-cols-3 gap-6 w-full max-w-md">
           <div className="relative group flex flex-col items-center">
             <div className="relative">
@@ -110,7 +129,7 @@ const ProfileHeader = ({ userDetails }: any) => {
 </div>
 
             </div>
-            <p className="text-xs font-bold text-cyan-100 uppercase tracking-wider mt-2">Points</p>
+            <p className="text-xs font-black text-white shadow-inner uppercase tracking-wider mt-0">Points</p>
           </div>
 
           <div className="relative group flex flex-col items-center">
@@ -129,7 +148,7 @@ const ProfileHeader = ({ userDetails }: any) => {
 </div>
 
             </div>
-            <p className="text-xs font-bold text-cyan-100 uppercase tracking-wider mt-2">Refs</p>
+            <p className="text-xs font-black text-white shadow-inner uppercase tracking-wider mt-0">Refs</p>
           </div>
 
           <div className="relative group flex flex-col items-center">
@@ -148,7 +167,7 @@ const ProfileHeader = ({ userDetails }: any) => {
 </div>
 
             </div>
-            <p className="text-xs font-bold text-cyan-100 uppercase tracking-wider mt-2">Boost</p>
+            <p className="text-xs font-black text-white shadow-inner uppercase tracking-wider mt-0">Boost</p>
           </div>
         </div>
       </div>
@@ -189,8 +208,8 @@ const Link = ({ userDetails }: any) => {
 
   return (
     <div className="mt-10 space-y-4">
-    <div className="flex items-center justify-center gap-3">
-      <h2 className="text-lg font-black text-cyan-100 uppercase tracking-wider">Invite Link</h2>
+    <div className="flex items-center justify-center gap-2">
+      <h2 className="text-sm font-black text-cyan-100 uppercase tracking-wider">Invite Link</h2>
     </div>
     <div className="bg-none">
     <button
@@ -278,20 +297,21 @@ const Farming = () => {
   }, [count, userDetails?.multiplier])
 
   return (
-    <div className="mt-10 space-y-4">
+    <div className="mt-5 space-y-4">
       <div className="flex items-center justify-center gap-3">
         {/* <img src="/axe.png" alt="Treasure Chest" className="w-12 h-12 drop-shadow-lg" /> */}
-        <h2 className="text-lg font-black text-cyan-100 uppercase tracking-wider">Farming</h2>
+        <h2 className="text-sm font-black text-cyan-100 uppercase tracking-wider">Farming</h2>
       </div>
       <div className="flex justify-center">
       <button
   disabled={remainingTime > 0 && userDetails?.isMining}
-  className="relative px-6 py-4 text-amber-900 rounded-xl transition-all text-sm font-black uppercase tracking-wider transform hover:scale-105 hover:-translate-y-1 hover:rotate-1 disabled:opacity-50 disabled:transform-none  active:scale-95 active:translate-y-0"
+  className="relative px-6 py-6 text-amber-900 rounded-xl transition-all text-sm font-black uppercase tracking-wider transform hover:scale-105 hover:-translate-y-1 hover:rotate-1 disabled:opacity-50 disabled:transform-none  active:scale-95 active:translate-y-0"
   style={{
     backgroundImage: "url('/assets/buttons/wooden-button.png')",
-    backgroundSize: "cover",
+    backgroundSize: "contain",
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
+    aspectRatio: "3 / 1",
     opacity: remainingTime > 0 && userDetails?.isMining ? 0.6 : 1,
     boxShadow: "none", // removed shadow completely
   }}
