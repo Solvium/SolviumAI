@@ -307,6 +307,24 @@ async def start_createquiz_group(update, context):
         f"User {user_id} initiating /createquiz from {chat_type} chat {update.effective_chat.id}."
     )
 
+    # Check if user is admin (only for group chats)
+    if chat_type in ["group", "supergroup"]:
+        try:
+            administrators = await update.effective_chat.get_administrators()
+            admin_ids = [admin.user.id for admin in administrators]
+
+            if user_id not in admin_ids:
+                await update.message.reply_text(
+                    "❌ Only group administrators can create quizzes in this group."
+                )
+                return ConversationHandler.END
+        except Exception as e:
+            logger.error(f"Error checking admin status for /createquiz: {e}")
+            await update.message.reply_text(
+                "❌ Could not verify admin status. Please try again."
+            )
+            return ConversationHandler.END
+
     # Clear potentially stale user_data from previous incomplete flows
     await redis_client.delete_user_data_key(user_id, "awaiting_reward_input_type")
     await redis_client.delete_user_data_key(user_id, "current_quiz_id_for_reward_setup")
@@ -4562,10 +4580,12 @@ async def cleanup_group_keyboard(update: Update, context: CallbackContext):
         )
         return
 
-    # Check if user is admin (you can add more specific admin checks here)
+    # Check if user is admin using get_administrators()
     try:
-        member = await context.bot.get_chat_member(chat_id, user_id)
-        if member.status not in ["administrator", "creator"]:
+        administrators = await update.effective_chat.get_administrators()
+        admin_ids = [admin.user.id for admin in administrators]
+
+        if user_id not in admin_ids:
             await update.message.reply_text(
                 "❌ Only group administrators can use this command."
             )
