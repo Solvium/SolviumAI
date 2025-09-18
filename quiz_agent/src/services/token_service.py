@@ -453,7 +453,7 @@ class TokenService:
             result = await account.ft.transfer(
                 ft_model,
                 recipient_account_id,
-                amount,  # Use the converted amount
+                amount_in_smallest_unit,  # Use the converted amount in smallest units
                 force_register=force_register,
                 nowait=True,  # Return transaction hash immediately
             )
@@ -462,7 +462,7 @@ class TokenService:
                 "success": True,
                 "transaction_hash": result,
                 "amount": amount,
-                "amount_in_smallest_unit": amount,
+                "amount_in_smallest_unit": amount_in_smallest_unit,
                 "decimals": metadata["decimals"],
                 "message": f"Successfully transferred {amount} {metadata['symbol']} tokens",
             }

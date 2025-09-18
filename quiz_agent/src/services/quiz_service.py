@@ -1501,6 +1501,9 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         # Get all participants and their scores
         all_participants = QuizAnswer.get_quiz_participants_ranking(session, quiz_id)
 
+        # Initialize winners_with_scores to avoid UnboundLocalError
+        winners_with_scores = []
+
         # PART 1: Quiz ended announcement with answers
         answers_announcement = f"""� <b>Hurray! The quiz "{quiz.topic}" has officially ended!</b> �
 
