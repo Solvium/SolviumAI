@@ -1150,7 +1150,12 @@ async def reward_structure_choice(update, context):
             user_id, "token_reward_amount"
         )
         await redis_client.set_user_data_key(user_id, "reward_amount", token_amount)
-        await redis_client.set_user_data_key(user_id, "total_cost", token_amount)
+        # Calculate total cost with 2% service fee for token payments
+        token_amount_float = float(token_amount)
+        service_fee = token_amount_float * 0.02  # 2% service fee
+        total_cost_with_fee = token_amount_float + service_fee
+        await redis_client.set_user_data_key(user_id, "total_cost", total_cost_with_fee)
+        await redis_client.set_user_data_key(user_id, "service_charge", service_fee)
         return await process_token_payment(update, context)
 
     elif choice == "token_structure_top3":
@@ -1160,7 +1165,12 @@ async def reward_structure_choice(update, context):
             user_id, "token_reward_amount"
         )
         await redis_client.set_user_data_key(user_id, "reward_amount", token_amount)
-        await redis_client.set_user_data_key(user_id, "total_cost", token_amount)
+        # Calculate total cost with 2% service fee for token payments
+        token_amount_float = float(token_amount)
+        service_fee = token_amount_float * 0.02  # 2% service fee
+        total_cost_with_fee = token_amount_float + service_fee
+        await redis_client.set_user_data_key(user_id, "total_cost", total_cost_with_fee)
+        await redis_client.set_user_data_key(user_id, "service_charge", service_fee)
         return await process_token_payment(update, context)
 
     elif choice == "structure_top3":
@@ -2818,6 +2828,27 @@ async def confirm_prompt(update, context):
     total_paid = await redis_client.get_user_data_key(user_id, "total_paid")
     transaction_hash = await redis_client.get_user_data_key(user_id, "transaction_hash")
 
+    # Get payment method and token information
+    payment_method = (
+        await redis_client.get_user_data_key(user_id, "payment_method") or "NEAR"
+    )
+    token_contract = await redis_client.get_user_data_key(
+        user_id, "selected_token_contract"
+    )
+    token_symbol = "NEAR"  # Default to NEAR
+
+    # Get token symbol if it's a token payment
+    if payment_method == "TOKEN" and token_contract:
+        try:
+            from services.token_service import TokenService
+
+            token_service = TokenService()
+            metadata = await token_service.get_token_metadata_from_api(token_contract)
+            token_symbol = metadata.get("symbol", "TOKEN")
+        except Exception as e:
+            logger.error(f"Error getting token symbol for quiz summary: {e}")
+            token_symbol = "TOKEN"
+
     # Ensure values are not None before using in f-string or arithmetic
     n = n if n is not None else 0
     topic = topic if topic is not None else "[Unknown Topic]"
@@ -2837,7 +2868,7 @@ async def confirm_prompt(update, context):
         text += f"⏱ Duration: No limit\n"
 
     if reward_amount > 0:
-        text += f"💰 Reward Amount: {reward_amount} NEAR\n"
+        text += f"💰 Reward Amount: {reward_amount} {token_symbol}\n"
         if reward_structure:
             structure_display = {
                 "winner_takes_all": "Winner-takes-all",
@@ -2851,13 +2882,13 @@ async def confirm_prompt(update, context):
                 first_place = round(float(reward_amount) * 0.5, 6)
                 second_place = round(float(reward_amount) * 0.3, 6)
                 third_place = round(float(reward_amount) * 0.2, 6)
-                text += f"🥇 1st place: {first_place} NEAR (50%)\n"
-                text += f"🥈 2nd place: {second_place} NEAR (30%)\n"
-                text += f"🥉 3rd place: {third_place} NEAR (20%)\n"
+                text += f"🥇 1st place: {first_place} {token_symbol} (50%)\n"
+                text += f"🥈 2nd place: {second_place} {token_symbol} (30%)\n"
+                text += f"🥉 3rd place: {third_place} {token_symbol} (20%)\n"
         if total_cost > 0:
-            text += f"💳 Total Cost: {total_cost} NEAR\n"
+            text += f"💳 Total Cost: {total_cost} {token_symbol}\n"
             if service_charge:
-                text += f"💰 Service Charge: {service_charge} NEAR\n"
+                text += f"💰 Service Charge: {service_charge} {token_symbol}\n"
             if total_paid:
                 text += f"�� Total Paid: {total_paid} NEAR\n"
             if payment_status == "completed":
