@@ -2848,7 +2848,7 @@ async def confirm_prompt(update, context):
         if stored_token_symbol:
             token_symbol = stored_token_symbol
         else:
-            # Fallback to API lookup if not stored
+            # Fallback to API lookup if not stored (this happens during confirmation before payment)
             try:
                 from services.token_service import TokenService
 
@@ -2857,6 +2857,13 @@ async def confirm_prompt(update, context):
                     token_contract
                 )
                 token_symbol = metadata.get("symbol", "TOKEN")
+                # Store the token symbol for later use in payment process
+                await redis_client.set_user_data_key(
+                    user_id, "token_symbol", token_symbol
+                )
+                logger.info(
+                    f"Stored token symbol {token_symbol} for user {user_id} during confirmation"
+                )
             except Exception as e:
                 logger.error(f"Error getting token symbol for quiz summary: {e}")
                 token_symbol = "TOKEN"

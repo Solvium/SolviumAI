@@ -462,10 +462,6 @@ class TokenService:
                     f"Token {token_contract} has {metadata['decimals']} decimals instead of expected 24 - verify this is correct"
                 )
 
-            # Use py-near's transfer method - let py-near handle decimal conversion
-            logger.info(
-                f"Attempting transfer: {amount} tokens to {recipient_account_id} (py-near will handle decimal conversion)"
-            )
             result = await account.ft.transfer(
                 ft_model,
                 recipient_account_id,
@@ -473,7 +469,6 @@ class TokenService:
                 force_register=force_register,
                 nowait=True,  # Return transaction hash immediately
             )
-            logger.info(f"Transfer result: {result}")
 
             return {
                 "success": True,
