@@ -47,7 +47,6 @@ from utils.telegram_helpers import (
     safe_edit_message_text,
     sanitize_markdown,
 )  # Ensure this is imported
-from .keyboard_markups import create_main_menu_keyboard
 import html  # Add this import
 from datetime import datetime, timezone, timedelta  # Add this import
 
@@ -205,6 +204,79 @@ def _escape_markdown_v2_specials(text: str) -> str:
     CONFIRM,
 ) = range(19)
 
+
+# Helper functions for message cleanup
+async def delete_message_safely(
+    context: CallbackContext, chat_id: int, message_id: int
+):
+    """Safely delete a message, ignoring errors if message doesn't exist or can't be deleted"""
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception as e:
+        # Ignore errors - message might already be deleted or user might have deleted it
+        logger.debug(f"Could not delete message {message_id}: {e}")
+
+
+async def cleanup_quiz_creation_messages(context: CallbackContext, user_id: int):
+    """Clean up intermediate messages from quiz creation flow"""
+    redis_client = RedisClient()
+
+    # Get list of message IDs to delete
+    message_ids = await redis_client.get_user_data_key(
+        user_id, "quiz_creation_messages"
+    )
+    logger.info(
+        f"Cleanup requested for user {user_id}. Found message IDs: {message_ids}"
+    )
+
+    if message_ids:
+        try:
+            message_ids_list = eval(message_ids)
+
+            logger.info(
+                f"Deleting {len(message_ids_list)} stored messages: {message_ids_list}"
+            )
+            for msg_id in message_ids_list:
+                await delete_message_safely(context, user_id, msg_id)
+            # Clear the stored message IDs
+            await redis_client.delete_user_data_key(user_id, "quiz_creation_messages")
+            logger.info(
+                f"Successfully cleaned up {len(message_ids_list)} messages for user {user_id}"
+            )
+        except Exception as e:
+            logger.error(f"Error cleaning up quiz creation messages: {e}")
+    else:
+        logger.info(f"No messages to cleanup for user {user_id}")
+
+
+async def store_message_for_cleanup(user_id: int, message_id: int):
+    """Store a message ID for later cleanup"""
+    redis_client = RedisClient()
+
+    # Get existing message IDs
+    existing_ids = await redis_client.get_user_data_key(
+        user_id, "quiz_creation_messages"
+    )
+    if existing_ids:
+        try:
+            message_ids = eval(existing_ids)
+        except:
+            message_ids = []
+    else:
+        message_ids = []
+
+    # Add new message ID
+    message_ids.append(message_id)
+
+    # Store back to Redis
+    await redis_client.set_user_data_key(
+        user_id, "quiz_creation_messages", str(message_ids)
+    )
+    logger.info(
+        f"Stored message {message_id} for cleanup. Total messages to cleanup: {len(message_ids)}. All stored IDs: {message_ids}"
+    )
+
+
 # States for reward configuration
 (
     REWARD_METHOD_CHOICE,
@@ -308,6 +380,24 @@ async def start_createquiz_group(update, context):
         f"User {user_id} initiating /createquiz from {chat_type} chat {update.effective_chat.id}."
     )
 
+    # Check if user is admin (only for group chats)
+    if chat_type in ["group", "supergroup"]:
+        try:
+            administrators = await update.effective_chat.get_administrators()
+            admin_ids = [admin.user.id for admin in administrators]
+
+            if user_id not in admin_ids:
+                await update.message.reply_text(
+                    "❌ Only group administrators can create quizzes in this group."
+                )
+                return ConversationHandler.END
+        except Exception as e:
+            logger.error(f"Error checking admin status for /createquiz: {e}")
+            await update.message.reply_text(
+                "❌ Could not verify admin status. Please try again."
+            )
+            return ConversationHandler.END
+
     # Clear potentially stale user_data from previous incomplete flows
     await redis_client.delete_user_data_key(user_id, "awaiting_reward_input_type")
     await redis_client.delete_user_data_key(user_id, "current_quiz_id_for_reward_setup")
@@ -352,7 +442,6 @@ async def start_createquiz_group(update, context):
         if chat_type != "private":
             await update.message.reply_text(
                 f"@{user.username}, I'll create a wallet for you first, then we'll set up your quiz in private chat.",
-                reply_markup=create_main_menu_keyboard(),
             )
 
         # Send initial loading message
@@ -428,17 +517,31 @@ async def start_createquiz_group(update, context):
                             await update.message.reply_text(
                                 f"@{user.username}, let's create a quiz! I'll message you privately to set it up."
                             )
-                            await context.bot.send_message(
+                            logger.info(
+                                f"About to send initial quiz creation message to user {user_id} via group chat path"
+                            )
+                            msg = await context.bot.send_message(
                                 chat_id=user_id,
                                 text="🎯 Create Quiz - Step 1 of 4\nWhat's your quiz topic?\n[Quick Topics: Crypto | Gaming | Technology | Custom...]",
+                            )
+                            logger.info(
+                                f"Initial quiz creation message sent with ID {msg.message_id}"
+                            )
+                            await store_message_for_cleanup(user_id, msg.message_id)
+                            logger.info(
+                                f"Stored initial quiz creation message {msg.message_id} for user {user_id}"
                             )
                             await redis_client.set_user_data_key(
                                 user_id, "group_chat_id", update.effective_chat.id
                             )
                             return TOPIC
                         else:
-                            await update.message.reply_text(
+                            msg = await update.message.reply_text(
                                 "🎯 Create Quiz - Step 1 of 4\nWhat's your quiz topic?\n[Quick Topics: Crypto | Gaming | Technology | Custom...]"
+                            )
+                            await store_message_for_cleanup(user_id, msg.message_id)
+                            logger.info(
+                                f"Stored initial quiz creation message {msg.message_id} for user {user_id}"
                             )
                             await redis_client.delete_user_data_key(
                                 user_id, "group_chat_id"
@@ -489,9 +592,14 @@ async def start_createquiz_group(update, context):
         await update.message.reply_text(
             f"@{user.username}, let's create a quiz! I'll message you privately to set it up."
         )
-        await context.bot.send_message(
+        msg = await context.bot.send_message(
             chat_id=user_id,
             text="🎯 Create Quiz - Step 1 of 4\nWhat's your quiz topic?\n[Quick Topics: Crypto | Gaming | Technology | Custom...]",
+        )
+        # Store initial quiz creation message for cleanup
+        await store_message_for_cleanup(user_id, msg.message_id)
+        logger.info(
+            f"Stored initial quiz creation message {msg.message_id} for user {user_id}"
         )
         await redis_client.set_user_data_key(
             user_id, "group_chat_id", update.effective_chat.id
@@ -502,8 +610,13 @@ async def start_createquiz_group(update, context):
         return TOPIC
     else:
         logger.info(f"User {user_id} started quiz creation directly in private chat.")
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             "🎯 Create Quiz - Step 1 of 4\nWhat's your quiz topic?\n[Quick Topics: Crypto | Gaming | Technology | Custom...]"
+        )
+        # Store initial quiz creation message for cleanup
+        await store_message_for_cleanup(user_id, msg.message_id)
+        logger.info(
+            f"Stored initial quiz creation message {msg.message_id} for user {user_id}"
         )
         # Clear any potential leftover group_chat_id if starting fresh in DM
         await redis_client.delete_user_data_key(user_id, "group_chat_id")
@@ -518,18 +631,25 @@ async def topic_received(update, context):
     logger.info(f"Received topic: {topic} from user {user_id}")
     await redis_client.set_user_data_key(user_id, "topic", topic)
 
+    # Store user's input message for cleanup
+    await store_message_for_cleanup(user_id, update.message.message_id)
+
     # Show topic and ask about notes
     buttons = [
         [InlineKeyboardButton("📝 Add Notes", callback_data="add_notes")],
         [InlineKeyboardButton("⏭️ Skip Notes", callback_data="skip_notes")],
     ]
 
-    await update.message.reply_text(
+    msg = await update.message.reply_text(
         f"✅ Topic set: {topic}\n"
         f"Would you like to add any notes or context for your quiz?\n"
         f"(This helps AI generate better questions)",
         reply_markup=InlineKeyboardMarkup(buttons),
     )
+
+    # Store message ID for cleanup
+    await store_message_for_cleanup(user_id, msg.message_id)
+
     return NOTES_CHOICE
 
 
@@ -540,7 +660,7 @@ async def notes_choice(update, context):
     await update.callback_query.answer()
 
     if choice == "add_notes":
-        await update.callback_query.message.reply_text(
+        msg = await update.callback_query.message.reply_text(
             "📝 Add Quiz Notes (Optional)\n"
             "Share any additional information, context, or specific focus areas:\n"
             "Examples:\n"
@@ -551,6 +671,7 @@ async def notes_choice(update, context):
             "💡 Tip: Keep notes concise (under 500 characters for best results)\n"
             "Type your notes or send 'skip' to continue:"
         )
+        await store_message_for_cleanup(user_id, msg.message_id)
         await redis_client.set_user_data_key(user_id, "awaiting_notes", True)
         return NOTES_INPUT
 
@@ -568,12 +689,13 @@ async def notes_choice(update, context):
             [InlineKeyboardButton("Custom", callback_data="size_custom")],
         ]
 
-        await update.callback_query.message.reply_text(
+        msg = await update.callback_query.message.reply_text(
             f"✅ Topic: {topic}\n"
             f"📝 Notes: None\n"
             f"❓ Step 2 of 4: How many questions?",
             reply_markup=InlineKeyboardMarkup(buttons),
         )
+        await store_message_for_cleanup(user_id, msg.message_id)
         return SIZE
 
 
@@ -697,9 +819,10 @@ async def size_selection(update, context):
                 [InlineKeyboardButton("Custom duration", callback_data="set_duration")],
             ]
 
-            await update.callback_query.message.reply_text(
+            msg = await update.callback_query.message.reply_text(
                 progress_text, reply_markup=InlineKeyboardMarkup(buttons)
             )
+            await store_message_for_cleanup(user_id, msg.message_id)
             return DURATION_CHOICE
 
 
@@ -742,9 +865,10 @@ async def size_received(update, context):
         [InlineKeyboardButton("Custom duration", callback_data="set_duration")],
     ]
 
-    await update.message.reply_text(
+    msg = await update.message.reply_text(
         progress_text, reply_markup=InlineKeyboardMarkup(buttons)
     )
+    await store_message_for_cleanup(user_id, msg.message_id)
     return DURATION_CHOICE
 
 
@@ -848,9 +972,10 @@ async def duration_choice(update, context):
             ],
         ]
 
-        await update.callback_query.message.reply_text(
+        msg = await update.callback_query.message.reply_text(
             progress_text, reply_markup=InlineKeyboardMarkup(buttons)
         )
+        await store_message_for_cleanup(user_id, msg.message_id)
         return QUIZ_TYPE_CHOICE
 
     elif choice == "set_duration":
@@ -1097,13 +1222,15 @@ async def show_reward_structure_options(update, context, reward_amount):
     ]
 
     if update.callback_query:
-        await update.callback_query.message.reply_text(
+        msg = await update.callback_query.message.reply_text(
             progress_text, reply_markup=InlineKeyboardMarkup(buttons)
         )
+        await store_message_for_cleanup(user_id, msg.message_id)
     else:
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             progress_text, reply_markup=InlineKeyboardMarkup(buttons)
         )
+        await store_message_for_cleanup(user_id, msg.message_id)
 
 
 async def reward_structure_choice(update, context):
@@ -1134,7 +1261,12 @@ async def reward_structure_choice(update, context):
             user_id, "token_reward_amount"
         )
         await redis_client.set_user_data_key(user_id, "reward_amount", token_amount)
-        await redis_client.set_user_data_key(user_id, "total_cost", token_amount)
+        # Calculate total cost with 2% service fee for token payments
+        token_amount_float = float(token_amount)
+        service_fee = token_amount_float * 0.02  # 2% service fee
+        total_cost_with_fee = token_amount_float + service_fee
+        await redis_client.set_user_data_key(user_id, "total_cost", total_cost_with_fee)
+        await redis_client.set_user_data_key(user_id, "service_charge", service_fee)
         return await process_token_payment(update, context)
 
     elif choice == "token_structure_top3":
@@ -1144,7 +1276,12 @@ async def reward_structure_choice(update, context):
             user_id, "token_reward_amount"
         )
         await redis_client.set_user_data_key(user_id, "reward_amount", token_amount)
-        await redis_client.set_user_data_key(user_id, "total_cost", token_amount)
+        # Calculate total cost with 2% service fee for token payments
+        token_amount_float = float(token_amount)
+        service_fee = token_amount_float * 0.02  # 2% service fee
+        total_cost_with_fee = token_amount_float + service_fee
+        await redis_client.set_user_data_key(user_id, "total_cost", total_cost_with_fee)
+        await redis_client.set_user_data_key(user_id, "service_charge", service_fee)
         return await process_token_payment(update, context)
 
     elif choice == "structure_top3":
@@ -1179,6 +1316,7 @@ async def payment_method_choice(update, context):
     await update.callback_query.edit_message_text(
         "Choose your payment method:", reply_markup=reply_markup
     )
+    # Note: edit_message_text doesn't return a new message, so we can't store its ID for cleanup
     return PAYMENT_METHOD_SELECTION
 
 
@@ -1696,6 +1834,8 @@ async def process_token_payment(update, context):
             await redis_client.set_user_data_key(
                 user_id, "token_transaction_hash", transfer_result["transaction_hash"]
             )
+            # Store token symbol for later use in quiz summary
+            await redis_client.set_user_data_key(user_id, "token_symbol", token_symbol)
 
             # Update processing message
             await processing_msg.edit_text(
@@ -1706,6 +1846,9 @@ async def process_token_payment(update, context):
                 f"🛠 **Generating your quiz...**",
                 parse_mode="Markdown",
             )
+
+            # Store payment success message for cleanup
+            await store_message_for_cleanup(user_id, processing_msg.message_id)
 
             # Proceed to quiz generation
             return await confirm_prompt(update, context)
@@ -2802,6 +2945,44 @@ async def confirm_prompt(update, context):
     total_paid = await redis_client.get_user_data_key(user_id, "total_paid")
     transaction_hash = await redis_client.get_user_data_key(user_id, "transaction_hash")
 
+    # Get payment method and token information
+    payment_method = (
+        await redis_client.get_user_data_key(user_id, "payment_method") or "NEAR"
+    )
+    token_contract = await redis_client.get_user_data_key(
+        user_id, "selected_token_contract"
+    )
+    token_symbol = "NEAR"  # Default to NEAR
+
+    # Get token symbol if it's a token payment
+    if payment_method == "TOKEN" and token_contract:
+        # First try to get the stored token symbol from payment process
+        stored_token_symbol = await redis_client.get_user_data_key(
+            user_id, "token_symbol"
+        )
+        if stored_token_symbol:
+            token_symbol = stored_token_symbol
+        else:
+            # Fallback to API lookup if not stored (this happens during confirmation before payment)
+            try:
+                from services.token_service import TokenService
+
+                token_service = TokenService()
+                metadata = await token_service.get_token_metadata_from_api(
+                    token_contract
+                )
+                token_symbol = metadata.get("symbol", "TOKEN")
+                # Store the token symbol for later use in payment process
+                await redis_client.set_user_data_key(
+                    user_id, "token_symbol", token_symbol
+                )
+                logger.info(
+                    f"Stored token symbol {token_symbol} for user {user_id} during confirmation"
+                )
+            except Exception as e:
+                logger.error(f"Error getting token symbol for quiz summary: {e}")
+                token_symbol = "TOKEN"
+
     # Ensure values are not None before using in f-string or arithmetic
     n = n if n is not None else 0
     topic = topic if topic is not None else "[Unknown Topic]"
@@ -2821,7 +3002,7 @@ async def confirm_prompt(update, context):
         text += f"⏱ Duration: No limit\n"
 
     if reward_amount > 0:
-        text += f"💰 Reward Amount: {reward_amount} NEAR\n"
+        text += f"💰 Reward Amount: {reward_amount} {token_symbol}\n"
         if reward_structure:
             structure_display = {
                 "winner_takes_all": "Winner-takes-all",
@@ -2835,13 +3016,13 @@ async def confirm_prompt(update, context):
                 first_place = round(float(reward_amount) * 0.5, 6)
                 second_place = round(float(reward_amount) * 0.3, 6)
                 third_place = round(float(reward_amount) * 0.2, 6)
-                text += f"🥇 1st place: {first_place} NEAR (50%)\n"
-                text += f"🥈 2nd place: {second_place} NEAR (30%)\n"
-                text += f"🥉 3rd place: {third_place} NEAR (20%)\n"
+                text += f"🥇 1st place: {first_place} {token_symbol} (50%)\n"
+                text += f"🥈 2nd place: {second_place} {token_symbol} (30%)\n"
+                text += f"🥉 3rd place: {third_place} {token_symbol} (20%)\n"
         if total_cost > 0:
-            text += f"💳 Total Cost: {total_cost} NEAR\n"
+            text += f"💳 Total Cost: {total_cost} {token_symbol}\n"
             if service_charge:
-                text += f"💰 Service Charge: {service_charge} NEAR\n"
+                text += f"💰 Service Charge: {service_charge} {token_symbol}\n"
             if total_paid:
                 text += f"�� Total Paid: {total_paid} NEAR\n"
             if payment_status == "completed":
@@ -2867,7 +3048,13 @@ async def confirm_prompt(update, context):
     else:
         msg = update.message
 
-    await msg.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    confirmation_msg = await msg.reply_text(
+        text, reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+    # Store the quiz summary/confirmation message for cleanup
+    await store_message_for_cleanup(user_id, confirmation_msg.message_id)
+
     return CONFIRM
 
 
@@ -2879,7 +3066,7 @@ async def confirm_choice(update, context):
 
     if choice == "no":
         await update.callback_query.message.reply_text(
-            "Quiz creation canceled.", reply_markup=create_main_menu_keyboard()
+            "Quiz creation canceled.",
         )
         await redis_client.clear_user_data(user_id)  # Clear data on cancellation
         return ConversationHandler.END
@@ -2897,7 +3084,10 @@ async def confirm_choice(update, context):
             return ConversationHandler.END
 
     # yes: generate and post
-    await update.callback_query.message.reply_text("🛠 Generating your quiz—one moment…")
+    processing_msg = await update.callback_query.message.reply_text(
+        "🛠 Generating your quiz—one moment…"
+    )
+    await store_message_for_cleanup(user_id, processing_msg.message_id)
 
     # Fetch all necessary data from Redis
     topic = await redis_client.get_user_data_key(user_id, "topic")
@@ -3230,17 +3420,25 @@ async def process_questions_with_payment(
 
         # Get token symbol if it's a token payment
         if payment_method == "TOKEN" and token_contract:
-            try:
-                from services.token_service import TokenService
+            # First try to get the stored token symbol from payment process
+            stored_token_symbol = await redis_client.get_user_data_key(
+                user_id, "token_symbol"
+            )
+            if stored_token_symbol:
+                token_symbol = stored_token_symbol
+            else:
+                # Fallback to API lookup if not stored
+                try:
+                    from services.token_service import TokenService
 
-                token_service = TokenService()
-                metadata = await token_service.get_token_metadata_from_api(
-                    token_contract
-                )
-                token_symbol = metadata.get("symbol", "TOKEN")
-            except Exception as e:
-                logger.error(f"Error getting token symbol for announcement: {e}")
-                token_symbol = "TOKEN"
+                    token_service = TokenService()
+                    metadata = await token_service.get_token_metadata_from_api(
+                        token_contract
+                    )
+                    token_symbol = metadata.get("symbol", "TOKEN")
+                except Exception as e:
+                    logger.error(f"Error getting token symbol for announcement: {e}")
+                    token_symbol = "TOKEN"
 
         # Create rich announcement card with image
         image_path, announcement_msg, announcement_keyboard = (
@@ -3363,13 +3561,16 @@ async def process_questions_with_payment(
 
         final_message = user_msg.strip()
 
-        await safe_send_message(
-            context.bot,
-            user_id,
-            final_message,
+        success_msg = await context.bot.send_message(
+            chat_id=user_id,
+            text=final_message,
             parse_mode="Markdown",
             reply_markup=user_keyboard,
         )
+        # Don't store success message for cleanup - we want to keep it visible
+
+        # Clean up all intermediate messages from quiz creation flow AFTER success message is sent
+        await cleanup_quiz_creation_messages(context, user_id)
 
         logger.info(
             f"Quiz {quiz_id} created and announced successfully for user {user_id}"
@@ -4549,3 +4750,55 @@ async def debug_sessions_handler(update: Update, context: CallbackContext):
         debug_text += "\n💡 Use /stop to clean up all sessions and tasks."
 
     await safe_send_message(context.bot, user_id, debug_text, parse_mode="Markdown")
+
+
+async def cleanup_group_keyboard(update: Update, context: CallbackContext):
+    """Remove persistent keyboard from group chats (admin command)"""
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    chat_type = update.effective_chat.type
+
+    # Only allow in group chats
+    if chat_type != "group" and chat_type != "supergroup":
+        await update.message.reply_text(
+            "❌ This command can only be used in group chats."
+        )
+        return
+
+    # Check if user is admin using get_administrators()
+    try:
+        administrators = await update.effective_chat.get_administrators()
+        admin_ids = [admin.user.id for admin in administrators]
+
+        if user_id not in admin_ids:
+            await update.message.reply_text(
+                "❌ Only group administrators can use this command."
+            )
+            return
+    except Exception as e:
+        logger.error(f"Error checking admin status: {e}")
+        await update.message.reply_text("❌ Could not verify admin status.")
+        return
+
+    try:
+        # Import the remove_keyboard function
+        from .keyboard_markups import remove_keyboard
+
+        # Send message with ReplyKeyboardRemove to remove persistent keyboard
+        await update.message.reply_text(
+            "🧹 **Keyboard Cleanup**\n\n"
+            "Removing persistent menu keyboard from this group.\n"
+            "The menu will no longer appear here.",
+            parse_mode="Markdown",
+            reply_markup=remove_keyboard(),
+        )
+
+        logger.info(
+            f"Group keyboard cleanup performed by admin {user_id} in group {chat_id}"
+        )
+
+    except Exception as e:
+        logger.error(f"Error during keyboard cleanup: {e}")
+        await update.message.reply_text(
+            "❌ An error occurred during cleanup. Please try again."
+        )

@@ -1465,6 +1465,117 @@ async def distribute_quiz_rewards(
                 pass  # Ignore if message deletion fails
 
 
+async def create_enhanced_quiz_answers_message(quiz, all_participants):
+    """Create a beautifully formatted quiz answers announcement"""
+
+    # Header with rich formatting
+    header = f"""🎉 <b>QUIZ COMPLETED: "{quiz.topic}"</b> 🎉
+
+📊 <b>PARTICIPANTS:</b> {len(all_participants)} users
+⏰ <b>DURATION:</b> {quiz.duration_seconds // 60} minutes
+🏆 <b>DIFFICULTY:</b> {len(quiz.questions)} questions
+
+═══════════════════════════════════════════
+📝 <b>ANSWERS REVEALED</b> 📝
+═══════════════════════════════════════════
+
+"""
+
+    # Interactive answer format
+    answers_section = ""
+    if quiz.questions and len(quiz.questions) > 0:
+        for i, question_data in enumerate(quiz.questions, 1):
+            question_text = question_data.get("question", f"Question {i}")
+            # Get correct answer - try multiple possible field names and structures
+            correct_answer = "Unknown"
+
+            # Method 1: Direct correct_answer field (if stored as processed text)
+            if "correct_answer" in question_data:
+                correct_answer = question_data["correct_answer"]
+
+            # Method 2: correct field with original_options mapping
+            elif "correct" in question_data and "original_options" in question_data:
+                correct_label = question_data["correct"]
+                original_options = question_data["original_options"]
+                correct_answer = original_options.get(correct_label, "Unknown")
+
+            # Method 3: correct field with shuffled_options mapping
+            elif "correct" in question_data and "shuffled_options" in question_data:
+                correct_label = question_data["correct"]
+                shuffled_options = question_data["shuffled_options"]
+                correct_answer = shuffled_options.get(correct_label, "Unknown")
+
+            # Method 4: direct options mapping (A, B, C, D structure)
+            elif "correct" in question_data and any(
+                key in question_data for key in ["A", "B", "C", "D"]
+            ):
+                correct_label = question_data["correct"]
+                correct_answer = question_data.get(correct_label, "Unknown")
+
+            # Method 5: options array structure
+            elif "correct" in question_data and "options" in question_data:
+                correct_label = question_data["correct"]
+                options = question_data["options"]
+                if isinstance(options, dict):
+                    correct_answer = options.get(correct_label, "Unknown")
+                elif isinstance(options, list) and correct_label.isdigit():
+                    idx = int(correct_label)
+                    if 0 <= idx < len(options):
+                        correct_answer = options[idx]
+
+            # Debug logging for troubleshooting
+            if correct_answer == "Unknown":
+                logger.warning(
+                    f"Could not extract correct answer for question {i}. Question data keys: {list(question_data.keys())}"
+                )
+                logger.debug(f"Question {i} data: {question_data}")
+
+            # Truncate long questions for readability
+            if len(question_text) > 60:
+                question_text = question_text[:57] + "..."
+
+            # Enhanced formatting with better visual structure
+            answers_section += f"""🔸 <b>Q{i}:</b> {question_text}
+   ✅ <b>Correct Answer:</b> <code>{correct_answer}</code>
+
+"""
+
+    return header + answers_section + "⏳ <i>Winners announcement coming up next...</i>"
+
+
+async def schedule_quiz_announcement_cleanup(
+    application, chat_id, message_ids, delay_minutes=20
+):
+    """Schedule automatic deletion of quiz announcement messages"""
+
+    async def cleanup_job(context):
+        logger.info(
+            f"Starting cleanup of {len(message_ids)} quiz announcement messages"
+        )
+        for message_id in message_ids:
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+                logger.info(f"Auto-deleted quiz announcement message {message_id}")
+            except Exception as e:
+                logger.warning(f"Could not auto-delete message {message_id}: {e}")
+        logger.info(f"Completed cleanup of quiz announcement messages")
+
+    # Schedule cleanup job
+    if hasattr(application, "job_queue") and application.job_queue:
+        application.job_queue.run_once(
+            cleanup_job,
+            delay_minutes * 60,  # Convert to seconds
+            name=f"cleanup_quiz_announcements_{chat_id}_{int(time.time())}",
+        )
+        logger.info(
+            f"Scheduled cleanup of {len(message_ids)} quiz announcement messages in {delay_minutes} minutes"
+        )
+    else:
+        logger.error(
+            "application.job_queue not available for quiz announcement cleanup"
+        )
+
+
 async def announce_quiz_end(application: "Application", quiz_id: str):
     """Announce quiz end with answers first, then winners - two-part flow"""
     logger.info(f"Announcing quiz end for quiz_id: {quiz_id}")
@@ -1501,77 +1612,27 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         # Get all participants and their scores
         all_participants = QuizAnswer.get_quiz_participants_ranking(session, quiz_id)
 
-        # PART 1: Quiz ended announcement with answers
-        answers_announcement = f"""� <b>Hurray! The quiz "{quiz.topic}" has officially ended!</b> �
+        # Initialize winners_with_scores to avoid UnboundLocalError
+        winners_with_scores = []
 
-⏰ The quiz period is now complete.
-👥 <b>Total Participants:</b> {len(all_participants)}"""
+        # PART 1: Enhanced quiz ended announcement with answers
+        answers_announcement = await create_enhanced_quiz_answers_message(
+            quiz, all_participants
+        )
 
-        # Add quiz answers review
-        if quiz.questions and len(quiz.questions) > 0:
-            answers_announcement += f"\n� <b>The answers to the questions are:</b>\n"
-            for i, question_data in enumerate(quiz.questions, 1):
-                question_text = question_data.get("question", f"Question {i}")
-                # Get correct answer - try multiple possible field names and structures
-                correct_answer = "Unknown"
-
-                # Method 1: Direct correct_answer field (if stored as processed text)
-                if "correct_answer" in question_data:
-                    correct_answer = question_data["correct_answer"]
-
-                # Method 2: correct field with original_options mapping
-                elif "correct" in question_data and "original_options" in question_data:
-                    correct_label = question_data["correct"]
-                    original_options = question_data["original_options"]
-                    correct_answer = original_options.get(correct_label, "Unknown")
-
-                # Method 3: correct field with shuffled_options mapping
-                elif "correct" in question_data and "shuffled_options" in question_data:
-                    correct_label = question_data["correct"]
-                    shuffled_options = question_data["shuffled_options"]
-                    correct_answer = shuffled_options.get(correct_label, "Unknown")
-
-                # Method 4: direct options mapping (A, B, C, D structure)
-                elif "correct" in question_data and any(
-                    key in question_data for key in ["A", "B", "C", "D"]
-                ):
-                    correct_label = question_data["correct"]
-                    correct_answer = question_data.get(correct_label, "Unknown")
-
-                # Method 5: options array structure
-                elif "correct" in question_data and "options" in question_data:
-                    correct_label = question_data["correct"]
-                    options = question_data["options"]
-                    if isinstance(options, dict):
-                        correct_answer = options.get(correct_label, "Unknown")
-                    elif isinstance(options, list) and correct_label.isdigit():
-                        idx = int(correct_label)
-                        if 0 <= idx < len(options):
-                            correct_answer = options[idx]
-
-                # Debug logging for troubleshooting
-                if correct_answer == "Unknown":
-                    logger.warning(
-                        f"Could not extract correct answer for question {i}. Question data keys: {list(question_data.keys())}"
-                    )
-                    logger.debug(f"Question {i} data: {question_data}")
-
-                # Truncate long questions for readability
-                if len(question_text) > 80:
-                    question_text = question_text[:77] + "..."
-
-                answers_announcement += f"✅ <b>Q{i}:</b> {question_text}\n"
-                answers_announcement += f"   � <b>Answer:</b> {correct_answer}\n"
-
-        answers_announcement += "\n⏳ <i>Winners announcement coming up next...</i>"
-
-        # Send first announcement (answers)
-        await safe_send_message(
+        # Send answers announcement
+        answers_msg = await safe_send_message(
             application.bot,
             announcement_chat_id,
             answers_announcement,
             parse_mode="HTML",
         )
+
+        # Schedule cleanup for answers announcement (20 minutes)
+        if answers_msg:
+            await schedule_quiz_announcement_cleanup(
+                application, announcement_chat_id, [answers_msg.message_id], 20 * 60
+            )
 
         logger.info(f"Quiz answers announcement sent for quiz {quiz_id}")
 
@@ -1583,7 +1644,9 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         # PART 2: Winners and leaderboard announcement
         winners_announcement = f"""🏆 <b>QUIZ WINNERS - {quiz.topic}</b> 🏆
 
-📊 Final results and leaderboard:"""
+═══════════════════════════════════════════
+📊 <b>FINAL RESULTS & LEADERBOARD</b> 📊
+═══════════════════════════════════════════"""
 
         if all_participants:
             # Get the actual number of questions in the quiz
@@ -1614,8 +1677,8 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                         else 0
                     )
 
-                    winners_announcement += f"{medal} <b>{i+1}.</b> @{username}\n"
-                    winners_announcement += f"   📊 {correct_count}/{num_questions_in_quiz} ({accuracy:.1f}%)\n"
+                    winners_announcement += f"\n{medal} <b>{i+1}.</b> @{username}"
+                    winners_announcement += f"\n   📊 <code>{correct_count}/{num_questions_in_quiz}</code> ({accuracy:.1f}%)"
             else:
                 # No one got any questions right
                 winners_announcement += "\n🏆 <b>FINAL LEADERBOARD:</b>\n"
@@ -1634,10 +1697,16 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                 else 0
             )
 
-            winners_announcement += f"\n📈 <b>Quiz Statistics:</b>\n"
-            winners_announcement += f"• Total correct answers: {total_correct}\n"
-            winners_announcement += f"• Average accuracy: {avg_accuracy:.1f}%\n"
-            winners_announcement += f"• Questions in quiz: {num_questions_in_quiz}\n"
+            winners_announcement += f"\n\n📈 <b>Quiz Statistics:</b>\n"
+            winners_announcement += (
+                f"• Total correct answers: <code>{total_correct}</code>\n"
+            )
+            winners_announcement += (
+                f"• Average accuracy: <code>{avg_accuracy:.1f}%</code>\n"
+            )
+            winners_announcement += (
+                f"• Questions in quiz: <code>{num_questions_in_quiz}</code>\n"
+            )
         else:
             winners_announcement += "\n📊 No participants found for this quiz."
 
@@ -1694,6 +1763,12 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
             # Store announcement message ID for cleanup (this is the main end announcement)
             quiz.announcement_message_id = message.message_id
             session.commit()
+
+            # Schedule cleanup for winners announcement (20 minutes)
+            await schedule_quiz_announcement_cleanup(
+                application, announcement_chat_id, [message.message_id], 20 * 60
+            )
+
             logger.info(
                 f"Quiz end announcements sent for quiz {quiz_id} with message ID: {message.message_id}"
             )
