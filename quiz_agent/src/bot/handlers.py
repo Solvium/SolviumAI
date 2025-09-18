@@ -231,9 +231,10 @@ async def cleanup_quiz_creation_messages(context: CallbackContext, user_id: int)
 
     if message_ids:
         try:
-            message_ids_list = eval(message_ids)  # Convert string back to list
+            message_ids_list = eval(message_ids)
+
             logger.info(
-                f"Deleting {len(message_ids_list)} messages: {message_ids_list}"
+                f"Deleting {len(message_ids_list)} stored messages: {message_ids_list}"
             )
             for msg_id in message_ids_list:
                 await delete_message_safely(context, user_id, msg_id)
@@ -516,9 +517,15 @@ async def start_createquiz_group(update, context):
                             await update.message.reply_text(
                                 f"@{user.username}, let's create a quiz! I'll message you privately to set it up."
                             )
+                            logger.info(
+                                f"About to send initial quiz creation message to user {user_id} via group chat path"
+                            )
                             msg = await context.bot.send_message(
                                 chat_id=user_id,
                                 text="🎯 Create Quiz - Step 1 of 4\nWhat's your quiz topic?\n[Quick Topics: Crypto | Gaming | Technology | Custom...]",
+                            )
+                            logger.info(
+                                f"Initial quiz creation message sent with ID {msg.message_id}"
                             )
                             await store_message_for_cleanup(user_id, msg.message_id)
                             logger.info(
@@ -585,9 +592,14 @@ async def start_createquiz_group(update, context):
         await update.message.reply_text(
             f"@{user.username}, let's create a quiz! I'll message you privately to set it up."
         )
-        await context.bot.send_message(
+        msg = await context.bot.send_message(
             chat_id=user_id,
             text="🎯 Create Quiz - Step 1 of 4\nWhat's your quiz topic?\n[Quick Topics: Crypto | Gaming | Technology | Custom...]",
+        )
+        # Store initial quiz creation message for cleanup
+        await store_message_for_cleanup(user_id, msg.message_id)
+        logger.info(
+            f"Stored initial quiz creation message {msg.message_id} for user {user_id}"
         )
         await redis_client.set_user_data_key(
             user_id, "group_chat_id", update.effective_chat.id
@@ -598,8 +610,13 @@ async def start_createquiz_group(update, context):
         return TOPIC
     else:
         logger.info(f"User {user_id} started quiz creation directly in private chat.")
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             "🎯 Create Quiz - Step 1 of 4\nWhat's your quiz topic?\n[Quick Topics: Crypto | Gaming | Technology | Custom...]"
+        )
+        # Store initial quiz creation message for cleanup
+        await store_message_for_cleanup(user_id, msg.message_id)
+        logger.info(
+            f"Stored initial quiz creation message {msg.message_id} for user {user_id}"
         )
         # Clear any potential leftover group_chat_id if starting fresh in DM
         await redis_client.delete_user_data_key(user_id, "group_chat_id")
