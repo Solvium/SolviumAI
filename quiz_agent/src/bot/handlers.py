@@ -272,7 +272,7 @@ async def store_message_for_cleanup(user_id: int, message_id: int):
         user_id, "quiz_creation_messages", str(message_ids)
     )
     logger.info(
-        f"Stored message {message_id} for cleanup. Total messages to cleanup: {len(message_ids)}"
+        f"Stored message {message_id} for cleanup. Total messages to cleanup: {len(message_ids)}. All stored IDs: {message_ids}"
     )
 
 
@@ -521,6 +521,9 @@ async def start_createquiz_group(update, context):
                                 text="🎯 Create Quiz - Step 1 of 4\nWhat's your quiz topic?\n[Quick Topics: Crypto | Gaming | Technology | Custom...]",
                             )
                             await store_message_for_cleanup(user_id, msg.message_id)
+                            logger.info(
+                                f"Stored initial quiz creation message {msg.message_id} for user {user_id}"
+                            )
                             await redis_client.set_user_data_key(
                                 user_id, "group_chat_id", update.effective_chat.id
                             )
@@ -530,6 +533,9 @@ async def start_createquiz_group(update, context):
                                 "🎯 Create Quiz - Step 1 of 4\nWhat's your quiz topic?\n[Quick Topics: Crypto | Gaming | Technology | Custom...]"
                             )
                             await store_message_for_cleanup(user_id, msg.message_id)
+                            logger.info(
+                                f"Stored initial quiz creation message {msg.message_id} for user {user_id}"
+                            )
                             await redis_client.delete_user_data_key(
                                 user_id, "group_chat_id"
                             )
@@ -3028,6 +3034,9 @@ async def confirm_prompt(update, context):
     confirmation_msg = await msg.reply_text(
         text, reply_markup=InlineKeyboardMarkup(buttons)
     )
+
+    # Store the quiz summary/confirmation message for cleanup
+    await store_message_for_cleanup(user_id, confirmation_msg.message_id)
 
     return CONFIRM
 
