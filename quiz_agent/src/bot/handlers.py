@@ -47,7 +47,6 @@ from utils.telegram_helpers import (
     safe_edit_message_text,
     sanitize_markdown,
 )  # Ensure this is imported
-from .keyboard_markups import create_main_menu_keyboard
 import html  # Add this import
 from datetime import datetime, timezone, timedelta  # Add this import
 
@@ -352,7 +351,6 @@ async def start_createquiz_group(update, context):
         if chat_type != "private":
             await update.message.reply_text(
                 f"@{user.username}, I'll create a wallet for you first, then we'll set up your quiz in private chat.",
-                reply_markup=create_main_menu_keyboard(),
             )
 
         # Send initial loading message
@@ -2879,7 +2877,7 @@ async def confirm_choice(update, context):
 
     if choice == "no":
         await update.callback_query.message.reply_text(
-            "Quiz creation canceled.", reply_markup=create_main_menu_keyboard()
+            "Quiz creation canceled.",
         )
         await redis_client.clear_user_data(user_id)  # Clear data on cancellation
         return ConversationHandler.END
@@ -4549,3 +4547,53 @@ async def debug_sessions_handler(update: Update, context: CallbackContext):
         debug_text += "\n💡 Use /stop to clean up all sessions and tasks."
 
     await safe_send_message(context.bot, user_id, debug_text, parse_mode="Markdown")
+
+
+async def cleanup_group_keyboard(update: Update, context: CallbackContext):
+    """Remove persistent keyboard from group chats (admin command)"""
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    chat_type = update.effective_chat.type
+
+    # Only allow in group chats
+    if chat_type != "group" and chat_type != "supergroup":
+        await update.message.reply_text(
+            "❌ This command can only be used in group chats."
+        )
+        return
+
+    # Check if user is admin (you can add more specific admin checks here)
+    try:
+        member = await context.bot.get_chat_member(chat_id, user_id)
+        if member.status not in ["administrator", "creator"]:
+            await update.message.reply_text(
+                "❌ Only group administrators can use this command."
+            )
+            return
+    except Exception as e:
+        logger.error(f"Error checking admin status: {e}")
+        await update.message.reply_text("❌ Could not verify admin status.")
+        return
+
+    try:
+        # Import the remove_keyboard function
+        from .keyboard_markups import remove_keyboard
+
+        # Send message with ReplyKeyboardRemove to remove persistent keyboard
+        await update.message.reply_text(
+            "🧹 **Keyboard Cleanup**\n\n"
+            "Removing persistent menu keyboard from this group.\n"
+            "The menu will no longer appear here.",
+            parse_mode="Markdown",
+            reply_markup=remove_keyboard(),
+        )
+
+        logger.info(
+            f"Group keyboard cleanup performed by admin {user_id} in group {chat_id}"
+        )
+
+    except Exception as e:
+        logger.error(f"Error during keyboard cleanup: {e}")
+        await update.message.reply_text(
+            "❌ An error occurred during cleanup. Please try again."
+        )

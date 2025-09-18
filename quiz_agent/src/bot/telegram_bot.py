@@ -184,6 +184,7 @@ class TelegramBot:
             stop_enhanced_quiz,
             announce_quiz_end_handler,  # Quiz end announcement handler
             debug_sessions_handler,  # Debug sessions handler
+            cleanup_group_keyboard,  # Group keyboard cleanup handler
             handle_wallet_retry_callback,  # Wallet retry callback handler
             quiz_type_choice,  # Quiz type selection (Free vs Paid)
             payment_method_choice,  # Payment method selection
@@ -440,6 +441,9 @@ class TelegramBot:
 
         # Handle enhanced quiz stop command
         self.app.add_handler(CommandHandler("stop", stop_enhanced_quiz))
+
+        # Handle keyboard cleanup command for groups
+        self.app.add_handler(CommandHandler("cleanup", cleanup_group_keyboard))
 
         # Handle text messages for ReplyKeyboardMarkup (higher priority than private_message_handler)
         logger.info("Registering text message handler for ReplyKeyboardMarkup")

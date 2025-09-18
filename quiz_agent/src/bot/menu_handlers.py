@@ -1176,7 +1176,6 @@ async def show_menu_in_group(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(
         f"🎉 Hi {user_name}! I'm SolviumAI bot.\n"
         "For the best experience, please DM me to access all features!",
-        reply_markup=create_main_menu_keyboard(),
     )
 
 
