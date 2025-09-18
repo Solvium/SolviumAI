@@ -1722,6 +1722,8 @@ async def process_token_payment(update, context):
             await redis_client.set_user_data_key(
                 user_id, "token_transaction_hash", transfer_result["transaction_hash"]
             )
+            # Store token symbol for later use in quiz summary
+            await redis_client.set_user_data_key(user_id, "token_symbol", token_symbol)
 
             # Update processing message
             await processing_msg.edit_text(
@@ -2839,15 +2841,25 @@ async def confirm_prompt(update, context):
 
     # Get token symbol if it's a token payment
     if payment_method == "TOKEN" and token_contract:
-        try:
-            from services.token_service import TokenService
+        # First try to get the stored token symbol from payment process
+        stored_token_symbol = await redis_client.get_user_data_key(
+            user_id, "token_symbol"
+        )
+        if stored_token_symbol:
+            token_symbol = stored_token_symbol
+        else:
+            # Fallback to API lookup if not stored
+            try:
+                from services.token_service import TokenService
 
-            token_service = TokenService()
-            metadata = await token_service.get_token_metadata_from_api(token_contract)
-            token_symbol = metadata.get("symbol", "TOKEN")
-        except Exception as e:
-            logger.error(f"Error getting token symbol for quiz summary: {e}")
-            token_symbol = "TOKEN"
+                token_service = TokenService()
+                metadata = await token_service.get_token_metadata_from_api(
+                    token_contract
+                )
+                token_symbol = metadata.get("symbol", "TOKEN")
+            except Exception as e:
+                logger.error(f"Error getting token symbol for quiz summary: {e}")
+                token_symbol = "TOKEN"
 
     # Ensure values are not None before using in f-string or arithmetic
     n = n if n is not None else 0
@@ -3277,17 +3289,25 @@ async def process_questions_with_payment(
 
         # Get token symbol if it's a token payment
         if payment_method == "TOKEN" and token_contract:
-            try:
-                from services.token_service import TokenService
+            # First try to get the stored token symbol from payment process
+            stored_token_symbol = await redis_client.get_user_data_key(
+                user_id, "token_symbol"
+            )
+            if stored_token_symbol:
+                token_symbol = stored_token_symbol
+            else:
+                # Fallback to API lookup if not stored
+                try:
+                    from services.token_service import TokenService
 
-                token_service = TokenService()
-                metadata = await token_service.get_token_metadata_from_api(
-                    token_contract
-                )
-                token_symbol = metadata.get("symbol", "TOKEN")
-            except Exception as e:
-                logger.error(f"Error getting token symbol for announcement: {e}")
-                token_symbol = "TOKEN"
+                    token_service = TokenService()
+                    metadata = await token_service.get_token_metadata_from_api(
+                        token_contract
+                    )
+                    token_symbol = metadata.get("symbol", "TOKEN")
+                except Exception as e:
+                    logger.error(f"Error getting token symbol for announcement: {e}")
+                    token_symbol = "TOKEN"
 
         # Create rich announcement card with image
         image_path, announcement_msg, announcement_keyboard = (
