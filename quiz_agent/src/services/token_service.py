@@ -424,11 +424,14 @@ class TokenService:
     ) -> Dict:
         """Transfer tokens using py-near FTS with NearBlocks API for metadata"""
         try:
-            # Get metadata using NearBlocks API (more reliable)
-            metadata = await self.get_token_metadata_from_api(token_contract)
+            # Get metadata using NearBlocks API with inventory fallback (more reliable)
+            metadata = await self.get_token_metadata(account, token_contract)
 
             # Create FtModel with correct decimals from NearBlocks API
             ft_model = FtModel(contract_id=token_contract, decimal=metadata["decimals"])
+            logger.info(
+                f"Created FtModel with contract_id={token_contract}, decimal={metadata['decimals']}"
+            )
 
             # Log the transfer details for debugging
             logger.info(
@@ -437,7 +440,17 @@ class TokenService:
 
             # Manually convert amount to the smallest unit (considering decimals)
             # For example: 200 tokens with 24 decimals = 200 * 10^24
-            amount_in_smallest_unit = int(amount * (10 ** metadata["decimals"]))
+            # Use string conversion to avoid floating point precision issues
+            amount_str = str(amount)
+            if "." in amount_str:
+                integer_part, decimal_part = amount_str.split(".")
+                # Pad decimal part to match token decimals
+                decimal_part = decimal_part.ljust(metadata["decimals"], "0")[
+                    : metadata["decimals"]
+                ]
+                amount_in_smallest_unit = int(integer_part + decimal_part)
+            else:
+                amount_in_smallest_unit = int(amount_str) * (10 ** metadata["decimals"])
 
             logger.info(
                 f"Converted {amount} tokens to {amount_in_smallest_unit} smallest units (using {metadata['decimals']} decimals)"
@@ -449,14 +462,18 @@ class TokenService:
                     f"Token {token_contract} has {metadata['decimals']} decimals instead of expected 24 - verify this is correct"
                 )
 
-            # Use py-near's transfer method with the converted amount
+            # Use py-near's transfer method - let py-near handle decimal conversion
+            logger.info(
+                f"Attempting transfer: {amount} tokens to {recipient_account_id} (py-near will handle decimal conversion)"
+            )
             result = await account.ft.transfer(
                 ft_model,
                 recipient_account_id,
-                amount_in_smallest_unit,  # Use the converted amount in smallest units
+                amount,  # Let py-near handle the decimal conversion
                 force_register=force_register,
                 nowait=True,  # Return transaction hash immediately
             )
+            logger.info(f"Transfer result: {result}")
 
             return {
                 "success": True,
@@ -493,9 +510,14 @@ class TokenService:
                     tokens = await self.get_user_token_inventory(account.account_id)
                     for token in tokens:
                         if token["contract_address"] == token_contract:
-                            logger.info(f"Found token in inventory: {token['symbol']}")
+                            logger.info(
+                                f"Found token in inventory: {token['symbol']} with {token['decimals']} decimals"
+                            )
                             metadata["symbol"] = token["symbol"]
                             metadata["name"] = token["name"]
+                            metadata["decimals"] = token[
+                                "decimals"
+                            ]  # Also update decimals from inventory
                             break
                 except Exception as inventory_error:
                     logger.warning(
