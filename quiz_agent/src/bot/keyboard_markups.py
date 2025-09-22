@@ -47,6 +47,23 @@ def create_main_menu_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def create_wallet_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a keyboard for wallet management options.
+    Essential daily wallet functions in a clean 2x3 grid.
+    """
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton("💰 View Balance"), KeyboardButton("🔑 Export Keys")],
+            [KeyboardButton("📤 Withdraw"), KeyboardButton("📥 Receive")],
+            [KeyboardButton("📊 Transactions"), KeyboardButton("⬅️ Back to Main Menu")],
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=False,
+        input_field_placeholder="📱 Wallet options...",
+    )
+
+
 def create_leaderboards_keyboard() -> ReplyKeyboardMarkup:
     """
     Creates a keyboard for leaderboard options

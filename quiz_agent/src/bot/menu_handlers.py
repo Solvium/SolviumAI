@@ -7,24 +7,14 @@ from telegram import (
 from telegram.ext import CallbackContext
 from .keyboard_markups import (
     create_main_menu_keyboard,
-    create_game_selection_keyboard,
-    create_quiz_creation_keyboard,
-    create_quiz_templates_keyboard,
-    create_quiz_settings_keyboard,
-    create_quiz_play_keyboard,
-    create_rewards_keyboard,
+    create_wallet_keyboard,
     create_leaderboards_keyboard,
-    create_community_keyboard,
-    create_app_keyboard,
+    create_withdrawal_keyboard,
     create_cancel_keyboard,
     remove_keyboard,
     create_inline_cancel_keyboard,
     create_inline_main_menu_keyboard,
-    create_inline_game_selection_keyboard,
-    create_inline_challenge_keyboard,
-    create_inline_community_keyboard,
-    create_inline_app_keyboard,
-    create_inline_quiz_creation_keyboard,
+    create_inline_leaderboards_keyboard,
 )
 from utils.redis_client import RedisClient
 from services.wallet_service import WalletService
@@ -268,42 +258,24 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
     # Only process messages that are actual menu button presses
     # If it's not a menu button, let other handlers deal with it
     menu_buttons = [
-        "🎯 Create Quiz",
-        "🎲 Play Quiz",
+        # Main menu buttons
+        "💰 My Wallet",
+        "🎯 My Points", 
         "🏆 Leaderboards",
-        "💰 My Rewards",
-        "🎯 My Points",
-        "⬅️ Back to Main Menu",
-        "⬅️ Back to Games",
-        "⬅️ Back to Quiz Creation",
-        "👥 Challenge Group",
-        "👤 Challenge Friend",
-        "🏅 My Challenges",
-        "📊 Challenge Stats",
-        "📢 Join Announcements",
-        "💬 Join Discussion",
-        "🎮 Join Gaming",
-        "📈 Join Trading",
-        "🌐 Open Web App",
-        "📱 Download Mobile",
-        "💳 Connect Wallet",
-        "💰 View Rewards",
-        "📝 Quick Quiz",
-        "⚙️ Custom Quiz",
-        "📊 Quiz Templates",
-        "📈 My Quizzes",
-        "🎯 Active Quizzes",
-        "🏆 My Results",
-        "📊 Quiz History",
-        "🎖️ Achievements",
-        "💳 Connect Wallet",
-        "💰 View Balance",
-        "🏆 Claim Rewards",
-        "📈 Transaction History",
+        "📜 History",
+        # Wallet submenu buttons
+        "� View Balance",
+        "� Export Keys",
+        "� Withdraw",
+        "� Receive",
+        "📊 Transactions",
+        # Leaderboard submenu buttons
         "🏆 Global Leaderboard",
         "👥 Group Leaderboard",
         "📊 Weekly Top",
         "🎖️ All Time Best",
+        # Navigation buttons
+        "⬅️ Back to Main Menu",
         "❌ Cancel",
         "⬅️ Back",
     ]
@@ -324,30 +296,39 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         return
 
     # Parse the button text and route to appropriate handler
-    if message_text == "🎯 Create Quiz":
-        await handle_create_quiz(update, context)
-    elif message_text == "🎲 Play Quiz":
-        await handle_play_quiz(update, context)
+    if message_text == "💰 My Wallet":
+        await handle_my_wallet(update, context)
+    elif message_text == "� My Points":
+        await handle_my_points(update, context)
     elif message_text == "🏆 Leaderboards":
         await handle_leaderboards(update, context)
-    elif message_text == "💰 My Rewards":
-        await handle_rewards(update, context)
-    elif message_text == "🎯 My Points":
-        await handle_my_points(update, context)
+    elif message_text == "� History":
+        await handle_history(update, context)
+    # Wallet submenu handlers
+    elif message_text == "💰 View Balance":
+        await handle_view_balance(update, context)
+    elif message_text == "🔑 Export Keys":
+        await handle_export_keys(update, context)
+    elif message_text == "📤 Withdraw":
+        await handle_withdraw(update, context)
+    elif message_text == "📥 Receive":
+        await handle_receive(update, context)
+    elif message_text == "📊 Transactions":
+        await handle_transactions(update, context)
+    # Leaderboard submenu handlers
+    elif message_text == "🏆 Global Leaderboard":
+        await handle_global_leaderboard(update, context)
+    elif message_text == "� Group Leaderboard":
+        await handle_group_leaderboard(update, context)
+    elif message_text == "📊 Weekly Top":
+        await handle_weekly_top(update, context)
+    elif message_text == "🎖️ All Time Best":
+        await handle_all_time_best(update, context)
+    # Navigation handlers
     elif message_text == "⬅️ Back to Main Menu":
         await show_main_menu(update, context)
-    elif message_text == "⬅️ Back to Games":
-        await handle_back_to_games(update, context)
-    elif message_text == "⬅️ Back to Quiz Creation":
-        await handle_create_quiz(update, context)
-    # Challenge handlers
-    elif message_text == "👥 Challenge Group":
-        await handle_challenge_group(update, context)
-    elif message_text == "👤 Challenge Friend":
-        await handle_challenge_friend(update, context)
-    elif message_text == "🏅 My Challenges":
-        await handle_my_challenges(update, context)
-    elif message_text == "📊 Challenge Stats":
+    elif message_text in ["❌ Cancel", "⬅️ Back"]:
+        await show_main_menu(update, context)
         await handle_challenge_stats(update, context)
     # Community handlers
     elif message_text == "📢 Join Announcements":
@@ -413,17 +394,6 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         await handle_unknown_message(update, context)
 
 
-async def handle_rewards(update: Update, context: CallbackContext) -> None:
-    """Handle 'My Rewards' button press"""
-    user_id = update.effective_user.id
-    redis_client = RedisClient()
-
-    await update.message.reply_text(
-        "💰 Manage your rewards:", reply_markup=create_rewards_keyboard()
-    )
-    await redis_client.set_user_data_key(user_id, "current_menu", "rewards")
-
-
 async def handle_my_points(update: Update, context: CallbackContext) -> None:
     """Handle 'My Points' button press"""
     user_id = str(update.effective_user.id)
@@ -485,31 +455,6 @@ async def handle_my_points(update: Update, context: CallbackContext) -> None:
             parse_mode="Markdown",
             reply_markup=create_main_menu_keyboard(),
         )
-
-
-async def handle_back_to_games(update: Update, context: CallbackContext) -> None:
-    """Handle 'Back to Games' button press"""
-    await update.message.reply_text(
-        "🎮 Game options:", reply_markup=create_game_selection_keyboard()
-    )
-
-
-async def handle_create_quiz(update: Update, context: CallbackContext) -> None:
-    """Handle 'Create Quiz' button press"""
-    await update.message.reply_text(
-        "📝 Create a new quiz:", reply_markup=create_quiz_creation_keyboard()
-    )
-
-
-async def handle_play_quiz(update: Update, context: CallbackContext) -> None:
-    """Handle 'Play Quiz' button press"""
-    user_id = update.effective_user.id
-    redis_client = RedisClient()
-
-    await update.message.reply_text(
-        "🎲 Play quizzes:", reply_markup=create_quiz_play_keyboard()
-    )
-    await redis_client.set_user_data_key(user_id, "current_menu", "quiz_play")
 
 
 async def handle_leaderboards(update: Update, context: CallbackContext) -> None:
@@ -907,18 +852,14 @@ async def handle_game_callback(
     query = update.callback_query
     user_id = update.effective_user.id
 
-    if callback_data == "game:create_quiz":
-        await handle_create_quiz(update, context)
-    elif callback_data == "game:play_quiz":
-        await handle_play_quiz(update, context)
-    elif callback_data == "game:leaderboards":
-        await handle_leaderboards(update, context)
-    elif callback_data == "game:rewards":
-        await handle_rewards(update, context)
-    elif callback_data == "game:my_points":
-        await handle_my_points_inline(query, context)
+    # Since we removed games from main menu, redirect to main menu
+    if callback_data.startswith("game:"):
+        await query.edit_message_text(
+            "🎉 Welcome to SolviumAI!\nWhat would you like to do today?",
+            reply_markup=create_inline_main_menu_keyboard(),
+        )
     else:
-        await query.edit_message_text("❌ Invalid game selection. Please try again.")
+        await query.edit_message_text("❌ Invalid selection. Please try again.")
 
 
 async def handle_main_menu_callback(
@@ -939,34 +880,52 @@ async def handle_main_menu_callback(
         )
         await redis_client.set_user_data_key(user_id, "current_menu", "main")
 
-    elif callback_data == "menu:pick_game":
-        # Show game selection menu
-        await query.edit_message_text(
-            "🎮 Choose your game:", reply_markup=create_inline_game_selection_keyboard()
+    elif callback_data == "menu:wallet":
+        # Show wallet options - convert to text message with reply keyboard
+        await query.answer()
+        await query.delete_message()
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="💰 **My Wallet**\nChoose an option to manage your wallet:",
+            reply_markup=create_wallet_keyboard(),
+            parse_mode='Markdown'
         )
-        await redis_client.set_user_data_key(user_id, "current_menu", "games")
+        await redis_client.set_user_data_key(user_id, "current_menu", "wallet")
 
-    elif callback_data == "menu:challenge_friends":
-        # Show challenge menu
-        await query.edit_message_text(
-            "💪 Challenge your friends:",
-            reply_markup=create_inline_challenge_keyboard(),
-        )
-        await redis_client.set_user_data_key(user_id, "current_menu", "challenge")
+    elif callback_data == "menu:my_points":
+        # Handle my points
+        await handle_my_points_inline(query, context)
 
-    elif callback_data == "menu:join_community":
-        # Show community menu
-        await query.edit_message_text(
-            "🤝 Join our community:", reply_markup=create_inline_community_keyboard()
+    elif callback_data == "menu:leaderboards":
+        # Show leaderboards options - convert to text message with reply keyboard
+        await query.answer()
+        await query.delete_message()
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="🏆 View leaderboards:",
+            reply_markup=create_leaderboards_keyboard()
         )
-        await redis_client.set_user_data_key(user_id, "current_menu", "community")
+        await redis_client.set_user_data_key(user_id, "current_menu", "leaderboards")
 
-    elif callback_data == "menu:get_app":
-        # Show app menu
-        await query.edit_message_text(
-            "📱 Get our cash winning app:", reply_markup=create_inline_app_keyboard()
+    elif callback_data == "menu:history":
+        # Handle history
+        await query.answer()
+        await query.delete_message()
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="📜 Loading your gaming history...",
+            reply_markup=create_main_menu_keyboard()
         )
-        await redis_client.set_user_data_key(user_id, "current_menu", "app")
+        # You can add the actual history handler here
+        
+    # Remove old menu options that no longer exist
+    elif callback_data in ["menu:pick_game", "menu:challenge_friends", "menu:join_community", "menu:get_app"]:
+        # Redirect to main menu for removed options
+        await query.edit_message_text(
+            "🎉 Welcome to SolviumAI!\nWhat would you like to do today?",
+            reply_markup=create_inline_main_menu_keyboard()
+        )
+        await redis_client.set_user_data_key(user_id, "current_menu", "main")
 
     elif callback_data == "menu:my_points":
         # Show user's points
@@ -1295,3 +1254,261 @@ async def handle_quiz_deep_link(
 
         context.args = [quiz_id]
         await play_quiz(update, context)
+
+
+# New wallet handlers
+async def handle_my_wallet(update: Update, context: CallbackContext) -> None:
+    """Handle 'My Wallet' button press - show wallet submenu"""
+    await update.message.reply_text(
+        "💰 **My Wallet**\nChoose an option to manage your wallet:",
+        reply_markup=create_wallet_keyboard(),
+    )
+
+
+async def handle_view_balance(update: Update, context: CallbackContext) -> None:
+    """Handle 'View Balance' button press"""
+    user_id = update.effective_user.id
+    wallet_service = WalletService()
+    
+    try:
+        # Get user's wallet info
+        wallet_info = await wallet_service.get_wallet_info(user_id)
+        
+        if wallet_info:
+            balance_text = f"""💰 **Wallet Balance**
+
+🏛️ **NEAR Balance:** {wallet_info.get('near_balance', '0.00')} NEAR
+🪙 **Token Balance:** {wallet_info.get('token_balance', '0')} Tokens
+🎯 **Points:** {wallet_info.get('points', '0')} Points
+
+💵 **Estimated USD:** ${wallet_info.get('usd_value', '0.00')}
+
+📍 **Wallet Address:**
+`{wallet_info.get('address', 'N/A')}`"""
+        else:
+            balance_text = "❌ Unable to retrieve wallet balance. Please try again."
+            
+        await update.message.reply_text(
+            balance_text,
+            reply_markup=create_wallet_keyboard(),
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving wallet balance for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Error retrieving wallet balance. Please try again later.",
+            reply_markup=create_wallet_keyboard()
+        )
+
+
+async def handle_export_keys(update: Update, context: CallbackContext) -> None:
+    """Handle 'Export Keys' button press"""
+    user_id = update.effective_user.id
+    wallet_service = WalletService()
+    
+    try:
+        # Security warning first
+        security_warning = """🔐 **SECURITY WARNING**
+
+⚠️ **IMPORTANT:** Your private key gives complete access to your wallet!
+
+🚨 **Never share your private key with anyone**
+🔒 **Store it safely offline**
+📵 **Don't take screenshots or photos**
+
+Are you sure you want to export your private key?"""
+
+        # Create confirmation keyboard
+        confirm_keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ Yes, Export", callback_data="export_confirm"),
+                InlineKeyboardButton("❌ Cancel", callback_data="export_cancel")
+            ]
+        ])
+        
+        await update.message.reply_text(
+            security_warning,
+            reply_markup=confirm_keyboard,
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"Error in export keys handler for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Error accessing export function. Please try again.",
+            reply_markup=create_wallet_keyboard()
+        )
+
+
+async def handle_withdraw(update: Update, context: CallbackContext) -> None:
+    """Handle 'Withdraw' button press"""
+    await update.message.reply_text(
+        "📤 **Withdraw Funds**\nChoose what you'd like to withdraw:",
+        reply_markup=create_withdrawal_keyboard(),
+    )
+
+
+async def handle_receive(update: Update, context: CallbackContext) -> None:
+    """Handle 'Receive' button press"""
+    user_id = update.effective_user.id
+    wallet_service = WalletService()
+    
+    try:
+        wallet_info = await wallet_service.get_wallet_info(user_id)
+        
+        if wallet_info and wallet_info.get('address'):
+            receive_text = f"""📥 **Receive Funds**
+
+Send NEAR or tokens to this address:
+
+📍 **Your Wallet Address:**
+`{wallet_info['address']}`
+
+💡 **How to use:**
+1. Copy the address above
+2. Send funds from any NEAR wallet
+3. Funds will appear in your balance
+
+⚠️ **Only send NEAR Protocol assets to this address!**"""
+            
+            await update.message.reply_text(
+                receive_text,
+                reply_markup=create_wallet_keyboard(),
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                "❌ Unable to retrieve wallet address. Please try again.",
+                reply_markup=create_wallet_keyboard()
+            )
+    except Exception as e:
+        logger.error(f"Error in receive handler for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Error retrieving wallet information. Please try again.",
+            reply_markup=create_wallet_keyboard()
+        )
+
+
+async def handle_transactions(update: Update, context: CallbackContext) -> None:
+    """Handle 'Transactions' button press"""
+    user_id = update.effective_user.id
+    
+    try:
+        # This would integrate with your transaction history service
+        transactions_text = """📊 **Transaction History**
+
+🔄 **Recent Transactions:**
+
+📤 2024-09-20 15:30 - Withdraw: 0.5 NEAR
+📥 2024-09-19 10:15 - Quiz Reward: 0.1 NEAR  
+🎯 2024-09-18 14:22 - Points Earned: 150 Points
+📤 2024-09-17 09:45 - Withdraw: 1.0 NEAR
+
+💡 **Tip:** Click on any transaction for full details on NEAR Explorer"""
+
+        await update.message.reply_text(
+            transactions_text,
+            reply_markup=create_wallet_keyboard(),
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"Error in transactions handler for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Error retrieving transaction history. Please try again.",
+            reply_markup=create_wallet_keyboard()
+        )
+
+
+async def handle_history(update: Update, context: CallbackContext) -> None:
+    """Handle 'History' button press - show game/quiz history"""
+    user_id = update.effective_user.id
+    
+    try:
+        # This would integrate with your quiz/game history service
+        history_text = f"""📜 **Your Gaming History**
+
+🎮 **Recent Activity:**
+
+🏆 Quiz Champion - 2024-09-20 (Won 0.5 NEAR)
+🎯 Science Quiz - 2024-09-19 (Score: 8/10, +150 points)
+🧠 General Knowledge - 2024-09-18 (Score: 6/10, +100 points)
+⚽ Sports Trivia - 2024-09-17 (Score: 9/10, +180 points)
+
+📊 **Stats:**
+• Total Quizzes Played: 45
+• Average Score: 7.2/10
+• Total Earnings: 2.3 NEAR
+• Total Points: 4,250
+
+🏅 **Achievements:**
+• Quiz Master (10+ perfect scores)
+• Streak Champion (7-day streak)
+• Knowledge Seeker (25+ quizzes)"""
+
+        await update.message.reply_text(
+            history_text,
+            reply_markup=create_main_menu_keyboard(),
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"Error in history handler for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Error retrieving your history. Please try again.",
+            reply_markup=create_main_menu_keyboard()
+        )
+
+
+# Leaderboard handlers for submenu options
+async def handle_global_leaderboard(update: Update, context: CallbackContext) -> None:
+    """Handle 'Global Leaderboard' button press"""
+    try:
+        # This would integrate with your leaderboard service
+        leaderboard_text = """🏆 **Global Leaderboard**
+
+🥇 **#1** - QuizMaster2024 (15,420 points)
+🥈 **#2** - BrainiacBob (14,890 points) 
+🥉 **#3** - WisdomSeeker (13,250 points)
+4️⃣ **#4** - TriviaKing (12,100 points)
+5️⃣ **#5** - KnowledgeQueen (11,750 points)
+
+📍 **Your Rank:** #23 (4,250 points)
+
+🔄 Updated every 5 minutes"""
+
+        await update.message.reply_text(
+            leaderboard_text,
+            reply_markup=create_leaderboards_keyboard(),
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"Error in global leaderboard handler: {e}")
+        await update.message.reply_text(
+            "❌ Error loading global leaderboard. Please try again.",
+            reply_markup=create_leaderboards_keyboard()
+        )
+
+
+async def handle_group_leaderboard(update: Update, context: CallbackContext) -> None:
+    """Handle 'Group Leaderboard' button press"""
+    await update.message.reply_text(
+        "👥 **Group Leaderboard**\n\n🔄 Loading group rankings...\n\n💡 This shows rankings for your current group/chat.",
+        reply_markup=create_leaderboards_keyboard(),
+        parse_mode='Markdown'
+    )
+
+
+async def handle_weekly_top(update: Update, context: CallbackContext) -> None:
+    """Handle 'Weekly Top' button press"""
+    await update.message.reply_text(
+        "📊 **Weekly Top Performers**\n\n🔄 Loading this week's champions...\n\n⏰ Resets every Monday",
+        reply_markup=create_leaderboards_keyboard(),
+        parse_mode='Markdown'
+    )
+
+
+async def handle_all_time_best(update: Update, context: CallbackContext) -> None:
+    """Handle 'All Time Best' button press"""
+    await update.message.reply_text(
+        "🎖️ **All Time Best**\n\n🔄 Loading all-time records...\n\n🏆 Hall of Fame",
+        reply_markup=create_leaderboards_keyboard(),
+        parse_mode='Markdown'
+    )
