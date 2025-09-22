@@ -39,7 +39,7 @@ def create_main_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton("💰 My Wallet"), KeyboardButton("🎯 My Points")],
-            [KeyboardButton("🏆 Leaderboards"), KeyboardButton("💸 Withdraw")],
+            [KeyboardButton("🏆 Leaderboards"), KeyboardButton("📜 History")],
         ],
         resize_keyboard=True,  # Makes buttons smaller to fit better
         one_time_keyboard=False,  # Keeps keyboard visible - CRITICAL for menu icon consistency
