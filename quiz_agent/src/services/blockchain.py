@@ -461,7 +461,10 @@ class BlockchainMonitor:
                             if reward_amount_yoctonear_final > 0:
                                 recipient_wallet = wallet_address
 
-                                if is_token_reward:
+                                # SMART WALLET VERIFICATION - Check if wallet exists on blockchain before transfer
+                                wallet_verified = await self._verify_and_recover_wallet(user_id, recipient_wallet, winner_data.get('username', 'N/A'))
+                                
+                                if wallet_verified and is_token_reward:
                                     # Handle token reward distribution
                                     try:
                                         from services.token_service import TokenService
@@ -519,7 +522,7 @@ class BlockchainMonitor:
                                         logger.error(
                                             f"[distribute_rewards] WTA: Error distributing token reward: {e}"
                                         )
-                                else:
+                                elif wallet_verified:
                                     # Handle NEAR reward distribution (existing logic)
                                     logger.info(
                                         f"[distribute_rewards] WTA: Attempting to send {reward_amount_near_str_final} NEAR ({reward_amount_yoctonear_final} yoctoNEAR) to {recipient_wallet} (User: {winner_data.get('username', 'N/A')})"
@@ -569,6 +572,8 @@ class BlockchainMonitor:
                                                 f"[distribute_rewards] WTA: Failed to send reward to {recipient_wallet}: {e}"
                                             )
                                         traceback.print_exc()
+                                else:
+                                    logger.error(f"[distribute_rewards] WTA: Wallet {recipient_wallet} verification failed for user {user_id}. Skipping transfer.")
                             else:
                                 logger.warning(
                                     f"[distribute_rewards] WTA: Calculated reward amount for user {user_id} is zero or negative after fee ({reward_amount_near_str_final} NEAR), skipping transfer."
@@ -761,6 +766,13 @@ class BlockchainMonitor:
                         continue
 
                     recipient_wallet = wallet_address
+                    
+                    # SMART WALLET VERIFICATION - Check if wallet exists on blockchain before transfer
+                    wallet_verified = await self._verify_and_recover_wallet(user_id, recipient_wallet, winner_data.get('username', 'N/A'))
+                    if not wallet_verified:
+                        logger.error(f"[distribute_rewards] Wallet {recipient_wallet} verification failed for user {user_id}. Skipping transfer.")
+                        continue
+                    
                     logger.info(
                         f"[distribute_rewards] Attempting to send {reward_amount_near_str_final} NEAR ({reward_amount_yoctonear_final} yoctoNEAR) to {recipient_wallet} (User: {winner_data.get('username', 'N/A')}, Rank: {rank})"
                     )
@@ -1452,6 +1464,102 @@ class BlockchainMonitor:
                 f"Error validating timestamp for transaction {tx_hash}: {e}. Allowing transaction."
             )
             return True, ""
+
+    async def _verify_and_recover_wallet(self, user_id: str, wallet_address: str, username: str = "N/A") -> bool:
+        """
+        Smart wallet verification with automatic recovery using stored private keys.
+
+        This method:
+        1. Checks if wallet exists on blockchain
+        2. If missing but user has private key in DB, attempts auto-recovery
+        3. Returns True only if wallet is verified to exist on blockchain
+
+        Args:
+            user_id: Telegram user ID
+            wallet_address: NEAR wallet address to verify
+            username: Username for logging
+
+        Returns:
+            bool: True if wallet exists or was successfully recovered, False otherwise
+        """
+        try:
+            # Import services we need
+            from services.near_wallet_service import NEARWalletService
+            from services.wallet_service import WalletService
+
+            logger.info(f"[Smart Wallet Verification] Checking wallet {wallet_address} for user {user_id} ({username})")
+
+            # Initialize services
+            near_service = NEARWalletService()
+            wallet_service = WalletService()
+
+            # Get wallet from database first
+            wallet_info = await wallet_service.get_user_wallet(user_id)
+            if not wallet_info:
+                logger.error(f"[Smart Wallet Verification] No wallet found in database for user {user_id}")
+                return False
+
+            network = wallet_info.get('network', 'testnet')
+
+            # Step 1: Check if wallet exists on blockchain
+            try:
+                exists_on_chain = await near_service.verify_account_exists(wallet_address, network)
+                if exists_on_chain:
+                    logger.info(f"[Smart Wallet Verification] ✅ Wallet {wallet_address} exists on blockchain")
+                    return True
+
+                logger.warning(f"[Smart Wallet Verification] ❌ Wallet {wallet_address} missing from blockchain")
+            except Exception as e:
+                logger.error(f"[Smart Wallet Verification] Error checking wallet existence: {e}")
+                return False
+
+            # Step 2: Attempt auto-recovery if we have private key
+            if not wallet_info.get('encrypted_private_key'):
+                logger.error(f"[Smart Wallet Verification] No private key available for auto-recovery of {wallet_address}")
+                return False
+
+            logger.info(f"[Smart Wallet Verification] 🔧 Attempting auto-recovery for {wallet_address}")
+
+            try:
+                # Decrypt private key
+                private_key = near_service.decrypt_private_key(
+                    wallet_info['encrypted_private_key'],
+                    wallet_info['iv'],
+                    wallet_info['tag']
+                )
+
+                # Extract public key from private key
+                import base58
+
+                private_key_bytes = base58.b58decode(private_key.replace('ed25519:', ''))
+                public_key_bytes = private_key_bytes[32:]  # Public key is last 32 bytes
+
+                # Determine network and creation method
+                if network == 'mainnet':
+                    success = await near_service._create_mainnet_sub_account_robust(wallet_address, public_key_bytes)
+                else:
+                    success = await near_service._create_testnet_sub_account_robust(wallet_address, public_key_bytes)
+
+                if success:
+                    # Verify the recovery worked
+                    recovered_exists = await near_service.verify_account_exists(wallet_address, network)
+                    if recovered_exists:
+                        logger.info(f"[Smart Wallet Verification] ✅ Successfully recovered wallet {wallet_address}")
+                        return True
+                    else:
+                        logger.error(f"[Smart Wallet Verification] Recovery appeared successful but verification failed for {wallet_address}")
+                        return False
+                else:
+                    logger.error(f"[Smart Wallet Verification] Recovery failed for {wallet_address}")
+                    return False
+
+            except Exception as recovery_error:
+                logger.error(f"[Smart Wallet Verification] Auto-recovery failed for {wallet_address}: {recovery_error}")
+                return False
+
+        except Exception as e:
+            logger.error(f"[Smart Wallet Verification] Unexpected error verifying wallet {wallet_address}: {e}")
+            return False
 
 
 # To be called during bot initialization
