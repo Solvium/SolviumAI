@@ -260,14 +260,14 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
     menu_buttons = [
         # Main menu buttons
         "💰 My Wallet",
-        "🎯 My Points", 
+        "🎯 My Points",
         "🏆 Leaderboards",
         "📜 History",
         # Wallet submenu buttons
-        "� View Balance",
-        "� Export Keys",
-        "� Withdraw",
-        "� Receive",
+        "💰 View Balance",
+        "🔑 Export Keys",
+        "📤 Withdraw",
+        "📥 Receive",
         "📊 Transactions",
         # Leaderboard submenu buttons
         "🏆 Global Leaderboard",
@@ -917,7 +917,7 @@ async def handle_main_menu_callback(
             reply_markup=create_main_menu_keyboard()
         )
         # You can add the actual history handler here
-        
+
     # Remove old menu options that no longer exist
     elif callback_data in ["menu:pick_game", "menu:challenge_friends", "menu:join_community", "menu:get_app"]:
         # Redirect to main menu for removed options
@@ -1269,25 +1269,29 @@ async def handle_view_balance(update: Update, context: CallbackContext) -> None:
     """Handle 'View Balance' button press"""
     user_id = update.effective_user.id
     wallet_service = WalletService()
-    
+
     try:
         # Get user's wallet info
-        wallet_info = await wallet_service.get_wallet_info(user_id)
-        
-        if wallet_info:
+        wallet_data = await wallet_service.get_user_wallet(user_id)
+
+        if wallet_data:
+            # Get the actual NEAR balance
+            near_balance = await wallet_service.get_wallet_balance(user_id)
+            account_id = wallet_data.get('account_id', 'N/A')
+            network = wallet_data.get('network', 'mainnet')
+
             balance_text = f"""💰 **Wallet Balance**
 
-🏛️ **NEAR Balance:** {wallet_info.get('near_balance', '0.00')} NEAR
-🪙 **Token Balance:** {wallet_info.get('token_balance', '0')} Tokens
-🎯 **Points:** {wallet_info.get('points', '0')} Points
+🏛️ **NEAR Balance:** {near_balance} NEAR
+🌐 **Network:** {network.title()}
 
-💵 **Estimated USD:** ${wallet_info.get('usd_value', '0.00')}
+📍 **Account ID:**
+`{account_id}`
 
-📍 **Wallet Address:**
-`{wallet_info.get('address', 'N/A')}`"""
+� **Tip:** Your balance updates automatically every few minutes"""
         else:
-            balance_text = "❌ Unable to retrieve wallet balance. Please try again."
-            
+            balance_text = "❌ Unable to retrieve wallet information. Please try again."
+
         await update.message.reply_text(
             balance_text,
             reply_markup=create_wallet_keyboard(),
@@ -1305,27 +1309,31 @@ async def handle_export_keys(update: Update, context: CallbackContext) -> None:
     """Handle 'Export Keys' button press"""
     user_id = update.effective_user.id
     wallet_service = WalletService()
-    
+
     try:
         # Security warning first
         security_warning = """🔐 **SECURITY WARNING**
 
-⚠️ **IMPORTANT:** Your private key gives complete access to your wallet!
+⚠️ **CRITICAL:** Your private key gives complete access to your wallet!
 
-🚨 **Never share your private key with anyone**
-🔒 **Store it safely offline**
-📵 **Don't take screenshots or photos**
+🚨 **Security Rules:**
+• Never share your private key with anyone
+• Store it safely offline (write it down)
+• Don't take screenshots or photos
+• Don't send via messages or email
+
+📱 **This key works with any NEAR wallet app**
 
 Are you sure you want to export your private key?"""
 
         # Create confirmation keyboard
         confirm_keyboard = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("✅ Yes, Export", callback_data="export_confirm"),
+                InlineKeyboardButton("✅ Yes, Export Keys", callback_data=f"export_confirm:{user_id}"),
                 InlineKeyboardButton("❌ Cancel", callback_data="export_cancel")
             ]
         ])
-        
+
         await update.message.reply_text(
             security_warning,
             reply_markup=confirm_keyboard,
@@ -1351,25 +1359,31 @@ async def handle_receive(update: Update, context: CallbackContext) -> None:
     """Handle 'Receive' button press"""
     user_id = update.effective_user.id
     wallet_service = WalletService()
-    
+
     try:
-        wallet_info = await wallet_service.get_wallet_info(user_id)
-        
-        if wallet_info and wallet_info.get('address'):
+        wallet_data = await wallet_service.get_user_wallet(user_id)
+
+        if wallet_data and wallet_data.get('account_id'):
+            account_id = wallet_data['account_id']
+            network = wallet_data.get('network', 'mainnet')
+
             receive_text = f"""📥 **Receive Funds**
 
-Send NEAR or tokens to this address:
+Send NEAR tokens to your account:
 
-📍 **Your Wallet Address:**
-`{wallet_info['address']}`
+📍 **Your Account ID:**
+`{account_id}`
+
+🌐 **Network:** {network.title()}
 
 💡 **How to use:**
-1. Copy the address above
-2. Send funds from any NEAR wallet
+1. Copy the Account ID above
+2. Send NEAR from any wallet to this ID
 3. Funds will appear in your balance
 
-⚠️ **Only send NEAR Protocol assets to this address!**"""
-            
+⚠️ **Important:** Only send NEAR Protocol assets!
+⚠️ **Network:** Make sure sender uses {network}"""
+
             await update.message.reply_text(
                 receive_text,
                 reply_markup=create_wallet_keyboard(),
@@ -1391,7 +1405,7 @@ Send NEAR or tokens to this address:
 async def handle_transactions(update: Update, context: CallbackContext) -> None:
     """Handle 'Transactions' button press"""
     user_id = update.effective_user.id
-    
+
     try:
         # This would integrate with your transaction history service
         transactions_text = """📊 **Transaction History**
@@ -1399,7 +1413,7 @@ async def handle_transactions(update: Update, context: CallbackContext) -> None:
 🔄 **Recent Transactions:**
 
 📤 2024-09-20 15:30 - Withdraw: 0.5 NEAR
-📥 2024-09-19 10:15 - Quiz Reward: 0.1 NEAR  
+📥 2024-09-19 10:15 - Quiz Reward: 0.1 NEAR
 🎯 2024-09-18 14:22 - Points Earned: 150 Points
 📤 2024-09-17 09:45 - Withdraw: 1.0 NEAR
 
@@ -1421,7 +1435,7 @@ async def handle_transactions(update: Update, context: CallbackContext) -> None:
 async def handle_history(update: Update, context: CallbackContext) -> None:
     """Handle 'History' button press - show game/quiz history"""
     user_id = update.effective_user.id
-    
+
     try:
         # This would integrate with your quiz/game history service
         history_text = f"""📜 **Your Gaming History**
@@ -1465,7 +1479,7 @@ async def handle_global_leaderboard(update: Update, context: CallbackContext) ->
         leaderboard_text = """🏆 **Global Leaderboard**
 
 🥇 **#1** - QuizMaster2024 (15,420 points)
-🥈 **#2** - BrainiacBob (14,890 points) 
+🥈 **#2** - BrainiacBob (14,890 points)
 🥉 **#3** - WisdomSeeker (13,250 points)
 4️⃣ **#4** - TriviaKing (12,100 points)
 5️⃣ **#5** - KnowledgeQueen (11,750 points)
@@ -1512,3 +1526,85 @@ async def handle_all_time_best(update: Update, context: CallbackContext) -> None
         reply_markup=create_leaderboards_keyboard(),
         parse_mode='Markdown'
     )
+
+
+# Callback handlers for wallet export functionality
+async def handle_export_confirmation_callback(update: Update, context: CallbackContext) -> None:
+    """Handle export key confirmation callbacks"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    callback_data = query.data
+
+    await query.answer()
+
+    if callback_data == "export_cancel":
+        # User cancelled export
+        await query.edit_message_text(
+            "🔐 **Export Cancelled**\n\nYour private key remains secure. You can export it anytime from the wallet menu.",
+            reply_markup=None
+        )
+        # Send wallet menu
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="💰 **My Wallet**\nChoose an option to manage your wallet:",
+            reply_markup=create_wallet_keyboard(),
+        )
+
+    elif callback_data.startswith("export_confirm:"):
+        # User confirmed export - show the actual keys
+        try:
+            wallet_service = WalletService()
+            wallet_data = await wallet_service.get_user_wallet(user_id)
+
+            if wallet_data:
+                private_key = wallet_data.get('private_key', 'N/A')
+                account_id = wallet_data.get('account_id', 'N/A')
+                network = wallet_data.get('network', 'mainnet')
+
+                export_text = f"""🔑 **Private Key Exported**
+
+⚠️ **KEEP THIS SECRET AND SECURE!**
+
+📍 **Account ID:** `{account_id}`
+🌐 **Network:** {network.title()}
+
+🔐 **Private Key:**
+```
+{private_key}
+```
+
+💡 **Import Instructions:**
+1. Open any NEAR wallet app
+2. Choose "Import Account"
+3. Enter your Account ID and Private Key
+4. You'll have full access to your wallet
+
+⚠️ **Security Reminder:**
+• Save this key offline immediately
+• Delete this message after saving
+• Never share with anyone"""
+
+                await query.edit_message_text(
+                    export_text,
+                    parse_mode='Markdown',
+                    reply_markup=None
+                )
+
+                # Send wallet menu back
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text="💰 **My Wallet**\nChoose an option to manage your wallet:",
+                    reply_markup=create_wallet_keyboard(),
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ Unable to retrieve wallet keys. Please try again.",
+                    reply_markup=None
+                )
+
+        except Exception as e:
+            logger.error(f"Error exporting keys for user {user_id}: {e}")
+            await query.edit_message_text(
+                "❌ Error exporting keys. Please try again later.",
+                reply_markup=None
+            )
