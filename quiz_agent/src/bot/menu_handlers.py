@@ -3,6 +3,7 @@ from telegram import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     ReplyKeyboardMarkup,
+    KeyboardButton,
 )
 from telegram.ext import CallbackContext
 from .keyboard_markups import (
@@ -269,6 +270,9 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         "📤 Withdraw",
         "📥 Receive",
         "📊 Transactions",
+        # Receive screen buttons
+        "🔄 Check Balance",
+        "⬅️ Back to Wallet",
         # Leaderboard submenu buttons
         "🏆 Global Leaderboard",
         "👥 Group Leaderboard",
@@ -315,6 +319,11 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         await handle_receive(update, context)
     elif message_text == "📊 Transactions":
         await handle_transactions(update, context)
+    # Receive screen handlers
+    elif message_text == "🔄 Check Balance":
+        await handle_check_balance_after_deposit(update, context)
+    elif message_text == "⬅️ Back to Wallet":
+        await handle_my_wallet(update, context)
     # Leaderboard submenu handlers
     elif message_text == "🏆 Global Leaderboard":
         await handle_global_leaderboard(update, context)
@@ -1379,14 +1388,24 @@ Send NEAR tokens to your account:
 💡 **How to use:**
 1. Copy the Account ID above
 2. Send NEAR from any wallet to this ID
-3. Funds will appear in your balance
+3. Click "🔄 Check Balance" after sending
 
 ⚠️ **Important:** Only send NEAR Protocol assets!
 ⚠️ **Network:** Make sure sender uses {network}"""
 
+            # Create simplified keyboard with just check balance and back
+            receive_keyboard = ReplyKeyboardMarkup(
+                [
+                    [KeyboardButton("🔄 Check Balance"), KeyboardButton("⬅️ Back to Wallet")],
+                ],
+                resize_keyboard=True,
+                one_time_keyboard=False,
+                input_field_placeholder="📱 After deposit...",
+            )
+
             await update.message.reply_text(
                 receive_text,
-                reply_markup=create_wallet_keyboard(),
+                reply_markup=receive_keyboard,
                 parse_mode='Markdown'
             )
         else:
@@ -1398,6 +1417,57 @@ Send NEAR tokens to your account:
         logger.error(f"Error in receive handler for user {user_id}: {e}")
         await update.message.reply_text(
             "❌ Error retrieving wallet information. Please try again.",
+            reply_markup=create_wallet_keyboard()
+        )
+
+
+async def handle_check_balance_after_deposit(update: Update, context: CallbackContext) -> None:
+    """Handle 'Check Balance' button press after showing receive info"""
+    user_id = update.effective_user.id
+    wallet_service = WalletService()
+    
+    try:
+        # Show loading message
+        loading_msg = await update.message.reply_text(
+            "🔄 **Checking Balance...**\nFetching latest balance from blockchain..."
+        )
+        
+        # Force refresh balance from blockchain
+        near_balance = await wallet_service.get_wallet_balance(user_id, force_refresh=True)
+        wallet_data = await wallet_service.get_user_wallet(user_id)
+        
+        if wallet_data:
+            account_id = wallet_data.get('account_id', 'N/A')
+            network = wallet_data.get('network', 'mainnet')
+            
+            balance_text = f"""💰 **Updated Balance**
+
+🏛️ **NEAR Balance:** {near_balance} NEAR
+🌐 **Network:** {network.title()}
+📍 **Account ID:** `{account_id}`
+
+🔄 **Last Updated:** Just now"""
+            
+            # Edit the loading message with results
+            await loading_msg.edit_text(
+                balance_text,
+                parse_mode='Markdown'
+            )
+            
+            # Send wallet menu back
+            await update.message.reply_text(
+                "💰 **My Wallet**\nChoose an option to manage your wallet:",
+                reply_markup=create_wallet_keyboard(),
+            )
+        else:
+            await loading_msg.edit_text(
+                "❌ Unable to retrieve wallet balance. Please try again."
+            )
+            
+    except Exception as e:
+        logger.error(f"Error checking balance after deposit for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Error checking balance. Please try again later.",
             reply_markup=create_wallet_keyboard()
         )
 
