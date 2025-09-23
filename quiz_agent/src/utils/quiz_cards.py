@@ -41,7 +41,7 @@ def create_quiz_announcement_card(
     # Only sanitize content that will be used in Markdown formatting
     # Don't over-sanitize - let the telegram_helpers handle final sanitization
     safe_topic = topic
-    
+
     # quiz_id should not be sanitized as it's used in callback data
     safe_quiz_id = quiz_id
 

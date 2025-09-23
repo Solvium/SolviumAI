@@ -324,7 +324,7 @@ async def safe_send_photo(
     Returns:
         The Message object or None if failed
     """
-    # Don't automatically sanitize here - let the calling code handle sanitization  
+    # Don't automatically sanitize here - let the calling code handle sanitization
     # This prevents double-sanitization issues
     # parse_mode = kwargs.get("parse_mode", None)
     # if parse_mode and parse_mode.lower() == "markdown" and caption:
@@ -342,6 +342,7 @@ async def safe_send_photo(
     try:
         # Check if file exists before trying to open it
         import os
+
         if not os.path.exists(photo_path):
             logger.error(f"Photo file not found: {photo_path}")
             logger.error(f"Current working directory: {os.getcwd()}")
@@ -393,13 +394,34 @@ async def safe_send_photo(
                 try:
                     # Strip all markdown formatting characters from caption
                     plain_caption = caption
-                    for char in ["*", "_", "`", "[", "]", "(", ")", "~", ">", "#", "+", "=", "|", "{", "}", "\\", "!"]:
+                    for char in [
+                        "*",
+                        "_",
+                        "`",
+                        "[",
+                        "]",
+                        "(",
+                        ")",
+                        "~",
+                        ">",
+                        "#",
+                        "+",
+                        "=",
+                        "|",
+                        "{",
+                        "}",
+                        "\\",
+                        "!",
+                    ]:
                         plain_caption = plain_caption.replace(char, "")
-                    
+
                     with open(photo_path, "rb") as photo_file:
                         return await asyncio.wait_for(
                             with_telegram_retry(max_retries=2)(bot.send_photo)(
-                                chat_id=chat_id, photo=photo_file, caption=plain_caption, **kwargs
+                                chat_id=chat_id,
+                                photo=photo_file,
+                                caption=plain_caption,
+                                **kwargs,
                             ),
                             timeout=timeout,
                         )

@@ -3497,21 +3497,18 @@ async def process_questions_with_payment(
 
         # Sanitize content for Markdown using imported function
 
-        # Send confirmation to user with rich formatting
-        safe_topic = sanitize_markdown(topic)
-        safe_quiz_id = sanitize_markdown(quiz_id)
-        safe_payment_status = (
-            sanitize_markdown(payment_status) if payment_status else ""
-        )
+        # Send confirmation to user - using plain text to avoid parsing issues
+        safe_topic = topic  # No sanitization needed for plain text
+        safe_quiz_id = quiz_id  # UUIDs are safe for plain text
+        safe_payment_status = payment_status if payment_status else ""
 
-        user_msg = f"""
-✅ **QUIZ CREATED SUCCESSFULLY!** ✅
+        user_msg = f"""✅ QUIZ CREATED SUCCESSFULLY! ✅
 ══════════════════════════════════════════
 
-🎯 **Topic:** {safe_topic}
-❓ **Questions:** {len(questions_list)}
-⏱ **Duration:** {duration_seconds // 60 if duration_seconds else 'No limit'} minutes
-🆔 **Quiz ID:** {safe_quiz_id}
+🎯 Topic: {safe_topic}
+❓ Questions: {len(questions_list)}
+⏱ Duration: {duration_seconds // 60 if duration_seconds else 'No limit'} minutes
+🆔 Quiz ID: {safe_quiz_id}
 
 """
 
@@ -3519,28 +3516,26 @@ async def process_questions_with_payment(
             # Debug: Log the original reward structure
             logger.info(f"Original reward_structure: '{reward_structure}'")
 
-            # Sanitize reward_structure for Markdown
-            safe_reward_structure = reward_structure
-            if "Top 3 winners" in reward_structure:
-                safe_reward_structure = "Top 3 Winners"
-            elif "Winner-takes-all" in reward_structure:
-                safe_reward_structure = "Winner Takes All"
+            # Clean up reward_structure for display (no sanitization needed for simple text)
+            display_reward_structure = reward_structure
+            if "top_3" in reward_structure.lower():
+                display_reward_structure = "Top 3 Winners"
+            elif "winner_takes_all" in reward_structure.lower():
+                display_reward_structure = "Winner Takes All"
+            elif "top_3" == reward_structure:
+                display_reward_structure = "Top 3 Winners"
 
-            # Sanitize the reward structure
-            safe_reward_structure = sanitize_markdown(safe_reward_structure)
-            logger.info(f"Sanitized reward_structure: '{safe_reward_structure}'")
+            logger.info(f"Display reward_structure: '{display_reward_structure}'")
 
-            user_msg += f"""
-💰 **Reward:** {reward_amount} NEAR
-📊 **Structure:** {safe_reward_structure}
-💳 **Payment:** {safe_payment_status}
+            user_msg += f"""💰 Reward: {reward_amount} NEAR
+📊 Structure: {display_reward_structure}
+💳 Payment: {safe_payment_status}
 """
         else:
-            user_msg += f"💰 **Reward:** Free Quiz\n"
+            user_msg += f"💰 Reward: Free Quiz\n"
 
-        user_msg += f"""
-══════════════════════════════════════════
-🎮 **Your quiz is now active and ready to play!**
+        user_msg += f"""══════════════════════════════════════════
+🎮 Your quiz is now active and ready to play!
 """
 
         # Create user action buttons
@@ -3564,7 +3559,6 @@ async def process_questions_with_payment(
         success_msg = await context.bot.send_message(
             chat_id=user_id,
             text=final_message,
-            parse_mode="Markdown",
             reply_markup=user_keyboard,
         )
         # Don't store success message for cleanup - we want to keep it visible
