@@ -272,7 +272,7 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         "📊 Transactions",
         # Receive screen buttons
         "🔄 Check NEAR Balance",
-        "🪙 Check Token Balance", 
+        "🪙 Check Token Balance",
         "💰 Check All Balances",
         "⬅️ Back to Wallet",
         # Leaderboard submenu buttons
@@ -903,7 +903,7 @@ async def handle_main_menu_callback(
             chat_id=update.effective_chat.id,
             text="💰 **My Wallet**\nChoose an option to manage your wallet:",
             reply_markup=create_wallet_keyboard(),
-            parse_mode='Markdown'
+            parse_mode="Markdown",
         )
         await redis_client.set_user_data_key(user_id, "current_menu", "wallet")
 
@@ -918,7 +918,7 @@ async def handle_main_menu_callback(
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="🏆 View leaderboards:",
-            reply_markup=create_leaderboards_keyboard()
+            reply_markup=create_leaderboards_keyboard(),
         )
         await redis_client.set_user_data_key(user_id, "current_menu", "leaderboards")
 
@@ -929,16 +929,21 @@ async def handle_main_menu_callback(
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="📜 Loading your gaming history...",
-            reply_markup=create_main_menu_keyboard()
+            reply_markup=create_main_menu_keyboard(),
         )
         # You can add the actual history handler here
 
     # Remove old menu options that no longer exist
-    elif callback_data in ["menu:pick_game", "menu:challenge_friends", "menu:join_community", "menu:get_app"]:
+    elif callback_data in [
+        "menu:pick_game",
+        "menu:challenge_friends",
+        "menu:join_community",
+        "menu:get_app",
+    ]:
         # Redirect to main menu for removed options
         await query.edit_message_text(
             "🎉 Welcome to SolviumAI!\nWhat would you like to do today?",
-            reply_markup=create_inline_main_menu_keyboard()
+            reply_markup=create_inline_main_menu_keyboard(),
         )
         await redis_client.set_user_data_key(user_id, "current_menu", "main")
 
@@ -1292,8 +1297,8 @@ async def handle_view_balance(update: Update, context: CallbackContext) -> None:
         if wallet_data:
             # Get the actual NEAR balance
             near_balance = await wallet_service.get_wallet_balance(user_id)
-            account_id = wallet_data.get('account_id', 'N/A')
-            network = wallet_data.get('network', 'mainnet')
+            account_id = wallet_data.get("account_id", "N/A")
+            network = wallet_data.get("network", "mainnet")
 
             balance_text = f"""💰 **Wallet Balance**
 
@@ -1308,15 +1313,13 @@ async def handle_view_balance(update: Update, context: CallbackContext) -> None:
             balance_text = "❌ Unable to retrieve wallet information. Please try again."
 
         await update.message.reply_text(
-            balance_text,
-            reply_markup=create_wallet_keyboard(),
-            parse_mode='Markdown'
+            balance_text, reply_markup=create_wallet_keyboard(), parse_mode="Markdown"
         )
     except Exception as e:
         logger.error(f"Error retrieving wallet balance for user {user_id}: {e}")
         await update.message.reply_text(
             "❌ Error retrieving wallet balance. Please try again later.",
-            reply_markup=create_wallet_keyboard()
+            reply_markup=create_wallet_keyboard(),
         )
 
 
@@ -1342,23 +1345,25 @@ async def handle_export_keys(update: Update, context: CallbackContext) -> None:
 Are you sure you want to export your private key?"""
 
         # Create confirmation keyboard
-        confirm_keyboard = InlineKeyboardMarkup([
+        confirm_keyboard = InlineKeyboardMarkup(
             [
-                InlineKeyboardButton("✅ Yes, Export Keys", callback_data=f"export_confirm:{user_id}"),
-                InlineKeyboardButton("❌ Cancel", callback_data="export_cancel")
+                [
+                    InlineKeyboardButton(
+                        "✅ Yes, Export Keys", callback_data=f"export_confirm:{user_id}"
+                    ),
+                    InlineKeyboardButton("❌ Cancel", callback_data="export_cancel"),
+                ]
             ]
-        ])
+        )
 
         await update.message.reply_text(
-            security_warning,
-            reply_markup=confirm_keyboard,
-            parse_mode='Markdown'
+            security_warning, reply_markup=confirm_keyboard, parse_mode="Markdown"
         )
     except Exception as e:
         logger.error(f"Error in export keys handler for user {user_id}: {e}")
         await update.message.reply_text(
             "❌ Error accessing export function. Please try again.",
-            reply_markup=create_wallet_keyboard()
+            reply_markup=create_wallet_keyboard(),
         )
 
 
@@ -1378,9 +1383,9 @@ async def handle_receive(update: Update, context: CallbackContext) -> None:
     try:
         wallet_data = await wallet_service.get_user_wallet(user_id)
 
-        if wallet_data and wallet_data.get('account_id'):
-            account_id = wallet_data['account_id']
-            network = wallet_data.get('network', 'mainnet')
+        if wallet_data and wallet_data.get("account_id"):
+            account_id = wallet_data["account_id"]
+            network = wallet_data.get("network", "mainnet")
 
             receive_text = f"""📥 **Receive Funds**
 
@@ -1407,8 +1412,14 @@ Send NEAR or supported tokens to your account:
             # Create enhanced keyboard with token balance options
             receive_keyboard = ReplyKeyboardMarkup(
                 [
-                    [KeyboardButton("🔄 Check NEAR Balance"), KeyboardButton("🪙 Check Token Balance")],
-                    [KeyboardButton("💰 Check All Balances"), KeyboardButton("⬅️ Back to Wallet")],
+                    [
+                        KeyboardButton("🔄 Check NEAR Balance"),
+                        KeyboardButton("🪙 Check Token Balance"),
+                    ],
+                    [
+                        KeyboardButton("💰 Check All Balances"),
+                        KeyboardButton("⬅️ Back to Wallet"),
+                    ],
                 ],
                 resize_keyboard=True,
                 one_time_keyboard=False,
@@ -1416,42 +1427,44 @@ Send NEAR or supported tokens to your account:
             )
 
             await update.message.reply_text(
-                receive_text,
-                reply_markup=receive_keyboard,
-                parse_mode='Markdown'
+                receive_text, reply_markup=receive_keyboard, parse_mode="Markdown"
             )
         else:
             await update.message.reply_text(
                 "❌ Unable to retrieve wallet address. Please try again.",
-                reply_markup=create_wallet_keyboard()
+                reply_markup=create_wallet_keyboard(),
             )
     except Exception as e:
         logger.error(f"Error in receive handler for user {user_id}: {e}")
         await update.message.reply_text(
             "❌ Error retrieving wallet information. Please try again.",
-            reply_markup=create_wallet_keyboard()
+            reply_markup=create_wallet_keyboard(),
         )
 
 
-async def handle_check_near_balance_after_deposit(update: Update, context: CallbackContext) -> None:
+async def handle_check_near_balance_after_deposit(
+    update: Update, context: CallbackContext
+) -> None:
     """Handle 'Check NEAR Balance' button press after showing receive info"""
     user_id = update.effective_user.id
     wallet_service = WalletService()
-    
+
     try:
         # Show loading message
         loading_msg = await update.message.reply_text(
             "🔄 **Checking NEAR Balance...**\nFetching latest NEAR balance from blockchain..."
         )
-        
+
         # Force refresh NEAR balance from blockchain
-        near_balance = await wallet_service.get_wallet_balance(user_id, force_refresh=True)
+        near_balance = await wallet_service.get_wallet_balance(
+            user_id, force_refresh=True
+        )
         wallet_data = await wallet_service.get_user_wallet(user_id)
-        
+
         if wallet_data:
-            account_id = wallet_data.get('account_id', 'N/A')
-            network = wallet_data.get('network', 'mainnet')
-            
+            account_id = wallet_data.get("account_id", "N/A")
+            network = wallet_data.get("network", "mainnet")
+
             balance_text = f"""💰 **NEAR Balance Updated**
 
 🏛️ **NEAR Balance:** {near_balance}
@@ -1461,50 +1474,53 @@ async def handle_check_near_balance_after_deposit(update: Update, context: Callb
 🔄 **Last Updated:** Just now
 
 💡 **Note:** NEAR balance refreshed from blockchain"""
-            
+
             # Edit the loading message with results
-            await loading_msg.edit_text(
-                balance_text,
-                parse_mode='Markdown'
-            )
-            
+            await loading_msg.edit_text(balance_text, parse_mode="Markdown")
+
         else:
             await loading_msg.edit_text(
                 "❌ Unable to retrieve wallet balance. Please try again."
             )
-            
+
     except Exception as e:
-        logger.error(f"Error checking NEAR balance after deposit for user {user_id}: {e}")
+        logger.error(
+            f"Error checking NEAR balance after deposit for user {user_id}: {e}"
+        )
         await update.message.reply_text(
             "❌ Error checking NEAR balance. Please try again later.",
-            reply_markup=create_wallet_keyboard()
+            reply_markup=create_wallet_keyboard(),
         )
 
 
-async def handle_check_token_balance_after_deposit(update: Update, context: CallbackContext) -> None:
+async def handle_check_token_balance_after_deposit(
+    update: Update, context: CallbackContext
+) -> None:
     """Handle 'Check Token Balance' button press after showing receive info"""
     user_id = update.effective_user.id
     wallet_service = WalletService()
-    
+
     try:
         # Show loading message
         loading_msg = await update.message.reply_text(
             "🪙 **Checking Token Balances...**\nScanning for all tokens in your wallet..."
         )
-        
+
         wallet_data = await wallet_service.get_user_wallet(user_id)
-        
+
         if wallet_data:
             from services.token_service import TokenService
             from py_near.account import Account
-            
-            account_id = wallet_data.get('account_id')
-            network = wallet_data.get('network', 'mainnet')
-            
+
+            account_id = wallet_data.get("account_id")
+            network = wallet_data.get("network", "mainnet")
+
             # Get token inventory with force refresh
             token_service = TokenService()
-            tokens = await token_service.get_user_token_inventory(account_id, force_refresh=True)
-            
+            tokens = await token_service.get_user_token_inventory(
+                account_id, force_refresh=True
+            )
+
             if tokens:
                 token_text = f"""🪙 **Token Balances Updated**
 
@@ -1514,14 +1530,14 @@ async def handle_check_token_balance_after_deposit(update: Update, context: Call
 � **Your Tokens:**
 """
                 for token in tokens[:10]:  # Show first 10 tokens
-                    balance = token.get('balance', '0')
-                    symbol = token.get('symbol', 'Unknown')
-                    name = token.get('name', 'Unknown Token')
+                    balance = token.get("balance", "0")
+                    symbol = token.get("symbol", "Unknown")
+                    name = token.get("name", "Unknown Token")
                     token_text += f"• **{symbol}:** {balance} ({name})\n"
-                
+
                 if len(tokens) > 10:
                     token_text += f"\n... and {len(tokens) - 10} more tokens"
-                
+
                 token_text += f"\n\n🔄 **Last Updated:** Just now"
             else:
                 token_text = f"""🪙 **Token Balances**
@@ -1533,51 +1549,57 @@ async def handle_check_token_balance_after_deposit(update: Update, context: Call
 You don't have any fungible tokens yet.
 
 �🔄 **Last Updated:** Just now"""
-            
+
             # Edit the loading message with results
-            await loading_msg.edit_text(
-                token_text,
-                parse_mode='Markdown'
-            )
-            
+            await loading_msg.edit_text(token_text, parse_mode="Markdown")
+
         else:
             await loading_msg.edit_text(
                 "❌ Unable to retrieve wallet information. Please try again."
             )
-            
+
     except Exception as e:
-        logger.error(f"Error checking token balance after deposit for user {user_id}: {e}")
+        logger.error(
+            f"Error checking token balance after deposit for user {user_id}: {e}"
+        )
         await update.message.reply_text(
             "❌ Error checking token balances. Please try again later.",
-            reply_markup=create_wallet_keyboard()
+            reply_markup=create_wallet_keyboard(),
         )
 
 
-async def handle_check_all_balances_after_deposit(update: Update, context: CallbackContext) -> None:
+async def handle_check_all_balances_after_deposit(
+    update: Update, context: CallbackContext
+) -> None:
     """Handle 'Check All Balances' button press - comprehensive balance check"""
     user_id = update.effective_user.id
     wallet_service = WalletService()
-    
+
     try:
         # Show loading message
         loading_msg = await update.message.reply_text(
             "💰 **Comprehensive Balance Check...**\nFetching NEAR and all tokens from blockchain..."
         )
-        
+
         wallet_data = await wallet_service.get_user_wallet(user_id)
-        
+
         if wallet_data:
-            account_id = wallet_data.get('account_id')
-            network = wallet_data.get('network', 'mainnet')
-            
+            account_id = wallet_data.get("account_id")
+            network = wallet_data.get("network", "mainnet")
+
             # Get NEAR balance with force refresh
-            near_balance = await wallet_service.get_wallet_balance(user_id, force_refresh=True)
-            
-            # Get token inventory with force refresh  
+            near_balance = await wallet_service.get_wallet_balance(
+                user_id, force_refresh=True
+            )
+
+            # Get token inventory with force refresh
             from services.token_service import TokenService
+
             token_service = TokenService()
-            tokens = await token_service.get_user_token_inventory(account_id, force_refresh=True)
-            
+            tokens = await token_service.get_user_token_inventory(
+                account_id, force_refresh=True
+            )
+
             balance_text = f"""💰 **Complete Balance Report**
 
 📍 **Account:** `{account_id}`
@@ -1586,43 +1608,46 @@ async def handle_check_all_balances_after_deposit(update: Update, context: Callb
 🏛️ **NEAR Balance:** {near_balance}
 
 🪙 **Token Balances:**"""
-            
+
             if tokens:
-                for token in tokens[:8]:  # Show first 8 tokens to avoid message length limits
-                    balance = token.get('balance', '0')
-                    symbol = token.get('symbol', 'Unknown')
+                for token in tokens[
+                    :8
+                ]:  # Show first 8 tokens to avoid message length limits
+                    balance = token.get("balance", "0")
+                    symbol = token.get("symbol", "Unknown")
                     balance_text += f"\n• **{symbol}:** {balance}"
-                
+
                 if len(tokens) > 8:
                     balance_text += f"\n• ... and {len(tokens) - 8} more tokens"
             else:
                 balance_text += "\n• No fungible tokens found"
-            
+
             balance_text += f"\n\n🔄 **Last Updated:** Just now\n💡 **All balances refreshed from blockchain**"
-            
+
             # Edit the loading message with results
-            await loading_msg.edit_text(
-                balance_text,
-                parse_mode='Markdown'
-            )
-            
+            await loading_msg.edit_text(balance_text, parse_mode="Markdown")
+
             # Send wallet menu back after showing balances
             await update.message.reply_text(
                 "💰 **My Wallet**\nChoose an option to manage your wallet:",
                 reply_markup=create_wallet_keyboard(),
             )
-            
+
         else:
             await loading_msg.edit_text(
                 "❌ Unable to retrieve wallet information. Please try again."
             )
-            
+
     except Exception as e:
-        logger.error(f"Error checking all balances after deposit for user {user_id}: {e}")
+        logger.error(
+            f"Error checking all balances after deposit for user {user_id}: {e}"
+        )
         await update.message.reply_text(
             "❌ Error checking balances. Please try again later.",
-            reply_markup=create_wallet_keyboard()
+            reply_markup=create_wallet_keyboard(),
         )
+
+
 async def handle_transactions(update: Update, context: CallbackContext) -> None:
     """Handle 'Transactions' button press"""
     user_id = update.effective_user.id
@@ -1643,13 +1668,13 @@ async def handle_transactions(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text(
             transactions_text,
             reply_markup=create_wallet_keyboard(),
-            parse_mode='Markdown'
+            parse_mode="Markdown",
         )
     except Exception as e:
         logger.error(f"Error in transactions handler for user {user_id}: {e}")
         await update.message.reply_text(
             "❌ Error retrieving transaction history. Please try again.",
-            reply_markup=create_wallet_keyboard()
+            reply_markup=create_wallet_keyboard(),
         )
 
 
@@ -1682,13 +1707,13 @@ async def handle_history(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text(
             history_text,
             reply_markup=create_main_menu_keyboard(),
-            parse_mode='Markdown'
+            parse_mode="Markdown",
         )
     except Exception as e:
         logger.error(f"Error in history handler for user {user_id}: {e}")
         await update.message.reply_text(
             "❌ Error retrieving your history. Please try again.",
-            reply_markup=create_main_menu_keyboard()
+            reply_markup=create_main_menu_keyboard(),
         )
 
 
@@ -1712,13 +1737,13 @@ async def handle_global_leaderboard(update: Update, context: CallbackContext) ->
         await update.message.reply_text(
             leaderboard_text,
             reply_markup=create_leaderboards_keyboard(),
-            parse_mode='Markdown'
+            parse_mode="Markdown",
         )
     except Exception as e:
         logger.error(f"Error in global leaderboard handler: {e}")
         await update.message.reply_text(
             "❌ Error loading global leaderboard. Please try again.",
-            reply_markup=create_leaderboards_keyboard()
+            reply_markup=create_leaderboards_keyboard(),
         )
 
 
@@ -1727,7 +1752,7 @@ async def handle_group_leaderboard(update: Update, context: CallbackContext) -> 
     await update.message.reply_text(
         "👥 **Group Leaderboard**\n\n🔄 Loading group rankings...\n\n💡 This shows rankings for your current group/chat.",
         reply_markup=create_leaderboards_keyboard(),
-        parse_mode='Markdown'
+        parse_mode="Markdown",
     )
 
 
@@ -1736,7 +1761,7 @@ async def handle_weekly_top(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(
         "📊 **Weekly Top Performers**\n\n🔄 Loading this week's champions...\n\n⏰ Resets every Monday",
         reply_markup=create_leaderboards_keyboard(),
-        parse_mode='Markdown'
+        parse_mode="Markdown",
     )
 
 
@@ -1745,12 +1770,14 @@ async def handle_all_time_best(update: Update, context: CallbackContext) -> None
     await update.message.reply_text(
         "🎖️ **All Time Best**\n\n🔄 Loading all-time records...\n\n🏆 Hall of Fame",
         reply_markup=create_leaderboards_keyboard(),
-        parse_mode='Markdown'
+        parse_mode="Markdown",
     )
 
 
 # Callback handlers for wallet export functionality
-async def handle_export_confirmation_callback(update: Update, context: CallbackContext) -> None:
+async def handle_export_confirmation_callback(
+    update: Update, context: CallbackContext
+) -> None:
     """Handle export key confirmation callbacks"""
     query = update.callback_query
     user_id = update.effective_user.id
@@ -1762,7 +1789,7 @@ async def handle_export_confirmation_callback(update: Update, context: CallbackC
         # User cancelled export
         await query.edit_message_text(
             "🔐 **Export Cancelled**\n\nYour private key remains secure. You can export it anytime from the wallet menu.",
-            reply_markup=None
+            reply_markup=None,
         )
         # Send wallet menu
         await context.bot.send_message(
@@ -1778,11 +1805,27 @@ async def handle_export_confirmation_callback(update: Update, context: CallbackC
             wallet_data = await wallet_service.get_user_wallet(user_id)
 
             if wallet_data:
-                private_key = wallet_data.get('private_key', 'N/A')
-                account_id = wallet_data.get('account_id', 'N/A')
-                network = wallet_data.get('network', 'mainnet')
+                account_id = wallet_data.get("account_id", "N/A")
+                network = wallet_data.get("network", "mainnet")
 
-                export_text = f"""🔑 **Private Key Exported**
+                # Get encrypted private key data
+                encrypted_private_key = wallet_data.get("encrypted_private_key")
+                iv = wallet_data.get("iv")
+                tag = wallet_data.get("tag")
+
+                if encrypted_private_key and iv and tag:
+                    # Import and use NEARWalletService to decrypt the private key
+                    from services.near_wallet_service import NEARWalletService
+
+                    near_service = NEARWalletService()
+
+                    try:
+                        # Decrypt the private key
+                        private_key = near_service.decrypt_private_key(
+                            encrypted_private_key, iv, tag
+                        )
+
+                        export_text = f"""🔑 **Private Key Exported**
 
 ⚠️ **KEEP THIS SECRET AND SECURE!**
 
@@ -1805,10 +1848,30 @@ async def handle_export_confirmation_callback(update: Update, context: CallbackC
 • Delete this message after saving
 • Never share with anyone"""
 
+                    except Exception as decrypt_error:
+                        logger.error(
+                            f"Error decrypting private key for user {user_id}: {decrypt_error}"
+                        )
+                        export_text = f"""❌ **Error Decrypting Private Key**
+
+Unable to decrypt your private key at this time.
+
+📍 **Account ID:** `{account_id}`
+🌐 **Network:** {network.title()}
+
+Please try again later or contact support if the issue persists."""
+                else:
+                    export_text = f"""❌ **Incomplete Wallet Data**
+
+Your wallet data is missing encryption information.
+
+📍 **Account ID:** `{account_id}`
+🌐 **Network:** {network.title()}
+
+Please contact support to resolve this issue."""
+
                 await query.edit_message_text(
-                    export_text,
-                    parse_mode='Markdown',
-                    reply_markup=None
+                    export_text, parse_mode="Markdown", reply_markup=None
                 )
 
                 # Send wallet menu back
@@ -1820,12 +1883,11 @@ async def handle_export_confirmation_callback(update: Update, context: CallbackC
             else:
                 await query.edit_message_text(
                     "❌ Unable to retrieve wallet keys. Please try again.",
-                    reply_markup=None
+                    reply_markup=None,
                 )
 
         except Exception as e:
             logger.error(f"Error exporting keys for user {user_id}: {e}")
             await query.edit_message_text(
-                "❌ Error exporting keys. Please try again later.",
-                reply_markup=None
+                "❌ Error exporting keys. Please try again later.", reply_markup=None
             )
