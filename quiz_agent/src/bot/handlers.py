@@ -3527,7 +3527,13 @@ async def process_questions_with_payment(
 
             logger.info(f"Display reward_structure: '{display_reward_structure}'")
 
-            user_msg += f"""💰 Reward: {reward_amount} NEAR
+            # Determine the correct currency display based on payment method
+            if payment_method == "TOKEN" and token_symbol:
+                currency_display = f"{reward_amount} {token_symbol}"
+            else:
+                currency_display = f"{reward_amount} NEAR"
+
+            user_msg += f"""💰 Reward: {currency_display}
 📊 Structure: {display_reward_structure}
 💳 Payment: {safe_payment_status}
 """
