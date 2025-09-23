@@ -28,26 +28,25 @@ def create_quiz_announcement_card(
     """
 
     # Create the card border and content
-    # Sanitize all content to avoid Markdown parsing issues
-    safe_topic = sanitize_markdown(topic)
-    safe_reward_structure = reward_structure
-
-    # Normalize reward structure text
+    # Normalize reward structure text first (before sanitization)
     if "Top 3 winners" in reward_structure:
         safe_reward_structure = "Top 3 Winners"
     elif "Winner-takes-all" in reward_structure:
         safe_reward_structure = "Winner Takes All"
     elif "Free Quiz" in reward_structure or reward_structure.lower() == "free":
         safe_reward_structure = "Free Quiz"
+    else:
+        safe_reward_structure = reward_structure
 
-    # Sanitize the reward structure
-    safe_reward_structure = sanitize_markdown(safe_reward_structure)
+    # Only sanitize content that will be used in Markdown formatting
+    # Don't over-sanitize - let the telegram_helpers handle final sanitization
+    safe_topic = topic
+    
+    # quiz_id should not be sanitized as it's used in callback data
+    safe_quiz_id = quiz_id
 
-    # Sanitize quiz_id for callback data
-    safe_quiz_id = sanitize_markdown(quiz_id)
-
-    # Sanitize bot_username if provided
-    safe_bot_username = sanitize_markdown(bot_username) if bot_username else None
+    # bot_username should not be sanitized as it's used in URLs
+    safe_bot_username = bot_username
 
     # Determine the correct currency symbol
     if payment_method == "TOKEN" and token_symbol:
@@ -56,19 +55,18 @@ def create_quiz_announcement_card(
         currency_display = f"{reward_amount} NEAR"
 
     # Make the announcement more catchy and engaging
-    card = f"""
-🚀⚡ **{safe_topic.upper()} QUIZ BATTLE ROYALE!** ⚡🚀
+    # Use simple, consistent Markdown formatting to avoid parsing errors
+    card = f"""🚀⚡ *{safe_topic.upper()} QUIZ BATTLE ROYALE!* ⚡🚀
 
-🧠 **{num_questions} Brain-Busting Questions**
-⏰ **{duration_minutes} Minutes to Dominate**
-💰 **{currency_display}** Prize Pool!
-🏆 **{safe_reward_structure}** Winner Takes All!
+🧠 *{num_questions} Brain-Busting Questions*
+⏰ *{duration_minutes} Minutes to Dominate*
+💰 *{currency_display}* Prize Pool!
+🏆 *{safe_reward_structure}* Winner Takes All!
 
 🔥 Ready to prove you're the smartest in the room?
 💎 Test your knowledge, beat the clock, and climb the leaderboard!
 
-🎯 **Challenge Accepted? Let's GO!** 🎯
-"""
+🎯 *Challenge Accepted? Let's GO!* 🎯"""
 
     # Create interactive buttons
     buttons = []
