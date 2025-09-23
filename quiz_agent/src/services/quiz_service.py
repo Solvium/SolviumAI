@@ -1547,32 +1547,39 @@ async def schedule_quiz_announcement_cleanup(
     application, chat_id, message_ids, delay_minutes=20
 ):
     """Schedule automatic deletion of quiz announcement messages"""
+    import time
 
     async def cleanup_job(context):
         logger.info(
-            f"Starting cleanup of {len(message_ids)} quiz announcement messages"
+            f"[CLEANUP] Starting cleanup of {len(message_ids)} quiz announcement messages for chat {chat_id}"
         )
+        deleted_count = 0
         for message_id in message_ids:
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-                logger.info(f"Auto-deleted quiz announcement message {message_id}")
+                deleted_count += 1
+                logger.info(f"[CLEANUP] Auto-deleted quiz announcement message {message_id} from chat {chat_id}")
             except Exception as e:
-                logger.warning(f"Could not auto-delete message {message_id}: {e}")
-        logger.info(f"Completed cleanup of quiz announcement messages")
+                logger.warning(f"[CLEANUP] Could not auto-delete message {message_id} from chat {chat_id}: {e}")
+        logger.info(f"[CLEANUP] Completed cleanup: {deleted_count}/{len(message_ids)} messages deleted from chat {chat_id}")
 
     # Schedule cleanup job
     if hasattr(application, "job_queue") and application.job_queue:
-        application.job_queue.run_once(
-            cleanup_job,
-            delay_minutes * 60,  # Convert to seconds
-            name=f"cleanup_quiz_announcements_{chat_id}_{int(time.time())}",
-        )
-        logger.info(
-            f"Scheduled cleanup of {len(message_ids)} quiz announcement messages in {delay_minutes} minutes"
-        )
+        try:
+            job_name = f"cleanup_quiz_announcements_{chat_id}_{int(time.time())}"
+            application.job_queue.run_once(
+                cleanup_job,
+                delay_minutes * 60,  # Convert to seconds
+                name=job_name,
+            )
+            logger.info(
+                f"[CLEANUP] Successfully scheduled cleanup of {len(message_ids)} quiz announcement messages in {delay_minutes} minutes for chat {chat_id} (job: {job_name})"
+            )
+        except Exception as e:
+            logger.error(f"[CLEANUP] Failed to schedule cleanup job: {e}")
     else:
         logger.error(
-            "application.job_queue not available for quiz announcement cleanup"
+            f"[CLEANUP] application.job_queue not available for quiz announcement cleanup (chat: {chat_id})"
         )
 
 
@@ -1631,7 +1638,7 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         # Schedule cleanup for answers announcement (20 minutes)
         if answers_msg:
             await schedule_quiz_announcement_cleanup(
-                application, announcement_chat_id, [answers_msg.message_id], 20 * 60
+                application, announcement_chat_id, [answers_msg.message_id], 20
             )
 
         logger.info(f"Quiz answers announcement sent for quiz {quiz_id}")
@@ -1766,7 +1773,7 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
 
             # Schedule cleanup for winners announcement (20 minutes)
             await schedule_quiz_announcement_cleanup(
-                application, announcement_chat_id, [message.message_id], 20 * 60
+                application, announcement_chat_id, [message.message_id], 20
             )
 
             logger.info(
