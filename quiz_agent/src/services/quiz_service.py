@@ -1544,52 +1544,121 @@ async def create_enhanced_quiz_answers_message(quiz, all_participants):
 
 
 async def schedule_quiz_announcement_cleanup(
-    application, chat_id, message_ids, delay_minutes=20
+    application, chat_id, message_ids, delay_minutes=20, quiz_id=None
 ):
-    """Schedule automatic deletion of quiz announcement messages"""
+    """Schedule automatic deletion of quiz announcement messages and cache cleanup"""
+    import time
 
     async def cleanup_job(context):
         logger.info(
-            f"Starting cleanup of {len(message_ids)} quiz announcement messages"
+            f"[CLEANUP] Starting cleanup of {len(message_ids)} quiz announcement messages for chat {chat_id}"
         )
+
+        # Delete Telegram messages
+        deleted_count = 0
         for message_id in message_ids:
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-                logger.info(f"Auto-deleted quiz announcement message {message_id}")
+                deleted_count += 1
             except Exception as e:
-                logger.warning(f"Could not auto-delete message {message_id}: {e}")
-        logger.info(f"Completed cleanup of quiz announcement messages")
+                logger.warning(
+                    f"[CLEANUP] Could not auto-delete message {message_id} from chat {chat_id}: {e}"
+                )
+
+        # Clean up Redis cache for the quiz
+        if quiz_id:
+            try:
+                from utils.redis_client import RedisClient
+                from services.cache_service import cache_service
+
+                redis_client = RedisClient()
+
+                # Clear quiz-related cache data
+                cache_keys_to_clear = [
+                    f"quiz_details:{quiz_id}",
+                    f"quiz_leaderboard:{quiz_id}",
+                    f"quiz_participants:{quiz_id}",
+                    f"quiz_results:{quiz_id}",
+                    f"quiz_questions:{quiz_id}",
+                ]
+
+                cache_cleared_count = 0
+                for cache_key in cache_keys_to_clear:
+                    try:
+                        await redis_client.delete_cached_object(cache_key)
+                        cache_cleared_count += 1
+                    except Exception as e:
+                        logger.warning(
+                            f"[CLEANUP] Could not clear cache key {cache_key}: {e}"
+                        )
+
+                # Clear any active quiz sessions for this quiz
+                from services.quiz_service import active_quiz_sessions
+
+                sessions_cleared = 0
+                keys_to_remove = []
+                for session_key in active_quiz_sessions.keys():
+                    if session_key.endswith(f":{quiz_id}"):
+                        keys_to_remove.append(session_key)
+
+                for key in keys_to_remove:
+                    try:
+                        del active_quiz_sessions[key]
+                        sessions_cleared += 1
+                        logger.info(f"[CLEANUP] Cleared active quiz session: {key}")
+                    except Exception as e:
+                        logger.warning(f"[CLEANUP] Could not clear session {key}: {e}")
+
+                logger.info(
+                    f"[CLEANUP] Cache cleanup completed: {cache_cleared_count} cache keys and {sessions_cleared} sessions cleared for quiz {quiz_id}"
+                )
+
+            except Exception as e:
+                logger.error(
+                    f"[CLEANUP] Error during cache cleanup for quiz {quiz_id}: {e}"
+                )
+
+        logger.info(
+            f"[CLEANUP] Completed cleanup: {deleted_count}/{len(message_ids)} messages deleted from chat {chat_id}"
+        )
 
     # Schedule cleanup job
     if hasattr(application, "job_queue") and application.job_queue:
-        application.job_queue.run_once(
-            cleanup_job,
-            delay_minutes * 60,  # Convert to seconds
-            name=f"cleanup_quiz_announcements_{chat_id}_{int(time.time())}",
-        )
-        logger.info(
-            f"Scheduled cleanup of {len(message_ids)} quiz announcement messages in {delay_minutes} minutes"
-        )
+        try:
+            job_name = f"cleanup_quiz_announcements_{chat_id}_{int(time.time())}"
+            application.job_queue.run_once(
+                cleanup_job,
+                delay_minutes * 60,  # Convert to seconds
+                name=job_name,
+            )
+            cache_note = f" (including cache for quiz {quiz_id})" if quiz_id else ""
+            logger.info(
+                f"[CLEANUP] Successfully scheduled cleanup of {len(message_ids)} quiz announcement messages in {delay_minutes} minutes for chat {chat_id}{cache_note} (job: {job_name})"
+            )
+        except Exception as e:
+            logger.error(f"[CLEANUP] Failed to schedule cleanup job: {e}")
     else:
         logger.error(
-            "application.job_queue not available for quiz announcement cleanup"
+            f"[CLEANUP] application.job_queue not available for quiz announcement cleanup (chat: {chat_id})"
         )
 
 
 async def announce_quiz_end(application: "Application", quiz_id: str):
     """Announce quiz end with answers first, then winners - two-part flow"""
-    logger.info(f"Announcing quiz end for quiz_id: {quiz_id}")
+    logger.info(f"[ANNOUNCE_END] Starting quiz end announcement for quiz_id: {quiz_id}")
 
     session = SessionLocal()
     try:
         quiz = session.query(Quiz).filter(Quiz.id == quiz_id).first()
         if not quiz:
-            logger.error(f"Quiz {quiz_id} not found for end announcement")
+            logger.error(
+                f"[ANNOUNCE_END] Quiz {quiz_id} not found for end announcement"
+            )
             return
 
         # Debug: Log full quiz details for troubleshooting
         logger.info(
-            f"Quiz {quiz_id} full object - topic: {quiz.topic}, status: {quiz.status}, reward_schedule type: {type(quiz.reward_schedule)}, reward_schedule: {quiz.reward_schedule}"
+            f"[ANNOUNCE_END] Quiz {quiz_id} full object - topic: {quiz.topic}, status: {quiz.status}, reward_schedule type: {type(quiz.reward_schedule)}, reward_schedule: {quiz.reward_schedule}"
         )
 
         if not quiz.group_chat_id:
@@ -1616,25 +1685,45 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         winners_with_scores = []
 
         # PART 1: Enhanced quiz ended announcement with answers
+        logger.info(
+            f"[ANNOUNCE_END] Creating enhanced quiz answers message for quiz {quiz_id}"
+        )
         answers_announcement = await create_enhanced_quiz_answers_message(
             quiz, all_participants
         )
+        logger.info(
+            f"[ANNOUNCE_END] Generated answers announcement length: {len(answers_announcement) if answers_announcement else 0}"
+        )
 
         # Send answers announcement
+        logger.info(
+            f"[ANNOUNCE_END] Sending answers announcement to chat {announcement_chat_id}"
+        )
         answers_msg = await safe_send_message(
             application.bot,
             announcement_chat_id,
             answers_announcement,
             parse_mode="HTML",
+            use_queue=False,  # Disable queue to get message object back for cleanup scheduling
+        )
+        logger.info(
+            f"[ANNOUNCE_END] Answers message result: {answers_msg.message_id if answers_msg else 'None'}"
         )
 
-        # Schedule cleanup for answers announcement (20 minutes)
+        # Schedule cleanup for answers announcement (2 minutes)
         if answers_msg:
+            logger.info(
+                f"[ANNOUNCE_END] About to schedule cleanup for answers message {answers_msg.message_id}"
+            )
             await schedule_quiz_announcement_cleanup(
-                application, announcement_chat_id, [answers_msg.message_id], 20 * 60
+                application, announcement_chat_id, [answers_msg.message_id], 20, quiz_id
+            )
+        else:
+            logger.warning(
+                f"[ANNOUNCE_END] No answers message to schedule cleanup for quiz {quiz_id}"
             )
 
-        logger.info(f"Quiz answers announcement sent for quiz {quiz_id}")
+        logger.info(f"[ANNOUNCE_END] Quiz answers announcement sent for quiz {quiz_id}")
 
         # Small delay before second announcement
         import asyncio
@@ -1752,11 +1841,21 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         winners_announcement += "\n🎯 <b>Thanks to all participants!</b> 🎯"
 
         # Send second announcement (winners)
+        logger.info(
+            f"[ANNOUNCE_END] Sending winners announcement to chat {announcement_chat_id}"
+        )
+        logger.info(
+            f"[ANNOUNCE_END] Winners announcement length: {len(winners_announcement) if winners_announcement else 0}"
+        )
         message = await safe_send_message(
             application.bot,
             announcement_chat_id,
             winners_announcement,
             parse_mode="HTML",
+            use_queue=False,  # Disable queue to get message object back for cleanup scheduling
+        )
+        logger.info(
+            f"[ANNOUNCE_END] Winners message result: {message.message_id if message else 'None'}"
         )
 
         if message:
@@ -1764,17 +1863,20 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
             quiz.announcement_message_id = message.message_id
             session.commit()
 
-            # Schedule cleanup for winners announcement (20 minutes)
+            # Schedule cleanup for winners announcement (2 minutes)
+            logger.info(
+                f"[ANNOUNCE_END] About to schedule cleanup for winners message {message.message_id}"
+            )
             await schedule_quiz_announcement_cleanup(
-                application, announcement_chat_id, [message.message_id], 20 * 60
+                application, announcement_chat_id, [message.message_id], 20, quiz_id
             )
 
             logger.info(
-                f"Quiz end announcements sent for quiz {quiz_id} with message ID: {message.message_id}"
+                f"[ANNOUNCE_END] Quiz end announcements sent for quiz {quiz_id} with message ID: {message.message_id}"
             )
         else:
             logger.warning(
-                f"Quiz end announcements sent for quiz {quiz_id} but no message object returned"
+                f"[ANNOUNCE_END] Quiz end announcements sent for quiz {quiz_id} but no message object returned - cleanup will NOT be scheduled!"
             )
 
         # Debug logging to diagnose reward distribution issue

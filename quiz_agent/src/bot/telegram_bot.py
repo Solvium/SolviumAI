@@ -202,6 +202,7 @@ class TelegramBot:
             handle_menu_callback,
             handle_text_message,
             handle_reset_wallet,
+            handle_export_confirmation_callback,
         )
 
         # Conversation for interactive quiz creation needs to be registered FIRST
@@ -386,6 +387,15 @@ class TelegramBot:
             CallbackQueryHandler(
                 handle_menu_callback,
                 pattern="^(menu:|game:|challenge:|app:|quiz:|cancel|back)",
+            ),
+            group=0,
+        )
+
+        # Handle wallet export confirmation callbacks
+        self.app.add_handler(
+            CallbackQueryHandler(
+                handle_export_confirmation_callback,
+                pattern="^(export_confirm|export_cancel)",
             ),
             group=0,
         )

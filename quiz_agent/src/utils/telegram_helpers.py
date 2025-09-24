@@ -258,10 +258,11 @@ async def safe_send_message(bot, chat_id, text, timeout=10.0, use_queue=True, **
     Returns:
         The Message object or None if failed
     """
-    # If parse_mode is specified, sanitize the text accordingly
-    parse_mode = kwargs.get("parse_mode", None)
-    if parse_mode and parse_mode.lower() == "markdown":
-        text = sanitize_markdown(text)
+    # Don't automatically sanitize here - let the calling code handle sanitization
+    # This prevents double-sanitization issues
+    # parse_mode = kwargs.get("parse_mode", None)
+    # if parse_mode and parse_mode.lower() == "markdown":
+    #     text = sanitize_markdown(text)
 
     # Use message queue for rate limiting if enabled
     if use_queue and message_queue.running:
@@ -323,10 +324,11 @@ async def safe_send_photo(
     Returns:
         The Message object or None if failed
     """
-    # If parse_mode is specified and caption is provided, sanitize the caption
-    parse_mode = kwargs.get("parse_mode", None)
-    if parse_mode and parse_mode.lower() == "markdown" and caption:
-        caption = sanitize_markdown(caption)
+    # Don't automatically sanitize here - let the calling code handle sanitization
+    # This prevents double-sanitization issues
+    # parse_mode = kwargs.get("parse_mode", None)
+    # if parse_mode and parse_mode.lower() == "markdown" and caption:
+    #     caption = sanitize_markdown(caption)
 
     # Use message queue for rate limiting if enabled
     if use_queue and message_queue.running:
@@ -340,6 +342,7 @@ async def safe_send_photo(
     try:
         # Check if file exists before trying to open it
         import os
+
         if not os.path.exists(photo_path):
             logger.error(f"Photo file not found: {photo_path}")
             logger.error(f"Current working directory: {os.getcwd()}")
@@ -380,14 +383,51 @@ async def safe_send_photo(
             try:
                 with open(photo_path, "rb") as photo_file:
                     return await asyncio.wait_for(
-                        with_telegram_retry()(bot.send_photo)(
+                        with_telegram_retry(max_retries=3)(bot.send_photo)(
                             chat_id=chat_id, photo=photo_file, caption=caption, **kwargs
                         ),
                         timeout=timeout,
                     )
             except BadRequest as e2:
                 logger.error(f"Failed to send photo even without formatting: {e2}")
-                return None
+                # Try with plain text caption (remove all special characters)
+                try:
+                    # Strip all markdown formatting characters from caption
+                    plain_caption = caption
+                    for char in [
+                        "*",
+                        "_",
+                        "`",
+                        "[",
+                        "]",
+                        "(",
+                        ")",
+                        "~",
+                        ">",
+                        "#",
+                        "+",
+                        "=",
+                        "|",
+                        "{",
+                        "}",
+                        "\\",
+                        "!",
+                    ]:
+                        plain_caption = plain_caption.replace(char, "")
+
+                    with open(photo_path, "rb") as photo_file:
+                        return await asyncio.wait_for(
+                            with_telegram_retry(max_retries=2)(bot.send_photo)(
+                                chat_id=chat_id,
+                                photo=photo_file,
+                                caption=plain_caption,
+                                **kwargs,
+                            ),
+                            timeout=timeout,
+                        )
+                except Exception as e3:
+                    logger.error(f"Failed to send photo with plain caption: {e3}")
+                    return None
         elif "chat not found" in str(e).lower() or "user not found" in str(e).lower():
             logger.warning(f"Cannot send photo to {chat_id}: user/chat not found")
         else:

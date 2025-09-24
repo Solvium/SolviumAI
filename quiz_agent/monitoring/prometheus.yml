@@ -27,19 +27,3 @@ scrape_configs:
     metrics_path: "/nginx_status"
     scrape_interval: 30s
     scrape_timeout: 5s
-
-  # External Service Health Checks (Optional)
-  # These can be added if you want to monitor external service availability
-  # - job_name: "external-postgres"
-  #   static_configs:
-  #     - targets: ["your-external-postgres-host:5432"]
-  #   metrics_path: "/metrics"
-  #   scrape_interval: 60s
-  #   scrape_timeout: 10s
-
-  # - job_name: "external-redis"
-  #   static_configs:
-  #     - targets: ["your-external-redis-host:6379"]
-  #   metrics_path: "/metrics"
-  #   scrape_interval: 60s
-  #   scrape_timeout: 10s

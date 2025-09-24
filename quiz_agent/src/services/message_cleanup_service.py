@@ -47,22 +47,33 @@ class MessageCleanupService:
             logger.error(f"Error in cleanup cycle: {e}", exc_info=True)
 
     async def cleanup_announcements(self):
-        """Delete announcement messages for closed quizzes"""
+        """Delete announcement messages for closed quizzes - but wait at least 25 minutes after quiz end"""
         session = SessionLocal()
         try:
             # Find closed quizzes with undeleted announcements
+            # Only delete if quiz ended at least 25 minutes ago to allow our 20-minute cleanup to work
+            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=25)
+
             closed_quizzes = (
                 session.query(Quiz)
                 .filter(
                     Quiz.status == QuizStatus.CLOSED,
                     Quiz.announcement_message_id.isnot(None),
                     Quiz.announcement_deleted_at.is_(None),
+                    Quiz.end_time
+                    < cutoff_time,  # Only delete if quiz ended more than 25 minutes ago
                 )
                 .all()
             )
 
-            for quiz in closed_quizzes:
-                await self.delete_announcement_message(quiz, session)
+            # Only log if there are announcements to clean up
+            if len(closed_quizzes) > 0:
+                logger.info(
+                    f"Found {len(closed_quizzes)} quiz announcements eligible for cleanup (older than 25 minutes)"
+                )
+                for quiz in closed_quizzes:
+                    await self.delete_announcement_message(quiz, session)
+            # No logging when there's nothing to clean up (reduces spam)
 
         except Exception as e:
             logger.error(f"Error cleaning up announcements: {e}", exc_info=True)
