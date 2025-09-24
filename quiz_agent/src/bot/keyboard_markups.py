@@ -116,9 +116,9 @@ def create_cancel_keyboard() -> ReplyKeyboardMarkup:
 
 def remove_keyboard() -> ReplyKeyboardRemove:
     """
-    Removes the custom keyboard and returns to normal keyboard
+    Removes the custom keyboard and returns to normal keyboard for all users
     """
-    return ReplyKeyboardRemove(selective=True)
+    return ReplyKeyboardRemove(selective=False)
 
 
 # Keep the original InlineKeyboardMarkup functions for specific use cases

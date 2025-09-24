@@ -4786,9 +4786,9 @@ async def cleanup_group_keyboard(update: Update, context: CallbackContext):
 
         # Send message with ReplyKeyboardRemove to remove persistent keyboard
         await update.message.reply_text(
-            "🧹 **Keyboard Cleanup**\n\n"
-            "Removing persistent menu keyboard from this group.\n"
-            "The menu will no longer appear here.",
+            "🧹 **Group Keyboard Cleanup**\n\n"
+            "✅ Persistent menu keyboard removed for all group members.\n"
+            "Users can still access bot features through commands or by starting a DM with the bot.",
             parse_mode="Markdown",
             reply_markup=remove_keyboard(),
         )
