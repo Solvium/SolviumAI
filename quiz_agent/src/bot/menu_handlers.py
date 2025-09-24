@@ -2058,6 +2058,14 @@ async def handle_history(update: Update, context: CallbackContext) -> None:
         )
 
 
+# Utility function for escaping markdown characters in usernames
+def escape_markdown(text: str) -> str:
+    """Escape special markdown characters in text to prevent parsing errors"""
+    if not text:
+        return text
+    # Escape common markdown characters that cause parsing issues
+    return text.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]').replace('`', '\\`').replace('~', '\\~')
+
 # Leaderboard handlers for submenu options
 async def handle_global_leaderboard(update: Update, context: CallbackContext) -> None:
     """Handle 'Global Leaderboard' button press"""
@@ -2093,7 +2101,9 @@ async def handle_global_leaderboard(update: Update, context: CallbackContext) ->
                 else:
                     emoji = f"{rank}."
 
-                leaderboard_text += f"{emoji} **#{rank}** - {username} ({total_points:,} points)\n"
+                # Escape markdown characters in username
+                escaped_username = escape_markdown(username)
+                leaderboard_text += f"{emoji} **#{rank}** - {escaped_username} ({total_points:,} points)\n"
 
             # Find user's rank
             user_points_data = await PointService.get_user_points(user_id)
@@ -2168,7 +2178,9 @@ async def handle_group_leaderboard(update: Update, context: CallbackContext) -> 
                 else:
                     emoji = f"{rank}."
 
-                leaderboard_text += f"{emoji} **#{rank}** - {username} ({total_points:,} points)\n"
+                # Escape markdown characters in username
+                escaped_username = escape_markdown(username)
+                leaderboard_text += f"{emoji} **#{rank}** - {escaped_username} ({total_points:,} points)\n"
 
             leaderboard_text += "\n💡 **Note:** Currently showing global rankings. Group-specific rankings coming soon!"
 
@@ -2225,7 +2237,9 @@ async def handle_weekly_top(update: Update, context: CallbackContext) -> None:
                 else:
                     emoji = f"{rank}."
 
-                leaderboard_text += f"{emoji} **{username}** - {creator_points} creator points ({quizzes_created} quizzes)\n"
+                # Escape markdown characters in username
+                escaped_username = escape_markdown(username)
+                leaderboard_text += f"{emoji} **{escaped_username}** - {creator_points} creator points ({quizzes_created} quizzes)\n"
 
             leaderboard_text += "\n💡 **Note:** Showing top quiz creators by creator points earned"
             leaderboard_text += "\n⏰ **Updated:** Real-time data"
@@ -2284,7 +2298,9 @@ async def handle_all_time_best(update: Update, context: CallbackContext) -> None
                     emoji = f"{rank}."
 
                 accuracy = (correct_answers / max(quizzes_taken, 1) * 100) if quizzes_taken > 0 else 0
-                leaderboard_text += f"{emoji} **{username}** - {taker_points} quiz points\n"
+                # Escape markdown characters in username
+                escaped_username = escape_markdown(username)
+                leaderboard_text += f"{emoji} **{escaped_username}** - {taker_points} quiz points\n"
                 leaderboard_text += f"   📊 {correct_answers} correct answers, {accuracy:.1f}% accuracy\n"
 
             leaderboard_text += "\n🏆 **Hall of Fame** - Greatest quiz performers of all time!"
