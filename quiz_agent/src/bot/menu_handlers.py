@@ -1720,25 +1720,79 @@ async def handle_history(update: Update, context: CallbackContext) -> None:
 # Leaderboard handlers for submenu options
 async def handle_global_leaderboard(update: Update, context: CallbackContext) -> None:
     """Handle 'Global Leaderboard' button press"""
+    user_id = str(update.effective_user.id)
+
     try:
-        # This would integrate with your leaderboard service
-        leaderboard_text = """🏆 **Global Leaderboard**
-
-🥇 **#1** - QuizMaster2024 (15,420 points)
-🥈 **#2** - BrainiacBob (14,890 points)
-🥉 **#3** - WisdomSeeker (13,250 points)
-4️⃣ **#4** - TriviaKing (12,100 points)
-5️⃣ **#5** - KnowledgeQueen (11,750 points)
-
-📍 **Your Rank:** #23 (4,250 points)
-
-🔄 Updated every 5 minutes"""
-
-        await update.message.reply_text(
-            leaderboard_text,
-            reply_markup=create_leaderboards_keyboard(),
-            parse_mode="Markdown",
+        # Show loading message
+        loading_msg = await update.message.reply_text(
+            "🏆 **Loading Global Leaderboard...**\nFetching latest rankings..."
         )
+
+        from services.point_service import PointService
+
+        # Get leaderboard data
+        leaderboard_data = await PointService.get_leaderboard(limit=10, leaderboard_type="total")
+
+        if leaderboard_data:
+            leaderboard_text = "🏆 **Global Leaderboard**\n\n"
+
+            # Show top players
+            for entry in leaderboard_data:
+                rank = entry['rank']
+                username = entry['username']
+                total_points = entry['total_points']
+
+                # Emoji for top 3
+                if rank == 1:
+                    emoji = "🥇"
+                elif rank == 2:
+                    emoji = "🥈"
+                elif rank == 3:
+                    emoji = "🥉"
+                else:
+                    emoji = f"{rank}️⃣"
+
+                leaderboard_text += f"{emoji} **#{rank}** - {username} ({total_points:,} points)\n"
+
+            # Find user's rank
+            user_points_data = await PointService.get_user_points(user_id)
+            if user_points_data:
+                user_points = user_points_data['total_points']
+                # Calculate user's rank by counting users with higher points
+                # This is a simplified approach - for better performance, you might want to add a rank field
+                if user_points > 0:
+                    user_rank_text = f"\n📍 **Your Points:** {user_points:,} points"
+                else:
+                    user_rank_text = f"\n📍 **Your Points:** 0 points - Start playing to join the leaderboard!"
+            else:
+                user_rank_text = f"\n📍 **Your Points:** 0 points - Start playing to join the leaderboard!"
+
+            leaderboard_text += user_rank_text
+            leaderboard_text += f"\n\n🔄 **Updated:** Just now"
+
+        else:
+            leaderboard_text = """🏆 **Global Leaderboard**
+
+📊 No players have earned points yet.
+Be the first to play a quiz and claim the top spot!
+
+💡 **How to earn points:**
+• Answer quiz questions correctly (+5 points)
+• Be first to answer in timed quizzes (+3 bonus)
+• Create quizzes that others play (+2 per player)"""
+
+        # Edit the loading message with results
+        await loading_msg.edit_text(
+            leaderboard_text,
+            parse_mode="Markdown"
+        )
+
+        # Send leaderboard keyboard
+        await update.message.reply_text(
+            "🏆 **Leaderboard Options:**",
+            reply_markup=create_leaderboards_keyboard()
+        )
+
     except Exception as e:
         logger.error(f"Error in global leaderboard handler: {e}")
         await update.message.reply_text(
@@ -1749,29 +1803,174 @@ async def handle_global_leaderboard(update: Update, context: CallbackContext) ->
 
 async def handle_group_leaderboard(update: Update, context: CallbackContext) -> None:
     """Handle 'Group Leaderboard' button press"""
-    await update.message.reply_text(
-        "👥 **Group Leaderboard**\n\n🔄 Loading group rankings...\n\n💡 This shows rankings for your current group/chat.",
-        reply_markup=create_leaderboards_keyboard(),
-        parse_mode="Markdown",
-    )
+    try:
+        from services.point_service import PointService
+
+        # Get leaderboard data (using total leaderboard for now - can be enhanced for group-specific later)
+        leaderboard_data = await PointService.get_leaderboard(limit=10, leaderboard_type="total")
+
+        if leaderboard_data:
+            leaderboard_text = "👥 **Group Leaderboard**\n\n"
+
+            # Show top players (simplified for group - can be enhanced to filter by actual group)
+            for entry in leaderboard_data[:5]:  # Show top 5 for group
+                rank = entry['rank']
+                username = entry['username']
+                total_points = entry['total_points']
+
+                if rank == 1:
+                    emoji = "🥇"
+                elif rank == 2:
+                    emoji = "🥈"
+                elif rank == 3:
+                    emoji = "🥉"
+                else:
+                    emoji = f"{rank}️⃣"
+
+                leaderboard_text += f"{emoji} **#{rank}** - {username} ({total_points:,} points)\n"
+
+            leaderboard_text += "\n💡 **Note:** Currently showing global rankings. Group-specific rankings coming soon!"
+
+        else:
+            leaderboard_text = """👥 **Group Leaderboard**
+
+📊 No group activity yet.
+Invite friends to play quizzes together!
+
+💡 **Group features coming soon:**
+• Group-specific rankings
+• Team challenges
+• Group competitions"""
+
+        await update.message.reply_text(
+            leaderboard_text,
+            reply_markup=create_leaderboards_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    except Exception as e:
+        logger.error(f"Error in group leaderboard handler: {e}")
+        await update.message.reply_text(
+            "❌ Error loading group leaderboard. Please try again.",
+            reply_markup=create_leaderboards_keyboard()
+        )
 
 
 async def handle_weekly_top(update: Update, context: CallbackContext) -> None:
     """Handle 'Weekly Top' button press"""
-    await update.message.reply_text(
-        "📊 **Weekly Top Performers**\n\n🔄 Loading this week's champions...\n\n⏰ Resets every Monday",
-        reply_markup=create_leaderboards_keyboard(),
-        parse_mode="Markdown",
-    )
+    try:
+        from services.point_service import PointService
+
+        # Get leaderboard data for quiz creators (weekly focus)
+        leaderboard_data = await PointService.get_leaderboard(limit=10, leaderboard_type="creator")
+
+        if leaderboard_data:
+            leaderboard_text = "📊 **Weekly Top Performers** ⭐\n\n"
+            leaderboard_text += "🎯 **Quiz Creators This Week:**\n"
+
+            for entry in leaderboard_data[:5]:  # Show top 5 creators
+                rank = entry['rank']
+                username = entry['username']
+                creator_points = entry['quiz_creator_points']
+                quizzes_created = entry['total_quizzes_created']
+
+                if rank <= 3:
+                    if rank == 1:
+                        emoji = "🥇"
+                    elif rank == 2:
+                        emoji = "🥈"
+                    else:
+                        emoji = "🥉"
+                else:
+                    emoji = f"{rank}️⃣"
+
+                leaderboard_text += f"{emoji} **{username}** - {creator_points} creator points ({quizzes_created} quizzes)\n"
+
+            leaderboard_text += "\n💡 **Note:** Showing top quiz creators by creator points earned"
+            leaderboard_text += "\n⏰ **Updated:** Real-time data"
+
+        else:
+            leaderboard_text = """📊 **Weekly Top Performers**
+
+🎯 No quiz creators this week yet.
+Be the first to create a quiz and earn creator points!
+
+💡 **Creator points:**
+• +2 points for each unique player
+• +1 point for each correct answer"""
+
+        await update.message.reply_text(
+            leaderboard_text,
+            reply_markup=create_leaderboards_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    except Exception as e:
+        logger.error(f"Error in weekly top handler: {e}")
+        await update.message.reply_text(
+            "❌ Error loading weekly top performers. Please try again.",
+            reply_markup=create_leaderboards_keyboard()
+        )
 
 
 async def handle_all_time_best(update: Update, context: CallbackContext) -> None:
     """Handle 'All Time Best' button press"""
-    await update.message.reply_text(
-        "🎖️ **All Time Best**\n\n🔄 Loading all-time records...\n\n🏆 Hall of Fame",
-        reply_markup=create_leaderboards_keyboard(),
-        parse_mode="Markdown",
-    )
+    try:
+        from services.point_service import PointService
+
+        # Get leaderboard data for quiz takers (all-time focus)
+        leaderboard_data = await PointService.get_leaderboard(limit=10, leaderboard_type="taker")
+
+        if leaderboard_data:
+            leaderboard_text = "🎖️ **All Time Best Players** 🏆\n\n"
+            leaderboard_text += "🧠 **Quiz Masters (By Quiz Performance):**\n"
+
+            for entry in leaderboard_data[:5]:  # Show top 5 takers
+                rank = entry['rank']
+                username = entry['username']
+                taker_points = entry['quiz_taker_points']
+                correct_answers = entry['total_correct_answers']
+                quizzes_taken = entry['total_quizzes_taken']
+
+                if rank <= 3:
+                    if rank == 1:
+                        emoji = "🥇"
+                    elif rank == 2:
+                        emoji = "🥈"
+                    else:
+                        emoji = "🥉"
+                else:
+                    emoji = f"{rank}️⃣"
+
+                accuracy = (correct_answers / max(quizzes_taken, 1) * 100) if quizzes_taken > 0 else 0
+                leaderboard_text += f"{emoji} **{username}** - {taker_points} quiz points\n"
+                leaderboard_text += f"   📊 {correct_answers} correct answers, {accuracy:.1f}% accuracy\n"
+
+            leaderboard_text += "\n🏆 **Hall of Fame** - Greatest quiz performers of all time!"
+
+        else:
+            leaderboard_text = """🎖️ **All Time Best**
+
+🏆 No quiz champions yet.
+Be the first to earn your place in the Hall of Fame!
+
+💡 **How to become a legend:**
+• Answer quiz questions correctly
+• Build up your accuracy percentage
+• Compete in multiple quizzes"""
+
+        await update.message.reply_text(
+            leaderboard_text,
+            reply_markup=create_leaderboards_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    except Exception as e:
+        logger.error(f"Error in all time best handler: {e}")
+        await update.message.reply_text(
+            "❌ Error loading all-time best players. Please try again.",
+            reply_markup=create_leaderboards_keyboard()
+        )
 
 
 # Callback handlers for wallet export functionality
