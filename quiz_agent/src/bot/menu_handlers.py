@@ -11,6 +11,7 @@ from .keyboard_markups import (
     create_wallet_keyboard,
     create_leaderboards_keyboard,
     create_withdrawal_keyboard,
+    create_history_keyboard,
     create_cancel_keyboard,
     remove_keyboard,
     create_inline_cancel_keyboard,
@@ -280,6 +281,11 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         "👥 Group Leaderboard",
         "📊 Weekly Top",
         "🎖️ All Time Best",
+        # History submenu buttons
+        "📝 Quiz Activity",
+        "💰 Points History",
+        "💳 Wallet Activity",
+        "🏆 Achievements",
         # Navigation buttons
         "⬅️ Back to Main Menu",
         "❌ Cancel",
@@ -304,11 +310,11 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
     # Parse the button text and route to appropriate handler
     if message_text == "💰 My Wallet":
         await handle_my_wallet(update, context)
-    elif message_text == "� My Points":
+    elif message_text == "🎯 My Points":
         await handle_my_points(update, context)
     elif message_text == "🏆 Leaderboards":
         await handle_leaderboards(update, context)
-    elif message_text == "� History":
+    elif message_text == "📜 History":
         await handle_history(update, context)
     # Wallet submenu handlers
     elif message_text == "💰 View Balance":
@@ -333,12 +339,21 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
     # Leaderboard submenu handlers
     elif message_text == "🏆 Global Leaderboard":
         await handle_global_leaderboard(update, context)
-    elif message_text == "� Group Leaderboard":
+    elif message_text == "👥 Group Leaderboard":
         await handle_group_leaderboard(update, context)
     elif message_text == "📊 Weekly Top":
         await handle_weekly_top(update, context)
     elif message_text == "🎖️ All Time Best":
         await handle_all_time_best(update, context)
+    # History submenu handlers
+    elif message_text == "📝 Quiz Activity":
+        await handle_quiz_activity(update, context)
+    elif message_text == "💰 Points History":
+        await handle_points_history(update, context)
+    elif message_text == "💳 Wallet Activity":
+        await handle_wallet_activity(update, context)
+    elif message_text == "🏆 Achievements":
+        await handle_achievements(update, context)
     # Navigation handlers
     elif message_text == "⬅️ Back to Main Menu":
         await show_main_menu(update, context)
@@ -722,36 +737,7 @@ async def handle_transaction_history(update: Update, context: CallbackContext) -
     )
 
 
-async def handle_global_leaderboard(update: Update, context: CallbackContext) -> None:
-    """Handle 'Global Leaderboard' button press"""
-    await update.message.reply_text(
-        "🏆 Global Leaderboard:\n🥇 @user1 - 15,420 SOLV\n🥈 @user2 - 12,850 SOLV\n🥉 @user3 - 11,200 SOLV\n4. @user4 - 9,800 SOLV\n5. @user5 - 8,950 SOLV",
-        reply_markup=create_cancel_keyboard(),
-    )
 
-
-async def handle_group_leaderboard(update: Update, context: CallbackContext) -> None:
-    """Handle 'Group Leaderboard' button press"""
-    await update.message.reply_text(
-        "👥 Group Leaderboard:\n🥇 @user1 - 2,450 SOLV\n🥈 @user2 - 1,890 SOLV\n🥉 @user3 - 1,650 SOLV\n4. @user4 - 1,200 SOLV\n5. @user5 - 980 SOLV",
-        reply_markup=create_cancel_keyboard(),
-    )
-
-
-async def handle_weekly_top(update: Update, context: CallbackContext) -> None:
-    """Handle 'Weekly Top' button press"""
-    await update.message.reply_text(
-        "📊 Weekly Top Performers:\n🥇 @user1 - 850 SOLV\n🥈 @user2 - 720 SOLV\n🥉 @user3 - 680 SOLV\n4. @user4 - 550 SOLV\n5. @user5 - 480 SOLV",
-        reply_markup=create_cancel_keyboard(),
-    )
-
-
-async def handle_all_time_best(update: Update, context: CallbackContext) -> None:
-    """Handle 'All Time Best' button press"""
-    await update.message.reply_text(
-        "🎖️ All Time Best:\n🥇 @user1 - 25,420 SOLV\n🥈 @user2 - 22,850 SOLV\n🥉 @user3 - 21,200 SOLV\n4. @user4 - 19,800 SOLV\n5. @user5 - 18,950 SOLV",
-        reply_markup=create_cancel_keyboard(),
-    )
 
 
 async def handle_back_navigation(update: Update, context: CallbackContext) -> None:
@@ -766,6 +752,361 @@ async def handle_back_navigation(update: Update, context: CallbackContext) -> No
     else:
         # Default back to main menu
         await show_main_menu(update, context)
+
+
+# =============================================================================
+# HISTORY HANDLERS
+# =============================================================================
+
+async def handle_history(update: Update, context: CallbackContext) -> None:
+    """Handle '📜 History' button press"""
+    await update.message.reply_text(
+        "📜 **Your History**\n\nView your activity and progress across all areas of the platform:",
+        reply_markup=create_history_keyboard(),
+        parse_mode="Markdown",
+    )
+
+
+async def handle_quiz_activity(update: Update, context: CallbackContext) -> None:
+    """Handle '📝 Quiz Activity' button press - show user's quiz history"""
+    user_id = str(update.effective_user.id)
+
+    try:
+        from store.database import SessionLocal
+        from models.quiz import Quiz, QuizAnswer
+        from models.user import User
+        from sqlalchemy import desc, func
+        import datetime
+
+        session = SessionLocal()
+
+        # Get quizzes created by user (last 10)
+        created_quizzes = (
+            session.query(Quiz)
+            .filter(Quiz.creator_id == user_id)
+            .order_by(desc(Quiz.created_at))
+            .limit(10)
+            .all()
+        )
+
+        # Get recent quiz participations (last 10)
+        participated_quizzes = (
+            session.query(QuizAnswer.quiz_id, Quiz.topic, func.count(QuizAnswer.id).label('answers_count'),
+                         func.sum(func.case([(QuizAnswer.is_correct == 'True', 1)], else_=0)).label('correct_count'))
+            .join(Quiz, QuizAnswer.quiz_id == Quiz.id)
+            .filter(QuizAnswer.user_id == user_id)
+            .group_by(QuizAnswer.quiz_id, Quiz.topic)
+            .order_by(desc(func.max(QuizAnswer.answered_at)))
+            .limit(10)
+            .all()
+        )
+
+        session.close()
+
+        # Format the message
+        message = "📝 **Quiz Activity History**\n\n"
+
+        # Created Quizzes Section
+        message += "🎯 **Quizzes You Created:**\n"
+        if created_quizzes:
+            for i, quiz in enumerate(created_quizzes[:5], 1):
+                status_emoji = {"DRAFT": "✏️", "FUNDING": "💰", "ACTIVE": "🔥", "CLOSED": "✅"}.get(quiz.status.value, "❓")
+                created_date = quiz.created_at.strftime("%m/%d") if quiz.created_at else "N/A"
+                message += f"{i}. {status_emoji} {quiz.topic[:30]}{'...' if len(quiz.topic) > 30 else ''} ({created_date})\n"
+        else:
+            message += "   No quizzes created yet\n"
+
+        message += "\n"
+
+        # Participated Quizzes Section
+        message += "🎮 **Recent Quiz Participation:**\n"
+        if participated_quizzes:
+            for i, (quiz_id, topic, total_answers, correct_answers) in enumerate(participated_quizzes[:5], 1):
+                accuracy = f"{int((correct_answers or 0) / total_answers * 100)}%" if total_answers > 0 else "0%"
+                message += f"{i}. {topic[:25]}{'...' if len(topic) > 25 else ''}\n   📊 {correct_answers or 0}/{total_answers} ({accuracy})\n"
+        else:
+            message += "   No quiz participation yet\n"
+
+        await update.message.reply_text(
+            message,
+            reply_markup=create_history_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting quiz activity for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Unable to load quiz activity history. Please try again.",
+            reply_markup=create_history_keyboard(),
+        )
+
+
+async def handle_points_history(update: Update, context: CallbackContext) -> None:
+    """Handle '💰 Points History' button press - show user's point transaction history"""
+    user_id = str(update.effective_user.id)
+
+    try:
+        from services.point_service import PointService
+
+        # Get point history from the service
+        history = await PointService.get_user_point_history(user_id, limit=15)
+
+        if not history:
+            await update.message.reply_text(
+                "💰 **Points History**\n\n📊 No point transactions found yet.\n\nStart participating in quizzes to earn points!",
+                reply_markup=create_history_keyboard(),
+                parse_mode="Markdown",
+            )
+            return
+
+        # Format the message
+        message = "💰 **Points History**\n\n"
+
+        total_shown = 0
+        for transaction in history:
+            if total_shown >= 10:  # Show only last 10 transactions
+                break
+
+            # Parse transaction data
+            points = transaction.get('points', 0)
+            description = transaction.get('description', 'Unknown transaction')
+            transaction_type = transaction.get('transaction_type', '')
+            created_at = transaction.get('created_at', '')
+
+            # Format date
+            try:
+                from datetime import datetime
+                date_obj = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                date_str = date_obj.strftime("%m/%d %H:%M")
+            except:
+                date_str = "Unknown"
+
+            # Choose emoji based on transaction type
+            if 'CORRECT_ANSWER' in transaction_type:
+                emoji = "✅"
+            elif 'FIRST_CORRECT' in transaction_type:
+                emoji = "🥇"
+            elif 'CREATOR_UNIQUE' in transaction_type:
+                emoji = "👥"
+            elif 'CREATOR_CORRECT' in transaction_type:
+                emoji = "🎯"
+            else:
+                emoji = "💰"
+
+            sign = "+" if points > 0 else ""
+            message += f"{emoji} {sign}{points} pts - {description}\n   📅 {date_str}\n\n"
+            total_shown += 1
+
+        if len(history) > 10:
+            message += f"... and {len(history) - 10} more transactions"
+
+        await update.message.reply_text(
+            message,
+            reply_markup=create_history_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting points history for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Unable to load points history. Please try again.",
+            reply_markup=create_history_keyboard(),
+        )
+
+
+async def handle_wallet_activity(update: Update, context: CallbackContext) -> None:
+    """Handle '💳 Wallet Activity' button press - show user's wallet transaction history"""
+    user_id = str(update.effective_user.id)
+
+    try:
+        from store.database import SessionLocal
+        from models.quiz import Quiz
+        from models.wallet import UserWallet
+        from sqlalchemy import desc
+
+        session = SessionLocal()
+
+        # Get user's wallet info
+        user_wallet = (
+            session.query(UserWallet)
+            .filter(UserWallet.telegram_user_id == user_id, UserWallet.is_active == True)
+            .first()
+        )
+
+        if not user_wallet:
+            session.close()
+            await update.message.reply_text(
+                "💳 **Wallet Activity**\n\n❌ No wallet found.\n\nCreate a wallet first from the 'My Wallet' menu to view transaction history.",
+                reply_markup=create_history_keyboard(),
+                parse_mode="Markdown",
+            )
+            return
+
+        # Get quiz payments made by this user
+        quiz_payments = (
+            session.query(Quiz)
+            .filter(Quiz.creator_id == user_id, Quiz.payment_transaction_hash.isnot(None))
+            .order_by(desc(Quiz.created_at))
+            .limit(10)
+            .all()
+        )
+
+        session.close()
+
+        # Format the message
+        message = f"💳 **Wallet Activity**\n\n"
+        message += f"🏦 **Wallet:** `{user_wallet.account_id}`\n"
+        message += f"🌐 **Network:** {user_wallet.network.title()}\n"
+        message += f"📅 **Created:** {user_wallet.created_at.strftime('%m/%d/%Y') if user_wallet.created_at else 'N/A'}\n\n"
+
+        # Quiz Payments Section
+        message += "💰 **Quiz Creation Payments:**\n"
+        if quiz_payments:
+            for i, quiz in enumerate(quiz_payments[:5], 1):
+                created_date = quiz.created_at.strftime("%m/%d") if quiz.created_at else "N/A"
+                tx_hash_short = f"{quiz.payment_transaction_hash[:8]}...{quiz.payment_transaction_hash[-8:]}" if quiz.payment_transaction_hash else "N/A"
+                message += f"{i}. {quiz.topic[:25]}{'...' if len(quiz.topic) > 25 else ''}\n"
+                message += f"   📅 {created_date} | 🔗 `{tx_hash_short}`\n"
+        else:
+            message += "   No quiz payments found\n"
+
+        message += "\n💡 **Tip:** View full transaction details on NEAR Explorer using the transaction hash."
+
+        await update.message.reply_text(
+            message,
+            reply_markup=create_history_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting wallet activity for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Unable to load wallet activity. Please try again.",
+            reply_markup=create_history_keyboard(),
+        )
+
+
+async def handle_achievements(update: Update, context: CallbackContext) -> None:
+    """Handle '🏆 Achievements' button press - show user's achievements and milestones"""
+    user_id = str(update.effective_user.id)
+
+    try:
+        from services.point_service import PointService
+
+        # Get user points data which contains achievement stats
+        user_points = await PointService.get_user_points(user_id)
+
+        if not user_points:
+            await update.message.reply_text(
+                "🏆 **Achievements**\n\n📊 No achievements data found.\n\nStart participating in quizzes to unlock achievements!",
+                reply_markup=create_history_keyboard(),
+                parse_mode="Markdown",
+            )
+            return
+
+        # Get user's current ranking
+        leaderboard = await PointService.get_leaderboard(limit=100, leaderboard_type="total")
+        user_rank = None
+        for entry in leaderboard:
+            if entry['user_id'] == user_id:
+                user_rank = entry['rank']
+                break
+
+        # Calculate achievement levels and badges
+        total_points = user_points.get('total_points', 0)
+        total_correct = user_points.get('total_correct_answers', 0)
+        total_created = user_points.get('total_quizzes_created', 0)
+        total_taken = user_points.get('total_quizzes_taken', 0)
+        first_correct = user_points.get('first_correct_answers', 0)
+
+        # Format the message
+        message = "🏆 **Your Achievements**\n\n"
+
+        # Points Achievements
+        message += "💰 **Points Milestones:**\n"
+        if total_points >= 1000:
+            message += "🥇 Points Master (1000+ pts) ✅\n"
+        elif total_points >= 500:
+            message += "🥈 Points Expert (500+ pts) ✅\n"
+        elif total_points >= 100:
+            message += "🥉 Points Collector (100+ pts) ✅\n"
+        else:
+            next_milestone = 100 if total_points < 100 else (500 if total_points < 500 else 1000)
+            message += f"🎯 Next: {next_milestone} pts ({total_points}/{next_milestone})\n"
+
+        message += "\n"
+
+        # Quiz Participation Achievements
+        message += "🎮 **Quiz Participation:**\n"
+        if total_taken >= 50:
+            message += "🏆 Quiz Master (50+ quizzes) ✅\n"
+        elif total_taken >= 20:
+            message += "🥇 Quiz Expert (20+ quizzes) ✅\n"
+        elif total_taken >= 10:
+            message += "🥈 Quiz Regular (10+ quizzes) ✅\n"
+        elif total_taken >= 5:
+            message += "🥉 Quiz Explorer (5+ quizzes) ✅\n"
+        else:
+            next_milestone = 5 if total_taken < 5 else (10 if total_taken < 10 else 20)
+            message += f"🎯 Next: {next_milestone} quizzes ({total_taken}/{next_milestone})\n"
+
+        message += "\n"
+
+        # Quiz Creation Achievements
+        message += "🎨 **Quiz Creation:**\n"
+        if total_created >= 10:
+            message += "👑 Quiz Creator Pro (10+ created) ✅\n"
+        elif total_created >= 5:
+            message += "🎪 Quiz Maker (5+ created) ✅\n"
+        elif total_created >= 1:
+            message += "🎯 First Creator (1+ created) ✅\n"
+        else:
+            message += "🎯 Next: Create your first quiz\n"
+
+        message += "\n"
+
+        # Accuracy Achievements
+        if total_taken > 0:
+            accuracy = int(total_correct / total_taken * 100) if total_taken > 0 else 0
+            message += "🎯 **Accuracy Badges:**\n"
+            if accuracy >= 90:
+                message += "🎖️ Sharpshooter (90%+ accuracy) ✅\n"
+            elif accuracy >= 75:
+                message += "🥇 Expert Accuracy (75%+) ✅\n"
+            elif accuracy >= 60:
+                message += "🥈 Good Accuracy (60%+) ✅\n"
+            message += f"📊 Current: {accuracy}% ({total_correct}/{total_taken})\n\n"
+
+        # Ranking Achievement
+        message += "🏅 **Ranking:**\n"
+        if user_rank:
+            if user_rank <= 3:
+                message += f"👑 Top 3 Player (#{user_rank}) ✅\n"
+            elif user_rank <= 10:
+                message += f"🥇 Top 10 Player (#{user_rank}) ✅\n"
+            elif user_rank <= 50:
+                message += f"🥈 Top 50 Player (#{user_rank}) ✅\n"
+            else:
+                message += f"📊 Ranked #{user_rank}\n"
+        else:
+            message += "📊 Not ranked yet\n"
+
+        # Speed Achievement
+        if first_correct > 0:
+            message += f"\n⚡ **Speed Demon:** {first_correct} first correct answers!\n"
+
+        await update.message.reply_text(
+            message,
+            reply_markup=create_history_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting achievements for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Unable to load achievements. Please try again.",
+            reply_markup=create_history_keyboard(),
+        )
 
 
 async def handle_reset_wallet(update: Update, context: CallbackContext) -> None:
@@ -1717,28 +2058,92 @@ async def handle_history(update: Update, context: CallbackContext) -> None:
         )
 
 
+# Utility function for escaping markdown characters in usernames
+def escape_markdown(text: str) -> str:
+    """Escape special markdown characters in text to prevent parsing errors"""
+    if not text:
+        return text
+    # Escape common markdown characters that cause parsing issues
+    return text.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]').replace('`', '\\`').replace('~', '\\~')
+
 # Leaderboard handlers for submenu options
 async def handle_global_leaderboard(update: Update, context: CallbackContext) -> None:
     """Handle 'Global Leaderboard' button press"""
+    user_id = str(update.effective_user.id)
+
     try:
-        # This would integrate with your leaderboard service
-        leaderboard_text = """🏆 **Global Leaderboard**
-
-🥇 **#1** - QuizMaster2024 (15,420 points)
-🥈 **#2** - BrainiacBob (14,890 points)
-🥉 **#3** - WisdomSeeker (13,250 points)
-4️⃣ **#4** - TriviaKing (12,100 points)
-5️⃣ **#5** - KnowledgeQueen (11,750 points)
-
-📍 **Your Rank:** #23 (4,250 points)
-
-🔄 Updated every 5 minutes"""
-
-        await update.message.reply_text(
-            leaderboard_text,
-            reply_markup=create_leaderboards_keyboard(),
-            parse_mode="Markdown",
+        # Show loading message
+        loading_msg = await update.message.reply_text(
+            "🏆 **Loading Global Leaderboard...**\nFetching latest rankings..."
         )
+
+        from services.point_service import PointService
+
+        # Get leaderboard data
+        leaderboard_data = await PointService.get_leaderboard(limit=10, leaderboard_type="total")
+
+        if leaderboard_data:
+            leaderboard_text = "🏆 **Global Leaderboard**\n\n"
+
+            # Show top players
+            for entry in leaderboard_data:
+                rank = entry['rank']
+                username = entry['username']
+                total_points = entry['total_points']
+
+                # Emoji for top 3
+                if rank == 1:
+                    emoji = "🥇"
+                elif rank == 2:
+                    emoji = "🥈"
+                elif rank == 3:
+                    emoji = "🥉"
+                else:
+                    emoji = f"{rank}."
+
+                # Escape markdown characters in username
+                escaped_username = escape_markdown(username)
+                leaderboard_text += f"{emoji} **#{rank}** - {escaped_username} ({total_points:,} points)\n"
+
+            # Find user's rank
+            user_points_data = await PointService.get_user_points(user_id)
+            if user_points_data:
+                user_points = user_points_data['total_points']
+                # Calculate user's rank by counting users with higher points
+                # This is a simplified approach - for better performance, you might want to add a rank field
+                if user_points > 0:
+                    user_rank_text = f"\n📍 **Your Points:** {user_points:,} points"
+                else:
+                    user_rank_text = f"\n📍 **Your Points:** 0 points - Start playing to join the leaderboard!"
+            else:
+                user_rank_text = f"\n📍 **Your Points:** 0 points - Start playing to join the leaderboard!"
+
+            leaderboard_text += user_rank_text
+            leaderboard_text += f"\n\n🔄 **Updated:** Just now"
+
+        else:
+            leaderboard_text = """🏆 **Global Leaderboard**
+
+📊 No players have earned points yet.
+Be the first to play a quiz and claim the top spot!
+
+💡 **How to earn points:**
+• Answer quiz questions correctly (+5 points)
+• Be first to answer in timed quizzes (+3 bonus)
+• Create quizzes that others play (+2 per player)"""
+
+        # Edit the loading message with results
+        await loading_msg.edit_text(
+            leaderboard_text,
+            parse_mode="Markdown"
+        )
+
+        # Send leaderboard keyboard
+        await update.message.reply_text(
+            "🏆 **Leaderboard Options:**",
+            reply_markup=create_leaderboards_keyboard()
+        )
+
     except Exception as e:
         logger.error(f"Error in global leaderboard handler: {e}")
         await update.message.reply_text(
@@ -1749,29 +2154,180 @@ async def handle_global_leaderboard(update: Update, context: CallbackContext) ->
 
 async def handle_group_leaderboard(update: Update, context: CallbackContext) -> None:
     """Handle 'Group Leaderboard' button press"""
-    await update.message.reply_text(
-        "👥 **Group Leaderboard**\n\n🔄 Loading group rankings...\n\n💡 This shows rankings for your current group/chat.",
-        reply_markup=create_leaderboards_keyboard(),
-        parse_mode="Markdown",
-    )
+    try:
+        from services.point_service import PointService
+
+        # Get leaderboard data (using total leaderboard for now - can be enhanced for group-specific later)
+        leaderboard_data = await PointService.get_leaderboard(limit=10, leaderboard_type="total")
+
+        if leaderboard_data:
+            leaderboard_text = "👥 **Group Leaderboard**\n\n"
+
+            # Show top players (simplified for group - can be enhanced to filter by actual group)
+            for entry in leaderboard_data[:5]:  # Show top 5 for group
+                rank = entry['rank']
+                username = entry['username']
+                total_points = entry['total_points']
+
+                if rank == 1:
+                    emoji = "🥇"
+                elif rank == 2:
+                    emoji = "🥈"
+                elif rank == 3:
+                    emoji = "🥉"
+                else:
+                    emoji = f"{rank}."
+
+                # Escape markdown characters in username
+                escaped_username = escape_markdown(username)
+                leaderboard_text += f"{emoji} **#{rank}** - {escaped_username} ({total_points:,} points)\n"
+
+            leaderboard_text += "\n💡 **Note:** Currently showing global rankings. Group-specific rankings coming soon!"
+
+        else:
+            leaderboard_text = """👥 **Group Leaderboard**
+
+📊 No group activity yet.
+Invite friends to play quizzes together!
+
+💡 **Group features coming soon:**
+• Group-specific rankings
+• Team challenges
+• Group competitions"""
+
+        await update.message.reply_text(
+            leaderboard_text,
+            reply_markup=create_leaderboards_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    except Exception as e:
+        logger.error(f"Error in group leaderboard handler: {e}")
+        await update.message.reply_text(
+            "❌ Error loading group leaderboard. Please try again.",
+            reply_markup=create_leaderboards_keyboard()
+        )
 
 
 async def handle_weekly_top(update: Update, context: CallbackContext) -> None:
     """Handle 'Weekly Top' button press"""
-    await update.message.reply_text(
-        "📊 **Weekly Top Performers**\n\n🔄 Loading this week's champions...\n\n⏰ Resets every Monday",
-        reply_markup=create_leaderboards_keyboard(),
-        parse_mode="Markdown",
-    )
+    try:
+        from services.point_service import PointService
+
+        # Get leaderboard data for quiz creators (weekly focus)
+        leaderboard_data = await PointService.get_leaderboard(limit=10, leaderboard_type="creator")
+
+        if leaderboard_data:
+            leaderboard_text = "📊 **Weekly Top Performers** ⭐\n\n"
+            leaderboard_text += "🎯 **Quiz Creators This Week:**\n"
+
+            for entry in leaderboard_data[:5]:  # Show top 5 creators
+                rank = entry['rank']
+                username = entry['username']
+                creator_points = entry['quiz_creator_points']
+                quizzes_created = entry['total_quizzes_created']
+
+                if rank <= 3:
+                    if rank == 1:
+                        emoji = "🥇"
+                    elif rank == 2:
+                        emoji = "🥈"
+                    else:
+                        emoji = "🥉"
+                else:
+                    emoji = f"{rank}."
+
+                # Escape markdown characters in username
+                escaped_username = escape_markdown(username)
+                leaderboard_text += f"{emoji} **{escaped_username}** - {creator_points} creator points ({quizzes_created} quizzes)\n"
+
+            leaderboard_text += "\n💡 **Note:** Showing top quiz creators by creator points earned"
+            leaderboard_text += "\n⏰ **Updated:** Real-time data"
+
+        else:
+            leaderboard_text = """📊 **Weekly Top Performers**
+
+🎯 No quiz creators this week yet.
+Be the first to create a quiz and earn creator points!
+
+💡 **Creator points:**
+• +2 points for each unique player
+• +1 point for each correct answer"""
+
+        await update.message.reply_text(
+            leaderboard_text,
+            reply_markup=create_leaderboards_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    except Exception as e:
+        logger.error(f"Error in weekly top handler: {e}")
+        await update.message.reply_text(
+            "❌ Error loading weekly top performers. Please try again.",
+            reply_markup=create_leaderboards_keyboard()
+        )
 
 
 async def handle_all_time_best(update: Update, context: CallbackContext) -> None:
     """Handle 'All Time Best' button press"""
-    await update.message.reply_text(
-        "🎖️ **All Time Best**\n\n🔄 Loading all-time records...\n\n🏆 Hall of Fame",
-        reply_markup=create_leaderboards_keyboard(),
-        parse_mode="Markdown",
-    )
+    try:
+        from services.point_service import PointService
+
+        # Get leaderboard data for quiz takers (all-time focus)
+        leaderboard_data = await PointService.get_leaderboard(limit=10, leaderboard_type="taker")
+
+        if leaderboard_data:
+            leaderboard_text = "🎖️ **All Time Best Players** 🏆\n\n"
+            leaderboard_text += "🧠 **Quiz Masters (By Quiz Performance):**\n"
+
+            for entry in leaderboard_data[:5]:  # Show top 5 takers
+                rank = entry['rank']
+                username = entry['username']
+                taker_points = entry['quiz_taker_points']
+                correct_answers = entry['total_correct_answers']
+                quizzes_taken = entry['total_quizzes_taken']
+
+                if rank <= 3:
+                    if rank == 1:
+                        emoji = "🥇"
+                    elif rank == 2:
+                        emoji = "🥈"
+                    else:
+                        emoji = "🥉"
+                else:
+                    emoji = f"{rank}."
+
+                accuracy = (correct_answers / max(quizzes_taken, 1) * 100) if quizzes_taken > 0 else 0
+                # Escape markdown characters in username
+                escaped_username = escape_markdown(username)
+                leaderboard_text += f"{emoji} **{escaped_username}** - {taker_points} quiz points\n"
+                leaderboard_text += f"   📊 {correct_answers} correct answers, {accuracy:.1f}% accuracy\n"
+
+            leaderboard_text += "\n🏆 **Hall of Fame** - Greatest quiz performers of all time!"
+
+        else:
+            leaderboard_text = """🎖️ **All Time Best**
+
+🏆 No quiz champions yet.
+Be the first to earn your place in the Hall of Fame!
+
+💡 **How to become a legend:**
+• Answer quiz questions correctly
+• Build up your accuracy percentage
+• Compete in multiple quizzes"""
+
+        await update.message.reply_text(
+            leaderboard_text,
+            reply_markup=create_leaderboards_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    except Exception as e:
+        logger.error(f"Error in all time best handler: {e}")
+        await update.message.reply_text(
+            "❌ Error loading all-time best players. Please try again.",
+            reply_markup=create_leaderboards_keyboard()
+        )
 
 
 # Callback handlers for wallet export functionality

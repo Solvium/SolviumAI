@@ -2513,59 +2513,76 @@ async def schedule_next_question(
 
     # Check if session still exists
     session_key = f"{user_id}:{quiz.id}"
+
+    # Handle timeout regardless of whether session still exists
+    # Mark current question as missed if no answer was given
+    if quiz_session.current_question_index not in quiz_session.answers:
+        quiz_session.answers[quiz_session.current_question_index] = {
+            "answer": "TIMEOUT",
+            "correct": False,
+            "correct_answer": quiz_session.get_current_question().get(
+                "correct_answer", ""
+            ),
+        }
+        quiz_session.missed_questions += 1
+
+        # Delete the poll message on timeout as well
+        try:
+            redis_client = RedisClient()
+            poll_message_id = await redis_client.get_user_quiz_data(
+                user_id, quiz.id, f"poll_message_{current_num-1}"
+            )
+            await redis_client.close()
+
+            if poll_message_id:
+                # Delete the poll message on timeout
+                await application.bot.delete_message(
+                    chat_id=user_id, message_id=int(poll_message_id)
+                )
+                logger.info(
+                    f"Deleted poll message {poll_message_id} on timeout for user {user_id}"
+                )
+        except BadRequest as e:
+            if "message to delete not found" in str(e).lower():
+                logger.info(
+                    f"Poll message {poll_message_id} already deleted on timeout"
+                )
+            else:
+                logger.error(f"Error deleting poll message on timeout: {e}")
+        except Exception as e:
+            logger.error(f"Error deleting poll message on timeout: {e}")
+
+        # Send timeout message and wait for it to be delivered
+        # Use direct sending without queue to ensure immediate delivery
+        try:
+            await application.bot.send_message(
+                chat_id=user_id,
+                text=f"⏰ Time's up for question {current_num}!",
+                disable_notification=False,
+            )
+            logger.info(f"Timeout message sent successfully for question {current_num}")
+        except Exception as e:
+            logger.error(f"Error sending timeout message: {e}")
+
+        # Add a small delay to ensure user sees the timeout message
+        # before the next poll appears
+        await asyncio.sleep(2.0)
+
+    # Only continue with next question if session still exists
     if session_key not in active_quiz_sessions:
+        logger.warning(
+            f"Quiz session {session_key} no longer exists, skipping next question"
+        )
         # Clean up scheduled task
         if session_key in scheduled_tasks:
             del scheduled_tasks[session_key]
         return
 
-        # Mark current question as missed if no answer was given
-        if quiz_session.current_question_index not in quiz_session.answers:
-            quiz_session.answers[quiz_session.current_question_index] = {
-                "answer": "TIMEOUT",
-                "correct": False,
-                "correct_answer": quiz_session.get_current_question().get(
-                    "correct_answer", ""
-                ),
-            }
-            quiz_session.missed_questions += 1
-
-            # Delete the poll message on timeout as well
-            try:
-                redis_client = RedisClient()
-                poll_message_id = await redis_client.get_user_quiz_data(
-                    user_id, quiz.id, f"poll_message_{current_num-1}"
-                )
-                await redis_client.close()
-
-                if poll_message_id:
-                    # Delete the poll message on timeout
-                    await application.bot.delete_message(
-                        chat_id=user_id, message_id=int(poll_message_id)
-                    )
-                    logger.info(
-                        f"Deleted poll message {poll_message_id} on timeout for user {user_id}"
-                    )
-            except BadRequest as e:
-                if "message to delete not found" in str(e).lower():
-                    logger.info(
-                        f"Poll message {poll_message_id} already deleted on timeout"
-                    )
-                else:
-                    logger.error(f"Error deleting poll message on timeout: {e}")
-            except Exception as e:
-                logger.error(f"Error deleting poll message on timeout: {e}")
-
-            # Send timeout message
-            await safe_send_message(
-                application.bot, user_id, f"⏰ Time's up for question {current_num}!"
-            )
-
-        # Move to next question or finish
-        if quiz_session.next_question():
-            await send_enhanced_question(application, user_id, quiz_session, quiz)
-        else:
-            await finish_enhanced_quiz(application, user_id, quiz_session, quiz)
+    # Move to next question or finish
+    if quiz_session.next_question():
+        await send_enhanced_question(application, user_id, quiz_session, quiz)
+    else:
+        await finish_enhanced_quiz(application, user_id, quiz_session, quiz)
 
     # Clean up scheduled task
     if session_key in scheduled_tasks:

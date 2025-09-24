@@ -102,6 +102,38 @@ def create_withdrawal_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def create_points_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a keyboard for points management options
+    """
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton("📊 Point Details"), KeyboardButton("📈 Point History")],
+            [KeyboardButton("🏆 My Rank"), KeyboardButton("🎯 Earning Guide")],
+            [KeyboardButton("⬅️ Back to Main Menu")],
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=False,
+        input_field_placeholder="📱 Points options...",
+    )
+
+
+def create_history_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Creates a keyboard for history and activity tracking options
+    """
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton("📝 Quiz Activity"), KeyboardButton("💰 Points History")],
+            [KeyboardButton("💳 Wallet Activity"), KeyboardButton("🏆 Achievements")],
+            [KeyboardButton("⬅️ Back to Main Menu")],
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=False,
+        input_field_placeholder="📱 View your history...",
+    )
+
+
 def create_cancel_keyboard() -> ReplyKeyboardMarkup:
     """
     Creates a simple cancel/back keyboard
