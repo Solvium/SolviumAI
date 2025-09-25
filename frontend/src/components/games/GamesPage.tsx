@@ -36,12 +36,10 @@ const GamesPage = () => {
     <>
       {activeGame == null ? (
         <div
-          className="max-h-screen flex flex-col items-center justify-center pb-32 pt-20 p-6 bg-cover bg-center bg-no-repeat relative"
-          style={{
-            backgroundImage: "url('/tropical-adventure-bg.jpg')",
-          }}
-        >
-          <div className="absolute inset-0 bg-black/30" />
+        className="max-h-screen flex flex-col items-center justify-center  pt-[35%] p-6 bg-[#0A0146] relative"
+        // className="max-h-screen flex flex-col items-center justify-center pb-40 pt-24 p-6 bg-[#ffff] relative"
+      >
+          <div className="absolute " />
 
           <div className="relative z-10 flex flex-col items-center">
             {/* Select Game Title */}
@@ -50,19 +48,19 @@ const GamesPage = () => {
             </h1>
 
             {/* Game Selection Buttons */}
-            <div className="flex flex-col gap-6 w-full max-w-sm">
+            <div className="flex flex-col gap-12 w-full max-w-sm">
               {games.map((game) => (
                 <button
                   key={game.id}
                   onClick={() => handleGameSelect(game)}
-                  className="relative w-full h-20 bg-cover bg-center bg-no-repeat transform transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-yellow-400/50"
+                  className="relative w-full h-20 bg-contain bg-center bg-no-repeat transform transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-yellow-400/50"
                   style={{
                     backgroundImage: "url('/assets/buttons/wooden-button.png')",
                   }}
                 >
                   {/* Button Text Overlay */}
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-2xl md:text-3xl font-bold text-amber-900 drop-shadow-lg tracking-wider">
+                    <span className="text-2xl md:text-3xl font-bold text-[#ffffff] drop-shadow-lg tracking-wider">
                       {game.title}
                     </span>
                   </div>

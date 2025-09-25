@@ -54,7 +54,7 @@
 body {
   font-family: "Karla", sans-serif;
   color: rgb(var(--foreground-rgb));
-  background: linear-gradient(135deg, #87ceeb 0%, #00bfff 50%, #1e90ff 100%);
+  background-color: #0A0146;
   font-feature-settings: "ss01" 1, "ss02" 1, "ss03" 1;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
