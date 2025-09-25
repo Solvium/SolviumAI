@@ -102,15 +102,9 @@ function Home() {
                         alt="Home"
                         width={28}
                         height={28}
-                        className="w-7 h-7 mb-1 transition-all duration-300"
+                        className="w-auto h-12 mb-1 transition-all duration-300"
                       />
-                      <span
-                        className={`text-xs font-semibold transition-all duration-300 ${
-                          selectedTab === "Home" ? "text-pink-400" : "text-white/70"
-                        }`}
-                      >
-                        Home
-                      </span>
+                     
                     </button>
 
                     <button
