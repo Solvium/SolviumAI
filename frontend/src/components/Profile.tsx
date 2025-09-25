@@ -19,7 +19,7 @@ const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
     <div
       className="max-h-screen w-full py-3 px-3 md:py-4 pb-16 relative overflow-hidden"
       style={{
-        backgroundImage: "url('/tropical-adventure-bg.png')",
+        backgroundImage: "url('/assets/background/profile-background.png')",
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
@@ -27,14 +27,14 @@ const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
     >
       <div className="absolute inset-0 bg-none-transparent  pointer-events-none"></div>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(34,211,238,0.1),transparent_50%)] pointer-events-none"></div>
-      {/* <button
+      <button
         onClick={() => logout()}
         className="absolute top-6 right-6 z-50 w-12 h-12 bg-cover bg-center bg-no-repeat hover:scale-110 transition-all duration-200 shadow-lg"
         style={{
           backgroundImage: "url('/assets/buttons/power-button.png')",
         }}
         title="Logout"
-      ></button> */}
+      ></button>
 
       <div className="max-w-2xl mx-auto space-y-4 relative z-10">
       {/* <StatusBar3D className="mb-6" /> */}
