@@ -116,7 +116,7 @@ const WordleGame: React.FC = () => {
   }
 
   const TutorialScreen = () => (
-    <div className="flex-1 flex flex-col justify-center items-center px-4 text-white">
+    <div className="flex-1 flex flex-col justify-center items-center px-4 text-white overflow-hidden">
       <div className="max-w-md mx-auto text-center space-y-4">
         <div className="mb-3">
           {/* <Info className="w-8 h-8 mx-auto mb-2 text-blue-400" /> */}
@@ -125,14 +125,18 @@ const WordleGame: React.FC = () => {
         </div>
 
         <div className="space-y-4 text-left">
-          <div className="bg-white/10 rounded-lg p-4">
-            <h3 className="font-bold text-lg mb-2 text-center">Game Rules</h3>
-            <ul className="space-y-1 text-gray-300 text-sm">
-              <li>• You have 6 attempts to guess the word</li>
-              <li>• Each guess must be a valid 5-letter word</li>
-              <li>• After each guess, tiles will change color:</li>
-            </ul>
-          </div>
+        <div className="bg-white/10 rounded-lg p-4 max-h-[800px]:p-3">
+  <h3 className="font-bold text-lg max-h-[800px]:text-base mb-2 text-center">
+    Game Rules
+  </h3>
+  <ul className="space-y-1 text-gray-300 text-sm max-h-[800px]:text-xs">
+    <li>• You have 6 attempts to guess the word</li>
+    <li>• Each guess must be a valid 5-letter word</li>
+    <li>• After each guess, tiles will change color:</li>
+  </ul>
+</div>
+
+
 
           <div className="space-y-3">
             <div className="flex items-center gap-3">
@@ -334,7 +338,7 @@ const WordleGame: React.FC = () => {
               </div>
 
               {!gameOver && (
-                <div className="space-y-3 mt-12 w-full max-w-lg p-2 pr-4 pl-4">
+                <div className="space-y-3 mt-8 max-h-[700px]:mt-5 w-full max-w-lg p-2 pr-4 pl-4">
                   {[
                     ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
                     ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
