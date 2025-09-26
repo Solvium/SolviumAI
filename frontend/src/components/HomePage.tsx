@@ -82,12 +82,12 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
 
           {/* Progress bar */}
           <div className="w-[70%] sm:w-[80%] max-w-md mx-auto px-3 sm:px-5">
-  <div className="h-2 sm:h-3 bg-[#B2D9FF] rounded-full overflow-hidden flex items-center">
+          <div className="h-2 sm:h-3 bg-[#B2D9FF] rounded-full overflow-hidden flex items-center">
     <div
       className="h-[70%] sm:h-[80%] ml-1 bg-[#0080FF] rounded-full shadow-lg"
       style={{
         width: "75%",
-        boxShadow: "0 0 15px rgba(34, 211, 238, 0.6)",
+        boxShadow: "0 0 15px rgba(34, 211, 238, 0.6)"
       }}
     />
   </div>

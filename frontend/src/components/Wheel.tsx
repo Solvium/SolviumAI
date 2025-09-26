@@ -1,14 +1,27 @@
 "use client"
 import { useState, useEffect, useCallback } from "react"
-
 import dynamic from "next/dynamic"
 import { CONTRACTID, MEME_TOKEN_ADDRESS } from "./constants/contractId"
 import { Bounce, toast, ToastContainer } from "react-toastify"
 import BuySpin from "./BuySpin"
 import { useMultiLoginContext } from "@/app/contexts/MultiLoginContext"
 import { usePrivateKeyWallet } from "@/app/contexts/PrivateKeyWalletContext"
-import StatusBar3D from "./StatusBar3D"
 import Image from "next/image"
+import { Montserrat } from "next/font/google"
+import { Pixelify_Sans } from "next/font/google";
+
+const pixelify = Pixelify_Sans({
+  subsets: ["latin"],
+  weight: ["400", "700"], // pick weights you need
+  display: "swap",        // prevents layout shift
+});
+
+const montserrat = Montserrat({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+})
+
 const Wheel = dynamic(() => import("react-custom-roulette").then((mod) => mod.Wheel), { ssr: false })
 
 interface ClaimProps {
@@ -200,14 +213,13 @@ export const WheelOfFortune = () => {
               rewardAmount: rewardAmount,
               tokenAddress: MEME_TOKEN_ADDRESS!,
             },
-            gas: "300000000000000", // 300 TGas - should work with optimizations
+            gas: "300000000000000",
             deposit: "0",
           },
         },
       ])
 
       await claimTransaction
-
 
       const executeTransferTx = await signAndSendTransaction(CONTRACTID!, [
         {
@@ -227,7 +239,6 @@ export const WheelOfFortune = () => {
       localStorage.setItem("transaction", JSON.stringify({ claimTransaction, executeTransferTx }))
       onSuccess?.()
       return { claimTransaction, executeTransferTx }
-
     } catch (error: any) {
       console.error("Failed to claim reward:", error.message)
       onError?.(error as Error)
@@ -286,7 +297,6 @@ export const WheelOfFortune = () => {
         rewardAmount: data[prizeNumber].option,
         onSuccess: () => {
           setIsClaimed(true)
-
           localStorage.setItem("lastClaimed", Date.now().toString())
           localStorage.removeItem("unclaimedPrize")
           setIsClaimLoading(false)
@@ -306,119 +316,154 @@ export const WheelOfFortune = () => {
   }
 
   return (
-    <div
-      className="max-h-screen w-full py-2 px-4 pb-24 relative overflow-hidden"
-      style={{
-        backgroundImage: "url('/tropical-adventure-bg.jpg')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-        height: "calc(100vh - 80px)",
-      }}
-    >
-      <div className="absolute inset-0 bg-blue-900/20"></div>
+    <div className="h-[calc(100vh-80px)] w-full relative overflow-hidden">
+      {/* Background with floating dots */}
+      <div className="absolute inset-0">
+        <Image
+          src="/assets/wheel/background-dots.svg"
+          alt="Background dots"
+          fill
+          className="object-cover"
+          priority
+        />
+      </div>
 
-      <div className="relative z-10 max-w-xl mx-auto h-full flex flex-col">
-        {/* <StatusBar3D className="mb-4" /> */}
-
-        <div className="bg-white-600/30 backdrop-blur-sm rounded-3xl p-3 shadow-xl border border-blue-400/20 flex-1 flex flex-col min-h-1">
-          <h2
-            className="text-4xl font-black text-center text-white mb-2 drop-shadow-2xl"
-            style={{ fontFamily: 'Impact, "Arial Black", sans-serif', letterSpacing: "2px" }}
-          >
-            SPIN THE WHEEL
-          </h2>
-          <p
-            className="mb-4 text-xl text-center font-black drop-shadow-2xl text-white"
-            style={{ fontFamily: 'Impact, "Arial Black", sans-serif', letterSpacing: "1px" }}
-          >
-            <span className="text-blue-300">SPINS LEFT: </span>
-            <span className="text-3xl font-black text-yellow-300 drop-shadow-2xl">
-              {new Date(cooldownTime) > new Date(Date.now()) ? user?.dailySpinCount : 2}
-            </span>
-          </p>
-
-          <div className="relative flex justify-center mb-2 flex-1 items-center min-h-0">
-            <div className="relative flex items-center justify-center">
-            <div className="relative w-64 h-64 flex items-center justify-center">
+      <div className="relative z-10 max-w-md mx-auto h-full flex flex-col px-4 py-2">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-0 mt-[10%]">
+  {/* Back button */}
   <Image
-    src="/casino-wheel-3d.png"
-    alt="Casino Wheel"
-    fill
-    className={`object-contain transition-transform duration-[3000ms] ease-out ${
-      mustSpin ? "animate-spin-wheel" : ""
-    }`}
-    style={{
-      transform: mustSpin
-        ? `rotate(${prizeNumber * 40 + 1800}deg)`
-        : "rotate(0deg)",
-    }}
-    priority
+    src="/assets/wheel/back-button.svg"
+    alt="Back"
+    width={40}
+    height={28}
   />
 
-  <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20">
-    <div className="w-0 h-0 border-l-[12px] border-r-[12px] border-b-[20px] border-l-transparent border-r-transparent border-b-yellow-400 drop-shadow-lg"></div>
-    <div className="w-0 h-0 border-l-[8px] border-r-[8px] border-b-[14px] border-l-transparent border-r-transparent border-b-white absolute top-1 left-1/2 transform -translate-x-1/2"></div>
-  </div>
+  {/* Title */}
+  <h1
+    className={`${pixelify.className} text-4xl font-black text-[#BDECFB] tracking-wider mb-0 mt-2`}
+  >
+    LUCKY SPIN
+  </h1>
 
-  <div className="absolute -inset-[50px] bg-gradient-radial from-yellow-400/40 via-orange-400/20 to-transparent blur-2xl animate-pulse pointer-events-none" />
+  {/* Dots menu */}
+  <Image
+    src="/assets/wheel/dots-circle.svg"
+    alt="Menu"
+    width={24}
+    height={24}
+  />
 </div>
 
-            </div>
-          </div>
 
-          <div className="space-y-3">
-            {hasPlayed && new Date(cooldownTime) > new Date(Date.now()) ? (
-              <CountdownTimer targetTime={cooldownTime} />
-            ) : (
-              <button
-  onClick={handleSpinClick}
-  disabled={(hasPlayed && new Date(cooldownTime) > new Date(Date.now())) || mustSpin}
-  className="relative w-full h-20 bg-cover bg-center bg-no-repeat transform transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-yellow-400/50 disabled:opacity-50 disabled:cursor-not-allowed"
-  style={{
-    backgroundImage: "url('/assets/buttons/wooden-button.png')",
-  }}
->
-  {/* Button Text Overlay */}
-  <div className="absolute inset-0 flex items-center justify-center">
-    <span className="text-2xl md:text-3xl font-bold text-amber-900 drop-shadow-lg tracking-wider">
-     SPIN NOW!
-    </span>
-  </div>
+        {/* Title */}
 
-  {/* Subtle glow effect on hover */}
-  <div className="absolute inset-0 bg-yellow-400/0 hover:bg-yellow-400/10 transition-all duration-200 rounded-lg" />
-</button>
-            )}
-
-            {isClaimed && (
-              <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-6 text-center">
-                <div className="text-2xl text-white font-black drop-shadow-lg">🎉 REWARD CLAIMED SUCCESSFULLY! 🎉</div>
-              </div>
-            )}
-
-            {(user?.dailySpinCount ?? 0) <= 0 && new Date(cooldownTime) > new Date(Date.now()) && (
-              <button
-                onClick={() => setBuySpins(true)}
-                className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-lg font-black rounded-2xl
-                         hover:from-purple-700 hover:to-blue-700 transition-all duration-300 transform hover:scale-105
-                         shadow-xl border-2 border-purple-400"
-              >
-                <span className="drop-shadow-lg">💎 BUY SPIN 💎</span>
-              </button>
-            )}
-            {buySpins && <BuySpin setBuySpins={setBuySpins} />}
-          </div>
+        <div className="text-center ">
+          <p className={`${montserrat.className} text-white text-[14.48px] font-normal`}>Spin To Win Coins, Prizes And Boost</p>
         </div>
+        {/* Spinning Wheel */}
+        <div className="relative flex  items-center justify-center  mb-[30%]">
+          <div className="relative z-20">
+            <Image
+              src="/assets/wheel/spin-wheel-new.svg"
+              alt="Spin Wheel"
+              width={383}
+              height={377}
+              className={`transition-transform duration-[3000ms] ease-out ${mustSpin ? "animate-spin-wheel" : ""}`}
+              style={{
+                transform: mustSpin ? `rotate(${prizeNumber * 40 + 1800}deg)` : "rotate(0deg)",
+              }}
+              priority
+            />
+          </div>
+          <div className="absolute -bottom-4 mt-4 -left-12 z-30">
+            <Image
+              src="/assets/wheel/mascot-hello.svg"
+              alt="Mascot"
+              width={165}
+              height={193}
+              className="object-contain w-[165px] h-[193px]"
+            />
+          </div>
+
+          <div className="absolute z-30 -bottom-8 items-center right-50">
+  <div className="text-center space-y-2">
+    {/* Progress bar */}
+    <div className="h-2 sm:h-3 bg-[#B2D9FF] border border-[#FF309B] rounded-full flex items-center">
+      <div
+        className="h-[70%] sm:h-[80%] ml-[2px] bg-[#FF309B] rounded-full shadow-lg"
+        style={{
+          width: "34%",
+          boxShadow: "0 0 15px rgba(34, 211, 238, 0.6)",
+        }}
+      />
+    </div>
+
+    {/* Spins left text */}
+    <p className={`${montserrat.className} text-white text-xs sm:text-[10px] font-normal leading-relaxed`}>
+      <span className="font-bold">
+        {new Date(cooldownTime) > new Date(Date.now())
+          ? user?.dailySpinCount || 0
+          : 1}
+        /3
+      </span>
+      <span className="font-normal text-white/70"> Spins Left For Today</span>
+    </p>
+  </div>
+</div>
+
+        </div>
+
+        {/* Mascot and Spins Left */}
+
+        {/* Spin Button */}
+        <div className="mb-6 flex justify-center">
+  {hasPlayed && new Date(cooldownTime) > new Date(Date.now()) ? (
+    <CountdownTimer targetTime={cooldownTime} />
+  ) : (
+    <button
+      onClick={handleSpinClick}
+      disabled={(hasPlayed && new Date(cooldownTime) > new Date(Date.now())) || mustSpin}
+      className="w-[287px] h-20 flex items-center justify-center text-white font-bold"
+      style={{
+        backgroundImage: "url('/assets/wheel/spin-wheel.svg')",
+        backgroundSize: "contain",
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "center",
+      }}
+    >
+    </button>
+  )}
+</div>
+
+
+        {/* Additional UI elements */}
+        {isClaimed && (
+          <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-4 text-center mb-4">
+            <div className="text-lg text-white font-black">🎉 REWARD CLAIMED! 🎉</div>
+          </div>
+        )}
+
+        {(user?.dailySpinCount ?? 0) <= 0 && new Date(cooldownTime) > new Date(Date.now()) && (
+          <button
+            onClick={() => setBuySpins(true)}
+            className="w-full py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-lg font-black rounded-2xl
+                     hover:from-yellow-600 hover:to-orange-600 transition-all duration-300 transform hover:scale-105
+                     shadow-xl mb-4"
+          >
+            💎 BUY SPIN 💎
+          </button>
+        )}
+
+        {buySpins && <BuySpin setBuySpins={setBuySpins} />}
       </div>
 
       <WinPopup
-  isVisible={Boolean((winner || unclaimed) && !isClaimed)}
-  prize={winner}
-  onClaim={handleClaim}
-  isClaimLoading={isClaimLoading}
-/>
-
+        isVisible={Boolean((winner || unclaimed) && !isClaimed)}
+        prize={winner}
+        onClaim={handleClaim}
+        isClaimLoading={isClaimLoading}
+      />
 
       <ToastContainer
         position="bottom-right"
