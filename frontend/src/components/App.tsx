@@ -54,11 +54,14 @@ export default function App({
   return (
     <QueryClientProvider client={queryClient}>
       <Head>
-        <title>My App</title>
+        <title>Solvium</title>
       </Head>
 
       {/* ✅ Load script AFTER hydration to avoid ESLint warning */}
-      <Script src="https://telegram.org/js/telegram-web-app.js" strategy="afterInteractive" />
+      <Script
+        src="https://telegram.org/js/telegram-web-app.js"
+        strategy="afterInteractive"
+      />
 
       <SimpleWalletProvider>
         <MultiLoginProvider>{children}</MultiLoginProvider>

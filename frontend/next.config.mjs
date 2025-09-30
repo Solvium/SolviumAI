@@ -5,6 +5,32 @@ const nextConfig = {
       ...config.experiments,
       topLevelAwait: true,
     };
+    // Enable importing SVGs as React components via SVGR
+    config.module.rules.push({
+      test: /\.svg$/,
+      issuer: { and: [/[\\/](?=src|app)[^\\/]*(?:$|[\\/])/] },
+      use: [
+        {
+          loader: "@svgr/webpack",
+          options: {
+            ref: true,
+            svgo: true,
+            svgoConfig: {
+              plugins: [
+                { name: "preset-default" },
+                { name: "removeRasterImages", active: false },
+                { name: "removeViewBox", active: false },
+              ],
+            },
+            titleProp: true,
+            replaceAttrValues: {
+              "#000": "currentColor",
+              "#000000": "currentColor",
+            },
+          },
+        },
+      ],
+    });
     // Optimize chunk loading
     config.optimization = {
       ...config.optimization,

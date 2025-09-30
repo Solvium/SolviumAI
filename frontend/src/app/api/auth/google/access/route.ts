@@ -1,54 +1,65 @@
 import { NextRequest, NextResponse } from "next/server";
-import { jwtDecode } from "jwt-decode";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { credential } = body;
+    const { access_token } = body as { access_token?: string };
 
-    if (!credential) {
+    if (!access_token) {
       return NextResponse.json(
-        { error: "Google credential is required" },
+        { error: "Google access_token is required" },
         { status: 400 }
       );
     }
 
-    // Decode the JWT token from Google
-    let decoded: any;
-    try {
-      decoded = jwtDecode(credential);
-    } catch (error) {
-      console.error("Failed to decode Google token:", error);
+    // Fetch Google userinfo using the access token
+    const userinfoRes = await fetch(
+      "https://www.googleapis.com/oauth2/v3/userinfo",
+      {
+        headers: { Authorization: `Bearer ${access_token}` },
+        // Prevent Next from caching
+        cache: "no-store",
+      }
+    );
+
+    if (!userinfoRes.ok) {
+      const err = await userinfoRes.text();
       return NextResponse.json(
-        { error: "Invalid Google token format" },
+        { error: `Failed to fetch Google userinfo: ${err}` },
+        { status: 401 }
+      );
+    }
+
+    const profile = (await userinfoRes.json()) as {
+      sub: string;
+      email?: string;
+      given_name?: string;
+      family_name?: string;
+      picture?: string;
+    };
+
+    if (!profile?.sub) {
+      return NextResponse.json(
+        { error: "Invalid Google userinfo" },
         { status: 400 }
       );
     }
 
-    // Validate the token
-    if (!decoded.email || !decoded.sub) {
-      return NextResponse.json(
-        { error: "Invalid Google token - missing required fields" },
-        { status: 400 }
-      );
-    }
-
-    // Check if user already exists in database
-    let user = await prisma.user.findUnique({
-      where: { email: decoded.email },
-    });
+    // Find or create user
+    let user = profile.email
+      ? await prisma.user.findUnique({ where: { email: profile.email } })
+      : null;
 
     if (!user) {
-      // Create new user in database
       user = await prisma.user.create({
         data: {
-          username: decoded.email.split("@")[0],
-          email: decoded.email,
-          name: `${decoded.given_name || ""} ${
-            decoded.family_name || ""
+          username: (profile.email || `google_${profile.sub}`).split("@")[0],
+          email: profile.email || null,
+          name: `${profile.given_name || ""} ${
+            profile.family_name || ""
           }`.trim(),
-          referredBy: "", // Default empty value
+          referredBy: "",
           level: 1,
           difficulty: 1,
           puzzleCount: 1,
@@ -65,34 +76,29 @@ export async function POST(request: NextRequest) {
           weeklyPoints: 0,
         },
       });
-    } else {
     }
 
-    // Parse wallet data if it exists
-    let walletData = null;
+    let walletData: any = null;
     if (user.wallet) {
       try {
         walletData =
           typeof user.wallet === "string"
             ? JSON.parse(user.wallet)
             : user.wallet;
-      } catch (error) {
-        console.error("Error parsing wallet data:", error);
-      }
+      } catch {}
     }
 
-    // Create complete user data for response
     const userData = {
       id: user.id.toString(),
       username: user.username,
-      email: user.email,
-      telegramId: undefined, // Not available for Google auth
-      googleId: decoded.sub,
-      firstName: decoded.given_name,
-      lastName: decoded.family_name,
-      avatar: decoded.picture,
+      email: user.email || undefined,
+      telegramId: undefined,
+      googleId: profile.sub,
+      firstName: profile.given_name,
+      lastName: profile.family_name,
+      avatar: profile.picture,
       totalPoints: user.totalPoints || 0,
-      multiplier: 1, // Default multiplier
+      multiplier: 1,
       level: user.level || 1,
       difficulty: user.difficulty || 1,
       puzzleCount: user.puzzleCount || 0,
@@ -104,37 +110,29 @@ export async function POST(request: NextRequest) {
       isMining: user.isMining || false,
       isPremium: user.isPremium || false,
       weeklyPoints: user.weeklyPoints || 0,
-      createdAt: new Date(), // Default since not in schema
+      createdAt: new Date(),
       lastLoginAt: new Date(),
       lastSpinClaim: user.lastSpinClaim || undefined,
       lastClaim: user.lastClaim || undefined,
       chatId: user.chatId || undefined,
-      wallet: walletData, // Include parsed wallet data
+      wallet: walletData,
     };
 
-    // Create response with simple cookie (without JWT for now)
-    const response = NextResponse.json({
-      success: true,
-      user: userData,
-    });
-
-    // Set a simple auth cookie (root path for all routes)
-    // In development, do not require Secure to allow cookies over http://localhost
-    // Use SameSite=Lax by default; switch to None only if you truly embed in iframes/webviews over HTTPS
+    const response = NextResponse.json({ success: true, user: userData });
     response.cookies.set("auth_token", userData.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
       path: "/",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+      maxAge: 7 * 24 * 60 * 60,
     });
-
     return response;
   } catch (error) {
-    console.error("Google auth error:", error);
+    console.error("Google access auth error:", error);
     return NextResponse.json(
       { error: "Authentication failed - please try again" },
       { status: 500 }
     );
   }
 }
+
