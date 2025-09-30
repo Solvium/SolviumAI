@@ -12,4 +12,3 @@ export const ProfileIcon: React.FC<ProfileIconProps> = ({
 };
 
 export default ProfileIcon;
-

@@ -5,6 +5,8 @@ import ProfileIcon from "@/components/icons/ProfileIcon";
 import { ContestIcon } from "@/components/icons/ContestIcon";
 import { Montserrat } from "next/font/google";
 import { useNavigation } from "@/app/contexts/NavigationContext";
+import profilepng from "@/app/assets/icons/home/profile.png";
+import Profilebot from "@/app/assets/icons/home/profileBot.svg";
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -17,21 +19,12 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
   return (
     <div className="h-[calc(100vh-75px)] w-full bg-[#040022] flex flex-col">
       {/* Header */}
-      <div className="px-4 py-5 pt-10">
-        <div className="flex items-center justify-between mb-8">
+      <div className="px-4 py-2">
+        <div className="flex items-center justify-between mb-3">
           {/* <button className="text-white text-xs sm:text-sm font-medium">Cancel</button> */}
           <h1 className="text-[#BDECFB] text-center text-sm sm:text-lg w-full font-medium">
             Welcome to Solvium
           </h1>
-          {/* <button className="text-white">
-            <Image
-              src="/assets/header/menu-dots.png"
-              alt="Menu"
-              width={24}
-              height={24}
-              className="w-5 h-5 sm:w-6 sm:h-6"
-            />
-          </button> */}
         </div>
 
         {/* Navigation row */}
@@ -41,7 +34,7 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
             onClick={() => navigate("Tasks")}
             className="flex-1 max-w-[100px] sm:max-w-[120px] hover:scale-105 transition-transform"
           >
-            <TaskIcon className="h-10 sm:h-12 w-full object-contain text-current" />
+            <TaskIcon className="h-10 sm:h-12 w-full object-contain text-white" />
           </button>
 
           {/* Profile */}
@@ -49,7 +42,13 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
             onClick={() => navigate("Profile")}
             className="flex flex-1 items-center justify-center gap-1 sm:gap-2 max-w-[120px] sm:max-w-[140px] hover:scale-105 transition-transform"
           >
-            <ProfileIcon className="w-10 h-10 sm:w-12 sm:h-12 text-current" />
+            <img
+              src={profilepng.src}
+              alt="Profile Bot"
+              className="w-12 h-12 object-contain object-cover"
+            />
+            {/* <ProfileIcon className="w-12 h-12 text-white" />
+            <Profilebot className="w-12 h-12 text-white" /> */}
           </button>
 
           {/* Contest */}
@@ -57,13 +56,13 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
             onClick={() => navigate("Contest")}
             className="flex-1 max-w-[100px] sm:max-w-[120px] hover:scale-105 transition-transform"
           >
-            <ContestIcon className="h-10 sm:h-12 w-full object-contain text-current" />
+            <ContestIcon className="h-10 sm:h-12 w-full object-contain text-white" />
           </button>
         </div>
       </div>
 
       {/* Body that grows/shrinks */}
-      <div className="flex flex-col justify-center px-2 pt-10 space-y-4">
+      <div className="flex flex-col justify-center px-2 pt-4 space-y-4 pb-[130px]">
         <div className="max-w-2xl mx-auto text-center space-y-4">
           {/* Motivational text */}
           <div className="space-y-0 pb-5">

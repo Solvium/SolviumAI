@@ -55,6 +55,7 @@ export interface AuthContextType extends AuthState {
   // Core auth methods
   loginWithTelegram: (initData: any) => Promise<User>;
   loginWithGoogle: (credential: string) => Promise<User>;
+  loginWithGoogleAccessToken?: (accessToken: string) => Promise<User>;
   logout: () => Promise<void>;
 
   // Extensibility methods
@@ -258,6 +259,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     []
   );
 
+  const loginWithGoogleAccessToken = useCallback(
+    async (accessToken: string): Promise<User> => {
+      setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+      try {
+        const response = await axios.post("/api/auth/google/access", {
+          access_token: accessToken,
+        });
+
+        const user = response.data.user;
+        setState((prev) => ({
+          ...prev,
+          user,
+          isAuthenticated: true,
+          isLoading: false,
+        }));
+
+        return user;
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.error ||
+          error.response?.data?.message ||
+          "Google login failed";
+        setState((prev) => ({
+          ...prev,
+          error: errorMessage,
+          isLoading: false,
+        }));
+        throw new Error(errorMessage);
+      }
+    },
+    []
+  );
+
   const loginWithProvider = useCallback(
     async (provider: AuthProvider, data: any): Promise<User> => {
       const providerConfig = providers[provider];
@@ -333,6 +368,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     ...state,
     loginWithTelegram,
     loginWithGoogle,
+    loginWithGoogleAccessToken,
     logout,
     registerAuthProvider,
     loginWithProvider,

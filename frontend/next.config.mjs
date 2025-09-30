@@ -18,6 +18,7 @@ const nextConfig = {
             svgoConfig: {
               plugins: [
                 { name: "preset-default" },
+                { name: "removeRasterImages", active: false },
                 { name: "removeViewBox", active: false },
               ],
             },

@@ -12,7 +12,7 @@ import { useNavigation } from "@/app/contexts/NavigationContext";
 
 const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
   const { goBack } = useNavigation();
-  const { user: userDetails } = useAuth();
+  const { user: userDetails, logout } = useAuth();
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-[#1a237e] via-[#283593] to-[#1a237e] relative overflow-hidden">
       {/* Header */}
@@ -25,12 +25,12 @@ const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
           <IoChevronBackSharp className="w-5 h-5 text-current" aria-hidden />
           <span className="text-lg font-medium">Back</span>
         </button>
-        <button className="text-white">
-          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="5" cy="12" r="2" />
-            <circle cx="12" cy="12" r="2" />
-            <circle cx="19" cy="12" r="2" />
-          </svg>
+        <button
+          onClick={() => logout()}
+          className="px-4 py-2 rounded-full bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors"
+          title="Logout"
+        >
+          Logout
         </button>
       </div>
 

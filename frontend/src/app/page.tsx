@@ -15,6 +15,11 @@ import {
   useNavigation,
 } from "./contexts/NavigationContext";
 import Image from "next/image";
+import HomeIcon from "@/components/icons/HomeIcon";
+import GameIcon from "@/components/icons/GameIcon";
+import RankIcon from "@/components/icons/RankIcon";
+import WalletIcon from "@/components/icons/WalletIcon";
+import SpinIcon from "@/components/icons/SpinIcon";
 import TasksPage from "@/components/TasksPage";
 
 // Force dynamic rendering since this page uses client-side features
@@ -87,7 +92,7 @@ function HomeShell() {
               {currentPage === "Wallet" && <WalletPage />}
             </div>
 
-            <div className="fixed bottom-0 left-0 right-0">
+            <div className="fixed bottom-0 left-0 right-0 z-50">
               <div className="max-w-[430px] mx-auto px-4 pb-4">
                 <div className="bg-gradient-to-r from-purple-900 to-indigo-900 rounded-3xl shadow-2xl border border-purple-700/50">
                   <div className="flex justify-around items-center px-4 py-3">
@@ -99,17 +104,27 @@ function HomeShell() {
                           : "hover:bg-white/10 hover:scale-105"
                       }`}
                     >
-                      <Image
-                        src={
+                      <HomeIcon
+                        className={`mb-1 transition-all duration-300 ${
                           currentPage === "Home"
-                            ? "/assets/navigation/home-active.svg"
-                            : "/assets/navigation/home-inactive.svg"
-                        }
-                        alt="Home"
-                        width={28}
-                        height={28}
-                        className="w-auto h-12 mb-1 transition-all duration-300"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                        isActive={currentPage === "Home"}
+                        activeColor="#FF309B"
+                        color="currentColor"
+                        width={18}
+                        height={18}
                       />
+                      <span
+                        className={`text-xs font-semibold transition-all duration-300 ${
+                          currentPage === "Home"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                      >
+                        Home
+                      </span>
                     </button>
 
                     <button
@@ -120,22 +135,23 @@ function HomeShell() {
                           : "hover:bg-white/10 hover:scale-105"
                       }`}
                     >
-                      <Image
-                        src={
+                      <SpinIcon
+                        className={`mb-1 transition-all duration-300 ${
                           currentPage === "Wheel"
-                            ? "/assets/navigation/spin-active.png"
-                            : "/assets/navigation/spin-inactive.png"
-                        }
-                        alt="Spin"
-                        width={28}
-                        height={28}
-                        className="w-7 h-7 mb-1 transition-all duration-300"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                        isActive={currentPage === "Wheel"}
+                        activeColor="#FF309B"
+                        color="currentColor"
+                        width={18}
+                        height={18}
                       />
                       <span
                         className={`text-xs font-semibold transition-all duration-300 ${
                           currentPage === "Wheel"
-                            ? "text-pink-400"
-                            : "text-white/70"
+                            ? "text-white"
+                            : "text-white/50"
                         }`}
                       >
                         Spin
@@ -150,22 +166,23 @@ function HomeShell() {
                           : "hover:bg-white/10 hover:scale-105"
                       }`}
                     >
-                      <Image
-                        src={
+                      <GameIcon
+                        className={`mb-1 transition-all duration-300 ${
                           currentPage === "Game"
-                            ? "/assets/navigation/game-active.png"
-                            : "/assets/navigation/game-inactive.png"
-                        }
-                        alt="Game"
-                        width={28}
-                        height={28}
-                        className="w-7 h-7 mb-1 transition-all duration-300"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                        isActive={currentPage === "Game"}
+                        activeColor="#FF309B"
+                        color="currentColor"
+                        width={18}
+                        height={18}
                       />
                       <span
                         className={`text-xs font-semibold transition-all duration-300 ${
                           currentPage === "Game"
-                            ? "text-pink-400"
-                            : "text-white/70"
+                            ? "text-white"
+                            : "text-white/50"
                         }`}
                       >
                         Game
@@ -180,22 +197,23 @@ function HomeShell() {
                           : "hover:bg-white/10 hover:scale-105"
                       }`}
                     >
-                      <Image
-                        src={
+                      <RankIcon
+                        className={`mb-1 transition-all duration-300 ${
                           currentPage === "Leaderboard"
-                            ? "/assets/navigation/rank-active.png"
-                            : "/assets/navigation/rank-inactive.png"
-                        }
-                        alt="Rank"
-                        width={28}
-                        height={28}
-                        className="w-7 h-7 mb-1 transition-all duration-300"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                        isActive={currentPage === "Leaderboard"}
+                        activeColor="#FF309B"
+                        color="currentColor"
+                        width={18}
+                        height={18}
                       />
                       <span
                         className={`text-xs font-semibold transition-all duration-300 ${
                           currentPage === "Leaderboard"
-                            ? "text-pink-400"
-                            : "text-white/70"
+                            ? "text-white"
+                            : "text-white/50"
                         }`}
                       >
                         Rank
@@ -210,18 +228,23 @@ function HomeShell() {
                           : "hover:bg-white/10 hover:scale-105"
                       }`}
                     >
-                      <Image
-                        src="/assets/navigation/wallet-active.png"
-                        alt="Wallet"
-                        width={28}
-                        height={28}
-                        className="w-7 h-7 mb-1 transition-all duration-300"
+                      <WalletIcon
+                        className={`mb-1 transition-all duration-300 ${
+                          currentPage === "Wallet"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                        isActive={currentPage === "Wallet"}
+                        activeColor="#FF309B"
+                        color="currentColor"
+                        width={18}
+                        height={18}
                       />
                       <span
                         className={`text-xs font-semibold transition-all duration-300 ${
                           currentPage === "Wallet"
-                            ? "text-pink-400"
-                            : "text-white/70"
+                            ? "text-white"
+                            : "text-white/50"
                         }`}
                       >
                         Wallet
