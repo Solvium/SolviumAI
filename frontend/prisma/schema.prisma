@@ -8,31 +8,39 @@ datasource db {
 }
 
 model User {
-  id             Int           @id @default(autoincrement())
-  username       String        @unique
-  name           String?
-  referredBy     String?
-  referralCount  Int           @default(0)
-  chatId         String?
-  claimCount     Int           @default(0)
-  totalPoints    Int           @default(0)
-  isOfficial     Boolean       @default(false)
-  isPremium      Boolean       @default(false)
-  lastClaim      DateTime?
-  weeklyPoints   Int           @default(0)
-  isMining       Boolean       @default(false)
-  difficulty     Int           @default(1)
-  level          Int           @default(1)
-  puzzleCount    Int           @default(0)
-  spinCount      Int           @default(0)
-  email          String?       @unique
-  dailySpinCount Int           @default(0)
-  lastSpinClaim  DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @default(now()) @updatedAt
-  wallet         Json?
-  userTasks      UserTask[]
-  weeklyScores   WeeklyScore[]
+  id                    Int           @id @default(autoincrement())
+  username              String        @unique
+  name                  String?
+  referredBy            String?
+  referralCount         Int           @default(0)
+  chatId                String?
+  claimCount            Int           @default(0)
+  totalPoints           Int           @default(0)
+  isOfficial            Boolean       @default(false)
+  isPremium             Boolean       @default(false)
+  lastClaim             DateTime?
+  weeklyPoints          Int           @default(0)
+  isMining              Boolean       @default(false)
+  difficulty            Int           @default(1)
+  level                 Int           @default(1)
+  puzzleCount           Int           @default(0)
+  spinCount             Int           @default(0)
+  email                 String?       @unique
+  dailySpinCount        Int           @default(0)
+  lastSpinClaim         DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @default(now()) @updatedAt
+  wallet                Json?
+  // New fields for enhanced profile system
+  avatar_url            String?
+  experience_points     Int           @default(0)
+  contests_participated Int           @default(0)
+  tasks_completed       Int           @default(0)
+  last_level_up         DateTime?
+  // Relations
+  userTasks             UserTask[]
+  weeklyScores          WeeklyScore[]
+  activities            UserActivity[]
 }
 
 model Task {
@@ -86,4 +94,25 @@ model WalletCache {
   expiresAt           DateTime
 
   @@map("wallet_cache")
+}
+
+model UserActivity {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  activity_type String
+  points_earned Int      @default(0)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_activities")
+}
+
+model LevelConfig {
+  id             Int    @id @default(autoincrement())
+  level          Int    @unique
+  points_required Int
+  rewards        Json?
+
+  @@map("level_config")
 }

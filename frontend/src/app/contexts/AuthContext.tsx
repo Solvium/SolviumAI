@@ -23,6 +23,7 @@ export interface User {
   firstName?: string;
   lastName?: string;
   avatar?: string;
+  avatar_url?: string; // New field for profile avatar
   totalPoints: number;
   multiplier: number;
   level: number;
@@ -42,6 +43,26 @@ export interface User {
   lastClaim?: Date;
   chatId?: string;
   wallet?: any; // Changed from string to any to handle parsed wallet data
+  // New fields for enhanced profile system
+  experience_points?: number;
+  contests_participated?: number;
+  tasks_completed?: number;
+  level_progress?: {
+    current_level: number;
+    next_level_points: number;
+    progress_percentage: number;
+    points_to_next: number;
+    level_title: string;
+  };
+  recent_activities?: UserActivity[];
+}
+
+export interface UserActivity {
+  id: string;
+  activity_type: string;
+  points_earned: number;
+  metadata: any;
+  createdAt: string;
 }
 
 export interface AuthState {
@@ -69,6 +90,15 @@ export interface AuthContextType extends AuthState {
   refreshUser: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   refreshToken: () => Promise<void>;
+
+  // New profile enhancement methods
+  fetchUserProfile: () => Promise<void>;
+  updateUserProfile: (updates: Partial<User>) => Promise<void>;
+  logActivity: (activity: {
+    activity_type: string;
+    points_earned: number;
+    metadata?: any;
+  }) => Promise<void>;
 }
 
 export interface AuthProviderConfig {
@@ -364,6 +394,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  // New profile enhancement methods
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      const response = await axios.get("/api/user/profile");
+      const userData = response.data.user;
+
+      setState((prev) => ({
+        ...prev,
+        user: userData, // Update existing user state
+      }));
+    } catch (error) {
+      console.error("Failed to fetch user profile:", error);
+    }
+  }, []);
+
+  const updateUserProfile = useCallback(async (updates: Partial<User>) => {
+    try {
+      const response = await axios.patch("/api/user/profile", updates);
+      const userData = response.data.user;
+
+      setState((prev) => ({
+        ...prev,
+        user: userData, // Update existing user state
+      }));
+    } catch (error) {
+      console.error("Failed to update user profile:", error);
+      throw error;
+    }
+  }, []);
+
+  const logActivity = useCallback(
+    async (activity: {
+      activity_type: string;
+      points_earned: number;
+      metadata?: any;
+    }) => {
+      try {
+        const response = await axios.post("/api/user/activities", activity);
+
+        // Refresh user data to show updated stats
+        await fetchUserProfile();
+
+        return response.data;
+      } catch (error) {
+        console.error("Failed to log activity:", error);
+        throw error;
+      }
+    },
+    [fetchUserProfile]
+  );
+
   const value: AuthContextType = {
     ...state,
     loginWithTelegram,
@@ -375,6 +456,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     refreshUser,
     updateUser,
     refreshToken,
+    fetchUserProfile,
+    updateUserProfile,
+    logActivity,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

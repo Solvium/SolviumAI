@@ -1,33 +1,38 @@
-"use client"
-import { useState, useEffect, useCallback } from "react"
-import dynamic from "next/dynamic"
-import { CONTRACTID, MEME_TOKEN_ADDRESS } from "./constants/contractId"
-import { Bounce, toast, ToastContainer } from "react-toastify"
-import BuySpin from "./BuySpin"
-import { useMultiLoginContext } from "@/app/contexts/MultiLoginContext"
-import { usePrivateKeyWallet } from "@/app/contexts/PrivateKeyWalletContext"
-import Image from "next/image"
-import { Montserrat } from "next/font/google"
+"use client";
+import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
+import { CONTRACTID, MEME_TOKEN_ADDRESS } from "./constants/contractId";
+import { Bounce, toast, ToastContainer } from "react-toastify";
+import BuySpin from "./BuySpin";
+import { useMultiLoginContext } from "@/app/contexts/MultiLoginContext";
+import { usePrivateKeyWallet } from "@/app/contexts/PrivateKeyWalletContext";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { ACTIVITY_POINTS } from "@/lib/services/pointsService";
+import Image from "next/image";
+import { Montserrat } from "next/font/google";
 import { Pixelify_Sans } from "next/font/google";
 
 const pixelify = Pixelify_Sans({
   subsets: ["latin"],
   weight: ["400", "700"], // pick weights you need
-  display: "swap",        // prevents layout shift
+  display: "swap", // prevents layout shift
 });
 
 const montserrat = Montserrat({
   subsets: ["latin"],
   weight: ["400", "700"],
   display: "swap",
-})
+});
 
-const Wheel = dynamic(() => import("react-custom-roulette").then((mod) => mod.Wheel), { ssr: false })
+const Wheel = dynamic(
+  () => import("react-custom-roulette").then((mod) => mod.Wheel),
+  { ssr: false }
+);
 
 interface ClaimProps {
-  rewardAmount: string
-  onSuccess?: () => void
-  onError?: (error: Error) => void
+  rewardAmount: string;
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
 }
 
 const WinPopup = ({
@@ -36,12 +41,12 @@ const WinPopup = ({
   onClaim,
   isClaimLoading,
 }: {
-  isVisible: boolean
-  prize: string
-  onClaim: () => void
-  isClaimLoading: boolean
+  isVisible: boolean;
+  prize: string;
+  onClaim: () => void;
+  isClaimLoading: boolean;
 }) => {
-  if (!isVisible) return null
+  if (!isVisible) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -53,7 +58,9 @@ const WinPopup = ({
 
         <div className="text-center">
           <div className="text-6xl mb-4 animate-pulse">🎉</div>
-          <h2 className="text-3xl font-black text-white mb-2 drop-shadow-lg">WINNER!</h2>
+          <h2 className="text-3xl font-black text-white mb-2 drop-shadow-lg">
+            WINNER!
+          </h2>
           <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-transparent bg-clip-text text-4xl font-black mb-6 drop-shadow-lg">
             {prize} TOKENS
           </div>
@@ -76,25 +83,25 @@ const WinPopup = ({
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
 const CountdownTimer = ({ targetTime }: { targetTime: Date }) => {
-  const [timeLeft, setTimeLeft] = useState<number>(0)
+  const [timeLeft, setTimeLeft] = useState<number>(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const now = new Date(Date.now())
-      const remaining = targetTime.getTime() - now.getTime()
-      setTimeLeft(Math.max(0, remaining))
-    }, 1000)
+      const now = new Date(Date.now());
+      const remaining = targetTime.getTime() - now.getTime();
+      setTimeLeft(Math.max(0, remaining));
+    }, 1000);
 
-    return () => clearInterval(interval)
-  }, [targetTime])
+    return () => clearInterval(interval);
+  }, [targetTime]);
 
-  const hours = Math.floor(timeLeft / (1000 * 60 * 60))
-  const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60))
-  const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000)
+  const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+  const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
 
   return (
     <div className="text-white text-center bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-4">
@@ -103,105 +110,139 @@ const CountdownTimer = ({ targetTime }: { targetTime: Date }) => {
         {hours}h {minutes}m {seconds}s
       </div>
     </div>
-  )
-}
+  );
+};
 
 export const WheelOfFortune = () => {
-  const { userData: user, claimPoints } = useMultiLoginContext()
+  const { userData: user, claimPoints } = useMultiLoginContext();
+  const { logActivity } = useAuth();
   const {
     isConnected: nearConnected,
     accountId: nearAddress,
     signAndSendTransaction,
     checkTokenRegistration,
     registerToken,
-  } = usePrivateKeyWallet()
+  } = usePrivateKeyWallet();
 
-  const [mustSpin, setMustSpin] = useState(false)
-  const [prizeNumber, setPrizeNumber] = useState(0)
-  const [winner, setWinner] = useState("")
-  const [hasPlayed, setHasPlayed] = useState(false)
-  const [isClaimed, setIsClaimed] = useState(false)
+  const [mustSpin, setMustSpin] = useState(false);
+  const [prizeNumber, setPrizeNumber] = useState(0);
+  const [winner, setWinner] = useState("");
+  const [hasPlayed, setHasPlayed] = useState(false);
+  const [isClaimed, setIsClaimed] = useState(false);
   const [unclaimed, setUnclaimed] = useState<{
-    winner: string
-    prizeNumber: number
-  } | null>(null)
+    winner: string;
+    prizeNumber: number;
+  } | null>(null);
 
-  const [spinningSound, setSpinningSound] = useState(new Audio())
-  const [isClaimLoading, setIsClaimLoading] = useState(false)
-  const [canClaim, setCanClaim] = useState(false)
-  const [buySpins, setBuySpins] = useState(false)
+  const [spinningSound, setSpinningSound] = useState(new Audio());
+  const [isClaimLoading, setIsClaimLoading] = useState(false);
+  const [canClaim, setCanClaim] = useState(false);
+  const [buySpins, setBuySpins] = useState(false);
 
-  const [lastPlayed, setLastPlayed] = useState<number | null>(null)
-  const [cooldownTime, setCooldownTime] = useState<Date>(new Date())
+  const [lastPlayed, setLastPlayed] = useState<number | null>(null);
+  const [cooldownTime, setCooldownTime] = useState<Date>(new Date());
 
   const data = [
-    { option: "1", style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" } },
-    { option: "25", style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" } },
-    { option: "50", style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" } },
-    { option: "100", style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" } },
-    { option: "250", style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" } },
-    { option: "500", style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" } },
-    { option: "1000", style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" } },
-    { option: "2000", style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" } },
-    { option: "5000", style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" } },
-  ]
+    {
+      option: "1",
+      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
+    },
+    {
+      option: "25",
+      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
+    },
+    {
+      option: "50",
+      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
+    },
+    {
+      option: "100",
+      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
+    },
+    {
+      option: "250",
+      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
+    },
+    {
+      option: "500",
+      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
+    },
+    {
+      option: "1000",
+      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
+    },
+    {
+      option: "2000",
+      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
+    },
+    {
+      option: "5000",
+      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
+    },
+  ];
 
   const checkTokenRegistrationCallback = useCallback(async () => {
-    if (!nearAddress) return null
+    if (!nearAddress) return null;
 
     try {
-      const result = await checkTokenRegistration(MEME_TOKEN_ADDRESS)
-      return result
+      const result = await checkTokenRegistration(MEME_TOKEN_ADDRESS);
+      return result;
     } catch (error) {
-      console.error("Token registration check failed:", error)
-      return null
+      console.error("Token registration check failed:", error);
+      return null;
     }
-  }, [nearAddress, checkTokenRegistration])
+  }, [nearAddress, checkTokenRegistration]);
 
   const registerTokenCallback = async (tokenId: string) => {
-    if (!nearAddress) return
+    if (!nearAddress) return;
 
     try {
-      return await registerToken(tokenId)
+      return await registerToken(tokenId);
     } catch (error) {
-      console.error("Token registration failed:", error)
-      throw error
+      console.error("Token registration failed:", error);
+      throw error;
     }
-  }
+  };
 
   useEffect(() => {
-    setSpinningSound(new Audio(location.origin + "/spin.mp3"))
-    setLastPlayed(Number(user?.lastSpinClaim))
-    const now = new Date(Date.now())
-    const cooldownEnd = new Date(new Date(user?.lastSpinClaim ?? 0).getTime() + 24 * 60 * 60 * 1000)
+    setSpinningSound(new Audio(location.origin + "/spin.mp3"));
+    setLastPlayed(Number(user?.lastSpinClaim));
+    const now = new Date(Date.now());
+    const cooldownEnd = new Date(
+      new Date(user?.lastSpinClaim ?? 0).getTime() + 24 * 60 * 60 * 1000
+    );
     if (now < cooldownEnd) {
-      setCooldownTime(cooldownEnd)
+      setCooldownTime(cooldownEnd);
     }
-    if ((user?.dailySpinCount ?? 0) <= 0) setHasPlayed(true)
-    else setHasPlayed(false)
+    if ((user?.dailySpinCount ?? 0) <= 0) setHasPlayed(true);
+    else setHasPlayed(false);
 
-    const unclaimedPrize = localStorage.getItem("unclaimedPrize")
-    const lastClaimedTime = localStorage.getItem("lastClaimed")
+    const unclaimedPrize = localStorage.getItem("unclaimedPrize");
+    const lastClaimedTime = localStorage.getItem("lastClaimed");
     if (unclaimedPrize && !lastClaimedTime) {
-      const prize = JSON.parse(unclaimedPrize)
-      setWinner(prize.winner)
-      setPrizeNumber(prize.prizeNumber)
-      setUnclaimed(prize)
-      setIsClaimed(false)
+      const prize = JSON.parse(unclaimedPrize);
+      setWinner(prize.winner);
+      setPrizeNumber(prize.prizeNumber);
+      setUnclaimed(prize);
+      setIsClaimed(false);
     }
-  }, [user])
+  }, [user]);
 
-  const handleClaimRewardImproved = async ({ rewardAmount, onSuccess, onError }: ClaimProps) => {
+  const handleClaimRewardImproved = async ({
+    rewardAmount,
+    onSuccess,
+    onError,
+  }: ClaimProps) => {
     if (!nearAddress || !nearConnected) {
-      const error = new Error("Wallet not connected")
-      onError?.(error)
-      return
+      const error = new Error("Wallet not connected");
+      onError?.(error);
+      return;
     }
 
     try {
-      const isRegistered = await checkTokenRegistrationCallback()
+      const isRegistered = await checkTokenRegistrationCallback();
       if (!isRegistered) {
-        await registerTokenCallback(MEME_TOKEN_ADDRESS)
+        await registerTokenCallback(MEME_TOKEN_ADDRESS);
       }
 
       const claimTransaction = await signAndSendTransaction(CONTRACTID!, [
@@ -217,9 +258,9 @@ export const WheelOfFortune = () => {
             deposit: "0",
           },
         },
-      ])
+      ]);
 
-      await claimTransaction
+      await claimTransaction;
 
       const executeTransferTx = await signAndSendTransaction(CONTRACTID!, [
         {
@@ -231,89 +272,109 @@ export const WheelOfFortune = () => {
             deposit: "0",
           },
         },
-      ])
+      ]);
 
-      await executeTransferTx
+      await executeTransferTx;
 
-      localStorage.setItem("lastClaimed", Date.now().toString())
-      localStorage.setItem("transaction", JSON.stringify({ claimTransaction, executeTransferTx }))
-      onSuccess?.()
-      return { claimTransaction, executeTransferTx }
+      localStorage.setItem("lastClaimed", Date.now().toString());
+      localStorage.setItem(
+        "transaction",
+        JSON.stringify({ claimTransaction, executeTransferTx })
+      );
+      onSuccess?.();
+      return { claimTransaction, executeTransferTx };
     } catch (error: any) {
-      console.error("Failed to claim reward:", error.message)
-      onError?.(error as Error)
-      throw error
+      console.error("Failed to claim reward:", error.message);
+      onError?.(error as Error);
+      throw error;
     }
-  }
+  };
 
-  const handleSpinClick = () => {
-    const now = Date.now()
+  const handleSpinClick = async () => {
+    const now = Date.now();
 
     if (!nearConnected) {
-      toast.error("Please connect your NEAR wallet to continue!")
-      return
+      toast.error("Please connect your NEAR wallet to continue!");
+      return;
     }
 
-    claimPoints("spin claim", setCanClaim)
-    const newPrizeNumber = Math.floor(Math.random() * data.length)
-    setPrizeNumber(newPrizeNumber)
-    setMustSpin(true)
-    spinningSound.play()
-    setLastPlayed(now)
-    setCooldownTime(new Date(now + 24 * 60 * 60 * 1000))
-    localStorage.setItem("lastPlayedTime", now.toString())
-  }
+    // Log wheel spin activity
+    try {
+      await logActivity({
+        activity_type: "SPIN_WHEEL",
+        points_earned: ACTIVITY_POINTS.SPIN_WHEEL,
+        metadata: {
+          game_type: "wheel_spin",
+          timestamp: now,
+          wallet_connected: nearConnected,
+        },
+      });
+    } catch (error) {
+      console.error("Failed to log wheel spin activity:", error);
+    }
+
+    claimPoints("spin claim", setCanClaim);
+    const newPrizeNumber = Math.floor(Math.random() * data.length);
+    setPrizeNumber(newPrizeNumber);
+    setMustSpin(true);
+    spinningSound.play();
+    setLastPlayed(now);
+    setCooldownTime(new Date(now + 24 * 60 * 60 * 1000));
+    localStorage.setItem("lastPlayedTime", now.toString());
+  };
 
   const parseErrorMessage = (error: any): string => {
     try {
       if (typeof error === "string") {
-        return error
+        return error;
       }
 
       if (error.message) {
         try {
-          const parsed = JSON.parse(error.message)
+          const parsed = JSON.parse(error.message);
           if (parsed.kind?.kind?.FunctionCallError?.ExecutionError) {
-            const fullError = parsed.kind.kind.FunctionCallError.ExecutionError
-            const match = fullError.match(/Smart contract panicked: (.*?)(?:\n|$)/)
-            return match ? match[1] : fullError
+            const fullError = parsed.kind.kind.FunctionCallError.ExecutionError;
+            const match = fullError.match(
+              /Smart contract panicked: (.*?)(?:\n|$)/
+            );
+            return match ? match[1] : fullError;
           }
         } catch {
-          return error.message
+          return error.message;
         }
       }
 
-      return "Unknown error occurred"
+      return "Unknown error occurred";
     } catch {
-      return "Failed to parse error message"
+      return "Failed to parse error message";
     }
-  }
+  };
 
   const handleClaim = async () => {
-    if (!winner) return
-    setIsClaimLoading(true)
+    if (!winner) return;
+    setIsClaimLoading(true);
     try {
       await handleClaimRewardImproved({
         rewardAmount: data[prizeNumber].option,
         onSuccess: () => {
-          setIsClaimed(true)
-          localStorage.setItem("lastClaimed", Date.now().toString())
-          localStorage.removeItem("unclaimedPrize")
-          setIsClaimLoading(false)
-          setUnclaimed(null)
+          setIsClaimed(true);
+          localStorage.setItem("lastClaimed", Date.now().toString());
+          localStorage.removeItem("unclaimedPrize");
+          setIsClaimLoading(false);
+          setUnclaimed(null);
         },
         onError: (error) => {
-          console.error("Claim failed:", error)
-          setIsClaimLoading(false)
-          toast.error(`Failed to claim: ${parseErrorMessage(error)}`)
-          alert(`Failed to claim:${parseErrorMessage(error)} `)
+          console.error("Claim failed:", error);
+          setIsClaimLoading(false);
+          toast.error(`Failed to claim: ${parseErrorMessage(error)}`);
+          alert(`Failed to claim:${parseErrorMessage(error)} `);
         },
-      })
+      });
     } catch (error) {
-      setIsClaimLoading(false)
-      console.error("Claim failed:", error)
+      setIsClaimLoading(false);
+      console.error("Claim failed:", error);
     }
-  }
+  };
 
   return (
     <div className="h-[calc(100vh-80px)] w-full relative overflow-hidden">
@@ -331,35 +392,38 @@ export const WheelOfFortune = () => {
       <div className="relative z-10 max-w-md mx-auto h-full flex flex-col px-4 py-2">
         {/* Header */}
         <div className="flex items-center justify-between mb-0 mt-[10%]">
-  {/* Back button */}
-  <Image
-    src="/assets/wheel/back-button.svg"
-    alt="Back"
-    width={40}
-    height={28}
-  />
+          {/* Back button */}
+          <Image
+            src="/assets/wheel/back-button.svg"
+            alt="Back"
+            width={40}
+            height={28}
+          />
 
-  {/* Title */}
-  <h1
-    className={`${pixelify.className} text-4xl font-black text-[#BDECFB] tracking-wider mb-0 mt-2`}
-  >
-    LUCKY SPIN
-  </h1>
+          {/* Title */}
+          <h1
+            className={`${pixelify.className} text-4xl font-black text-[#BDECFB] tracking-wider mb-0 mt-2`}
+          >
+            LUCKY SPIN
+          </h1>
 
-  {/* Dots menu */}
-  <Image
-    src="/assets/wheel/dots-circle.svg"
-    alt="Menu"
-    width={24}
-    height={24}
-  />
-</div>
-
+          {/* Dots menu */}
+          <Image
+            src="/assets/wheel/dots-circle.svg"
+            alt="Menu"
+            width={24}
+            height={24}
+          />
+        </div>
 
         {/* Title */}
 
         <div className="text-center ">
-          <p className={`${montserrat.className} text-white text-[14.48px] font-normal`}>Spin To Win Coins, Prizes And Boost</p>
+          <p
+            className={`${montserrat.className} text-white text-[14.48px] font-normal`}
+          >
+            Spin To Win Coins, Prizes And Boost
+          </p>
         </div>
         {/* Spinning Wheel */}
         <div className="relative flex  items-center justify-center  mb-[30%]">
@@ -369,9 +433,13 @@ export const WheelOfFortune = () => {
               alt="Spin Wheel"
               width={383}
               height={377}
-              className={`transition-transform duration-[3000ms] ease-out ${mustSpin ? "animate-spin-wheel" : ""}`}
+              className={`transition-transform duration-[3000ms] ease-out ${
+                mustSpin ? "animate-spin-wheel" : ""
+              }`}
               style={{
-                transform: mustSpin ? `rotate(${prizeNumber * 40 + 1800}deg)` : "rotate(0deg)",
+                transform: mustSpin
+                  ? `rotate(${prizeNumber * 40 + 1800}deg)`
+                  : "rotate(0deg)",
               }}
               priority
             />
@@ -387,73 +455,81 @@ export const WheelOfFortune = () => {
           </div>
 
           <div className="absolute z-30 -bottom-8 items-center right-50">
-  <div className="text-center space-y-2">
-    {/* Progress bar */}
-    <div className="h-2 sm:h-3 bg-[#B2D9FF] border border-[#FF309B] rounded-full flex items-center">
-      <div
-        className="h-[70%] sm:h-[80%] ml-[2px] bg-[#FF309B] rounded-full shadow-lg"
-        style={{
-          width: "34%",
-          boxShadow: "0 0 15px rgba(34, 211, 238, 0.6)",
-        }}
-      />
-    </div>
+            <div className="text-center space-y-2">
+              {/* Progress bar */}
+              <div className="h-2 sm:h-3 bg-[#B2D9FF] border border-[#FF309B] rounded-full flex items-center">
+                <div
+                  className="h-[70%] sm:h-[80%] ml-[2px] bg-[#FF309B] rounded-full shadow-lg"
+                  style={{
+                    width: "34%",
+                    boxShadow: "0 0 15px rgba(34, 211, 238, 0.6)",
+                  }}
+                />
+              </div>
 
-    {/* Spins left text */}
-    <p className={`${montserrat.className} text-white text-xs sm:text-[10px] font-normal leading-relaxed`}>
-      <span className="font-bold">
-        {new Date(cooldownTime) > new Date(Date.now())
-          ? user?.dailySpinCount || 0
-          : 1}
-        /3
-      </span>
-      <span className="font-normal text-white/70"> Spins Left For Today</span>
-    </p>
-  </div>
-</div>
-
+              {/* Spins left text */}
+              <p
+                className={`${montserrat.className} text-white text-xs sm:text-[10px] font-normal leading-relaxed`}
+              >
+                <span className="font-bold">
+                  {new Date(cooldownTime) > new Date(Date.now())
+                    ? user?.dailySpinCount || 0
+                    : 1}
+                  /3
+                </span>
+                <span className="font-normal text-white/70">
+                  {" "}
+                  Spins Left For Today
+                </span>
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Mascot and Spins Left */}
 
         {/* Spin Button */}
         <div className="mb-6 flex justify-center">
-  {hasPlayed && new Date(cooldownTime) > new Date(Date.now()) ? (
-    <CountdownTimer targetTime={cooldownTime} />
-  ) : (
-    <button
-      onClick={handleSpinClick}
-      disabled={(hasPlayed && new Date(cooldownTime) > new Date(Date.now())) || mustSpin}
-      className="w-[287px] h-20 flex items-center justify-center text-white font-bold"
-      style={{
-        backgroundImage: "url('/assets/wheel/spin-wheel.svg')",
-        backgroundSize: "contain",
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "center",
-      }}
-    >
-    </button>
-  )}
-</div>
-
+          {hasPlayed && new Date(cooldownTime) > new Date(Date.now()) ? (
+            <CountdownTimer targetTime={cooldownTime} />
+          ) : (
+            <button
+              onClick={handleSpinClick}
+              disabled={
+                (hasPlayed && new Date(cooldownTime) > new Date(Date.now())) ||
+                mustSpin
+              }
+              className="w-[287px] h-20 flex items-center justify-center text-white font-bold"
+              style={{
+                backgroundImage: "url('/assets/wheel/spin-wheel.svg')",
+                backgroundSize: "contain",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "center",
+              }}
+            ></button>
+          )}
+        </div>
 
         {/* Additional UI elements */}
         {isClaimed && (
           <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-4 text-center mb-4">
-            <div className="text-lg text-white font-black">🎉 REWARD CLAIMED! 🎉</div>
+            <div className="text-lg text-white font-black">
+              🎉 REWARD CLAIMED! 🎉
+            </div>
           </div>
         )}
 
-        {(user?.dailySpinCount ?? 0) <= 0 && new Date(cooldownTime) > new Date(Date.now()) && (
-          <button
-            onClick={() => setBuySpins(true)}
-            className="w-full py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-lg font-black rounded-2xl
+        {(user?.dailySpinCount ?? 0) <= 0 &&
+          new Date(cooldownTime) > new Date(Date.now()) && (
+            <button
+              onClick={() => setBuySpins(true)}
+              className="w-full py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-lg font-black rounded-2xl
                      hover:from-yellow-600 hover:to-orange-600 transition-all duration-300 transform hover:scale-105
                      shadow-xl mb-4"
-          >
-            💎 BUY SPIN 💎
-          </button>
-        )}
+            >
+              💎 BUY SPIN 💎
+            </button>
+          )}
 
         {buySpins && <BuySpin setBuySpins={setBuySpins} />}
       </div>
@@ -479,5 +555,5 @@ export const WheelOfFortune = () => {
         transition={Bounce}
       />
     </div>
-  )
-}
+  );
+};

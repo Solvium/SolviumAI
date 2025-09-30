@@ -93,12 +93,12 @@ function HomeShell() {
             </div>
 
             <div className="fixed bottom-0 left-0 right-0 z-50">
-              <div className="max-w-[430px] mx-auto px-4 pb-4">
+              <div className="max-w-[430px] mx-auto px-2 pb-2">
                 <div className="bg-gradient-to-r from-purple-900 to-indigo-900 rounded-3xl shadow-2xl border border-purple-700/50">
-                  <div className="flex justify-around items-center px-4 py-3">
+                  <div className="flex justify-around items-center px-2 py-2">
                     <button
                       onClick={() => handlePageChange("Home")}
-                      className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-300 min-w-[60px] ${
+                      className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 min-w-[40px] ${
                         currentPage === "Home"
                           ? "bg-pink-500/20 scale-110"
                           : "hover:bg-white/10 hover:scale-105"
@@ -113,11 +113,11 @@ function HomeShell() {
                         isActive={currentPage === "Home"}
                         activeColor="#FF309B"
                         color="currentColor"
-                        width={18}
-                        height={18}
+                        width={16}
+                        height={16}
                       />
                       <span
-                        className={`text-xs font-semibold transition-all duration-300 ${
+                        className={`text-[9px] font-semibold transition-all duration-300 ${
                           currentPage === "Home"
                             ? "text-white"
                             : "text-white/50"
@@ -129,7 +129,7 @@ function HomeShell() {
 
                     <button
                       onClick={() => handlePageChange("Wheel")}
-                      className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-300 min-w-[60px] ${
+                      className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 min-w-[40px] ${
                         currentPage === "Wheel"
                           ? "bg-pink-500/20 scale-110"
                           : "hover:bg-white/10 hover:scale-105"
@@ -144,11 +144,11 @@ function HomeShell() {
                         isActive={currentPage === "Wheel"}
                         activeColor="#FF309B"
                         color="currentColor"
-                        width={18}
-                        height={18}
+                        width={16}
+                        height={16}
                       />
                       <span
-                        className={`text-xs font-semibold transition-all duration-300 ${
+                        className={`text-[9px] font-semibold transition-all duration-300 ${
                           currentPage === "Wheel"
                             ? "text-white"
                             : "text-white/50"
@@ -160,7 +160,7 @@ function HomeShell() {
 
                     <button
                       onClick={() => handlePageChange("Game")}
-                      className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-300 min-w-[60px] ${
+                      className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 min-w-[40px] ${
                         currentPage === "Game"
                           ? "bg-pink-500/20 scale-110"
                           : "hover:bg-white/10 hover:scale-105"
@@ -175,11 +175,11 @@ function HomeShell() {
                         isActive={currentPage === "Game"}
                         activeColor="#FF309B"
                         color="currentColor"
-                        width={18}
-                        height={18}
+                        width={16}
+                        height={16}
                       />
                       <span
-                        className={`text-xs font-semibold transition-all duration-300 ${
+                        className={`text-[9px] font-semibold transition-all duration-300 ${
                           currentPage === "Game"
                             ? "text-white"
                             : "text-white/50"
@@ -191,7 +191,7 @@ function HomeShell() {
 
                     <button
                       onClick={() => handlePageChange("Leaderboard")}
-                      className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-300 min-w-[60px] ${
+                      className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 min-w-[40px] ${
                         currentPage === "Leaderboard"
                           ? "bg-pink-500/20 scale-110"
                           : "hover:bg-white/10 hover:scale-105"
@@ -206,11 +206,11 @@ function HomeShell() {
                         isActive={currentPage === "Leaderboard"}
                         activeColor="#FF309B"
                         color="currentColor"
-                        width={18}
-                        height={18}
+                        width={16}
+                        height={16}
                       />
                       <span
-                        className={`text-xs font-semibold transition-all duration-300 ${
+                        className={`text-[9px] font-semibold transition-all duration-300 ${
                           currentPage === "Leaderboard"
                             ? "text-white"
                             : "text-white/50"
@@ -222,7 +222,7 @@ function HomeShell() {
 
                     <button
                       onClick={() => handlePageChange("Wallet")}
-                      className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-300 min-w-[60px] ${
+                      className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 min-w-[40px] ${
                         currentPage === "Wallet"
                           ? "bg-pink-500/20 scale-110"
                           : "hover:bg-white/10 hover:scale-105"
@@ -237,11 +237,11 @@ function HomeShell() {
                         isActive={currentPage === "Wallet"}
                         activeColor="#FF309B"
                         color="currentColor"
-                        width={18}
-                        height={18}
+                        width={16}
+                        height={16}
                       />
                       <span
-                        className={`text-xs font-semibold transition-all duration-300 ${
+                        className={`text-[9px] font-semibold transition-all duration-300 ${
                           currentPage === "Wallet"
                             ? "text-white"
                             : "text-white/50"

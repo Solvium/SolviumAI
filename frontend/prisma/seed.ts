@@ -3,6 +3,24 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
+  // Create level configuration
+  const levelConfigs = [
+    { level: 1, points_required: 0, rewards: { title: "Beginner" } },
+    { level: 2, points_required: 1000, rewards: { title: "Explorer" } },
+    { level: 3, points_required: 2500, rewards: { title: "Adventurer" } },
+    { level: 4, points_required: 5000, rewards: { title: "Champion" } },
+    { level: 5, points_required: 10000, rewards: { title: "Master" } },
+    { level: 6, points_required: 20000, rewards: { title: "Legend" } },
+  ];
+
+  for (const config of levelConfigs) {
+    await prisma.levelConfig.upsert({
+      where: { level: config.level },
+      update: {},
+      create: config,
+    });
+  }
+
   // Create default tasks
   const tasks = [
     {
