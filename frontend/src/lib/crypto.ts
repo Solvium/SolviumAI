@@ -60,27 +60,41 @@ const WALLET_CACHE_KEY_PREFIX = "solvium_wallet_";
 // Secure wallet storage and caching
 export class SecureWalletStorage {
   private encryptionKey: Buffer;
+  private isConfigured: boolean = false;
 
   constructor() {
-
     const key = process.env.WALLET_ENCRYPTION_KEY;
     if (!key) {
-      console.error(
-        `[${FILE_NAME}:constructor] WALLET_ENCRYPTION_KEY environment variable is required`
+      // Defer hard failure until an operation actually needs the key (runtime),
+      // so that builds and module import don't crash.
+      console.warn(
+        `[${FILE_NAME}:constructor] WALLET_ENCRYPTION_KEY is not set; secure wallet operations will be disabled until provided.`
       );
-      throw new Error("WALLET_ENCRYPTION_KEY environment variable is required");
+      this.encryptionKey = Buffer.alloc(32, 0);
+      this.isConfigured = false;
+      return;
     }
 
     const parsedKey = parseEncryptionKey(key);
     if (!parsedKey) {
-      console.error(
-        `[${FILE_NAME}:constructor] Failed to parse encryption key`
+      console.warn(
+        `[${FILE_NAME}:constructor] WALLET_ENCRYPTION_KEY is invalid; secure wallet operations will be disabled until fixed.`
       );
-      throw new Error("Failed to parse encryption key");
+      this.encryptionKey = Buffer.alloc(32, 0);
+      this.isConfigured = false;
+      return;
     }
 
     this.encryptionKey = parsedKey;
+    this.isConfigured = true;
+  }
 
+  private ensureConfigured(): void {
+    if (!this.isConfigured) {
+      throw new Error(
+        "WALLET_ENCRYPTION_KEY is not configured; set a valid 32-byte key (base64 or hex)."
+      );
+    }
   }
 
   /**
@@ -91,7 +105,7 @@ export class SecureWalletStorage {
     iv: string;
     tag: string;
   } {
-
+    this.ensureConfigured();
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv("aes-256-gcm", this.encryptionKey, iv);
 
@@ -117,7 +131,7 @@ export class SecureWalletStorage {
     iv: string,
     tag: string
   ): string {
-
+    this.ensureConfigured();
     try {
       const encryptedBuffer = Buffer.from(encrypted, "base64");
       const ivBuffer = Buffer.from(iv, "base64");
@@ -154,7 +168,7 @@ export class SecureWalletStorage {
     telegramUserId: number,
     walletInfo: WalletInfo
   ): Promise<void> {
-
+    this.ensureConfigured();
     try {
       // Encrypt the private key
 
@@ -177,7 +191,6 @@ export class SecureWalletStorage {
 
       // Store in database (you'll need to implement this based on your database)
       await this.saveToDatabase(secureData);
-
     } catch (error) {
       console.error(
         `[${FILE_NAME}:storeWalletData] Failed to store wallet data:`,
@@ -191,18 +204,16 @@ export class SecureWalletStorage {
    * Retrieve wallet data from database
    */
   async getWalletData(telegramUserId: number): Promise<WalletInfo | null> {
-
+    this.ensureConfigured();
     try {
       const secureData = await this.getFromDatabase(telegramUserId);
 
       if (!secureData) {
-
         return null;
       }
 
       // Check if data is expired
       if (new Date() > secureData.expiresAt) {
-
         await this.deleteFromDatabase(telegramUserId);
         return null;
       }
@@ -234,10 +245,9 @@ export class SecureWalletStorage {
    * Clear wallet data from database
    */
   async clearWalletData(telegramUserId: number): Promise<void> {
-
+    this.ensureConfigured();
     try {
       await this.deleteFromDatabase(telegramUserId);
-
     } catch (error) {
       console.error(
         `[${FILE_NAME}:clearWalletData] Failed to clear wallet data:`,
@@ -250,7 +260,6 @@ export class SecureWalletStorage {
    * Save wallet data to database
    */
   private async saveToDatabase(data: SecureWalletData): Promise<void> {
-
     try {
       const { prisma } = await import("@/lib/prisma");
 
@@ -280,7 +289,6 @@ export class SecureWalletStorage {
           expiresAt: data.expiresAt,
         },
       });
-
     } catch (error) {
       console.error(
         `[${FILE_NAME}:saveToDatabase] Database save error:`,
@@ -296,7 +304,6 @@ export class SecureWalletStorage {
   private async getFromDatabase(
     telegramUserId: number
   ): Promise<SecureWalletData | null> {
-
     try {
       const { prisma } = await import("@/lib/prisma");
 
@@ -305,7 +312,6 @@ export class SecureWalletStorage {
       });
 
       if (!cachedData) {
-
         return null;
       }
 
@@ -337,14 +343,12 @@ export class SecureWalletStorage {
    * Delete wallet data from database
    */
   private async deleteFromDatabase(telegramUserId: number): Promise<void> {
-
     try {
       const { prisma } = await import("@/lib/prisma");
 
       await prisma.walletCache.delete({
         where: { telegramUserId },
       });
-
     } catch (error) {
       console.error(
         `[${FILE_NAME}:deleteFromDatabase] Database deletion error:`,
@@ -362,7 +366,6 @@ export class SolviumWalletAPI {
   private secureStorage: SecureWalletStorage;
 
   constructor(baseUrl?: string, apiKey?: string) {
-
     this.baseUrl = baseUrl || SOLVIUM_API_BASE_URL;
     this.apiKey = apiKey || process.env.SOLVIUM_API_KEY;
     this.secureStorage = new SecureWalletStorage();
@@ -378,16 +381,13 @@ export class SolviumWalletAPI {
     telegramUserId: number,
     forceRefresh: boolean = false
   ): Promise<WalletCheckResponse> {
-
     try {
       // First, try to get from cache if not forcing refresh
       if (!forceRefresh) {
-
         const cachedWallet = await this.secureStorage.getWalletData(
           telegramUserId
         );
         if (cachedWallet) {
-
           return {
             has_wallet: true,
             message: "Wallet data retrieved from cache",
@@ -441,12 +441,10 @@ export class SolviumWalletAPI {
       // If wallet was found, store it securely
       if (walletResponse.has_wallet && walletResponse.wallet_info) {
         try {
-
           await this.secureStorage.storeWalletData(
             telegramUserId,
             walletResponse.wallet_info
           );
-
         } catch (storageError) {
           console.warn(
             `[${FILE_NAME}:checkWallet] Failed to store wallet data:`,
@@ -480,7 +478,6 @@ export class SolviumWalletAPI {
    * @returns Promise<boolean>
    */
   async checkHealth(): Promise<boolean> {
-
     try {
       const response = await fetch(`${this.baseUrl}/health`, {
         method: "GET",
@@ -492,7 +489,6 @@ export class SolviumWalletAPI {
       });
 
       if (!response.ok) {
-
         return false;
       }
 
@@ -515,7 +511,6 @@ export class SolviumWalletAPI {
     telegramUserId: number,
     walletInfo: WalletInfo
   ): Promise<void> {
-
     await this.secureStorage.storeWalletData(telegramUserId, walletInfo);
   }
 
@@ -525,7 +520,6 @@ export class SolviumWalletAPI {
    * @returns Promise<WalletInfo | null>
    */
   async getWalletInfo(telegramUserId: number): Promise<WalletInfo | null> {
-
     return this.secureStorage.getWalletData(telegramUserId);
   }
 
@@ -534,7 +528,6 @@ export class SolviumWalletAPI {
    * @param telegramUserId - The Telegram user ID
    */
   async clearWalletInfo(telegramUserId: number): Promise<void> {
-
     await this.secureStorage.clearWalletData(telegramUserId);
   }
 }
@@ -552,11 +545,9 @@ export async function getWalletInfo(
   telegramUserId: number,
   forceRefresh: boolean = false
 ): Promise<WalletCheckResponse | null> {
-
   try {
     // First check if the API is healthy (only if not using cache)
     if (forceRefresh) {
-
       const isHealthy = await solviumWalletAPI.checkHealth();
       if (!isHealthy) {
         console.warn(
@@ -583,9 +574,7 @@ export async function getWalletInfo(
 }
 
 export function parseEncryptionKey(keyInput?: string): Buffer | null {
-
   if (!keyInput) {
-
     return null;
   }
 
@@ -593,22 +582,16 @@ export function parseEncryptionKey(keyInput?: string): Buffer | null {
   try {
     const b64 = Buffer.from(keyInput, "base64");
     if (b64.length === 32) {
-
       return b64;
     }
-  } catch (e) {
-
-  }
+  } catch (e) {}
 
   try {
     const hex = Buffer.from(keyInput, "hex");
     if (hex.length === 32) {
-
       return hex;
     }
-  } catch (e) {
-
-  }
+  } catch (e) {}
 
   return null;
 }
@@ -619,7 +602,6 @@ export function decryptAes256Gcm(
   tag: string,
   keyBytes: Buffer
 ): string {
-
   try {
     // Decode base64 strings to bytes (matching Python's base64.b64decode)
     const encryptedBytes = Buffer.from(encryptedPrivateKey, "base64");

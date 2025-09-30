@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
+import { verify as jwtVerify } from "jsonwebtoken";
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,10 +15,29 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get user ID from token
-    const userId = parseInt(authToken.value);
+    // Determine user id: support both numeric user id and JWT token formats
+    let userId: number | null = null;
+    const raw = authToken.value;
+    // Try numeric id first
+    const asNumber = parseInt(raw);
+    if (!Number.isNaN(asNumber)) {
+      userId = asNumber;
+    } else {
+      // Try JWT (signed with JWT_SECRET) and read `id`
+      try {
+        const decoded = jwtVerify(raw, process.env.JWT_SECRET!) as any;
+        if (decoded && typeof decoded.id === "number") {
+          userId = decoded.id;
+        } else if (decoded && decoded.id && typeof decoded.id === "string") {
+          const fromStr = parseInt(decoded.id);
+          userId = Number.isNaN(fromStr) ? null : fromStr;
+        }
+      } catch (e) {
+        // invalid token; will return 401 below
+      }
+    }
 
-    if (isNaN(userId)) {
+    if (userId === null) {
       return NextResponse.json(
         { authenticated: false, user: null },
         { status: 401 }

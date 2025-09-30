@@ -65,9 +65,7 @@ export async function POST(request: NextRequest) {
           weeklyPoints: 0,
         },
       });
-
     } else {
-
     }
 
     // Parse wallet data if it exists
@@ -121,10 +119,12 @@ export async function POST(request: NextRequest) {
     });
 
     // Set a simple auth cookie (root path for all routes)
+    // In development, do not require Secure to allow cookies over http://localhost
+    // Use SameSite=Lax by default; switch to None only if you truly embed in iframes/webviews over HTTPS
     response.cookies.set("auth_token", userData.id, {
       httpOnly: true,
-      secure: true, // required for SameSite=None
-      sameSite: "none", // works in embedded webviews/iframes
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
       path: "/",
       maxAge: 7 * 24 * 60 * 60, // 7 days
     });

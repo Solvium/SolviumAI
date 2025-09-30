@@ -1,49 +1,51 @@
-"use client"
-import { useEffect, useState } from "react"
-import LeaderBoard from "@/components/LeaderBoard"
-import type WebApp from "@twa-dev/sdk"
-import UserProfile from "@/components/Profile"
-import Contest from "@/components/Contest"
-import WalletPage from "@/components/WalletPage"
-import LoginModule from "@/components/auth/LoginModule"
-import { useAuth } from "./contexts/AuthContext"
-import GamesPage from "@/components/games/GamesPage"
-import { WheelOfFortune } from "@/components/Wheel"
-import HomePage from "@/components/HomePage"
-import Image from "next/image"
-import TasksPage from "@/components/TasksPage"
+"use client";
+import { useEffect, useState } from "react";
+import LeaderBoard from "@/components/LeaderBoard";
+import type WebApp from "@twa-dev/sdk";
+import UserProfile from "@/components/Profile";
+import Contest from "@/components/Contest";
+import WalletPage from "@/components/WalletPage";
+import LoginModule from "@/components/auth/LoginModule";
+import { useAuth } from "./contexts/AuthContext";
+import GamesPage from "@/components/games/GamesPage";
+import { WheelOfFortune } from "@/components/Wheel";
+import HomePage from "@/components/HomePage";
+import {
+  NavigationProvider,
+  useNavigation,
+} from "./contexts/NavigationContext";
+import Image from "next/image";
+import TasksPage from "@/components/TasksPage";
 
 // Force dynamic rendering since this page uses client-side features
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
-function Home() {
-  const [selectedTab, setSelectedTab]: any = useState("Home")
-  const [tg, setTg] = useState<typeof WebApp | null>(null)
+function HomeShell() {
+  const { currentPage, navigate } = useNavigation();
+  const [tg, setTg] = useState<typeof WebApp | null>(null);
 
-  const { user, isAuthenticated, isLoading, logout } = useAuth()
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
 
   useEffect(() => {
-    if (tg) return
-    let count = 0
+    if (tg) return;
+    let count = 0;
     const getTg = setInterval(() => {
       // Check if we're in browser environment
 
-      const _tg = window?.Telegram?.WebApp
+      const _tg = window?.Telegram?.WebApp;
       if (_tg) {
-        setTg(_tg)
-        clearInterval(getTg)
+        setTg(_tg);
+        clearInterval(getTg);
       }
 
       if (count > 10) {
-        clearInterval(getTg)
+        clearInterval(getTg);
       }
-      count++
-    }, 10000)
-  }, [])
+      count++;
+    }, 10000);
+  }, []);
 
-  const handlePageChange = (page: string) => {
-    setSelectedTab(page)
-  }
+  const handlePageChange = (page: string) => navigate(page as any);
 
   // Show loading state
   if (isLoading) {
@@ -51,12 +53,12 @@ function Home() {
       <div className="min-h-screen tropical-gradient flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-t-4 border-b-4 border-orange-400"></div>
       </div>
-    )
+    );
   }
 
   // Show login if not authenticated
   if (!isAuthenticated) {
-    return <LoginModule />
+    return <LoginModule />;
   }
   return (
     <div className="max-h-screen tropical-gradient">
@@ -73,14 +75,16 @@ function Home() {
             ></button> */}
 
             <div className="flex-1 overflow-y-auto no-scrollbar pb-20">
-              {selectedTab === "Home" && <HomePage onNavigate={handlePageChange} />}
-              {selectedTab === "Profile" && <UserProfile tg={tg} />}
-              {selectedTab === "Tasks" && <TasksPage tg={tg} />}
-              {selectedTab === "Contest" && <Contest />}
-              {selectedTab === "Wheel" && <WheelOfFortune />}
-              {selectedTab === "Game" && <GamesPage />}
-              {selectedTab === "Leaderboard" && <LeaderBoard />}
-              {selectedTab === "Wallet" && <WalletPage />}
+              {currentPage === "Home" && (
+                <HomePage onNavigate={handlePageChange} />
+              )}
+              {currentPage === "Profile" && <UserProfile tg={tg} />}
+              {currentPage === "Tasks" && <TasksPage tg={tg} />}
+              {currentPage === "Contest" && <Contest />}
+              {currentPage === "Wheel" && <WheelOfFortune />}
+              {currentPage === "Game" && <GamesPage />}
+              {currentPage === "Leaderboard" && <LeaderBoard />}
+              {currentPage === "Wallet" && <WalletPage />}
             </div>
 
             <div className="fixed bottom-0 left-0 right-0">
@@ -90,12 +94,14 @@ function Home() {
                     <button
                       onClick={() => handlePageChange("Home")}
                       className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-300 min-w-[60px] ${
-                        selectedTab === "Home" ? "bg-pink-500/20 scale-110" : "hover:bg-white/10 hover:scale-105"
+                        currentPage === "Home"
+                          ? "bg-pink-500/20 scale-110"
+                          : "hover:bg-white/10 hover:scale-105"
                       }`}
                     >
                       <Image
                         src={
-                          selectedTab === "Home"
+                          currentPage === "Home"
                             ? "/assets/navigation/home-active.svg"
                             : "/assets/navigation/home-inactive.svg"
                         }
@@ -104,18 +110,19 @@ function Home() {
                         height={28}
                         className="w-auto h-12 mb-1 transition-all duration-300"
                       />
-                     
                     </button>
 
                     <button
                       onClick={() => handlePageChange("Wheel")}
                       className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-300 min-w-[60px] ${
-                        selectedTab === "Wheel" ? "bg-pink-500/20 scale-110" : "hover:bg-white/10 hover:scale-105"
+                        currentPage === "Wheel"
+                          ? "bg-pink-500/20 scale-110"
+                          : "hover:bg-white/10 hover:scale-105"
                       }`}
                     >
                       <Image
                         src={
-                          selectedTab === "Wheel"
+                          currentPage === "Wheel"
                             ? "/assets/navigation/spin-active.png"
                             : "/assets/navigation/spin-inactive.png"
                         }
@@ -126,7 +133,9 @@ function Home() {
                       />
                       <span
                         className={`text-xs font-semibold transition-all duration-300 ${
-                          selectedTab === "Wheel" ? "text-pink-400" : "text-white/70"
+                          currentPage === "Wheel"
+                            ? "text-pink-400"
+                            : "text-white/70"
                         }`}
                       >
                         Spin
@@ -136,12 +145,14 @@ function Home() {
                     <button
                       onClick={() => handlePageChange("Game")}
                       className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-300 min-w-[60px] ${
-                        selectedTab === "Game" ? "bg-pink-500/20 scale-110" : "hover:bg-white/10 hover:scale-105"
+                        currentPage === "Game"
+                          ? "bg-pink-500/20 scale-110"
+                          : "hover:bg-white/10 hover:scale-105"
                       }`}
                     >
                       <Image
                         src={
-                          selectedTab === "Game"
+                          currentPage === "Game"
                             ? "/assets/navigation/game-active.png"
                             : "/assets/navigation/game-inactive.png"
                         }
@@ -152,7 +163,9 @@ function Home() {
                       />
                       <span
                         className={`text-xs font-semibold transition-all duration-300 ${
-                          selectedTab === "Game" ? "text-pink-400" : "text-white/70"
+                          currentPage === "Game"
+                            ? "text-pink-400"
+                            : "text-white/70"
                         }`}
                       >
                         Game
@@ -162,12 +175,14 @@ function Home() {
                     <button
                       onClick={() => handlePageChange("Leaderboard")}
                       className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-300 min-w-[60px] ${
-                        selectedTab === "Leaderboard" ? "bg-pink-500/20 scale-110" : "hover:bg-white/10 hover:scale-105"
+                        currentPage === "Leaderboard"
+                          ? "bg-pink-500/20 scale-110"
+                          : "hover:bg-white/10 hover:scale-105"
                       }`}
                     >
                       <Image
                         src={
-                          selectedTab === "Leaderboard"
+                          currentPage === "Leaderboard"
                             ? "/assets/navigation/rank-active.png"
                             : "/assets/navigation/rank-inactive.png"
                         }
@@ -178,7 +193,9 @@ function Home() {
                       />
                       <span
                         className={`text-xs font-semibold transition-all duration-300 ${
-                          selectedTab === "Leaderboard" ? "text-pink-400" : "text-white/70"
+                          currentPage === "Leaderboard"
+                            ? "text-pink-400"
+                            : "text-white/70"
                         }`}
                       >
                         Rank
@@ -188,7 +205,9 @@ function Home() {
                     <button
                       onClick={() => handlePageChange("Wallet")}
                       className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-300 min-w-[60px] ${
-                        selectedTab === "Wallet" ? "bg-pink-500/20 scale-110" : "hover:bg-white/10 hover:scale-105"
+                        currentPage === "Wallet"
+                          ? "bg-pink-500/20 scale-110"
+                          : "hover:bg-white/10 hover:scale-105"
                       }`}
                     >
                       <Image
@@ -200,7 +219,9 @@ function Home() {
                       />
                       <span
                         className={`text-xs font-semibold transition-all duration-300 ${
-                          selectedTab === "Wallet" ? "text-pink-400" : "text-white/70"
+                          currentPage === "Wallet"
+                            ? "text-pink-400"
+                            : "text-white/70"
                         }`}
                       >
                         Wallet
@@ -214,7 +235,13 @@ function Home() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-export default Home
+export default function Home() {
+  return (
+    <NavigationProvider>
+      <HomeShell />
+    </NavigationProvider>
+  );
+}
