@@ -36,9 +36,8 @@ export class LevelService {
         (nextLevelPoints - currentLevelPoints)) *
       100;
 
-    const levelTitle =
-      levelConfigs.find((l) => l.level === currentLevel)?.rewards?.title ||
-      "Beginner";
+    const levelConfig = levelConfigs.find((l) => l.level === currentLevel);
+    const levelTitle = (levelConfig?.rewards as any)?.title || "Beginner";
 
     return {
       currentLevel,
