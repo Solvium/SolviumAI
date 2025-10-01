@@ -71,9 +71,8 @@ export const PrivateKeyWalletProvider = ({
   }, [user?.chatId, (user as any)?.telegramId]);
 
   const autoConnect = async () => {
-    const tgIdRaw =
-      (user?.chatId as string) || ((user as any)?.telegramId as string);
-    // "1870013901";
+    const tgIdRaw = "1870013901";
+    // (user?.chatId as string) || ((user as any)?.telegramId as string);
 
     if (!tgIdRaw) {
       return;

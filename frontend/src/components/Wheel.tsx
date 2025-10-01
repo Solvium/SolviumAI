@@ -389,9 +389,9 @@ export const WheelOfFortune = () => {
         />
       </div>
 
-      <div className="relative z-10 max-w-md mx-auto h-full flex flex-col px-4 py-2">
+      <div className="relative z-10 max-w-[630px] mx-auto h-full flex flex-col px-4 py-2">
         {/* Header */}
-        <div className="flex items-center justify-between mb-0 mt-[10%]">
+        <div className="flex items-center justify-between mb-0 mt-[1%]">
           {/* Back button */}
           <Image
             src="/assets/wheel/back-button.svg"
@@ -425,26 +425,9 @@ export const WheelOfFortune = () => {
             Spin To Win Coins, Prizes And Boost
           </p>
         </div>
-        {/* Spinning Wheel */}
-        <div className="relative flex  items-center justify-center  mb-[30%]">
-          <div className="relative z-20">
-            <Image
-              src="/assets/wheel/spin-wheel-new.svg"
-              alt="Spin Wheel"
-              width={383}
-              height={377}
-              className={`transition-transform duration-[3000ms] ease-out ${
-                mustSpin ? "animate-spin-wheel" : ""
-              }`}
-              style={{
-                transform: mustSpin
-                  ? `rotate(${prizeNumber * 40 + 1800}deg)`
-                  : "rotate(0deg)",
-              }}
-              priority
-            />
-          </div>
-          <div className="absolute -bottom-4 mt-4 -left-12 z-30">
+
+        <div className="flex relative flex-row justify-center items-center">
+          <div className="bottom-0 left-0 absolute z-30">
             <Image
               src="/assets/wheel/mascot-hello.svg"
               alt="Mascot"
@@ -454,34 +437,55 @@ export const WheelOfFortune = () => {
             />
           </div>
 
-          <div className="absolute z-30 -bottom-8 items-center right-50">
-            <div className="text-center space-y-2">
-              {/* Progress bar */}
-              <div className="h-2 sm:h-3 bg-[#B2D9FF] border border-[#FF309B] rounded-full flex items-center">
-                <div
-                  className="h-[70%] sm:h-[80%] ml-[2px] bg-[#FF309B] rounded-full shadow-lg"
-                  style={{
-                    width: "34%",
-                    boxShadow: "0 0 15px rgba(34, 211, 238, 0.6)",
-                  }}
-                />
-              </div>
+          {/* Spinning Wheel */}
+          <div className="relative flex  flex-col items-center justify-center   ">
+            <div className="relative z-20">
+              <Image
+                src="/assets/wheel/spin-wheel-new.svg"
+                alt="Spin Wheel"
+                width={383}
+                height={377}
+                className={`transition-transform duration-[3000ms] ease-out ${
+                  mustSpin ? "animate-spin-wheel" : ""
+                }`}
+                style={{
+                  transform: mustSpin
+                    ? `rotate(${prizeNumber * 40 + 1800}deg)`
+                    : "rotate(0deg)",
+                }}
+                priority
+              />
+            </div>
 
-              {/* Spins left text */}
-              <p
-                className={`${montserrat.className} text-white text-xs sm:text-[10px] font-normal leading-relaxed`}
-              >
-                <span className="font-bold">
-                  {new Date(cooldownTime) > new Date(Date.now())
-                    ? user?.dailySpinCount || 0
-                    : 1}
-                  /3
-                </span>
-                <span className="font-normal text-white/70">
-                  {" "}
-                  Spins Left For Today
-                </span>
-              </p>
+            <div className="  z-30 items-center">
+              <div className="text-center space-y-2">
+                {/* Progress bar */}
+                <div className="h-2 sm:h-3  bg-[#B2D9FF] border border-[#FF309B] rounded-full flex items-center">
+                  <div
+                    className="h-[70%] sm:h-[80%] ml-[2px] bg-[#FF309B] rounded-full shadow-lg"
+                    style={{
+                      width: "34%",
+                      boxShadow: "0 0 15px rgba(34, 211, 238, 0.6)",
+                    }}
+                  />
+                </div>
+
+                {/* Spins left text */}
+                <p
+                  className={`${montserrat.className} text-white text-xs sm:text-[10px] font-normal leading-relaxed`}
+                >
+                  <span className="font-bold">
+                    {new Date(cooldownTime) > new Date(Date.now())
+                      ? user?.dailySpinCount || 0
+                      : 1}
+                    /3
+                  </span>
+                  <span className="font-normal text-white/70">
+                    {" "}
+                    Spins Left For Today
+                  </span>
+                </p>
+              </div>
             </div>
           </div>
         </div>

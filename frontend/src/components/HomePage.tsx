@@ -62,10 +62,10 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
       </div>
 
       {/* Body that grows/shrinks */}
-      <div className="flex flex-col justify-center px-2 pt-4 space-y-4 pb-[130px]">
+      <div className="flex flex-col justify-center px-2 pt-4 space-y-4 ">
         <div className="max-w-2xl mx-auto text-center space-y-4">
           {/* Motivational text */}
-          <div className="space-y-0 pb-5">
+          <div className="space-y-0 pb-3">
             <h2
               className={`${montserrat.className} text-[#FBBC05] text-[9px] sm:text-[10px] font-normal leading-relaxed`}
             >
@@ -79,7 +79,7 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
           </div>
 
           {/* Progress bar */}
-          <div className="w-[70%] sm:w-[80%] max-w-md mx-auto px-3 sm:px-5">
+          <div className="w-[70%] sm:w-[80%] max-w-[630px] mx-auto px-3 sm:px-5">
             <div className="h-2 sm:h-3 bg-[#B2D9FF] rounded-full overflow-hidden flex items-center">
               <div
                 className="h-[70%] sm:h-[80%] ml-1 bg-[#0080FF] rounded-full shadow-lg"
@@ -108,13 +108,13 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
           </div>
 
           {/* Big home image */}
-          <div className="flex items-center pt-6 justify-center">
+          <div className="flex items-center pt-1 justify-center">
             <Image
               src="/assets/background/home-image.svg"
               alt="Home"
               width={364}
               height={390}
-              className="w-[97%] max-w-[364px] h-auto object-contain"
+              className="w-[97%] max-w-[630px] h-auto object-contain"
             />
           </div>
         </div>

@@ -68,7 +68,7 @@ function HomeShell() {
   return (
     <div className="max-h-screen tropical-gradient">
       <div>
-        <div className="max-w-[430px] no-scrollbar mx-auto relative min-h-screen">
+        <div className="max-w-[630px] no-scrollbar mx-auto relative min-h-screen">
           <div className="flex flex-col no-scrollbar h-screen">
             {/* <button
               onClick={() => logout()}
@@ -93,7 +93,7 @@ function HomeShell() {
             </div>
 
             <div className="fixed bottom-0 left-0 right-0 z-50">
-              <div className="max-w-[430px] mx-auto px-2 pb-2">
+              <div className="max-w-[630px] mx-auto px-2 pb-2">
                 <div className="bg-gradient-to-r from-purple-900 to-indigo-900 rounded-3xl shadow-2xl border border-purple-700/50">
                   <div className="flex justify-around items-center px-2 py-2">
                     <button
