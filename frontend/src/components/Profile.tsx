@@ -48,7 +48,7 @@ const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
         </button>
       </div>
 
-      <div className="max-w-sm mx-auto px-6 space-y-6 ">
+      <div className="max-w-[630px] mx-auto px-6 space-y-6 ">
         {/* Profile Section */}
         <ProfileHeader userDetails={userDetails} />
 

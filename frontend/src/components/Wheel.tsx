@@ -129,6 +129,8 @@ export const WheelOfFortune = () => {
   const [winner, setWinner] = useState("");
   const [hasPlayed, setHasPlayed] = useState(false);
   const [isClaimed, setIsClaimed] = useState(false);
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [wonPrize, setWonPrize] = useState<string | null>(null);
   const [unclaimed, setUnclaimed] = useState<{
     winner: string;
     prizeNumber: number;
@@ -298,6 +300,8 @@ export const WheelOfFortune = () => {
       return;
     }
 
+    if (isSpinning) return; // Prevent multiple spins
+
     // Log wheel spin activity
     try {
       await logActivity({
@@ -314,13 +318,35 @@ export const WheelOfFortune = () => {
     }
 
     claimPoints("spin claim", setCanClaim);
+
+    // Generate random prize
     const newPrizeNumber = Math.floor(Math.random() * data.length);
+    const selectedPrize = data[newPrizeNumber].option;
+
     setPrizeNumber(newPrizeNumber);
+    setWonPrize(selectedPrize);
+    setIsSpinning(true);
     setMustSpin(true);
     spinningSound.play();
     setLastPlayed(now);
     setCooldownTime(new Date(now + 24 * 60 * 60 * 1000));
     localStorage.setItem("lastPlayedTime", now.toString());
+
+    // Stop spinning after animation completes
+    setTimeout(() => {
+      setIsSpinning(false);
+      setMustSpin(false);
+
+      // Show prize notification
+      toast.success(`🎉 You won ${selectedPrize} tokens!`, {
+        position: "top-center",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+    }, 4000); // Match the CSS animation duration
   };
 
   const parseErrorMessage = (error: any): string => {
@@ -389,31 +415,31 @@ export const WheelOfFortune = () => {
         />
       </div>
 
-      <div className="relative z-10 max-w-md mx-auto h-full flex flex-col px-4 py-2">
+      <div className="relative z-10 max-w-[630px] mx-auto h-full flex flex-col px-4 py-2">
         {/* Header */}
-        <div className="flex items-center justify-between mb-0 mt-[10%]">
+        <div className="flex items-center justify-center mb-0 mt-[1%]">
           {/* Back button */}
-          <Image
+          {/* <Image
             src="/assets/wheel/back-button.svg"
             alt="Back"
             width={40}
             height={28}
-          />
+          /> */}
 
           {/* Title */}
           <h1
-            className={`${pixelify.className} text-4xl font-black text-[#BDECFB] tracking-wider mb-0 mt-2`}
+            className={`${pixelify.className} text-4xl text-center font-black text-[#BDECFB] tracking-wider mb-0 mt-2`}
           >
             LUCKY SPIN
           </h1>
 
           {/* Dots menu */}
-          <Image
+          {/* <Image
             src="/assets/wheel/dots-circle.svg"
             alt="Menu"
             width={24}
             height={24}
-          />
+          /> */}
         </div>
 
         {/* Title */}
@@ -425,63 +451,73 @@ export const WheelOfFortune = () => {
             Spin To Win Coins, Prizes And Boost
           </p>
         </div>
-        {/* Spinning Wheel */}
-        <div className="relative flex  items-center justify-center  mb-[30%]">
-          <div className="relative z-20">
-            <Image
-              src="/assets/wheel/spin-wheel-new.svg"
-              alt="Spin Wheel"
-              width={383}
-              height={377}
-              className={`transition-transform duration-[3000ms] ease-out ${
-                mustSpin ? "animate-spin-wheel" : ""
-              }`}
-              style={{
-                transform: mustSpin
-                  ? `rotate(${prizeNumber * 40 + 1800}deg)`
-                  : "rotate(0deg)",
-              }}
-              priority
-            />
-          </div>
-          <div className="absolute -bottom-4 mt-4 -left-12 z-30">
-            <Image
-              src="/assets/wheel/mascot-hello.svg"
-              alt="Mascot"
-              width={165}
-              height={193}
-              className="object-contain w-[165px] h-[193px]"
-            />
-          </div>
+        <div className="flex-1">
+          <div className="flex relative flex-row justify-center">
+            <div className="-bottom-10 -left-10 absolute z-30">
+              <Image
+                src="/assets/wheel/mascot-hello.svg"
+                alt="Mascot"
+                width={165}
+                height={193}
+                className="object-contain w-[165px] h-[193px]"
+              />
+            </div>
 
-          <div className="absolute z-30 -bottom-8 items-center right-50">
-            <div className="text-center space-y-2">
-              {/* Progress bar */}
-              <div className="h-2 sm:h-3 bg-[#B2D9FF] border border-[#FF309B] rounded-full flex items-center">
-                <div
-                  className="h-[70%] sm:h-[80%] ml-[2px] bg-[#FF309B] rounded-full shadow-lg"
+            {/* Spinning Wheel */}
+            <div className="relative flex flex-col items-center justify-center">
+              <div className="relative z-20">
+                <Image
+                  src="/assets/wheel/spin-wheel-new.svg"
+                  alt="Spin Wheel"
+                  width={383}
+                  height={377}
+                  className={`transition-transform duration-[4s] ease-out ${
+                    isSpinning ? "animate-wheel-spin" : ""
+                  }`}
                   style={{
-                    width: "34%",
-                    boxShadow: "0 0 15px rgba(34, 211, 238, 0.6)",
+                    transform: mustSpin
+                      ? `rotate(${prizeNumber * 40 + 1800}deg)`
+                      : "rotate(0deg)",
                   }}
+                  priority
                 />
               </div>
 
-              {/* Spins left text */}
-              <p
-                className={`${montserrat.className} text-white text-xs sm:text-[10px] font-normal leading-relaxed`}
-              >
-                <span className="font-bold">
-                  {new Date(cooldownTime) > new Date(Date.now())
-                    ? user?.dailySpinCount || 0
-                    : 1}
-                  /3
-                </span>
-                <span className="font-normal text-white/70">
-                  {" "}
-                  Spins Left For Today
-                </span>
-              </p>
+              {/* Prize Indicator Arrow */}
+              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2 z-30">
+                <div className="w-0 h-0 border-l-4 border-r-4 border-b-8 border-l-transparent border-r-transparent border-b-red-500"></div>
+              </div>
+
+              <div className="  z-30 items-center">
+                <div className="text-center space-y-2">
+                  {/* Progress bar */}
+                  <div className="h-2 sm:h-3  bg-[#B2D9FF] border border-[#FF309B] rounded-full flex items-center">
+                    <div
+                      className="h-[70%] sm:h-[80%] ml-[2px] bg-[#FF309B] rounded-full shadow-lg"
+                      style={{
+                        width: "34%",
+                        boxShadow: "0 0 15px rgba(34, 211, 238, 0.6)",
+                      }}
+                    />
+                  </div>
+
+                  {/* Spins left text */}
+                  <p
+                    className={`${montserrat.className} text-white text-xs sm:text-[10px] font-normal leading-relaxed`}
+                  >
+                    <span className="font-bold">
+                      {new Date(cooldownTime) > new Date(Date.now())
+                        ? user?.dailySpinCount || 0
+                        : 1}
+                      /3
+                    </span>
+                    <span className="font-normal text-white/70">
+                      {" "}
+                      Spins Left For Today
+                    </span>
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -497,18 +533,39 @@ export const WheelOfFortune = () => {
               onClick={handleSpinClick}
               disabled={
                 (hasPlayed && new Date(cooldownTime) > new Date(Date.now())) ||
-                mustSpin
+                isSpinning
               }
-              className="w-[287px] h-20 flex items-center justify-center text-white font-bold"
+              className={`w-[287px] h-20 flex items-center justify-center text-white font-bold transition-all duration-300 ${
+                isSpinning ? "opacity-50 cursor-not-allowed" : "hover:scale-105"
+              }`}
               style={{
                 backgroundImage: "url('/assets/wheel/spin-wheel.svg')",
                 backgroundSize: "contain",
                 backgroundRepeat: "no-repeat",
                 backgroundPosition: "center",
               }}
-            ></button>
+            >
+              {isSpinning && (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm">Spinning...</span>
+                </div>
+              )}
+            </button>
           )}
         </div>
+
+        {/* Prize Display */}
+        {wonPrize && !isSpinning && (
+          <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-2xl p-4 text-center mb-4 animate-pulse">
+            <div className="text-2xl font-black text-yellow-900 mb-2">
+              🎉 CONGRATULATIONS! 🎉
+            </div>
+            <div className="text-xl font-bold text-yellow-900">
+              You won {wonPrize} tokens!
+            </div>
+          </div>
+        )}
 
         {/* Additional UI elements */}
         {isClaimed && (
