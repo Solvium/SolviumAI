@@ -9,12 +9,20 @@ import { getAccountFull, formatYoctoToNear } from "@/lib/fastnear"
 import { getNearUsd } from "@/lib/prices"
 import { getAccountTxnsFastnear } from "@/lib/fastnearExplorer"
 import Image from "next/image"
+import SendFlow from "./wallet/SendFlow"
+import AddFlow from "./wallet/AddFlow"
+import SwapFlow from "./wallet/SwapFlow"
+import SuccessModal from "./wallet/SuccessModal"
+
+type ActiveFlow = "send" | "add" | "swap" | null
 
 const WalletPage = () => {
   const { isConnected, isLoading, error, accountId, autoConnect, account } = usePrivateKeyWallet()
   const [nearBalance, setNearBalance] = useState<string | null>(null)
   const [recentTxns, setRecentTxns] = useState<any[] | null>(null)
   const [nearUsd, setNearUsd] = useState<number | null>(null)
+  const [activeFlow, setActiveFlow] = useState<ActiveFlow>(null)
+  const [showSuccess, setShowSuccess] = useState(false)
 
   useEffect(() => {
     if (!isConnected && !isLoading) {
@@ -95,6 +103,15 @@ const WalletPage = () => {
       ? (Number(nearBalance) * nearUsd).toFixed(2)
       : "0.00"
 
+  const handleFlowSuccess = () => {
+    setActiveFlow(null)
+    setShowSuccess(true)
+  }
+
+  const handleCloseSuccess = () => {
+    setShowSuccess(false)
+  }
+
   if (!isConnected) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] flex items-center justify-center p-4">
@@ -114,140 +131,147 @@ const WalletPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] pb-24 relative overflow-hidden">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-2 h-2 bg-pink-500 rounded-full animate-pulse" />
-        <div className="absolute top-40 right-20 w-3 h-3 bg-purple-500 rounded-full animate-pulse delay-100" />
-        <div className="absolute bottom-40 left-20 w-2 h-2 bg-blue-500 rounded-full animate-pulse delay-200" />
-      </div>
-
-      <div className="relative z-10 px-4 pt-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <Button variant="ghost" className="text-white hover:bg-white/10 p-2" onClick={() => window.history.back()}>
-            <ArrowLeft className="w-5 h-5 mr-2" />
-            Back
-          </Button>
-          <h1
-            className="text-3xl font-bold text-white tracking-wider"
-            style={{
-              fontFamily: "monospace",
-              letterSpacing: "0.2em",
-              textShadow: "0 0 10px rgba(255,255,255,0.5)",
-            }}
-          >
-            WALLET
-          </h1>
-          <div className="w-20" />
+    <>
+      <div className="min-h-screen bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] pb-24 relative overflow-hidden h-[calc(100vh-75px)]">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-20 left-10 w-2 h-2 bg-pink-500 rounded-full animate-pulse" />
+          <div className="absolute top-40 right-20 w-3 h-3 bg-purple-500 rounded-full animate-pulse delay-100" />
+          <div className="absolute bottom-40 left-20 w-2 h-2 bg-blue-500 rounded-full animate-pulse delay-200" />
         </div>
 
-        <div className="relative">
-          <div
-            className="rounded-3xl p-[2px]"
-            style={{
-              background: "linear-gradient(135deg, #00d4ff 0%, #9d4edd 50%, #7b2cbf 100%)",
-            }}
-          >
-            <div className="bg-[#0f1535] rounded-3xl p-6 relative overflow-hidden">
-              <div className="flex items-center justify-between">
-                <div className="space-y-2">
-                  <div className="text-white/70 text-sm">Total balance</div>
-                  <div className="text-5xl font-bold text-white">${usdBalance}</div>
-                </div>
-                <div className="relative w-24 h-24">
-                  <Image
-                    src="/assets/wallet/mascot-robot.svg"
-                    alt="Mascot"
-                    width={96}
-                    height={96}
-                    className="object-contain"
-                  />
+        <div className="relative z-10 px-4 pt-6 space-y-6 overflow-y-auto h-full">
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" className="text-white hover:bg-white/10 p-2" onClick={() => window.history.back()}>
+              <ArrowLeft className="w-5 h-5 mr-2" />
+              Back
+            </Button>
+            <h1
+              className="text-3xl font-bold text-white tracking-wider"
+              style={{
+                fontFamily: "monospace",
+                letterSpacing: "0.2em",
+                textShadow: "0 0 10px rgba(255,255,255,0.5)",
+              }}
+            >
+              WALLET
+            </h1>
+            <div className="w-20" />
+          </div>
+
+          <div className="relative">
+            <div
+              className="rounded-3xl p-[2px]"
+              style={{
+                background: "linear-gradient(135deg, #00d4ff 0%, #9d4edd 50%, #7b2cbf 100%)",
+              }}
+            >
+              <div className="bg-[#0f1535] rounded-3xl p-6 relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <div className="text-white/70 text-sm">Total balance</div>
+                    <div className="text-5xl font-bold text-white">${usdBalance}</div>
+                  </div>
+                  <div className="relative w-24 h-24">
+                    <Image
+                      src="/assets/wallet/mascot-robot.svg"
+                      alt="Mascot"
+                      width={96}
+                      height={96}
+                      className="object-contain"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex items-center justify-center gap-8 py-4">
-          <button className="flex flex-col items-center gap-2 group">
-            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
-            </div>
-            <span className="text-white text-sm font-medium">Send</span>
-          </button>
+          <div className="flex items-center justify-center gap-8 py-4">
+            <button onClick={() => setActiveFlow("send")} className="flex flex-col items-center gap-2 group">
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                </svg>
+              </div>
+              <span className="text-white text-sm font-medium">Send</span>
+            </button>
 
-          <button className="flex flex-col items-center gap-2 group">
-            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            </div>
-            <span className="text-white text-sm font-medium">Add</span>
-          </button>
+            <button onClick={() => setActiveFlow("add")} className="flex flex-col items-center gap-2 group">
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </div>
+              <span className="text-white text-sm font-medium">Add</span>
+            </button>
 
-          <button className="flex flex-col items-center gap-2 group">
-            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                />
-              </svg>
-            </div>
-            <span className="text-white text-sm font-medium">Swap</span>
-          </button>
-        </div>
+            <button onClick={() => setActiveFlow("swap")} className="flex flex-col items-center gap-2 group">
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                  />
+                </svg>
+              </div>
+              <span className="text-white text-sm font-medium">Swap</span>
+            </button>
+          </div>
 
-        <div className="mt-8">
-          <div
-            className="rounded-3xl p-[2px]"
-            style={{
-              background: "linear-gradient(135deg, #00d4ff 0%, #9d4edd 50%, #7b2cbf 100%)",
-            }}
-          >
-            <div className="bg-[#0f1535] rounded-3xl p-6 space-y-4">
-              <h2 className="text-xl font-bold text-white mb-4">Transactions</h2>
+          <div className="mt-8">
+            <div
+              className="rounded-3xl p-[2px]"
+              style={{
+                background: "linear-gradient(135deg, #00d4ff 0%, #9d4edd 50%, #7b2cbf 100%)",
+              }}
+            >
+              <div className="bg-[#0f1535] rounded-3xl p-6 space-y-4">
+                <h2 className="text-xl font-bold text-white mb-4">Transactions</h2>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                      <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <div className="text-white font-medium">Wallet Earn</div>
-                    </div>
-                  </div>
-                  <div className="text-yellow-400 font-bold">$120.32</div>
-                </div>
-
-                {recentTxns?.slice(0, 5).map((txn, idx) => (
-                  <div key={txn.id || idx} className="flex items-center justify-between">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
-                        <span className="text-white text-xs font-bold">{txn.from?.slice(0, 2).toUpperCase()}</span>
+                      <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                        <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+                        </svg>
                       </div>
                       <div>
-                        <div className="text-white font-medium">TON Space Beta</div>
-                        <div className="text-white/50 text-xs">
-                          {txn.from?.slice(0, 8)}...{txn.from?.slice(-4)}
-                        </div>
+                        <div className="text-white font-medium">Wallet Earn</div>
                       </div>
                     </div>
-                    <div className="text-yellow-400 font-bold">$0.00</div>
+                    <div className="text-yellow-400 font-bold">$120.32</div>
                   </div>
-                ))}
+
+                  {recentTxns?.slice(0, 5).map((txn, idx) => (
+                    <div key={txn.id || idx} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
+                          <span className="text-white text-xs font-bold">{txn.from?.slice(0, 2).toUpperCase()}</span>
+                        </div>
+                        <div>
+                          <div className="text-white font-medium">TON Space Beta</div>
+                          <div className="text-white/50 text-xs">
+                            {txn.from?.slice(0, 8)}...{txn.from?.slice(-4)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-yellow-400 font-bold">$0.00</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+
+      {activeFlow === "send" && <SendFlow onClose={() => setActiveFlow(null)} onSuccess={handleFlowSuccess} />}
+      {activeFlow === "add" && <AddFlow onClose={() => setActiveFlow(null)} accountId={accountId} />}
+      {activeFlow === "swap" && <SwapFlow onClose={() => setActiveFlow(null)} onSuccess={handleFlowSuccess} />}
+      {showSuccess && <SuccessModal onClose={handleCloseSuccess} />}
+    </>
   )
 }
 
