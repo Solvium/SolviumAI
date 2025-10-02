@@ -1,248 +1,330 @@
-import React, { useState, useEffect } from "react";
-import { toast } from "sonner";
-import {
-  CheckCircle,
-  XCircle,
-  Lightbulb,
-  Trophy,
-  Coins,
-  Gift,
-} from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import HintSystem from "../monetization/HintSystem";
+"use client"
+
+import type React from "react"
+import { useState, useEffect } from "react"
+import { toast } from "sonner"
+import { ArrowLeft } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 // Sample quiz questions
 const QUESTIONS = [
   {
     id: "q1",
     question: "What is the capital of France?",
-    options: ["Berlin", "Madrid", "Paris", "Rome"],
+    options: ["Berlin", "Madrid", "Paris"],
     correctAnswer: "Paris",
     hint: 'This city is known as the "City of Light"',
     difficulty: "easy",
+    image: "/mona-lisa-inspired.jpg",
   },
   {
     id: "q2",
     question: "Which planet is known as the Red Planet?",
-    options: ["Jupiter", "Mars", "Venus", "Saturn"],
+    options: ["Jupiter", "Mars", "Venus"],
     correctAnswer: "Mars",
     hint: "Named after the Roman god of war",
     difficulty: "easy",
+    image: "/mona-lisa-inspired.jpg",
   },
   {
     id: "q3",
     question: "What is the largest mammal in the world?",
-    options: ["Elephant", "Blue Whale", "Giraffe", "Polar Bear"],
+    options: ["Elephant", "Blue Whale", "Giraffe"],
     correctAnswer: "Blue Whale",
     hint: "It lives in the ocean and can weigh up to 200 tons",
     difficulty: "easy",
+    image: "/mona-lisa-inspired.jpg",
   },
   {
     id: "q4",
     question: 'Which element has the chemical symbol "O"?',
-    options: ["Gold", "Oxygen", "Osmium", "Oganesson"],
+    options: ["Gold", "Oxygen", "Osmium"],
     correctAnswer: "Oxygen",
     hint: "We breathe this element to survive",
     difficulty: "medium",
+    image: "/mona-lisa-inspired.jpg",
   },
   {
     id: "q5",
     question: "Who painted the Mona Lisa?",
-    options: [
-      "Vincent van Gogh",
-      "Pablo Picasso",
-      "Leonardo da Vinci",
-      "Michelangelo",
-    ],
+    options: ["Vincent van Gogh", "Pablo Picasso", "Leonardo da Vinci"],
     correctAnswer: "Leonardo da Vinci",
     hint: "This Italian Renaissance polymath also designed flying machines",
     difficulty: "medium",
+    image: "/mona-lisa-inspired.png",
   },
-];
+  {
+    id: "q6",
+    question: "What is the name of the toy cowboy in Toy Story?",
+    options: ["JACK", "WOODY", "BUZZ"],
+    correctAnswer: "WOODY",
+    hint: "He's the sheriff of Andy's toys",
+    difficulty: "easy",
+    image: "/mona-lisa-inspired.jpg",
+  },
+]
 
 interface QuizGameProps {
-  onEarnCoins?: (amount: number) => void;
+  onEarnCoins?: (amount: number) => void
 }
 
 const QuizGame: React.FC<QuizGameProps> = ({ onEarnCoins = () => {} }) => {
-  const [questions, setQuestions] = useState(QUESTIONS);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  const [gameOver, setGameOver] = useState(false);
-  const [score, setScore] = useState(0);
-  const [userCoins, setUserCoins] = useState(150);
-  const [hintsUsed, setHintsUsed] = useState(0);
+  const router = useRouter()
+  const [questions, setQuestions] = useState(QUESTIONS)
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
+  const [gameOver, setGameOver] = useState(false)
+  const [score, setScore] = useState(0)
+  const [userCoins, setUserCoins] = useState(150)
+  const [hintsUsed, setHintsUsed] = useState(0)
+  const [showHint, setShowHint] = useState(false)
+  const [timer, setTimer] = useState(5)
 
-  // Shuffle questions on initial load
   useEffect(() => {
-    const shuffled = [...QUESTIONS].sort(() => Math.random() - 0.5);
-    setQuestions(shuffled.slice(0, 5)); // Take first 5 questions
-  }, []);
+    const shuffled = [...QUESTIONS].sort(() => Math.random() - 0.5)
+    setQuestions(shuffled.slice(0, 20))
+  }, [])
 
-  const currentQuestion = questions[currentQuestionIndex];
+  useEffect(() => {
+    if (timer > 0 && !selectedAnswer) {
+      const interval = setInterval(() => {
+        setTimer((prev) => prev - 1)
+      }, 1000)
+      return () => clearInterval(interval)
+    }
+  }, [timer, selectedAnswer])
+
+  const currentQuestion = questions[currentQuestionIndex]
 
   const handleAnswer = (answer: string) => {
-    if (selectedAnswer !== null) return;
+    if (selectedAnswer !== null) return
 
-    setSelectedAnswer(answer);
-    const correct = answer === currentQuestion.correctAnswer;
-    setIsCorrect(correct);
+    setSelectedAnswer(answer)
+    const correct = answer === currentQuestion.correctAnswer
+    setIsCorrect(correct)
 
     if (correct) {
-      const pointsEarned = currentQuestion.difficulty === "easy" ? 10 : 20;
-      setScore((prev) => prev + pointsEarned);
-      toast.success(`Correct! +${pointsEarned} points`);
+      const pointsEarned = 10
+      setScore((prev) => prev + pointsEarned)
+      setUserCoins((prev) => prev + pointsEarned)
+      onEarnCoins(pointsEarned)
+      toast.success(`Correct! +${pointsEarned} Solv`)
     } else {
-      toast.error("Incorrect answer");
+      toast.error("Incorrect answer")
     }
-  };
+
+    setTimeout(() => {
+      handleNextQuestion()
+    }, 2000)
+  }
 
   const handleNextQuestion = () => {
     if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1);
-      setSelectedAnswer(null);
-      setIsCorrect(null);
+      setCurrentQuestionIndex((prev) => prev + 1)
+      setSelectedAnswer(null)
+      setIsCorrect(null)
+      setShowHint(false)
+      setTimer(5)
     } else {
-      setGameOver(true);
-
-      // Calculate rewards based on score
-      const coinReward = Math.floor(score / 10);
-      setUserCoins((prev) => prev + coinReward);
-      onEarnCoins(coinReward);
-
-      toast.success(`Quiz completed! You earned ${coinReward} coins!`);
+      setGameOver(true)
+      toast.success(`Quiz completed! You earned ${score} coins!`)
     }
-  };
+  }
 
   const handleUseHint = () => {
-    setUserCoins((prev) => prev - 10); // Deduct coins
-    setHintsUsed((prev) => prev + 1);
-  };
+    if (userCoins >= 10) {
+      setUserCoins((prev) => prev - 10)
+      setHintsUsed((prev) => prev + 1)
+      setShowHint(true)
+      toast.info(currentQuestion.hint)
+    } else {
+      toast.error("Not enough coins for a hint!")
+    }
+  }
 
   const handlePlayAgain = () => {
-    const shuffled = [...QUESTIONS].sort(() => Math.random() - 0.5);
-    setQuestions(shuffled.slice(0, 5));
-    setCurrentQuestionIndex(0);
-    setSelectedAnswer(null);
-    setIsCorrect(null);
-    setGameOver(false);
-    setScore(0);
-    setHintsUsed(0);
-  };
+    const shuffled = [...QUESTIONS].sort(() => Math.random() - 0.5)
+    setQuestions(shuffled.slice(0, 20))
+    setCurrentQuestionIndex(0)
+    setSelectedAnswer(null)
+    setIsCorrect(null)
+    setGameOver(false)
+    setScore(0)
+    setHintsUsed(0)
+    setShowHint(false)
+    setTimer(5)
+  }
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle className="text-center flex justify-between items-center">
-          <span>Quiz Game</span>
-          {!gameOver && (
-            <div className="text-sm font-normal flex items-center gap-2">
-              <span className="bg-primary/10 px-2 py-1 rounded-md">
-                Score: {score}
-              </span>
-              <HintSystem
-                hintCost={10}
-                hint={currentQuestion?.hint || ""}
-                userCoins={userCoins}
-                onUseHint={handleUseHint}
-              />
+    <div className="h-[calc(100vh-80px)] bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] relative overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {[...Array(20)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute rounded-full animate-float"
+            style={{
+              width: Math.random() * 6 + 2 + "px",
+              height: Math.random() * 6 + 2 + "px",
+              left: Math.random() * 100 + "%",
+              top: Math.random() * 100 + "%",
+              background: Math.random() > 0.5 ? "rgba(139, 92, 246, 0.3)" : "rgba(236, 72, 153, 0.3)",
+              animationDelay: Math.random() * 5 + "s",
+              animationDuration: Math.random() * 10 + 10 + "s",
+              boxShadow: "0 0 20px currentColor",
+            }}
+          />
+        ))}
+      </div>
+
+      <div className="relative z-10 flex items-center justify-between px-4 py-6">
+        <button onClick={() => router.back()} className="flex items-center gap-2 text-white">
+          <ArrowLeft className="w-5 h-5" />
+          <span className="text-sm">Back</span>
+        </button>
+
+        <h1
+          className="text-3xl font-bold text-white tracking-wider"
+          style={{
+            fontFamily: "monospace",
+            textShadow: "0 0 10px rgba(255,255,255,0.5)",
+          }}
+        >
+          QUIZ
+        </h1>
+
+        {!selectedAnswer && !gameOver && (
+          <button onClick={handleUseHint} className="transition-transform hover:scale-105">
+          <img 
+            src="/assets/quiz/hint-button.svg"
+            alt="Use Hint"
+            className="w-32 h-auto"
+          />
+        </button>
+        
+        )}
+        {(selectedAnswer || gameOver) && <div className="w-20" />}
+      </div>
+
+      {!gameOver ? (
+        <div className="relative z-10 px-4 pb-16 overflow-y-auto max-h-[calc(100vh-200px)]">
+          <div className="flex justify-center mb-6">
+            <div className="relative w-16 h-16">
+              <svg className="w-16 h-16 transform -rotate-90">
+                <circle cx="32" cy="32" r="28" stroke="rgba(255,255,255,0.2)" strokeWidth="4" fill="none" />
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="28"
+                  stroke="white"
+                  strokeWidth="4"
+                  fill="none"
+                  strokeDasharray={`${(timer / 5) * 176} 176`}
+                  className="transition-all duration-1000"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-lg">
+                {String(timer).padStart(2, "0")}
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <img
+              src={currentQuestion.image || "/placeholder.svg"}
+              alt="Question"
+              className="w-full h-48 object-cover rounded-2xl"
+            />
+          </div>
+
+          <div className="mb-6">
+            <p className="text-gray-400 text-sm mb-2">
+              Question {currentQuestionIndex + 1} of {questions.length}
+            </p>
+            <h2 className="text-white text-2xl font-bold leading-tight">{currentQuestion.question}</h2>
+          </div>
+
+          <div className="space-y-4">
+            {currentQuestion.options.map((option) => {
+              const isSelected = selectedAnswer === option
+              const isCorrectAnswer = option === currentQuestion.correctAnswer
+              const showCorrect = isSelected && isCorrectAnswer
+              const showIncorrect = isSelected && !isCorrectAnswer
+
+              return (
+                <button
+                  key={option}
+                  onClick={() => handleAnswer(option)}
+                  disabled={selectedAnswer !== null}
+                  className={`w-full p-4 rounded-2xl font-semibold text-lg transition-all ${
+                    showCorrect
+                      ? "bg-white text-black"
+                      : showIncorrect
+                        ? "bg-red-500 text-white"
+                        : "bg-white text-black hover:scale-105"
+                  }`}
+                  style={{
+                    boxShadow: showCorrect ? "0 0 20px rgba(34, 197, 94, 0.5)" : "none",
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    {showCorrect && (
+                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-3">
+                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                    <span className="flex-1 text-center">{option}</span>
+                    {showCorrect && <div className="w-6" />}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          {selectedAnswer && isCorrect && (
+            <div className="mt-6 text-center space-y-4">
+              <p className="text-white text-lg">That's the right Answer - +10 Solv</p>
+              <div className="flex justify-center">
+                <img src="/src/app/assets/quiz/solvium-coin.png" alt="Coin" className="w-12 h-12 animate-bounce" />
+              </div>
             </div>
           )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {!gameOver ? (
-          <>
-            <div className="mb-6">
-              <div className="flex justify-between text-sm text-muted-foreground mb-2">
-                <span>
-                  Question {currentQuestionIndex + 1} of {questions.length}
-                </span>
-                <span>Difficulty: {currentQuestion.difficulty}</span>
-              </div>
-              <h3 className="text-lg font-medium mb-4">
-                {currentQuestion.question}
-              </h3>
+        </div>
+      ) : (
+        <div className="relative z-10 px-4 text-center space-y-6">
+          <div className="text-6xl mb-4">🎉</div>
+          <h2 className="text-white text-3xl font-bold">Quiz Complete!</h2>
+          <p className="text-white text-xl">
+            Your score: <span className="font-bold">{score}</span>
+          </p>
+          <p className="text-gray-400">Hints used: {hintsUsed}</p>
 
-              <div className="space-y-3">
-                {currentQuestion.options.map((option) => (
-                  <button
-                    key={option}
-                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                      selectedAnswer === option
-                        ? option === currentQuestion.correctAnswer
-                          ? "bg-green-100 border-green-300"
-                          : "bg-red-100 border-red-300"
-                        : "hover:bg-secondary border-border"
-                    }`}
-                    onClick={() => handleAnswer(option)}
-                    disabled={selectedAnswer !== null}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span>{option}</span>
-                      {selectedAnswer === option && (
-                        <>
-                          {option === currentQuestion.correctAnswer ? (
-                            <CheckCircle className="h-5 w-5 text-green-600" />
-                          ) : (
-                            <XCircle className="h-5 w-5 text-red-600" />
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
+          <button
+            onClick={handlePlayAgain}
+            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:scale-105 transition-transform"
+          >
+            Play Again
+          </button>
+        </div>
+      )}
 
-            {selectedAnswer && (
-              <div className="flex justify-end">
-                <Button onClick={handleNextQuestion}>
-                  {currentQuestionIndex < questions.length - 1
-                    ? "Next Question"
-                    : "See Results"}
-                </Button>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="text-center space-y-6">
-            <div className="text-3xl mb-2">🎉</div>
-            <h3 className="text-xl font-bold">Quiz Complete!</h3>
-            <p className="text-lg">
-              Your score: <span className="font-bold">{score}</span>
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Hints used: {hintsUsed}
-            </p>
+      <div
+        className="absolute bottom-0 left-0 right-0 h-64 pointer-events-none"
+        style={{
+          background: "linear-gradient(to bottom, transparent, rgba(10, 14, 39, 0.8))",
+          backgroundImage: `
+            linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px)
+          `,
+          backgroundSize: "50px 50px",
+          transform: "perspective(500px) rotateX(60deg)",
+          transformOrigin: "bottom",
+        }}
+      />
+    </div>
+  )
+}
 
-            <div className="grid grid-cols-3 gap-2 my-6">
-              <div className="bg-primary/10 rounded p-3 text-center">
-                <Trophy className="w-5 h-5 mx-auto mb-1 text-game-accent" />
-                <span className="text-xs block">+{score} pts</span>
-              </div>
-              <div className="bg-primary/10 rounded p-3 text-center">
-                <Coins className="w-5 h-5 mx-auto mb-1 text-game-accent" />
-                <span className="text-xs block">
-                  +{Math.floor(score / 10)} coins
-                </span>
-              </div>
-              <div className="bg-primary/10 rounded p-3 text-center">
-                <Gift className="w-5 h-5 mx-auto mb-1 text-game-accent" />
-                <span className="text-xs block">🧠 Badge</span>
-              </div>
-            </div>
-
-            <Button onClick={handlePlayAgain} className="w-full">
-              Play Again
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
-
-export default QuizGame;
+export default QuizGame
