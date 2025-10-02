@@ -563,24 +563,29 @@ export const WheelOfFortune = () => {
     }
   };
 
-  const handleBuySpinWithPoints = async () => {
+  const handleBuySpinWithPoints = async (count: string) => {
     try {
       if (!nearConnected) {
         toast.error("Connect wallet first");
         return;
       }
+
+      console.log("count", count);
       await signAndSendTransaction(CONTRACTID!, [
         {
           type: "FunctionCall",
           params: {
             methodName: "purchaseSpinWithPoints",
-            args: {},
+            args: { points: count },
             gas: "300000000000000",
             deposit: "0",
           },
         },
       ]);
-      toast.success("Spin purchased with points");
+      const spins = Math.max(1, Math.floor(Number(count) / 500));
+      toast.success(
+        `Purchased ${spins} spin${spins > 1 ? "s" : ""} with points`
+      );
     } catch (e) {
       toast.error("Failed to buy spin with points");
       console.error(e);
@@ -780,18 +785,38 @@ export const WheelOfFortune = () => {
         {(user?.dailySpinCount ?? 0) <= 0 &&
           new Date(cooldownTime) > new Date(Date.now()) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              <button
+              {/* <button
                 onClick={handleBuySpinWithNear}
                 className="w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-lg font-black rounded-2xl hover:opacity-90 transition-all"
               >
                 Buy Spin (NEAR)
-              </button>
-              <button
-                onClick={handleBuySpinWithPoints}
-                className="w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-lg font-black rounded-2xl hover:opacity-90 transition-all"
-              >
-                Buy Spin (Points)
-              </button>
+              </button> */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleBuySpinWithPoints("500")}
+                  className="w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl hover:opacity-90 transition-all"
+                >
+                  1 Spin (500)
+                </button>
+                <button
+                  onClick={() => handleBuySpinWithPoints("1000")}
+                  className="w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl hover:opacity-90 transition-all"
+                >
+                  2 Spins (1000)
+                </button>
+                <button
+                  onClick={() => handleBuySpinWithPoints("1500")}
+                  className="w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl hover:opacity-90 transition-all"
+                >
+                  3 Spins (1500)
+                </button>
+                <button
+                  onClick={() => handleBuySpinWithPoints("2000")}
+                  className="w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl hover:opacity-90 transition-all"
+                >
+                  4 Spins (2000)
+                </button>
+              </div>
             </div>
           )}
       </div>
