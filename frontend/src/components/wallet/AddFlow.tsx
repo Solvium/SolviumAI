@@ -3,14 +3,23 @@
 import { ArrowLeft, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { QRCodeSVG } from "qrcode.react"
+import { useEffect } from "react"
 
 interface AddFlowProps {
   onClose: () => void
-  accountId?: string
+  accountId?: string | null
 }
 
 const AddFlow = ({ onClose, accountId }: AddFlowProps) => {
+  useEffect(() => {
+    console.log("[v0] AddFlow mounted")
+    console.log("[v0] accountId:", accountId)
+    console.log("[v0] accountId type:", typeof accountId)
+  }, [accountId])
+
   const address = accountId || "0xjdhyg6w...0w9dwdw"
+
+  console.log("[v0] Using address:", address)
 
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] z-50 overflow-y-auto">
@@ -44,7 +53,17 @@ const AddFlow = ({ onClose, accountId }: AddFlowProps) => {
 
             <div className="flex items-center justify-center py-8">
               <div className="bg-white p-8 rounded-3xl">
-                <QRCodeSVG value={address} size={200} level="H" />
+                {(() => {
+                  try {
+                    console.log("[v0] Attempting to render QR code for:", address)
+                    return <QRCodeSVG value={address} size={200} level="H" />
+                  } catch (error) {
+                    console.error("[v0] QR code rendering error:", error)
+                    return (
+                      <div className="w-[200px] h-[200px] flex items-center justify-center text-red-500">QR Error</div>
+                    )
+                  }
+                })()}
               </div>
             </div>
 
