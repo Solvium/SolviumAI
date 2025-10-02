@@ -3,11 +3,11 @@ import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { CONTRACTID, MEME_TOKEN_ADDRESS } from "./constants/contractId";
 import { Bounce, toast, ToastContainer } from "react-toastify";
-import BuySpin from "./BuySpin";
 import { useMultiLoginContext } from "@/app/contexts/MultiLoginContext";
 import { usePrivateKeyWallet } from "@/app/contexts/PrivateKeyWalletContext";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { ACTIVITY_POINTS } from "@/lib/services/pointsService";
+import { checkTokenRegistration } from "@/lib/nearWallet";
 import Image from "next/image";
 import { Montserrat } from "next/font/google";
 import { Pixelify_Sans } from "next/font/google";
@@ -40,17 +40,26 @@ const WinPopup = ({
   prize,
   onClaim,
   isClaimLoading,
+  onClose,
 }: {
   isVisible: boolean;
   prize: string;
   onClaim: () => void;
   isClaimLoading: boolean;
+  onClose?: () => void;
 }) => {
   if (!isVisible) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="relative bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 rounded-3xl p-8 mx-4 max-w-sm w-full shadow-2xl animate-bounce">
+      <div className="relative bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 rounded-3xl p-8 mx-4 max-w-sm w-full shadow-2xl ">
+        <button
+          aria-label="Close"
+          onClick={onClose}
+          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/20 text-white hover:bg-white/30 flex items-center justify-center"
+        >
+          ✕
+        </button>
         <div className="absolute -top-4 -left-4 w-8 h-8 bg-yellow-400 rounded-full animate-ping"></div>
         <div className="absolute -top-2 -right-6 w-6 h-6 bg-orange-400 rounded-full animate-ping delay-300"></div>
         <div className="absolute -bottom-3 -left-2 w-5 h-5 bg-green-400 rounded-full animate-ping delay-500"></div>
@@ -119,9 +128,10 @@ export const WheelOfFortune = () => {
   const {
     isConnected: nearConnected,
     accountId: nearAddress,
+    account: nearAccount,
     signAndSendTransaction,
-    checkTokenRegistration,
-    registerToken,
+    checkTokenRegistration: checkTokenRegistrationCallback,
+    registerToken: registerTokenCallback,
   } = usePrivateKeyWallet();
 
   const [mustSpin, setMustSpin] = useState(false);
@@ -139,22 +149,21 @@ export const WheelOfFortune = () => {
   const [spinningSound, setSpinningSound] = useState(new Audio());
   const [isClaimLoading, setIsClaimLoading] = useState(false);
   const [canClaim, setCanClaim] = useState(false);
-  const [buySpins, setBuySpins] = useState(false);
+  // Remove modal flow for buying spins; use inline buttons instead
 
   const [lastPlayed, setLastPlayed] = useState<number | null>(null);
   const [cooldownTime, setCooldownTime] = useState<Date>(new Date());
 
+  // Control showing the reward modal (allow closing)
+  const [showWin, setShowWin] = useState(true);
+
   const data = [
     {
-      option: "1",
+      option: "30",
       style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
     },
     {
-      option: "25",
-      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
-    },
-    {
-      option: "50",
+      option: "70",
       style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
     },
     {
@@ -162,7 +171,15 @@ export const WheelOfFortune = () => {
       style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
     },
     {
-      option: "250",
+      option: "200",
+      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
+    },
+    {
+      option: "300",
+      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
+    },
+    {
+      option: "400",
       style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
     },
     {
@@ -177,33 +194,19 @@ export const WheelOfFortune = () => {
       option: "2000",
       style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
     },
-    {
-      option: "5000",
-      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
-    },
   ];
 
-  const checkTokenRegistrationCallback = useCallback(async () => {
-    if (!nearAddress) return null;
+  // Weighted probabilities for 9 slices (higher prizes are rarer)
+  const prizeWeights = [24, 20, 18, 14, 9, 6, 4, 3, 2]; // corresponds to data indices
 
-    try {
-      const result = await checkTokenRegistration(MEME_TOKEN_ADDRESS);
-      return result;
-    } catch (error) {
-      console.error("Token registration check failed:", error);
-      return null;
+  const pickWeightedIndex = (weights: number[]) => {
+    const total = weights.reduce((a, b) => a + b, 0);
+    let r = Math.random() * total;
+    for (let i = 0; i < weights.length; i++) {
+      r -= weights[i];
+      if (r < 0) return i;
     }
-  }, [nearAddress, checkTokenRegistration]);
-
-  const registerTokenCallback = async (tokenId: string) => {
-    if (!nearAddress) return;
-
-    try {
-      return await registerToken(tokenId);
-    } catch (error) {
-      console.error("Token registration failed:", error);
-      throw error;
-    }
+    return weights.length - 1;
   };
 
   useEffect(() => {
@@ -227,6 +230,7 @@ export const WheelOfFortune = () => {
       setPrizeNumber(prize.prizeNumber);
       setUnclaimed(prize);
       setIsClaimed(false);
+      setShowWin(true);
     }
   }, [user]);
 
@@ -242,11 +246,126 @@ export const WheelOfFortune = () => {
     }
 
     try {
-      const isRegistered = await checkTokenRegistrationCallback();
+      // Check if token is registered
+      const isRegistered = await checkTokenRegistrationCallback(
+        MEME_TOKEN_ADDRESS
+      );
       if (!isRegistered) {
+        console.log("Token not registered, registering...");
         await registerTokenCallback(MEME_TOKEN_ADDRESS);
       }
 
+      // Check if user has storage deposit for the contract
+      console.log("Checking storage deposit...");
+      if (!nearAccount) {
+        throw new Error("NEAR account not available");
+      }
+      const storageBalance = await checkTokenRegistration(
+        nearAccount,
+        MEME_TOKEN_ADDRESS,
+        nearAddress
+      );
+
+      if (!storageBalance || storageBalance.total === "0") {
+        console.log("No storage deposit found, making storage deposit...");
+        toast.info("Making storage deposit for token contract...", {
+          autoClose: 2000,
+        });
+
+        // Make a small storage deposit (0.00125 NEAR)
+        const storageDepositTx = await signAndSendTransaction(
+          MEME_TOKEN_ADDRESS,
+          [
+            {
+              type: "FunctionCall",
+              params: {
+                methodName: "storage_deposit",
+                args: {
+                  account_id: nearAddress,
+                  registration_only: true,
+                },
+                gas: "300000000000000",
+                deposit: "1250000000000000000000", // 0.00125 NEAR
+              },
+            },
+          ]
+        );
+
+        await storageDepositTx;
+        console.log("Storage deposit completed");
+        toast.success("Storage deposit completed!", { autoClose: 2000 });
+      } else {
+        console.log("Storage deposit found:", storageBalance);
+      }
+
+      // Check if user has deposits in the main contract
+      console.log("Checking deposits in main contract...");
+      if (!nearAccount) {
+        throw new Error("NEAR account not available");
+      }
+
+      let hasDeposits = false;
+      try {
+        const depositsResult = await nearAccount.viewFunction({
+          contractId: CONTRACTID!,
+          methodName: "getUserDepositSummary",
+          args: { accountId: nearAddress },
+        });
+        console.log("Deposits result:", depositsResult);
+        hasDeposits =
+          Array.isArray(depositsResult) && depositsResult.length > 0;
+        console.log("Deposits found:", depositsResult);
+      } catch (error) {
+        console.log("Error checking deposits, trying alternative method...");
+        try {
+          const depositsResult = await nearAccount.viewFunction({
+            contractId: CONTRACTID!,
+            methodName: "getUserDepositSummary",
+            args: { account_id: nearAddress },
+          });
+          hasDeposits =
+            Array.isArray(depositsResult) && depositsResult.length > 0;
+          console.log("Deposits found (alternative):", depositsResult);
+        } catch (altError) {
+          console.log("No deposits found, will make a small deposit");
+          hasDeposits = false;
+        }
+      }
+
+      if (!hasDeposits) {
+        console.log(
+          "No deposits found in main contract, making small deposit..."
+        );
+        toast.info("Making small deposit to enable claiming...", {
+          autoClose: 2000,
+        });
+
+        // Make a small deposit to the main contract (0.01 NEAR)
+        const depositTx = await signAndSendTransaction(CONTRACTID!, [
+          {
+            type: "FunctionCall",
+            params: {
+              methodName: "depositToGame",
+              args: {},
+              gas: "300000000000000",
+              deposit: "300000000000000000000000", // 0.01 NEAR
+            },
+          },
+        ]);
+
+        await depositTx;
+        console.log("Main contract deposit completed");
+        toast.success("Deposit completed! You can now claim rewards.", {
+          autoClose: 3000,
+        });
+      } else {
+        console.log("Deposits found in main contract");
+      }
+
+      console.log("Proceeding with claim after all deposits...");
+
+      // Use the correct claim method name
+      console.log("Trying claim method: claim_wheel");
       const claimTransaction = await signAndSendTransaction(CONTRACTID!, [
         {
           type: "FunctionCall",
@@ -264,27 +383,26 @@ export const WheelOfFortune = () => {
 
       await claimTransaction;
 
-      const executeTransferTx = await signAndSendTransaction(CONTRACTID!, [
-        {
-          type: "FunctionCall",
-          params: {
-            methodName: "execute_transfer",
-            args: {},
-            gas: "300000000000000",
-            deposit: "0",
-          },
-        },
-      ]);
+      // Try execute transfer method
+      console.log("Trying execute method: execute_transfer");
+      // const executeTransferTx = await signAndSendTransaction(CONTRACTID!, [
+      //   {
+      //     type: "FunctionCall",
+      //     params: {
+      //       methodName: "execute_transfer",
+      //       args: {},
+      //       gas: "300000000000000",
+      //       deposit: "0",
+      //     },
+      //   },
+      // ]);
 
-      await executeTransferTx;
+      // await executeTransferTx;
 
       localStorage.setItem("lastClaimed", Date.now().toString());
-      localStorage.setItem(
-        "transaction",
-        JSON.stringify({ claimTransaction, executeTransferTx })
-      );
+      localStorage.setItem("transaction", JSON.stringify({ claimTransaction }));
       onSuccess?.();
-      return { claimTransaction, executeTransferTx };
+      return { claimTransaction };
     } catch (error: any) {
       console.error("Failed to claim reward:", error.message);
       onError?.(error as Error);
@@ -319,9 +437,16 @@ export const WheelOfFortune = () => {
 
     claimPoints("spin claim", setCanClaim);
 
-    // Generate random prize
-    const newPrizeNumber = Math.floor(Math.random() * data.length);
+    // Generate weighted random prize (higher prizes are rarer)
+    const newPrizeNumber = pickWeightedIndex(prizeWeights);
     const selectedPrize = data[newPrizeNumber].option;
+
+    console.log(
+      "Spinning - Prize Number:",
+      newPrizeNumber,
+      "Selected Prize:",
+      selectedPrize
+    );
 
     setPrizeNumber(newPrizeNumber);
     setWonPrize(selectedPrize);
@@ -334,8 +459,12 @@ export const WheelOfFortune = () => {
 
     // Stop spinning after animation completes
     setTimeout(() => {
+      console.log("Animation complete - Setting winner to:", selectedPrize);
       setIsSpinning(false);
       setMustSpin(false);
+      setWinner(selectedPrize); // Set the winner for claiming
+      setHasPlayed(true); // Mark as played
+      setShowWin(true);
 
       // Show prize notification
       toast.success(`🎉 You won ${selectedPrize} tokens!`, {
@@ -377,6 +506,10 @@ export const WheelOfFortune = () => {
   };
 
   const handleClaim = async () => {
+    console.log("winner", winner);
+    console.log("prizeNumber", prizeNumber);
+    console.log("data", data);
+    console.log("selected prize from data:", data[prizeNumber]?.option);
     if (!winner) return;
     setIsClaimLoading(true);
     try {
@@ -402,8 +535,60 @@ export const WheelOfFortune = () => {
     }
   };
 
+  // Buy spin handlers (inline buttons)
+  const handleBuySpinWithNear = async () => {
+    try {
+      if (!nearConnected) {
+        toast.error("Connect wallet first");
+        return;
+      }
+      await signAndSendTransaction(CONTRACTID!, [
+        {
+          type: "FunctionCall",
+          params: {
+            methodName: "depositToGame",
+            args: {},
+            gas: "300000000000000",
+            // default to 0.01 NEAR unless env overrides
+            deposit:
+              process.env.NEXT_PUBLIC_SPIN_PRICE_YOCTO ||
+              "10000000000000000000000",
+          },
+        },
+      ]);
+      toast.success("Spin purchased with NEAR");
+    } catch (e) {
+      toast.error("Failed to buy spin with NEAR");
+      console.error(e);
+    }
+  };
+
+  const handleBuySpinWithPoints = async () => {
+    try {
+      if (!nearConnected) {
+        toast.error("Connect wallet first");
+        return;
+      }
+      await signAndSendTransaction(CONTRACTID!, [
+        {
+          type: "FunctionCall",
+          params: {
+            methodName: "purchaseSpinWithPoints",
+            args: {},
+            gas: "300000000000000",
+            deposit: "0",
+          },
+        },
+      ]);
+      toast.success("Spin purchased with points");
+    } catch (e) {
+      toast.error("Failed to buy spin with points");
+      console.error(e);
+    }
+  };
+
   return (
-    <div className="h-[calc(100vh-80px)] w-full relative overflow-hidden">
+    <div className="min-h-[calc(100vh-80px)] w-full relative overflow-hidden">
       {/* Background with floating dots */}
       <div className="absolute inset-0">
         <Image
@@ -476,7 +661,7 @@ export const WheelOfFortune = () => {
                   }`}
                   style={{
                     transform: mustSpin
-                      ? `rotate(${prizeNumber * 40 + 1800}deg)`
+                      ? `rotate(${prizeNumber * 40 + 1800}deg)` // 9 slices → 40° per slice
                       : "rotate(0deg)",
                   }}
                   priority
@@ -484,7 +669,7 @@ export const WheelOfFortune = () => {
               </div>
 
               {/* Prize Indicator Arrow */}
-              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2 z-30">
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 -translate-y-2 z-30">
                 <div className="w-0 h-0 border-l-4 border-r-4 border-b-8 border-l-transparent border-r-transparent border-b-red-500"></div>
               </div>
 
@@ -564,6 +749,22 @@ export const WheelOfFortune = () => {
             <div className="text-xl font-bold text-yellow-900">
               You won {wonPrize} tokens!
             </div>
+            <button
+              onClick={handleClaim}
+              disabled={isClaimLoading}
+              className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xl font-black rounded-2xl
+                     hover:from-orange-600 hover:to-red-600 transition-all duration-300 transform hover:scale-105
+                     disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+            >
+              {isClaimLoading ? (
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-5 h-5 border-t-2 border-white animate-spin rounded-full"></div>
+                  <span>CLAIMING...</span>
+                </div>
+              ) : (
+                "CLAIM REWARD!"
+              )}
+            </button>
           </div>
         )}
 
@@ -578,24 +779,29 @@ export const WheelOfFortune = () => {
 
         {(user?.dailySpinCount ?? 0) <= 0 &&
           new Date(cooldownTime) > new Date(Date.now()) && (
-            <button
-              onClick={() => setBuySpins(true)}
-              className="w-full py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-lg font-black rounded-2xl
-                     hover:from-yellow-600 hover:to-orange-600 transition-all duration-300 transform hover:scale-105
-                     shadow-xl mb-4"
-            >
-              💎 BUY SPIN 💎
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <button
+                onClick={handleBuySpinWithNear}
+                className="w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-lg font-black rounded-2xl hover:opacity-90 transition-all"
+              >
+                Buy Spin (NEAR)
+              </button>
+              <button
+                onClick={handleBuySpinWithPoints}
+                className="w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-lg font-black rounded-2xl hover:opacity-90 transition-all"
+              >
+                Buy Spin (Points)
+              </button>
+            </div>
           )}
-
-        {buySpins && <BuySpin setBuySpins={setBuySpins} />}
       </div>
 
       <WinPopup
-        isVisible={Boolean((winner || unclaimed) && !isClaimed)}
+        isVisible={Boolean((winner || unclaimed) && !isClaimed && showWin)}
         prize={winner}
         onClaim={handleClaim}
         isClaimLoading={isClaimLoading}
+        onClose={() => setShowWin(false)}
       />
 
       <ToastContainer
