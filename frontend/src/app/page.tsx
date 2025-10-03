@@ -92,7 +92,7 @@ function HomeShell() {
               {currentPage === "Wallet" && <WalletPage />}
             </div>
 
-            <div className="fixed bottom-0 left-0 right-0 z-50">
+            <div className=" bottom-0 left-0 right-0 z-50">
               <div className="max-w-[630px] mx-auto px-2 pb-2">
                 <div className="bg-gradient-to-r from-purple-900 to-indigo-900 rounded-3xl shadow-2xl border border-purple-700/50">
                   <div className="flex justify-around items-center px-2 py-2">
