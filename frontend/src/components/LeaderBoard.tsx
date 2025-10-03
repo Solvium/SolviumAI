@@ -1,12 +1,12 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useAuth } from "@/app/contexts/AuthContext"
-import { ChevronLeft, ChevronUp, ChevronDown } from "lucide-react"
+import { useState } from "react";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { ChevronLeft, ChevronUp, ChevronDown } from "lucide-react";
 
 const LeaderBoard = () => {
-  const { user } = useAuth()
-  const [leader, setLeader] = useState<any[]>([])
+  const { user } = useAuth();
+  const [leader, setLeader] = useState<any[]>([]);
 
   const mockLeaderboard = [
     {
@@ -36,38 +36,97 @@ const LeaderBoard = () => {
         "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Profile%20%284%29-Mk5AX2qudgAhCe4v16HXWhVTL9ItDT.png",
       trend: null,
     },
-    { username: "Paul", name: "Paul", totalPoints: 1241, level: 45, avatar: null, trend: null },
-    { username: "Robert", name: "Robert", totalPoints: 1051, level: 32, avatar: null, trend: null },
-    { username: "Gwen", name: "Gwen", totalPoints: 953, level: 28, avatar: null, trend: "up" },
-    { username: "Emma", name: "Emma", totalPoints: 943, level: 27, avatar: null, trend: null },
-    { username: "Sophia", name: "Sophia", totalPoints: 914, level: 25, avatar: null, trend: "down" },
-    { username: "Mia", name: "Mia", totalPoints: 896, level: 24, avatar: null, trend: "down" },
-    { username: "John", name: "John", totalPoints: 848, level: 22, avatar: null, trend: "down" },
-  ]
+    {
+      username: "Paul",
+      name: "Paul",
+      totalPoints: 1241,
+      level: 45,
+      avatar: null,
+      trend: null,
+    },
+    {
+      username: "Robert",
+      name: "Robert",
+      totalPoints: 1051,
+      level: 32,
+      avatar: null,
+      trend: null,
+    },
+    {
+      username: "Gwen",
+      name: "Gwen",
+      totalPoints: 953,
+      level: 28,
+      avatar: null,
+      trend: "up",
+    },
+    {
+      username: "Emma",
+      name: "Emma",
+      totalPoints: 943,
+      level: 27,
+      avatar: null,
+      trend: null,
+    },
+    {
+      username: "Sophia",
+      name: "Sophia",
+      totalPoints: 914,
+      level: 25,
+      avatar: null,
+      trend: "down",
+    },
+    {
+      username: "Mia",
+      name: "Mia",
+      totalPoints: 896,
+      level: 24,
+      avatar: null,
+      trend: "down",
+    },
+    {
+      username: "John",
+      name: "John",
+      totalPoints: 848,
+      level: 22,
+      avatar: null,
+      trend: "down",
+    },
+  ];
 
-  const leaderboardData = leader.length > 0 ? leader : mockLeaderboard
+  const leaderboardData = leader.length > 0 ? leader : mockLeaderboard;
 
   const myPos = leaderboardData?.findIndex((ele: any) => {
-    return ele.username == user?.username
-  })
+    return ele.username == user?.username;
+  });
 
-  const currentUserData = user || { username: "You", name: "You", totalPoints: 432, level: 10 }
-  const userPosition = myPos !== -1 ? myPos + 1 : 148
+  const currentUserData = {
+    username: user?.username ?? "You",
+    name:
+      // prefer explicit name-like fields if present
+      (user as any)?.name ||
+      (user as any)?.firstName ||
+      user?.username ||
+      "You",
+    totalPoints: (user as any)?.totalPoints ?? 432,
+    level: (user as any)?.level ?? 10,
+  };
+  const userPosition = myPos !== -1 ? myPos + 1 : 148;
 
   const stringToColour = (str: any) => {
-    if (!str) return "#6366f1"
-    let hash = 0
+    if (!str) return "#6366f1";
+    let hash = 0;
     for (let i = 0; i < str.length; i++) {
-      hash = str.charCodeAt(i) + ((hash << 5) - hash)
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
     }
-    const value = (hash >> (str.length * 8)) & 0xff
-    const hue = value * 137.508
-    return `hsl(${hue},70%,65%)`
-  }
+    const value = (hash >> (str.length * 8)) & 0xff;
+    const hue = value * 137.508;
+    return `hsl(${hue},70%,65%)`;
+  };
 
   const TopThreePodium = () => {
-    const top3 = leaderboardData.slice(0, 3)
-    const [first, second, third] = [top3[0], top3[1], top3[2]]
+    const top3 = leaderboardData.slice(0, 3);
+    const [first, second, third] = [top3[0], top3[1], top3[2]];
 
     return (
       <div className="flex items-end justify-center gap-4 mb-8 px-4">
@@ -95,7 +154,9 @@ const LeaderBoard = () => {
                 2
               </div>
             </div>
-            <p className="text-white font-semibold mt-3 text-sm">{second.name}</p>
+            <p className="text-white font-semibold mt-3 text-sm">
+              {second.name}
+            </p>
             <p className="text-gray-400 text-xs">level {second.level}</p>
           </div>
         )}
@@ -137,32 +198,44 @@ const LeaderBoard = () => {
                 3
               </div>
             </div>
-            <p className="text-white font-semibold mt-3 text-sm">{third.name}</p>
+            <p className="text-white font-semibold mt-3 text-sm">
+              {third.name}
+            </p>
             <p className="text-gray-400 text-xs">level {third.level}</p>
           </div>
         )}
       </div>
-    )
-  }
+    );
+  };
 
   const RankingCard = ({ userData, position }: any) => {
-    const isTop3 = position <= 3
-    let bgColor = "#1A1A3E"
+    const isTop3 = position <= 3;
+    let bgColor = "#1A1A3E";
 
-    if (position === 1) bgColor = "#1E2875"
-    if (position === 2) bgColor = "#F5F5F5"
-    if (position === 3) bgColor = "#E91E8C"
+    if (position === 1) bgColor = "#1E2875";
+    if (position === 2) bgColor = "#F5F5F5";
+    if (position === 3) bgColor = "#E91E8C";
 
-    const textColor = position === 2 ? "#000000" : "#FFFFFF"
-    const subTextColor = position === 2 ? "#666666" : "#A0A0C0"
+    const textColor = position === 2 ? "#000000" : "#FFFFFF";
+    const subTextColor = position === 2 ? "#666666" : "#A0A0C0";
 
     return (
-      <div className="flex items-center px-6 py-4 rounded-full mb-3 mx-4" style={{ backgroundColor: bgColor }}>
+      <div
+        className="flex items-center px-6 py-4 rounded-full mb-3 mx-4"
+        style={{ backgroundColor: bgColor }}
+      >
         <div className="flex items-center gap-3 flex-1">
-          {userData.trend === "up" && <ChevronUp className="w-5 h-5 text-green-500" />}
-          {userData.trend === "down" && <ChevronDown className="w-5 h-5 text-red-500" />}
+          {userData.trend === "up" && (
+            <ChevronUp className="w-5 h-5 text-green-500" />
+          )}
+          {userData.trend === "down" && (
+            <ChevronDown className="w-5 h-5 text-red-500" />
+          )}
           {!userData.trend && (
-            <span className="w-5 h-5 flex items-center justify-center" style={{ color: textColor }}>
+            <span
+              className="w-5 h-5 flex items-center justify-center"
+              style={{ color: textColor }}
+            >
               —
             </span>
           )}
@@ -197,8 +270,8 @@ const LeaderBoard = () => {
           {userData.totalPoints} pts.
         </span>
       </div>
-    )
-  }
+    );
+  };
 
   const UserRankingCard = () => (
     <div className="flex items-center px-6 py-4 rounded-full mb-3 mx-4 bg-[#0F0F20]">
@@ -211,15 +284,17 @@ const LeaderBoard = () => {
         </div>
 
         <span className="font-semibold text-lg text-white">
-  {"name" in currentUserData 
-    ? currentUserData.name 
-    : currentUserData.username}
-</span>
+          {(("name" in currentUserData) as any)
+            ? currentUserData.name
+            : currentUserData.username}
+        </span>
       </div>
 
-      <span className="font-semibold text-lg text-white">{currentUserData.totalPoints} pts.</span>
+      <span className="font-semibold text-lg text-white">
+        {currentUserData.totalPoints} pts.
+      </span>
     </div>
-  )
+  );
 
   return (
     <div className="w-full min-h-screen bg-[#040022] text-white pb-8">
@@ -241,7 +316,11 @@ const LeaderBoard = () => {
 
       <div className="mt-8">
         {leaderboardData.map((userData, index) => (
-          <RankingCard key={`${userData.username}-${index}`} userData={userData} position={index + 1} />
+          <RankingCard
+            key={`${userData.username}-${index}`}
+            userData={userData}
+            position={index + 1}
+          />
         ))}
 
         {userPosition > 10 && (
@@ -258,7 +337,7 @@ const LeaderBoard = () => {
         </button>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default LeaderBoard
+export default LeaderBoard;
