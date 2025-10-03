@@ -210,7 +210,11 @@ const LeaderBoard = () => {
           <span className="text-2xl">🤖</span>
         </div>
 
-        <span className="font-semibold text-lg text-white">{currentUserData.name}</span>
+        <span className="font-semibold text-lg text-white">
+  {"name" in currentUserData 
+    ? currentUserData.name 
+    : currentUserData.username}
+</span>
       </div>
 
       <span className="font-semibold text-lg text-white">{currentUserData.totalPoints} pts.</span>
@@ -218,7 +222,7 @@ const LeaderBoard = () => {
   )
 
   return (
-    <div className="w-full min-h-screen bg-[#0A0A1F] text-white pb-8">
+    <div className="w-full min-h-screen bg-[#040022] text-white pb-8">
       <div className="flex items-center justify-between px-6 py-6">
         <button className="flex items-center gap-2 text-white">
           <ChevronLeft className="w-5 h-5" />
