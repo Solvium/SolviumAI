@@ -5,9 +5,19 @@ import { useState, useEffect } from "react";
 import { computeGuessColors } from "@/lib/wordle/utils";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Coins, Trophy, Gift, Sparkles, Play, X, Settings } from "lucide-react";
+import {
+  Coins,
+  Trophy,
+  Gift,
+  Sparkles,
+  Play,
+  X,
+  Settings,
+  Loader2,
+} from "lucide-react";
 import HintSystem from "../monetization/HintSystem";
 import { useGameConfig } from "@/app/contexts/GameConfigContext";
+import { useAuth } from "@/app/contexts/AuthContext";
 import { validateWord, getDailyWord } from "@/lib/wordle/geminiWordFetcher";
 import { WordMeaning } from "@/components/wordle/WordMeaning";
 // import HintSystem from "@/components/monetization/HintSystem";
@@ -27,6 +37,7 @@ const WORDS = [
 const WordleGame: React.FC = () => {
   const { config, dailyProgress, updateWordleConfig, updateDailyProgress } =
     useGameConfig();
+  const { user } = useAuth();
   const [gameStarted, setGameStarted] = useState(false);
   const [targetWord, setTargetWord] = useState("");
   const [guesses, setGuesses] = useState<string[]>([]);
@@ -66,6 +77,7 @@ const WordleGame: React.FC = () => {
   const [gameStartTime, setGameStartTime] = useState<number>(0);
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [hintsUsedToday, setHintsUsedToday] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // Fetch user SOLV on component mount
   useEffect(() => {
@@ -230,6 +242,7 @@ const WordleGame: React.FC = () => {
 
   const startNewGame = async () => {
     try {
+      setIsLoading(true);
       // Get daily word from Gemini service
       const dailyId = new Date().toISOString().split("T")[0]; // Use date as daily ID
       // TODO: Get actual userId from auth context
@@ -278,6 +291,8 @@ const WordleGame: React.FC = () => {
     } catch (error) {
       console.error("Error starting new game:", error);
       toast.error("Failed to start new game. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -387,7 +402,7 @@ const WordleGame: React.FC = () => {
               hintUsed,
               rewards: rewards.totalSOLV,
               targetWord: targetWord,
-              userId: 1, // TODO: Get from auth context
+              userId: user?.id ? parseInt(user.id) : null,
             }),
           })
             .then(async (response) => {
@@ -438,7 +453,7 @@ const WordleGame: React.FC = () => {
               hintUsed,
               rewards: 0,
               targetWord: targetWord,
-              userId: 1, // TODO: Get from auth context
+              userId: user?.id ? parseInt(user.id) : null,
             }),
           })
             .then((response) => {
@@ -514,6 +529,28 @@ const WordleGame: React.FC = () => {
     }
   };
 
+  const LoadingScreen = () => (
+    <div className="flex-1 flex flex-col justify-center items-center px-4 text-white">
+      <div className="max-w-md mx-auto text-center space-y-6">
+        <div className="w-16 h-16 bg-[#1EC7FF]/20 rounded-full flex items-center justify-center mx-auto">
+          <Loader2 className="w-8 h-8 text-[#1EC7FF] animate-spin" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold mb-2">Loading Game...</h2>
+          <p className="text-sm text-gray-300">
+            Fetching your daily word and setting up the game
+          </p>
+        </div>
+        <div className="bg-white/10 rounded-lg p-4">
+          <p className="text-xs text-gray-400">
+            Level: {level} • Difficulty: {getDifficultyLabel(level)} • Word
+            Length: {wordLen}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
   const TutorialScreen = () => (
     <div className="flex-1 flex flex-col justify-center items-center px-4 text-white overflow-hidden">
       <div className="max-w-md mx-auto text-center space-y-4">
@@ -522,6 +559,9 @@ const WordleGame: React.FC = () => {
           <h2 className="text-xl font-bold mb-1 mt-3">Instructions</h2>
           <p className="text-sm text-gray-300">
             Guess the {wordLen}-letter word in 6 tries!
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Word length increases with your level (3-10 letters)
           </p>
         </div>
 
@@ -532,7 +572,7 @@ const WordleGame: React.FC = () => {
             </h3>
             <ul className="space-y-1 text-gray-300 text-sm max-h-[800px]:text-xs">
               <li>• You have 6 attempts to guess the word</li>
-              <li>• Each guess must be a valid 5-letter word</li>
+              <li>• Each guess must be a valid {wordLen}-letter word</li>
               <li>• After each guess, tiles will change color:</li>
             </ul>
           </div>
@@ -570,7 +610,7 @@ const WordleGame: React.FC = () => {
               Hints Available
             </h4>
             <p className="text-sm">
-              Need help? Use hints for 15 coins to reveal letters!
+              Need help? Use hints for 15 SOLV to reveal letters!
             </p>
           </div>
 
@@ -580,7 +620,7 @@ const WordleGame: React.FC = () => {
               Earn Rewards
             </h4>
             <p className="text-sm">
-              Win coins based on how quickly you solve the puzzle!
+              Win SOLV based on how quickly you solve the puzzle!
             </p>
           </div>
         </div>
@@ -884,7 +924,9 @@ const WordleGame: React.FC = () => {
             </div>
           </div>
 
-          {!gameStarted ? (
+          {isLoading ? (
+            <LoadingScreen />
+          ) : !gameStarted ? (
             <TutorialScreen />
           ) : (
             <>

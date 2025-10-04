@@ -39,6 +39,15 @@ export async function POST(request: NextRequest) {
       picture?: string;
     };
 
+    // Debug logging for Google profile data
+    console.log("Google profile data from API:", {
+      sub: profile.sub,
+      email: profile.email,
+      picture: profile.picture,
+      given_name: profile.given_name,
+      family_name: profile.family_name,
+    });
+
     if (!profile?.sub) {
       return NextResponse.json(
         { error: "Invalid Google userinfo" },
@@ -59,6 +68,7 @@ export async function POST(request: NextRequest) {
           name: `${profile.given_name || ""} ${
             profile.family_name || ""
           }`.trim(),
+          avatar_url: profile.picture || null, // Google profile picture
           referredBy: "",
           level: 1,
           difficulty: 1,
@@ -76,6 +86,20 @@ export async function POST(request: NextRequest) {
           weeklyPoints: 0,
         },
       });
+    } else {
+      // Update existing user's avatar with latest Google profile picture
+      if (profile.picture) {
+        console.log("Updating existing user avatar via access token:", {
+          userId: user.id,
+          currentAvatar: user.avatar_url,
+          newAvatar: profile.picture,
+        });
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { avatar_url: profile.picture },
+        });
+        console.log("User avatar updated successfully via access token");
+      }
     }
 
     let walletData: any = null;
@@ -135,4 +159,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

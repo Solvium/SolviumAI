@@ -135,9 +135,11 @@ const LeaderBoard = () => {
           <div className="flex flex-col items-center">
             <div className="relative">
               <div className="w-20 h-20 rounded-full border-4 border-white overflow-hidden bg-white">
-                {second.avatar ? (
+                {second.avatar_url || second.avatar ? (
                   <img
-                    src={second.avatar || "/placeholder.svg"}
+                    src={
+                      second.avatar_url || second.avatar || "/placeholder.svg"
+                    }
                     alt={second.name}
                     className="w-full h-full object-cover"
                   />
@@ -179,9 +181,9 @@ const LeaderBoard = () => {
           <div className="flex flex-col items-center">
             <div className="relative">
               <div className="w-20 h-20 rounded-full border-4 border-white overflow-hidden bg-white">
-                {third.avatar ? (
+                {third.avatar_url || third.avatar ? (
                   <img
-                    src={third.avatar || "/placeholder.svg"}
+                    src={third.avatar_url || third.avatar || "/placeholder.svg"}
                     alt={third.name}
                     className="w-full h-full object-cover"
                   />
@@ -245,9 +247,11 @@ const LeaderBoard = () => {
           </span>
 
           <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white">
-            {userData.avatar ? (
+            {userData.avatar_url || userData.avatar ? (
               <img
-                src={userData.avatar || "/placeholder.svg"}
+                src={
+                  userData.avatar_url || userData.avatar || "/placeholder.svg"
+                }
                 alt={userData.name}
                 className="w-full h-full object-cover"
               />

@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { CONTRACTID, MEME_TOKEN_ADDRESS } from "./constants/contractId";
 import { Bounce, toast, ToastContainer } from "react-toastify";
-import { useMultiLoginContext } from "@/app/contexts/MultiLoginContext";
 import { usePrivateKeyWallet } from "@/app/contexts/PrivateKeyWalletContext";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { ACTIVITY_POINTS } from "@/lib/services/pointsService";
@@ -123,8 +122,7 @@ const CountdownTimer = ({ targetTime }: { targetTime: Date }) => {
 };
 
 export const WheelOfFortune = () => {
-  const { userData: user, claimPoints } = useMultiLoginContext();
-  const { logActivity } = useAuth();
+  const { user, logActivity, claimPoints } = useAuth();
   const {
     isConnected: nearConnected,
     accountId: nearAddress,
@@ -435,7 +433,7 @@ export const WheelOfFortune = () => {
       console.error("Failed to log wheel spin activity:", error);
     }
 
-    claimPoints("spin claim", setCanClaim);
+    claimPoints("spin claim", () => setCanClaim(false));
 
     // Generate weighted random prize (higher prizes are rarer)
     const newPrizeNumber = pickWeightedIndex(prizeWeights);

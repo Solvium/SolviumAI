@@ -5,6 +5,7 @@ import ProfileIcon from "@/components/icons/ProfileIcon";
 import { ContestIcon } from "@/components/icons/ContestIcon";
 import { Montserrat } from "next/font/google";
 import { useNavigation } from "@/app/contexts/NavigationContext";
+import { useAuth } from "@/app/contexts/AuthContext";
 import profilepng from "@/app/assets/icons/home/profile.png";
 import Profilebot from "@/app/assets/icons/home/profileBot.svg";
 
@@ -16,6 +17,7 @@ const montserrat = Montserrat({
 
 const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
   const { navigate } = useNavigation();
+  const { user } = useAuth();
   return (
     <div className="h-[calc(100vh-75px)] w-full bg-[#040022] flex flex-col">
       {/* Header */}
@@ -42,11 +44,25 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
             onClick={() => navigate("Profile")}
             className="flex flex-1 items-center justify-center gap-1 sm:gap-2 max-w-[120px] sm:max-w-[140px] hover:scale-105 transition-transform"
           >
-            <img
-              src={profilepng.src}
-              alt="Profile Bot"
-              className="w-12 h-12 object-contain object-cover"
-            />
+            {user?.avatar_url || user?.avatar ? (
+              <img
+                src={user.avatar_url || user.avatar}
+                alt="Profile Avatar"
+                className="w-12 h-12 rounded-full object-cover border-2 border-[#BDECFB]"
+                onError={(e) => {
+                  // Fallback to default image if avatar fails to load
+                  e.currentTarget.src = profilepng.src;
+                  e.currentTarget.className =
+                    "w-12 h-12 object-contain object-cover";
+                }}
+              />
+            ) : (
+              <img
+                src={profilepng.src}
+                alt="Profile Bot"
+                className="w-12 h-12 object-contain object-cover"
+              />
+            )}
             {/* <ProfileIcon className="w-12 h-12 text-white" />
             <Profilebot className="w-12 h-12 text-white" /> */}
           </button>

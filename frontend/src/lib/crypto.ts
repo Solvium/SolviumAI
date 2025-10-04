@@ -49,9 +49,8 @@ export class SolviumAPIError extends Error {
   }
 }
 
-// API configuration
-const SOLVIUM_API_BASE_URL =
-  process.env.SOLVIUM_API_BASE_URL || "https://quiz.solviumgame.xyz";
+// API configuration - Now using local API
+const SOLVIUM_API_BASE_URL = "/api";
 
 // Wallet cache configuration
 const WALLET_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
@@ -479,7 +478,7 @@ export class SolviumWalletAPI {
    */
   async checkHealth(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/health`, {
+      const response = await fetch(`${this.baseUrl}/wallet/check`, {
         method: "GET",
         headers: {
           Accept: "application/json",

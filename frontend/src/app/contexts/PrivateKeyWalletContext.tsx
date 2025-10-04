@@ -9,7 +9,6 @@ import React, {
 } from "react";
 import { Account } from "near-api-js";
 import { initializeNearWithPrivateKey } from "@/lib/nearWallet";
-import { useMultiLoginContext } from "./MultiLoginContext";
 import { WalletCheckResponse } from "@/lib/crypto";
 import { useAuth } from "./AuthContext";
 
