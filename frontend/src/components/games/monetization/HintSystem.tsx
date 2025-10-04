@@ -1,40 +1,45 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState } from "react"
-import { Lightbulb, X, Coins } from "lucide-react"
+import type React from "react";
+import { useState } from "react";
+import { Lightbulb, X, Coins } from "lucide-react";
 
-import { Button } from "@/components/ui/button"
-import { toast } from "sonner"
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface HintSystemProps {
-  hintCost: number
-  hint: string
-  userCoins: number
-  onUseHint: () => void
+  hintCost: number;
+  hint: string;
+  userCoins: number;
+  onUseHint: () => void;
 }
 
-const HintSystem: React.FC<HintSystemProps> = ({ hintCost, hint, userCoins, onUseHint }) => {
-  const [hintRevealed, setHintRevealed] = useState(false)
-  const [isModalOpen, setIsModalOpen] = useState(false)
+const HintSystem: React.FC<HintSystemProps> = ({
+  hintCost,
+  hint,
+  userCoins,
+  onUseHint,
+}) => {
+  const [hintRevealed, setHintRevealed] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleUseHint = () => {
     if (userCoins < hintCost) {
-      toast.error("Not enough coins!", {
-        description: "Purchase more coins to use hints.",
-      })
-      return
+      toast.error("Not enough SOLV!", {
+        description: "Purchase more SOLV to use hints.",
+      });
+      return;
     }
 
-    setHintRevealed(true)
-    onUseHint()
+    setHintRevealed(true);
+    onUseHint();
     toast.success("Hint unlocked!", {
-      description: `${hintCost} coins have been deducted.`,
-    })
-  }
+      description: `${hintCost} SOLV have been deducted.`,
+    });
+  };
 
-  const openModal = () => setIsModalOpen(true)
-  const closeModal = () => setIsModalOpen(false)
+  const openModal = () => setIsModalOpen(true);
+  const closeModal = () => setIsModalOpen(false);
 
   return (
     <>
@@ -49,8 +54,8 @@ const HintSystem: React.FC<HintSystemProps> = ({ hintCost, hint, userCoins, onUs
       </Button>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="relative bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-2xl border border-slate-600/50 w-80 h-80 flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="relative bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-2xl border border-slate-600/50 w-80 max-h-[90vh] flex flex-col overflow-y-auto">
             <button
               onClick={closeModal}
               className="absolute top-4 right-4 p-2 rounded-full bg-slate-700/50 hover:bg-slate-600/50 transition-colors"
@@ -68,17 +73,22 @@ const HintSystem: React.FC<HintSystemProps> = ({ hintCost, hint, userCoins, onUs
             <div className="flex-1 px-6 pb-6 flex flex-col justify-between">
               {hintRevealed ? (
                 <div className="bg-yellow-500/10 border border-yellow-400/30 rounded-xl p-4 text-center">
-                  <p className="text-yellow-200 font-medium leading-relaxed">{hint}</p>
+                  <p className="text-yellow-200 font-medium leading-relaxed">
+                    {hint}
+                  </p>
                 </div>
               ) : (
                 <div className="text-center space-y-4">
                   <p className="text-slate-300 text-sm leading-relaxed">
-                    Stuck on this puzzle? Get a helpful hint to guide you in the right direction!
+                    Stuck on this puzzle? Get a helpful hint to guide you in the
+                    right direction!
                   </p>
 
                   <div className="bg-slate-700/50 rounded-lg p-3 flex items-center justify-center gap-2">
                     <Coins className="h-4 w-4 text-yellow-400" />
-                    <span className="text-white font-medium">{userCoins} coins</span>
+                    <span className="text-white font-medium">
+                      {userCoins} SOLV
+                    </span>
                   </div>
                 </div>
               )}
@@ -90,7 +100,7 @@ const HintSystem: React.FC<HintSystemProps> = ({ hintCost, hint, userCoins, onUs
                     className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-semibold py-3 rounded-xl transition-all duration-200 transform hover:scale-105"
                     disabled={userCoins < hintCost}
                   >
-                    Use {hintCost} Coins for Hint
+                    Use {hintCost} SOLV for Hint
                   </Button>
                 )}
 
@@ -107,7 +117,7 @@ const HintSystem: React.FC<HintSystemProps> = ({ hintCost, hint, userCoins, onUs
         </div>
       )}
     </>
-  )
-}
+  );
+};
 
-export default HintSystem
+export default HintSystem;

@@ -5,7 +5,6 @@ import { Copy } from "lucide-react";
 import type WebApp from "@twa-dev/sdk";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useToast } from "@/app/hooks/use-toast";
-import Image from "next/image";
 import { IoChevronBackSharp } from "react-icons/io5";
 // import ProfileIcon from "@/components/icons/ProfileIcon";
 // import Edit from "@/app/assets/icons/profile/edit.svg";
@@ -72,13 +71,14 @@ const ProfileHeader = ({ userDetails }: { userDetails: any }) => {
     <div className="flex flex-col items-center space-y-4">
       {/* Avatar */}
       <div className="relative">
-        <Image
-          src={userDetails?.avatar_url || profileImg.src}
+        <img
+          src={userDetails?.avatar_url || userDetails?.avatar || profileImg.src}
           className="w-24 h-24 rounded-full object-cover"
-          width={96}
-          height={96}
           alt="Profile"
-          unoptimized
+          onError={(e) => {
+            // Fallback to default image if avatar fails to load
+            e.currentTarget.src = profileImg.src;
+          }}
         />
       </div>
 
@@ -164,14 +164,7 @@ const StatsSection = ({ userDetails }: { userDetails: any }) => {
     <div className="grid grid-cols-3 gap-4">
       {/* SOLV Points */}
       <div className="bg-blue-800/50 border-2 border-[#173DE7] flex flex-col items-center justify-center rounded-3xl p-6 text-center">
-        <Image
-          src={coins.src}
-          className="w-[30px]"
-          width={0}
-          height={0}
-          alt=""
-          unoptimized
-        />
+        <img src={coins.src} className="w-[30px]" alt="Coins" />
         <div className="text-[15px] font-bold text-white mb-1">
           {userDetails?.totalSOLV || userDetails?.totalPoints || 0}
         </div>
@@ -182,14 +175,7 @@ const StatsSection = ({ userDetails }: { userDetails: any }) => {
 
       {/* Contests */}
       <div className="bg-blue-800/50 border-2 border-[#173DE7] flex flex-col items-center justify-center rounded-3xl p-6 text-center">
-        <Image
-          src={trophy.src}
-          className="w-[30px]"
-          width={0}
-          height={0}
-          alt=""
-          unoptimized
-        />
+        <img src={trophy.src} className="w-[30px]" alt="Trophy" />
         <div className="text-[15px] font-bold text-white mb-1">
           {userDetails?.contests_participated || 0}
         </div>
@@ -200,14 +186,7 @@ const StatsSection = ({ userDetails }: { userDetails: any }) => {
 
       {/* Tasks */}
       <div className="bg-blue-800/50 border-2 border-[#173DE7] flex flex-col items-center justify-center rounded-3xl p-6 text-center">
-        <Image
-          src={task.src}
-          className="w-[30px]"
-          width={0}
-          height={0}
-          alt=""
-          unoptimized
-        />
+        <img src={task.src} className="w-[30px]" alt="Tasks" />
         <div className="text-[15px] font-bold text-white mb-1">
           {userDetails?.tasks_completed || 0}
         </div>

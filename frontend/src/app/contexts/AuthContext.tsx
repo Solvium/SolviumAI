@@ -99,6 +99,7 @@ export interface AuthContextType extends AuthState {
     points_earned: number;
     metadata?: any;
   }) => Promise<void>;
+  claimPoints: (type: string, callback?: () => void) => Promise<void>;
 }
 
 export interface AuthProviderConfig {
@@ -445,6 +446,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     [fetchUserProfile]
   );
 
+  const claimPoints = useCallback(
+    async (type: string, callback?: () => void) => {
+      if (!state.user?.username) {
+        console.error("No user found for claiming points");
+        return;
+      }
+
+      try {
+        await axios.post("/api/claim", {
+          username: state.user.username,
+          type: type,
+          data: {},
+          userMultipler: 1,
+          solWallet: null,
+        });
+
+        // Refresh user data to get updated points
+        await fetchUserProfile();
+
+        // Call callback if provided
+        if (callback) {
+          callback();
+        }
+      } catch (error) {
+        console.error("Failed to claim points:", error);
+        throw error;
+      }
+    },
+    [state.user?.username, fetchUserProfile]
+  );
+
   const value: AuthContextType = {
     ...state,
     loginWithTelegram,
@@ -459,6 +491,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     fetchUserProfile,
     updateUserProfile,
     logActivity,
+    claimPoints,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

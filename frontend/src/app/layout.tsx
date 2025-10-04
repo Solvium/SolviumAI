@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import AuthProviderWrapper from "./providers/AuthProviderWrapper";
-import { MultiLoginProvider } from "./contexts/MultiLoginContext";
+import { AuthProvider } from "./contexts/AuthContext";
 import { SimpleWalletProvider } from "@/app/contexts/SimpleWalletContext";
 import { PrivateKeyWalletProvider } from "./contexts/PrivateKeyWalletContext";
 import { GameConfigProvider } from "./contexts/GameConfigContext";
@@ -23,13 +22,11 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.className} max-w-[630px] mx-auto`}>
         <SimpleWalletProvider>
-          <AuthProviderWrapper>
-            <MultiLoginProvider>
-              <PrivateKeyWalletProvider>
-                <GameConfigProvider>{children}</GameConfigProvider>
-              </PrivateKeyWalletProvider>
-            </MultiLoginProvider>
-          </AuthProviderWrapper>
+          <AuthProvider>
+            <PrivateKeyWalletProvider>
+              <GameConfigProvider>{children}</GameConfigProvider>
+            </PrivateKeyWalletProvider>
+          </AuthProvider>
         </SimpleWalletProvider>
       </body>
     </html>

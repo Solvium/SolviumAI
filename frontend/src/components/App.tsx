@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Script from "next/script";
 import Head from "next/head";
 import { useEffect } from "react";
-import { MultiLoginProvider } from "@/app/contexts/MultiLoginContext";
 import { SimpleWalletProvider } from "@/app/contexts/SimpleWalletContext";
 
 const queryClient = new QueryClient({
@@ -63,9 +62,7 @@ export default function App({
         strategy="afterInteractive"
       />
 
-      <SimpleWalletProvider>
-        <MultiLoginProvider>{children}</MultiLoginProvider>
-      </SimpleWalletProvider>
+      <SimpleWalletProvider>{children}</SimpleWalletProvider>
     </QueryClientProvider>
   );
 }

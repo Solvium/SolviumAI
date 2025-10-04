@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { solviumWalletAPI, getWalletInfo, SolviumAPIError } from "@/lib/crypto";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,40 +18,59 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use the secure API client to check wallet information with caching
-    const walletInfo = await getWalletInfo(
-      telegram_user_id,
-      force_refresh || false
-    );
+    // Check wallet in local WalletCache
+    const walletCache = await prisma.walletCache.findUnique({
+      where: {
+        telegramUserId: telegram_user_id,
+      },
+    });
 
-    if (!walletInfo) {
+    if (!walletCache) {
+      return NextResponse.json(
+        {
+          has_wallet: false,
+          error: "Wallet not found in cache",
+        },
+        { status: 404 }
+      );
+    }
+
+    // Check if cache is expired
+    const now = new Date();
+    if (walletCache.expiresAt < now) {
+      // Cache expired, remove it
+      await prisma.walletCache.delete({
+        where: {
+          id: walletCache.id,
+        },
+      });
 
       return NextResponse.json(
         {
           has_wallet: false,
-          error:
-            "Unable to retrieve wallet information. API may be unavailable or wallet not found.",
+          error: "Wallet cache expired",
         },
         { status: 404 }
       );
     }
 
     // Return the wallet information
+    const walletInfo = {
+      has_wallet: true,
+      message: "Wallet found in cache",
+      wallet_info: {
+        account_id: walletCache.accountId,
+        public_key: walletCache.publicKey,
+        is_demo: walletCache.isDemo,
+        network: walletCache.network,
+        last_updated: walletCache.lastUpdated,
+        expires_at: walletCache.expiresAt,
+      },
+    };
+
     return NextResponse.json(walletInfo);
   } catch (error) {
     console.error("[API] Error checking wallet:", error);
-
-    // Handle specific API errors
-    if (error instanceof SolviumAPIError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: error.message,
-          code: error.code,
-        },
-        { status: error.status || 500 }
-      );
-    }
 
     // Handle JSON parsing errors
     if (error instanceof SyntaxError) {
@@ -78,14 +97,16 @@ export async function POST(request: NextRequest) {
 // Also support GET method for health checks
 export async function GET() {
   try {
-    const isHealthy = await solviumWalletAPI.checkHealth();
+    // Test database connection
+    await prisma.$queryRaw`SELECT 1`;
+    const isHealthy = true;
 
     return NextResponse.json({
       success: true,
       status: isHealthy ? "healthy" : "unhealthy",
       message: isHealthy
-        ? "SolviumAI API is running"
-        : "SolviumAI API is not responding",
+        ? "Wallet cache system is running"
+        : "Wallet cache system is not responding",
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -95,7 +116,7 @@ export async function GET() {
       {
         success: false,
         status: "error",
-        error: "Failed to check API health",
+        error: "Failed to check database connection",
         timestamp: new Date().toISOString(),
       },
       { status: 500 }

@@ -34,6 +34,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Debug logging for Google token data
+    console.log("Google token decoded data:", {
+      email: decoded.email,
+      picture: decoded.picture,
+      given_name: decoded.given_name,
+      family_name: decoded.family_name,
+    });
+
     // Check if user already exists in database
     let user = await prisma.user.findUnique({
       where: { email: decoded.email },
@@ -48,6 +56,7 @@ export async function POST(request: NextRequest) {
           name: `${decoded.given_name || ""} ${
             decoded.family_name || ""
           }`.trim(),
+          avatar_url: decoded.picture || null, // Google profile picture
           referredBy: "", // Default empty value
           level: 1,
           difficulty: 1,
@@ -66,6 +75,21 @@ export async function POST(request: NextRequest) {
         },
       });
     } else {
+      // Update existing user's avatar with latest Google profile picture
+      if (decoded.picture) {
+        console.log("Updating existing user avatar:", {
+          userId: user.id,
+          currentAvatar: user.avatar_url,
+          newAvatar: decoded.picture,
+        });
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { avatar_url: decoded.picture },
+        });
+        console.log("User avatar updated successfully");
+      } else {
+        console.log("No picture in Google token for existing user");
+      }
     }
 
     // Parse wallet data if it exists
