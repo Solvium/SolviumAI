@@ -45,7 +45,6 @@ export async function POST(req: NextRequest) {
 
     if (message) {
       if (user) {
-
         await replyStart(message, user);
         return NextResponse.json(user);
       }
@@ -341,7 +340,19 @@ export async function GET(req: any) {
 
     if (type == "leaderboard") {
       const users = await prisma.user.findMany({
-        orderBy: { totalPoints: "desc" },
+        select: {
+          id: true,
+          username: true,
+          name: true,
+          totalPoints: true,
+          totalSOLV: true,
+          gamesPlayed: true,
+          gamesWon: true,
+          level: true,
+          difficulty: true,
+          avatar_url: true,
+        },
+        orderBy: { totalSOLV: "desc" },
       });
       return NextResponse.json(users || []);
     }
@@ -433,9 +444,7 @@ const completeTasks = async (data: any) => {
         isCompleted: true,
       },
     });
-  } catch (error) {
-
-  }
+  } catch (error) {}
 };
 
 const registerForTasks = async (data: any) => {
@@ -449,9 +458,7 @@ const registerForTasks = async (data: any) => {
         isCompleted: false,
       },
     });
-  } catch (error) {
-
-  }
+  } catch (error) {}
 };
 
 const getUserTasks = async (data: any) => {
@@ -466,7 +473,6 @@ const getUserTasks = async (data: any) => {
       },
     });
   } catch (error) {
-
     return null;
   }
 };

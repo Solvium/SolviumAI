@@ -162,7 +162,7 @@ const LevelProgress = ({ userDetails }: { userDetails: any }) => {
 const StatsSection = ({ userDetails }: { userDetails: any }) => {
   return (
     <div className="grid grid-cols-3 gap-4">
-      {/* Points */}
+      {/* SOLV Points */}
       <div className="bg-blue-800/50 border-2 border-[#173DE7] flex flex-col items-center justify-center rounded-3xl p-6 text-center">
         <Image
           src={coins.src}
@@ -173,10 +173,10 @@ const StatsSection = ({ userDetails }: { userDetails: any }) => {
           unoptimized
         />
         <div className="text-[15px] font-bold text-white mb-1">
-          {userDetails?.totalPoints || 0}
+          {userDetails?.totalSOLV || userDetails?.totalPoints || 0}
         </div>
         <div className="text-blue-300 text-[10px] font-medium uppercase tracking-wider mt-2">
-          POINTS
+          SOLV
         </div>
       </div>
 
