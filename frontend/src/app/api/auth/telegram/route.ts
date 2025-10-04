@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
     const username = tgUser.username ?? src.username;
     const firstName = tgUser.first_name ?? src.first_name;
     const lastName = tgUser.last_name ?? src.last_name;
+    const avatarUrl = tgUser.photo_url ?? src.photo_url;
 
     if (!telegramId) {
       return NextResponse.json(
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
           username: username || `telegram_${telegramId}`,
           name: `${firstName || ""} ${lastName || ""}`.trim(),
           chatId: telegramId,
+          avatar_url: avatarUrl || null,
           email: null, // Telegram users don't have email
           referredBy: "", // Default empty value
           level: 1,
@@ -54,6 +56,8 @@ export async function POST(request: NextRequest) {
           claimCount: 0,
           lastSpinClaim: new Date(),
           totalPoints: 0,
+          totalSOLV: 0,
+          experience_points: 0,
           isOfficial: false,
           isMining: false,
           isPremium: false,
@@ -62,6 +66,13 @@ export async function POST(request: NextRequest) {
         },
       });
     } else {
+      // Update existing user with avatar if not already set
+      if (avatarUrl && !user.avatar_url) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { avatar_url: avatarUrl },
+        });
+      }
     }
 
     // Parse wallet data if it exists

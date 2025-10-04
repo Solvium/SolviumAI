@@ -37,10 +37,16 @@ model User {
   contests_participated Int           @default(0)
   tasks_completed       Int           @default(0)
   last_level_up         DateTime?
+  // Wordle game stats
+  totalSOLV             Int           @default(0)
+  gamesPlayed           Int           @default(0)
+  gamesWon              Int           @default(0)
   // Relations
   userTasks             UserTask[]
   weeklyScores          WeeklyScore[]
   activities            UserActivity[]
+  wordUsages            WordUsage[]
+  wordleGames           WordleGame[]
 }
 
 model Task {
@@ -115,4 +121,69 @@ model LevelConfig {
   rewards        Json?
 
   @@map("level_config")
+}
+
+model Word {
+  id          Int      @id @default(autoincrement())
+  word        String   @unique
+  length      Int
+  difficulty  String   // "easy", "medium", "hard"
+  meaning     String?
+  examples    Json?    // Array of example sentences
+  synonyms    Json?    // Array of synonyms
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  // Relations
+  wordUsages  WordUsage[]
+
+  @@map("words")
+}
+
+model WordUsage {
+  id        Int      @id @default(autoincrement())
+  wordId    Int
+  userId    Int
+  usedAt    DateTime @default(now())
+  gameType  String   @default("wordle") // "wordle", "puzzle", etc.
+  // Relations
+  word      Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([wordId, userId, gameType])
+  @@map("word_usages")
+}
+
+model WordFetchLog {
+  id          Int      @id @default(autoincrement())
+  fetchDate   DateTime @default(now())
+  difficulty  String
+  wordsCount  Int
+  success     Boolean  @default(true)
+  errorMessage String?
+  createdAt   DateTime @default(now())
+
+  @@map("word_fetch_logs")
+}
+
+model WordleGame {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  dailyId       String
+  level         Int
+  difficulty    String
+  won           Boolean
+  guesses       Int
+  completionTime Int
+  hintUsed      Boolean
+  rewards       Int
+  targetWord    String
+  playedAt      DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+  
+  // Relations
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("wordle_games")
 }

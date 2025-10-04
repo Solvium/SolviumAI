@@ -5,6 +5,7 @@ import AuthProviderWrapper from "./providers/AuthProviderWrapper";
 import { MultiLoginProvider } from "./contexts/MultiLoginContext";
 import { SimpleWalletProvider } from "@/app/contexts/SimpleWalletContext";
 import { PrivateKeyWalletProvider } from "./contexts/PrivateKeyWalletContext";
+import { GameConfigProvider } from "./contexts/GameConfigContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -24,7 +25,9 @@ export default function RootLayout({
         <SimpleWalletProvider>
           <AuthProviderWrapper>
             <MultiLoginProvider>
-              <PrivateKeyWalletProvider>{children}</PrivateKeyWalletProvider>
+              <PrivateKeyWalletProvider>
+                <GameConfigProvider>{children}</GameConfigProvider>
+              </PrivateKeyWalletProvider>
             </MultiLoginProvider>
           </AuthProviderWrapper>
         </SimpleWalletProvider>

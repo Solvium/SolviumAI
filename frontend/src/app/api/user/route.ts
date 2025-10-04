@@ -8,7 +8,6 @@ import { NextRequest, NextResponse } from "next/server";
 const FILE_NAME = "user/route.ts";
 
 export async function POST(req: NextRequest) {
-
   try {
     const {
       username,
@@ -24,7 +23,6 @@ export async function POST(req: NextRequest) {
     } = await req.json();
 
     if (type == "loginWithTg") {
-
       try {
         if (!username) {
           console.error(`[${FILE_NAME}:POST] Username is required`);
@@ -41,7 +39,6 @@ export async function POST(req: NextRequest) {
         });
 
         if (!user) {
-
           // Create new user if doesn't exist
           user = await prisma.user.create({
             data: {
@@ -56,9 +53,7 @@ export async function POST(req: NextRequest) {
               lastSpinClaim: new Date(),
             },
           });
-
         } else {
-
         }
 
         // Create JWT token
@@ -304,21 +299,55 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type");
-
 
   // Get token from cookies - fix cookie name to match what's set in POST
   const auth_token = req.cookies.get("auth_token");
 
   if (!auth_token) {
-
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 
-  if (type == "getme") {
+  if (type == "updateLevel") {
+    try {
+      const { userId, level, difficulty } = await req.json();
 
+      if (!userId || !level || !difficulty) {
+        return NextResponse.json(
+          { error: "Missing required fields" },
+          { status: 400 }
+        );
+      }
+
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          level: level,
+          difficulty:
+            difficulty === "easy" ? 1 : difficulty === "medium" ? 2 : 3,
+        },
+      });
+
+      console.log(
+        `✅ User level updated: ${updatedUser.username} → Level ${level} (${difficulty})`
+      );
+
+      return NextResponse.json({
+        success: true,
+        level: updatedUser.level,
+        difficulty: updatedUser.difficulty,
+      });
+    } catch (error) {
+      console.error("Error updating user level:", error);
+      return NextResponse.json(
+        { error: "Failed to update user level" },
+        { status: 500 }
+      );
+    }
+  }
+
+  if (type == "getme") {
     try {
       // Verify token
 
@@ -333,7 +362,6 @@ export async function GET(req: NextRequest) {
       });
 
       if (!user) {
-
         return NextResponse.json({ authenticated: false }, { status: 401 });
       }
 
