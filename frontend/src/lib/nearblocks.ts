@@ -11,9 +11,9 @@ function buildHeaders() {
 export async function getAccountInfo(accountId: string): Promise<any | null> {
   try {
     const res = await fetch(
-      `${LOCAL_BASE}/api/nearblocks/account/${encodeURIComponent(
+      `${LOCAL_BASE}/api/wallet?action=nearblocks-info&account=${encodeURIComponent(
         accountId
-      )}/info`,
+      )}`,
       {
         method: "GET",
         headers: { Accept: "application/json" },
@@ -38,9 +38,9 @@ export async function getAccountTxns(
       order: "desc",
     });
     const res = await fetch(
-      `${LOCAL_BASE}/api/nearblocks/account/${encodeURIComponent(
+      `${LOCAL_BASE}/api/wallet?action=nearblocks-txns&account=${encodeURIComponent(
         accountId
-      )}/txns?${params.toString()}`,
+      )}&${params.toString()}`,
       {
         method: "GET",
         headers: { Accept: "application/json" },

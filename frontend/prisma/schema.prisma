@@ -47,6 +47,10 @@ model User {
   activities            UserActivity[]
   wordUsages            WordUsage[]
   wordleGames           WordleGame[]
+  // Multiplayer relations
+  hostedRooms           GameRoom[]        @relation("RoomHost")
+  roomPlayers           RoomPlayer[]      @relation("RoomPlayer")
+  multiplayerGames      MultiplayerGame[] @relation("MultiplayerGame")
 }
 
 model Task {
@@ -186,4 +190,63 @@ model WordleGame {
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("wordle_games")
+}
+
+// Multiplayer Game Rooms
+model GameRoom {
+  id          Int      @id @default(autoincrement())
+  roomCode    String   @unique
+  hostUserId  Int
+  gameType    String   @default("wordle") // wordle, puzzle, quiz, etc.
+  status      String   @default("waiting") // waiting, playing, completed
+  maxPlayers  Int      @default(8)
+  createdAt   DateTime @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  
+  // Relations
+  host        User         @relation("RoomHost", fields: [hostUserId], references: [id], onDelete: Cascade)
+  players     RoomPlayer[]
+  games       MultiplayerGame[]
+  
+  @@map("game_rooms")
+}
+
+// Players in game rooms
+model RoomPlayer {
+  id          Int      @id @default(autoincrement())
+  roomId      Int
+  userId      Int
+  status      String   @default("joined") // joined, ready, playing, completed
+  isReady     Boolean  @default(false)
+  joinedAt    DateTime @default(now())
+  leftAt      DateTime?
+  
+  // Relations
+  room        GameRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user        User     @relation("RoomPlayer", fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([roomId, userId])
+  @@map("room_players")
+}
+
+// Multiplayer game results
+model MultiplayerGame {
+  id              Int      @id @default(autoincrement())
+  roomId          Int
+  userId          Int
+  gameType        String   // wordle, puzzle, quiz, etc.
+  wordId          String?  // For wordle games
+  guesses         Int?
+  completionTime  Int?     // Time in seconds
+  rank            Int?     // Final ranking in the room
+  score           Int?     // Final score
+  won             Boolean  @default(false)
+  playedAt        DateTime @default(now())
+  
+  // Relations
+  room            GameRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user            User     @relation("MultiplayerGame", fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("multiplayer_games")
 }

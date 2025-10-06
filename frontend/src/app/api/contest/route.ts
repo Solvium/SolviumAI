@@ -1,4 +1,4 @@
-import { getCurrentYear, getISOWeekNumber } from "@/app/utils/utils";
+import { getCurrentYear, getISOWeekNumber } from "@/lib/utils/utils";
 // import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 

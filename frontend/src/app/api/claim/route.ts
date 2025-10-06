@@ -2,7 +2,7 @@ import {
   getCurrentYear,
   getISOWeekNumber,
   sendTokensToUser,
-} from "@/app/utils/utils";
+} from "@/lib/utils/utils";
 import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 

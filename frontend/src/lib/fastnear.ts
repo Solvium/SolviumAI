@@ -1,7 +1,9 @@
 export async function getAccountFull(accountId: string): Promise<any | null> {
   try {
     const res = await fetch(
-      `/api/fastnear/account/${encodeURIComponent(accountId)}/full`,
+      `/api/wallet?action=fastnear-full&account=${encodeURIComponent(
+        accountId
+      )}`,
       {
         method: "GET",
         headers: { Accept: "application/json" },
