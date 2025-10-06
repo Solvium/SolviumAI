@@ -1,6 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getISOWeekNumber, getCurrentYear } from "@/lib/utils/utils";
+import fs from "fs";
+import path from "path";
+
+// Word validation function
+let wordsSet: Set<string> | null = null;
+
+function loadDictionary(): Set<string> {
+  if (wordsSet) return wordsSet;
+  const dictPath = path.join(process.cwd(), "src", "lib", "dictionary.json");
+  const raw = fs.readFileSync(dictPath, "utf-8");
+  const dictionary = JSON.parse(raw);
+  // Flatten the dictionary structure
+  const allWords = Object.values(dictionary as Record<string, string[]>).flat();
+  wordsSet = new Set(allWords.map((w: string) => w.toUpperCase()));
+  return wordsSet;
+}
+
+function validateWord(word: string): boolean {
+  const set = loadDictionary();
+  return set.has(word.toUpperCase());
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -41,6 +62,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // For Wordle games, validate the target word if provided
+    if (gameType === "wordle" && metadata?.targetWord) {
+      const targetWord = metadata.targetWord.replace(/•/g, "").toUpperCase();
+      if (targetWord.length > 0 && !validateWord(targetWord)) {
+        console.log(
+          `❌ Invalid target word in game completion: "${targetWord}"`
+        );
+        return NextResponse.json(
+          { error: "Invalid target word" },
+          { status: 400 }
+        );
+      }
+      console.log(`✅ Target word validated: "${targetWord}"`);
+    }
+
     // Calculate expected level based on experience points
     let expectedLevel = Number(level) || 1;
     let totalGamesWon = 0;
@@ -52,7 +88,7 @@ export async function POST(req: NextRequest) {
       totalGamesWon = (currentUser?.gamesWon || 0) + 1;
 
       // Calculate new experience points after this game
-      const newExperiencePoints = (currentUser?.experience_points || 0) + 1;
+      const newExperiencePoints = (currentUser?.experience_points || 0) + 5;
 
       // Get level configurations to calculate proper level
       const levelConfigs = await prisma.levelConfig.findMany({
@@ -156,7 +192,7 @@ export async function POST(req: NextRequest) {
             increment: finalRewards,
           },
           experience_points: {
-            increment: 1, // 1 XP per game win
+            increment: 5, // 5 XP per game win
           },
           weeklyPoints: {
             increment: finalRewards,
@@ -208,7 +244,7 @@ export async function POST(req: NextRequest) {
         data: {
           userId: userId,
           activity_type: `${gameType.toUpperCase()}_WIN`,
-          points_earned: 1, // 1 XP for winning
+          points_earned: 5, // 5 XP for winning
           metadata: {
             gameType: gameType,
             level: expectedLevel,
@@ -238,7 +274,7 @@ export async function POST(req: NextRequest) {
         changes: {
           totalSOLVChange: finalRewards,
           totalPointsChange: finalRewards,
-          experiencePointsChange: 1,
+          experiencePointsChange: 5,
           weeklyPointsChange: finalRewards,
           gamesPlayedChange: 1,
           gamesWonChange: 1,

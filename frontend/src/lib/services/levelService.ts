@@ -9,7 +9,9 @@ export interface LevelInfo {
 }
 
 export class LevelService {
-  static async calculateLevelInfo(totalPoints: number): Promise<LevelInfo> {
+  static async calculateLevelInfo(
+    experiencePoints: number
+  ): Promise<LevelInfo> {
     const levelConfigs = await prisma.levelConfig.findMany({
       orderBy: { level: "asc" },
     });
@@ -19,7 +21,7 @@ export class LevelService {
 
     // Find current level
     for (let i = levelConfigs.length - 1; i >= 0; i--) {
-      if (totalPoints >= levelConfigs[i].points_required) {
+      if (experiencePoints >= levelConfigs[i].points_required) {
         currentLevel = levelConfigs[i].level;
         nextLevelPoints =
           levelConfigs[i + 1]?.points_required ||
@@ -30,9 +32,9 @@ export class LevelService {
 
     const currentLevelPoints =
       levelConfigs.find((l) => l.level === currentLevel)?.points_required || 0;
-    const pointsToNext = nextLevelPoints - totalPoints;
+    const pointsToNext = nextLevelPoints - experiencePoints;
     const progressPercentage =
-      ((totalPoints - currentLevelPoints) /
+      ((experiencePoints - currentLevelPoints) /
         (nextLevelPoints - currentLevelPoints)) *
       100;
 

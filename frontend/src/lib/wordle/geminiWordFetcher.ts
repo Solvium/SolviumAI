@@ -6,6 +6,9 @@
  * and ensures users don't get repeated words.
  */
 
+// fs and path removed - using API endpoint for validation instead
+import dictionary from "../dictionary.json";
+
 export interface WordInfo {
   word: string;
   meanings: Array<{
@@ -149,24 +152,99 @@ export async function getDailyWord(
   }
 }
 
+// Cache for dictionary words
+let dictionaryWords: Set<string> | null = null;
+
 /**
- * Validate a word using the database
+ * Load dictionary from the imported JSON file
  */
-export async function validateWord(word: string): Promise<boolean> {
+function loadDictionary(): Set<string> {
+  if (dictionaryWords) return dictionaryWords;
+
   try {
-    console.log(`🔍 Validating word: "${word}"`);
-    const response = await fetchFromAPI(
-      `/api/words/meaning?word=${encodeURIComponent(word)}`
-    );
-    const isValid = response.success;
+    console.log("📚 Loading dictionary for frontend validation...");
     console.log(
-      `✅ Word validation result: "${word}" is ${isValid ? "VALID" : "INVALID"}`
+      "📚 Dictionary JSON loaded:",
+      Object.keys(dictionary).length,
+      "prefixes"
+    );
+
+    // Flatten all word arrays from the prefix-based structure
+    const allWords = Object.values(
+      dictionary as Record<string, string[]>
+    ).flat();
+    console.log("📚 Total words after flattening:", allWords.length);
+
+    dictionaryWords = new Set(allWords.map((w) => w.toUpperCase()));
+    console.log(
+      `📚 Dictionary Set created: ${dictionaryWords.size} unique words`
+    );
+
+    return dictionaryWords;
+  } catch (error) {
+    console.error("Failed to load dictionary:", error);
+    // Fallback to basic validation if dictionary fails to load
+    dictionaryWords = new Set();
+    return dictionaryWords;
+  }
+}
+
+/**
+ * Frontend validation - check against actual dictionary
+ */
+export async function validateWordFrontend(word: string): Promise<boolean> {
+  const upperWord = word.toUpperCase();
+
+  // Basic validation rules first
+  if (!upperWord || upperWord.length < 3 || upperWord.length > 10) {
+    return false;
+  }
+
+  // Only allow letters
+  if (!/^[A-Z]+$/.test(upperWord)) {
+    return false;
+  }
+
+  // Load dictionary and check if word exists
+  const words = loadDictionary();
+  const exists = words.has(upperWord);
+
+  console.log(
+    `🔍 Frontend validation: "${upperWord}" ${
+      exists ? "EXISTS" : "NOT FOUND"
+    } in dictionary`
+  );
+  return exists;
+}
+
+/**
+ * Backend validation using API endpoint
+ */
+export async function validateWordBackend(word: string): Promise<boolean> {
+  try {
+    console.log(`🔍 Backend validating word: "${word}"`);
+    const response = await fetchFromAPI(
+      `/api/words/check?word=${encodeURIComponent(word)}`
+    );
+    const isValid = !!response.success;
+    console.log(
+      `✅ Backend validation result: "${word}" is ${
+        isValid ? "VALID" : "INVALID"
+      }`
     );
     return isValid;
   } catch (error) {
     console.error("Error validating word:", error);
     throw new Error(`Word validation failed: ${error}`);
   }
+}
+
+/**
+ * Full validation: frontend dictionary check first, then backend
+ */
+export async function validateWord(word: string): Promise<boolean> {
+  // Backend validation only - frontend validation should be done separately
+  return await validateWordBackend(word);
 }
 
 /**

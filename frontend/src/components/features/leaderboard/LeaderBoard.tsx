@@ -49,8 +49,8 @@ const LeaderBoard = () => {
       (user as any)?.firstName ||
       user?.username ||
       "You",
-    totalPoints: (user as any)?.totalPoints ?? 432,
-    level: (user as any)?.level ?? 10,
+    totalSOLV: (user as any)?.totalSOLV ?? 0,
+    level: (user as any)?.level ?? 1,
   };
   const userPosition = myPos !== -1 ? myPos + 1 : 148;
 
@@ -97,7 +97,10 @@ const LeaderBoard = () => {
                 2
               </div>
             </div>
-            <p className="text-white font-semibold mt-3 text-sm">
+            <p
+              className="text-white font-semibold mt-3 text-sm truncate max-w-[80px]"
+              title={second.name}
+            >
               {second.name}
             </p>
             <p className="text-gray-400 text-xs">level {second.level}</p>
@@ -107,12 +110,28 @@ const LeaderBoard = () => {
         {/* 1st Place */}
         {first && (
           <div className="flex flex-col items-center -mt-4">
-            <img
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Group%20427320572%20%281%29-NPYGoTXVwnq0OZUZH98F4K6Zif1m0d.png"
-              alt="Winner"
-              className="w-32 h-32 mb-2"
-            />
-            <p className="text-white font-semibold text-base">{first.name}</p>
+            <div className="w-32 h-32 rounded-full border-4 border-yellow-400 overflow-hidden bg-white mb-2">
+              {first.avatar_url || first.avatar ? (
+                <img
+                  src={first.avatar_url || first.avatar || "/placeholder.svg"}
+                  alt={first.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div
+                  style={{ background: stringToColour(first.username) }}
+                  className="w-full h-full flex items-center justify-center text-4xl font-bold text-white"
+                >
+                  {first.name?.slice(0, 1)?.toUpperCase()}
+                </div>
+              )}
+            </div>
+            <p
+              className="text-white font-semibold text-base truncate max-w-[100px]"
+              title={first.name}
+            >
+              {first.name}
+            </p>
             <p className="text-gray-400 text-sm">level {first.level}</p>
           </div>
         )}
@@ -141,7 +160,10 @@ const LeaderBoard = () => {
                 3
               </div>
             </div>
-            <p className="text-white font-semibold mt-3 text-sm">
+            <p
+              className="text-white font-semibold mt-3 text-sm truncate max-w-[80px]"
+              title={third.name}
+            >
               {third.name}
             </p>
             <p className="text-gray-400 text-xs">level {third.level}</p>
@@ -206,13 +228,17 @@ const LeaderBoard = () => {
             )}
           </div>
 
-          <span className="font-semibold text-lg" style={{ color: textColor }}>
+          <span
+            className="font-semibold text-lg truncate max-w-[120px]"
+            style={{ color: textColor }}
+            title={userData.name}
+          >
             {userData.name}
           </span>
         </div>
 
         <span className="font-semibold text-lg" style={{ color: textColor }}>
-          {userData.totalPoints} pts.
+          {userData.totalSOLV || userData.totalPoints || 0} SOLV
         </span>
       </div>
     );
@@ -224,11 +250,27 @@ const LeaderBoard = () => {
         <ChevronUp className="w-5 h-5 text-green-500" />
         <span className="font-semibold text-lg text-white">{userPosition}</span>
 
-        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white bg-blue-500 flex items-center justify-center">
-          <span className="text-2xl">🤖</span>
+        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white">
+          {user?.avatar_url || user?.avatar ? (
+            <img
+              src={user.avatar_url || user.avatar || "/placeholder.svg"}
+              alt={currentUserData.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div
+              style={{ background: stringToColour(user?.username || "user") }}
+              className="w-full h-full flex items-center justify-center text-lg font-bold text-white"
+            >
+              {currentUserData.name?.slice(0, 1)?.toUpperCase()}
+            </div>
+          )}
         </div>
 
-        <span className="font-semibold text-lg text-white">
+        <span
+          className="font-semibold text-lg text-white truncate max-w-[120px]"
+          title={currentUserData.name}
+        >
           {(("name" in currentUserData) as any)
             ? currentUserData.name
             : currentUserData.username}
@@ -236,7 +278,7 @@ const LeaderBoard = () => {
       </div>
 
       <span className="font-semibold text-lg text-white">
-        {currentUserData.totalPoints} pts.
+        {currentUserData.totalSOLV} SOLV
       </span>
     </div>
   );

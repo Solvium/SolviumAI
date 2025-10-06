@@ -9,6 +9,14 @@ export async function POST(req: NextRequest) {
   try {
     const { username, type } = await req.json();
 
+    if (!type) {
+      return NextResponse.json({ error: "Missing type" }, { status: 400 });
+    }
+
+    if (!username) {
+      return NextResponse.json({ error: "Missing username" }, { status: 400 });
+    }
+
     const user = await prisma.user.findUnique({
       where: {
         username: username,

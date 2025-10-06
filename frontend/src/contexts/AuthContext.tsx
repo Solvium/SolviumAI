@@ -398,7 +398,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   // New profile enhancement methods
   const fetchUserProfile = useCallback(async () => {
     try {
-      const response = await axios.get("/api/user/profile");
+      const response = await axios.get("/api/auth/me");
       const userData = response.data.user;
 
       setState((prev) => ({

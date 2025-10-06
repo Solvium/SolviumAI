@@ -9,11 +9,13 @@ export async function GET() {
         id: true,
         username: true,
         totalPoints: true,
+        totalSOLV: true,
         level: true,
         gamesWon: true,
         gamesPlayed: true,
         weeklyPoints: true,
         experience_points: true,
+        avatar_url: true,
         createdAt: true,
       },
       orderBy: {
@@ -28,14 +30,16 @@ export async function GET() {
       username: user.username,
       name: user.username, // Use username as name for now
       totalPoints: user.totalPoints,
+      totalSOLV: user.totalSOLV,
       level: user.level,
       gamesWon: user.gamesWon,
       gamesPlayed: user.gamesPlayed,
       weeklyPoints: user.weeklyPoints,
       experience_points: user.experience_points,
       rank: index + 1,
-      avatar: null, // No avatar field in database yet
-      trend: null, // No trend calculation yet
+      avatar: user.avatar_url,
+      avatar_url: user.avatar_url,
+      trend: index < 3 ? "up" : index > 45 ? "down" : null, // Simple trend based on position
       joinDate: user.createdAt,
     }));
 
