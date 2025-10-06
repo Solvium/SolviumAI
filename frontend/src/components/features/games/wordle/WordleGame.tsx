@@ -19,9 +19,10 @@ import {
 import HintSystem from "../monetization/HintSystem";
 import { useGameConfig } from "@/contexts/GameConfigContext";
 import { useAuth } from "@/contexts/AuthContext";
-// import { useGameType } from "@/contexts/GameContext";
-import { validateWord, getDailyWord } from "@/lib/wordle/geminiWordFetcher";
-import { WordMeaning } from "@/components/features/games/wordle/WordMeaning";
+import {
+  validateWordFrontend,
+  getDailyWord,
+} from "@/lib/wordle/geminiWordFetcher";
 import WordleRoomModal from "./WordleRoomModal";
 import { useMultiplayerRoom } from "@/hooks/useMultiplayerRoom";
 // import HintSystem from "@/components/monetization/HintSystem";
@@ -37,7 +38,7 @@ const WordleGame: React.FC<WordleGameProps> = ({
 }) => {
   const { config, dailyProgress, updateWordleConfig, updateDailyProgress } =
     useGameConfig();
-  const { user } = useAuth();
+  const { user, fetchUserProfile } = useAuth();
   const {
     createRoom,
     joinRoom,
@@ -79,7 +80,7 @@ const WordleGame: React.FC<WordleGameProps> = ({
 
   const [showGameOverModal, setShowGameOverModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showWordMeaning, setShowWordMeaning] = useState(false);
+  // Meaning modal removed
   const [currentWord, setCurrentWord] = useState("");
   // dynamic length support
   const [wordLen, setWordLen] = useState<number>(5);
@@ -340,14 +341,14 @@ const WordleGame: React.FC<WordleGameProps> = ({
       console.log(
         `🔍 Validating guess: "${guessUpper}" against target: "${targetWord}"`
       );
-      const isValid = await validateWord(guessUpper);
 
+      // Validate word using frontend dictionary check (fast)
+      const isValid = await validateWordFrontend(guessUpper);
       if (!isValid) {
         console.log(`❌ Invalid word: "${guessUpper}"`);
         toast.error("Word not found in dictionary!");
         return;
       }
-
       console.log(`✅ Valid word: "${guessUpper}"`);
 
       // Prefer local validation if we have the answer
@@ -383,7 +384,7 @@ const WordleGame: React.FC<WordleGameProps> = ({
 
           // SOLV balance will be updated by the API response
           console.log(`💰 SOLV Update: +${rewards.totalSOLV} SOLV`);
-          toast.success(`You won! +${rewards.totalSOLV} SOLV! 🎉`);
+          // Win message will be shown after backend confirms success
 
           // Update daily progress with game config
           if (dailyProgress) {
@@ -449,12 +450,29 @@ const WordleGame: React.FC<WordleGameProps> = ({
                   );
                   advanceLevel(result.userUpdate.totalGamesWon);
                 }
+
+                // Show win message only after backend confirms success
+                toast.success(
+                  `You won! +${
+                    result.userUpdate?.rewardsEarned || rewards.totalSOLV
+                  } SOLV! 🎉`
+                );
+
+                // Refresh user profile to show updated XP and stats
+                await fetchUserProfile();
               } else {
                 console.error("❌ Failed to save game completion to database");
+                const errorData = await response.json();
+                toast.error(
+                  `Game completion failed: ${
+                    errorData.error || "Unknown error"
+                  }`
+                );
               }
             })
             .catch((error) => {
               console.error("❌ Error saving game completion:", error);
+              toast.error("Failed to complete game. Please try again.");
             });
         } else if (newGuesses.length >= maxGuesses) {
           setGameOver(true);
@@ -879,12 +897,7 @@ const WordleGame: React.FC<WordleGameProps> = ({
                           +{rewards.totalSOLV} SOLV
                         </span>
                       </div>
-                      <div className="bg-yellow-500/20 rounded-lg p-4 text-center border border-yellow-400/30">
-                        <Gift className="w-6 h-6 mx-auto mb-2 text-yellow-400" />
-                        <span className="text-sm text-white block font-medium">
-                          🔤 Badge
-                        </span>
-                      </div>
+                      {/* Badge removed per requirements */}
                     </div>
                   );
                 })()}
@@ -918,16 +931,6 @@ const WordleGame: React.FC<WordleGameProps> = ({
             )}
 
             <div className="space-y-3 mt-6">
-              <Button
-                onClick={() => {
-                  setCurrentWord(targetWord.replace(/•/g, ""));
-                  setShowWordMeaning(true);
-                }}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 rounded-xl transition-all duration-200"
-              >
-                📖 Learn About This Word
-              </Button>
-
               <Button
                 onClick={() => {
                   startNewGame();
@@ -1180,11 +1183,7 @@ const WordleGame: React.FC<WordleGameProps> = ({
 
       <GameOverModal />
       <SettingsModal />
-      <WordMeaning
-        word={currentWord}
-        isOpen={showWordMeaning}
-        onClose={() => setShowWordMeaning(false)}
-      />
+      {/* Meaning UI removed */}
 
       {/* Multiplayer Room Modal */}
       <WordleRoomModal
@@ -1192,7 +1191,6 @@ const WordleGame: React.FC<WordleGameProps> = ({
         onClose={() => setShowRoomModal(false)}
         onStartGame={(roomId) => {
           setShowRoomModal(false);
-          // Start the multiplayer game
           startNewGame();
         }}
         roomCode={currentRoomCode || undefined}

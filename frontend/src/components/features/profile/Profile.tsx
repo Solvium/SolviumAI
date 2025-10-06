@@ -107,9 +107,78 @@ const ProfileHeader = ({ userDetails }: { userDetails: any }) => {
 };
 
 const LevelProgress = ({ userDetails }: { userDetails: any }) => {
-  const levelInfo = userDetails?.level_progress;
+  const [levelInfo, setLevelInfo] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!levelInfo) return null;
+  console.log("userDetails", userDetails);
+  useEffect(() => {
+    const calculateLevelProgress = async () => {
+      if (!userDetails?.experience_points) {
+        setLevelInfo({
+          currentLevel: userDetails?.level || 1,
+          pointsToNext: 200,
+          progressPercentage: 0,
+          nextLevelPoints: 200,
+          levelTitle: "Beginner",
+        });
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/level/calculate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            experiencePoints: userDetails.experience_points,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setLevelInfo(data);
+        } else {
+          // Fallback if API fails
+          setLevelInfo({
+            currentLevel: userDetails?.level || 1,
+            pointsToNext: 200,
+            progressPercentage: 0,
+            nextLevelPoints: 200,
+            levelTitle: "Beginner",
+          });
+        }
+      } catch (error) {
+        console.error("Error calculating level progress:", error);
+        // Fallback if API fails
+        setLevelInfo({
+          currentLevel: userDetails?.level || 1,
+          pointsToNext: 200,
+          progressPercentage: 0,
+          nextLevelPoints: 200,
+          levelTitle: "Beginner",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    calculateLevelProgress();
+  }, [userDetails?.experience_points]);
+
+  if (loading) {
+    return (
+      <div className="bg-blue-800/50 rounded-3xl p-6 border border-blue-600/30">
+        <div className="animate-pulse">
+          <div className="h-4 bg-blue-700 rounded w-1/2 mb-2"></div>
+          <div className="h-8 bg-blue-700 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!levelInfo) {
+    return null;
+  }
 
   return (
     <div className="bg-blue-800/50 rounded-3xl p-6 border border-blue-600/30">
@@ -117,15 +186,15 @@ const LevelProgress = ({ userDetails }: { userDetails: any }) => {
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
             <span className="text-white font-bold text-sm">
-              {levelInfo.current_level}
+              {levelInfo.currentLevel}
             </span>
           </div>
           <div>
             <h3 className="text-white font-bold text-lg">
-              Level {levelInfo.current_level}
+              Level {levelInfo.currentLevel} - {levelInfo.levelTitle}
             </h3>
             <p className="text-blue-300 text-sm">
-              {levelInfo.points_to_next} Points to next level
+              {levelInfo.pointsToNext} Points to next level
             </p>
           </div>
         </div>
@@ -136,21 +205,21 @@ const LevelProgress = ({ userDetails }: { userDetails: any }) => {
         <div className="relative flex items-center w-[100%] overflow-hidden justify-between bg-[rgba(243,177,78,0.7)] rounded-full h-8">
           <div
             className="bg-[rgba(243,177,78,1)] rounded-full h-full absolute transition-all duration-500"
-            style={{ width: `${levelInfo.progress_percentage}%` }}
+            style={{ width: `${levelInfo.progressPercentage}%` }}
           />
 
           <div className="flex items-center justify-between z-10 w-full ">
             <span className="text-xs text-[#825C24] px-2 py-1 border-2 rounded-full bg-[#FFCE51] border-[#F3B14E] font-bold">
-              {levelInfo.current_level}{" "}
+              {levelInfo.currentLevel}{" "}
             </span>
 
             <span className="text-yellow-900 z-10 font-bold text-sm">
               ★ {userDetails?.experience_points || 0}/
-              {levelInfo.next_level_points}
+              {levelInfo.nextLevelPoints}
             </span>
 
             <span className="text-xs text-[#825C24] px-2 py-1 border-2 rounded-full bg-[#FFCE51] border-[#F3B14E] font-bold">
-              {levelInfo.current_level + 1}
+              {levelInfo.currentLevel + 1}
             </span>
           </div>
         </div>

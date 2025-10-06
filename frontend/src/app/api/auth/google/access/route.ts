@@ -87,18 +87,20 @@ export async function POST(request: NextRequest) {
         },
       });
     } else {
-      // Update existing user's avatar with latest Google profile picture
-      if (profile.picture) {
-        console.log("Updating existing user avatar via access token:", {
-          userId: user.id,
-          currentAvatar: user.avatar_url,
-          newAvatar: profile.picture,
-        });
+      // Idempotent avatar save: only set once if not already present
+      if (profile.picture && !user.avatar_url) {
+        console.log(
+          "Setting user avatar for the first time via access token:",
+          {
+            userId: user.id,
+            newAvatar: profile.picture,
+          }
+        );
         user = await prisma.user.update({
           where: { id: user.id },
           data: { avatar_url: profile.picture },
         });
-        console.log("User avatar updated successfully via access token");
+        console.log("User avatar saved (first-time)");
       }
     }
 

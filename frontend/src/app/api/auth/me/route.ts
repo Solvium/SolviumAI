@@ -68,6 +68,14 @@ export async function GET(request: NextRequest) {
         lastClaim: true,
         chatId: true,
         totalPoints: true,
+        experience_points: true,
+        totalSOLV: true,
+        gamesPlayed: true,
+        gamesWon: true,
+        avatar_url: true,
+        contests_participated: true,
+        tasks_completed: true,
+        last_level_up: true,
       },
     });
 
@@ -119,6 +127,14 @@ export async function GET(request: NextRequest) {
       lastClaim: user.lastClaim || undefined,
       chatId: user.chatId || undefined,
       wallet: walletData, // Include parsed wallet data
+      experience_points: user.experience_points || 0,
+      totalSOLV: user.totalSOLV || 0,
+      gamesPlayed: user.gamesPlayed || 0,
+      gamesWon: user.gamesWon || 0,
+      avatar_url: user.avatar_url || undefined,
+      contests_participated: user.contests_participated || 0,
+      tasks_completed: user.tasks_completed || 0,
+      last_level_up: user.last_level_up || undefined,
     };
 
     return NextResponse.json({
