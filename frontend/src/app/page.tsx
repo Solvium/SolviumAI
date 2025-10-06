@@ -1,26 +1,26 @@
 "use client";
 import { useEffect, useState } from "react";
-import LeaderBoard from "@/components/LeaderBoard";
+import LeaderBoard from "@/components/features/leaderboard/LeaderBoard";
 import type WebApp from "@twa-dev/sdk";
-import UserProfile from "@/components/Profile";
-import Contest from "@/components/Contest";
-import WalletPage from "@/components/WalletPage";
-import LoginModule from "@/components/auth/LoginModule";
-import { useAuth } from "./contexts/AuthContext";
-import GamesPage from "@/components/games/GamesPage";
-import { WheelOfFortune } from "@/components/Wheel";
-import HomePage from "@/components/HomePage";
+import UserProfile from "@/components/features/profile/Profile";
+import Contest from "@/components/features/contest/Contest";
+import WalletPage from "@/components/common/WalletPage";
+import LoginModule from "@/components/features/auth/LoginModule";
+import { useAuth } from "@/contexts/AuthContext";
+import GamesPage from "@/components/features/games/GamesPage";
+import { WheelOfFortune } from "@/components/features/wheel/Wheel";
+import HomePage from "@/components/layout/HomePage";
 import {
   NavigationProvider,
   useNavigation,
-} from "./contexts/NavigationContext";
+} from "@/contexts/NavigationContext";
 import Image from "next/image";
-import HomeIcon from "@/components/icons/HomeIcon";
-import GameIcon from "@/components/icons/GameIcon";
-import RankIcon from "@/components/icons/RankIcon";
-import WalletIcon from "@/components/icons/WalletIcon";
-import SpinIcon from "@/components/icons/SpinIcon";
-import TasksPage from "@/components/TasksPage";
+import HomeIcon from "@/components/common/icons/HomeIcon";
+import GameIcon from "@/components/common/icons/GameIcon";
+import RankIcon from "@/components/common/icons/RankIcon";
+import WalletIcon from "@/components/common/icons/WalletIcon";
+import SpinIcon from "@/components/common/icons/SpinIcon";
+import TasksPage from "@/components/features/tasks/TasksPage";
 
 // Force dynamic rendering since this page uses client-side features
 export const dynamic = "force-dynamic";

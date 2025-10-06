@@ -82,7 +82,7 @@ export const initializeNearWithPrivateKey = async (
 
     // Route RPC via local proxy to avoid CSP
     const urls = getNetworkUrls(BLOCKCHAIN_NET);
-    const proxiedRpc = `/api/near-rpc?network=${encodeURIComponent(
+    const proxiedRpc = `/api/wallet?action=near-rpc&network=${encodeURIComponent(
       BLOCKCHAIN_NET
     )}`;
     const near = await connect({

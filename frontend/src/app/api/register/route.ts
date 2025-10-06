@@ -1,5 +1,5 @@
-import { getCurrentYear, getISOWeekNumber } from "@/app/utils/utils";
-import { telegramClient } from "../../clients/TelegramApiClient";
+import { getCurrentYear, getISOWeekNumber } from "@/lib/utils/utils";
+import { telegramClient } from "@/lib/api/TelegramApiClient";
 import { InlineKeyboardMarkup } from "@grammyjs/types";
 // import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";

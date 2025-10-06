@@ -73,7 +73,27 @@ export class LevelService {
         },
       });
 
-      // TODO: Send level up notification
+      // Log level up event for frontend to handle
+      console.log(
+        `🎉 Level Up! User ${userId} reached level ${newLevelInfo.currentLevel}`
+      );
+
+      // Store level up event in database for frontend to fetch
+      await prisma.userActivity.create({
+        data: {
+          userId: parseInt(userId),
+          activity_type: "LEVEL_UP",
+          points_earned: 0, // Level up doesn't earn points, just progression
+          metadata: {
+            newLevel: newLevelInfo.currentLevel,
+            oldLevel: oldLevelInfo.currentLevel,
+            experiencePoints: newPoints,
+            description: `Leveled up to level ${newLevelInfo.currentLevel}`,
+            gameType: "system",
+          },
+        },
+      });
+
       return true;
     }
 

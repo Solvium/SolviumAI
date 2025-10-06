@@ -17,7 +17,7 @@ export async function getAccountTxnsFastnear(
   maxBlockHeight?: number
 ): Promise<FastnearAccountResponse | null> {
   try {
-    const res = await fetch(`/api/fastnear/explorer/account`, {
+    const res = await fetch(`/api/wallet?action=fastnear-explorer-account`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

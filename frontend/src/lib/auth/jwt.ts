@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { User } from '@/app/contexts/AuthContext';
+import { User } from '@/contexts/AuthContext';
 
 export interface JWTPayload {
   userId: string;

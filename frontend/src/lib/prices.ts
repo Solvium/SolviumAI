@@ -1,6 +1,6 @@
 export async function getNearUsd(): Promise<number | null> {
   try {
-    const res = await fetch("/api/price/near", {
+    const res = await fetch("/api/wallet?action=price", {
       method: "GET",
       headers: { Accept: "application/json" },
       cache: "no-store",
