@@ -14,6 +14,9 @@ const walletEncryptionKey = crypto.randomBytes(32).toString("base64");
 
 const envContent = `# Database Configuration
 DATABASE_URL="postgresql://username:password@localhost:5432/solvium_db"
+DIRECT_URL="postgresql://username:password@localhost:5432/solvium_db"
+# Optional: Prisma Accelerate proxy URL (preferred in serverless)
+# PRISMA_ACCELERATE_URL="prisma-accelerate-proxy-url"
 
 # JWT Configuration
 JWT_SECRET="${jwtSecret}"

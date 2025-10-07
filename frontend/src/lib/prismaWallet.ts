@@ -1,7 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 
 // Use a separate database URL for wallet tables
-const walletDbUrl = process.env.WALLET_DATABASE_URL || process.env.DATABASE_URL;
+const walletDbUrl =
+  process.env.WALLET_DATABASE_URL ||
+  process.env.PRISMA_ACCELERATE_URL ||
+  process.env.DATABASE_URL;
 
 if (!walletDbUrl) {
   console.warn(

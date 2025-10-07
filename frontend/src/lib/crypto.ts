@@ -134,7 +134,10 @@ export class SolviumWalletAPI {
 }
 
 // Export a default instance
-export const solviumWalletAPI = new SolviumWalletAPI();
+export const solviumWalletAPI = new SolviumWalletAPI(
+  process.env.SOLVIUM_API_BASE_URL,
+  process.env.SOLVIUM_API_KEY
+);
 
 /**
  * Utility function to safely check wallet information

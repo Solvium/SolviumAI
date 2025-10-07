@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
 import { ArrowLeft, QrCode, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -15,6 +16,9 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
   const [step, setStep] = useState<SendStep>("amount");
   const [amount, setAmount] = useState("");
   const [recipient, setRecipient] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { sendNearNative } = usePrivateKeyWallet();
 
   // TODO: Implement contact management system
   // This could fetch recent transaction recipients from the database
@@ -31,12 +35,34 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     setAmount((prev) => prev.slice(0, -1));
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (step === "amount") {
       setStep("recipient");
     } else if (step === "recipient") {
-      // Show success
-      onSuccess();
+      // Execute native NEAR transfer
+      setError(null);
+      if (!amount || !recipient) return;
+      // Convert human NEAR string to yoctoNEAR precisely
+      const normalized = amount.trim();
+      if (!/^\d*(?:\.\d+)?$/.test(normalized)) {
+        setError("Invalid amount");
+        return;
+      }
+      const [w = "0", f = ""] = normalized.split(".");
+      const frac24 = (f + "0".repeat(24)).slice(0, 24);
+      const yocto = (
+        BigInt(w) * BigInt(10) ** BigInt(24) +
+        BigInt(frac24)
+      ).toString();
+      try {
+        setSubmitting(true);
+        await sendNearNative(recipient.trim(), yocto);
+        onSuccess();
+      } catch (e: any) {
+        setError(e?.message || "Failed to send NEAR");
+      } finally {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -259,12 +285,15 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                 </div>
               </div>
 
+              {error && (
+                <div className="text-red-400 text-sm mt-2">{error}</div>
+              )}
               <button
                 onClick={handleConfirm}
-                disabled={!recipient}
+                disabled={!recipient || submitting}
                 className="w-full py-4 bg-[#0075EA] text-white rounded-full text-lg font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-8"
               >
-                Next
+                {submitting ? "Sending..." : "Send"}
               </button>
             </div>
           </div>
