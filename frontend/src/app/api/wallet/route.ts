@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getWalletInfo } from "@/lib/crypto";
 
 // Price API
 const DEXSCREENER_URL =
@@ -283,7 +284,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check wallet in local WalletCache
+    // First try external wallet API via crypto client if configured
+
+    try {
+      const result = await getWalletInfo(telegram_user_id);
+      if (result?.has_wallet && result.wallet_info) {
+        return NextResponse.json({
+          has_wallet: true,
+          message: result.message || "Wallet found",
+          wallet_info: result.wallet_info,
+        });
+      }
+    } catch (e) {
+      console.error("Error checking wallet:", e);
+      // Fall back to local cache if external fails
+    }
+
+    // Fallback: Check wallet in local WalletCache
     const walletCache = await prisma.walletCache.findUnique({
       where: {
         telegramUserId: telegram_user_id,

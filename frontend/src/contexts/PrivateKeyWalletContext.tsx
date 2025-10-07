@@ -40,6 +40,7 @@ interface PrivateKeyWalletContextType {
       };
     }>
   ) => Promise<any>;
+  sendNearNative: (receiverId: string, amountYocto: string) => Promise<any>;
   checkTokenRegistration: (tokenId: string) => Promise<boolean>;
   registerToken: (tokenId: string) => Promise<boolean>;
 }
@@ -77,6 +78,7 @@ export const PrivateKeyWalletProvider = ({
       return;
     }
 
+    console.log("tgIdRaw", tgIdRaw);
     // Coerce to number string for API that expects numeric id
     const tgId = String(parseInt(tgIdRaw, 10));
 
@@ -291,6 +293,20 @@ export const PrivateKeyWalletProvider = ({
       } catch (error) {
         console.error("Error registering token:", error);
         return false;
+      }
+    },
+    sendNearNative: async (receiverId: string, amountYocto: string) => {
+      if (!account) throw new Error("NEAR account not initialized");
+      try {
+        // Use Account.sendMoney for native NEAR transfers
+        const result = await (account as any).sendMoney(
+          receiverId,
+          BigInt(amountYocto)
+        );
+        return result;
+      } catch (error) {
+        console.error("Error sending NEAR:", error);
+        throw error;
       }
     },
   };
