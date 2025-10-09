@@ -8,8 +8,10 @@ export async function POST(request: NextRequest) {
       message: "Logged out successfully",
     });
 
-    // Clear the auth cookie
+    // Clear auth cookies
     response.cookies.delete("auth_token");
+    response.cookies.delete("accessToken");
+    response.cookies.delete("refreshToken");
 
     return response;
   } catch (error) {
@@ -22,6 +24,8 @@ export async function POST(request: NextRequest) {
     });
 
     response.cookies.delete("auth_token");
+    response.cookies.delete("accessToken");
+    response.cookies.delete("refreshToken");
     return response;
   }
 }

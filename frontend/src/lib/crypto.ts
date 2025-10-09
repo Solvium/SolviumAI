@@ -32,8 +32,24 @@ export class SolviumAPIError extends Error {
   }
 }
 
-// API configuration - Using local API
-const SOLVIUM_API_BASE_URL = "/api";
+// Resolve external API base URL from env (must be absolute http(s) URL)
+function resolveExternalApiBaseUrl(): string {
+  const raw =
+    process.env.SOLVIUM_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_SOLVIUM_API_BASE_URL ||
+    "";
+  if (!raw) {
+    throw new Error(
+      "Missing SOLVIUM_API_BASE_URL (or NEXT_PUBLIC_SOLVIUM_API_BASE_URL) in environment"
+    );
+  }
+  if (!/^https?:\/\//i.test(raw)) {
+    throw new Error(
+      "SOLVIUM_API_BASE_URL must be an absolute http(s) URL (e.g., https://api.example.com)"
+    );
+  }
+  return raw.replace(/\/$/, "");
+}
 
 // Simple API client for SolviumAI wallet operations
 export class SolviumWalletAPI {
@@ -41,7 +57,7 @@ export class SolviumWalletAPI {
   private apiKey?: string;
 
   constructor(baseUrl?: string, apiKey?: string) {
-    this.baseUrl = baseUrl || SOLVIUM_API_BASE_URL;
+    this.baseUrl = (baseUrl || resolveExternalApiBaseUrl()).replace(/\/$/, "");
     this.apiKey = apiKey || process.env.SOLVIUM_API_KEY;
   }
 

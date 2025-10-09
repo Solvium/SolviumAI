@@ -18,7 +18,7 @@ export function useWalletCheck(): UseWalletCheckReturn {
       setError(null);
 
       try {
-        const response = await fetch("/api/wallet/check", {
+        const response = await fetch("/api/wallet", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -28,14 +28,27 @@ export function useWalletCheck(): UseWalletCheckReturn {
           }),
         });
 
+        let data: WalletCheckResponse | null = null;
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(
-            errorData.error || `HTTP error! status: ${response.status}`
-          );
+          try {
+            const errorData = await response.json();
+            throw new Error(
+              (errorData as any)?.error ||
+                (errorData as any)?.message ||
+                `HTTP ${response.status}`
+            );
+          } catch (e) {
+            const text = await response.text();
+            throw new Error(text?.slice(0, 200) || `HTTP ${response.status}`);
+          }
         }
 
-        const data: WalletCheckResponse = await response.json();
+        try {
+          data = (await response.json()) as WalletCheckResponse;
+        } catch (e) {
+          const text = await response.text();
+          throw new Error(text?.slice(0, 200) || "Invalid JSON response");
+        }
         return data;
       } catch (err) {
         const errorMessage =

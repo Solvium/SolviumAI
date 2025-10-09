@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type WebApp from "@twa-dev/sdk";
 import axios from "axios";
 import { FaXTwitter, FaTelegram } from "react-icons/fa6";
@@ -14,7 +14,13 @@ import {
   Info,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSolviumContract } from "@/hooks/useSolviumContract";
+import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
+import { useTaskProgress } from "@/hooks/useTaskProgress";
+import { useBalanceCache } from "@/hooks/useBalanceCache";
 import { useToast } from "@/hooks/use-toast";
+import { throttleApiCall } from "@/lib/requestThrottler";
+import { taskConfig } from "@/config/taskConfig";
 
 const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   const [loading, setLoading] = useState({ id: "", status: false });
@@ -25,50 +31,123 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
   const [nearAmount, setNearAmount] = useState("");
   const [depositLoading, setDepositLoading] = useState(false);
+  const [nearBalance, setNearBalance] = useState<string>("0.00");
+  const [userDepositSummary, setUserDepositSummary] = useState<any>(null);
+  const [spinsAvailable, setSpinsAvailable] = useState<number>(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [contractMultiplierFactor, setContractMultiplierFactor] =
+    useState<number>(1);
+  const [rateLimitInfo, setRateLimitInfo] = useState<{
+    remaining: number;
+    resetIn: number;
+  } | null>(null);
+  const [gamingLoadingId, setGamingLoadingId] = useState<string | null>(null);
 
-  const { user: userDetails, refreshUser } = useAuth();
+  const { user: userDetails, refreshUser, trackLogin } = useAuth();
+  const {
+    depositToGame,
+    isConnected,
+    isLoading: contractLoading,
+    getUserDepositSummary,
+    getSpinsAvailable,
+    getMultiplierFactor,
+  } = useSolviumContract();
+  const { account, accountId } = usePrivateKeyWallet();
+  const {
+    taskProgress,
+    completeDailyLogin,
+    completeFirstGame,
+    checkFirstGameStatus,
+  } = useTaskProgress();
+  const { fetchBalance, getCachedBalance } = useBalanceCache();
   const { toast } = useToast();
+
+  // Refs to control effect executions
+  // Derived flags from userTasks
+  const firstGameClaimed = userTasks?.some(
+    (ut: any) => ut?.task?.name === "First Game Reward" && ut?.isCompleted
+  );
+
+  // Daily login availability (disable button if already logged today)
+  const alreadyLoggedToday = (() => {
+    const last = userDetails?.lastClaim
+      ? new Date(String(userDetails.lastClaim))
+      : null;
+    if (!last) return false;
+    const today = new Date();
+    return last.toDateString() === today.toDateString();
+  })();
+  const didInitialFetchRef = useRef<string | null>(null); // tracks by user id
+  const didLoginTrackRef = useRef<string | null>(null); // tracks by user id
+  const lastWalletKeyRef = useRef<string | null>(null); // tracks by `${isConnected}:${accountId}`
+  const trackLoginRef = useRef(trackLogin);
+  useEffect(() => {
+    trackLoginRef.current = trackLogin;
+  }, [trackLogin]);
 
   const gamingTasks = [
     {
       id: "daily-login",
-      name: "Daily Login Streak",
+      name: taskConfig.daily_login.displayName,
       description: "Login 7 days in a row for bonus rewards",
-      points: 200,
+      points: taskConfig.daily_login.solvReward,
       icon: <Gamepad2 className="w-6 h-6" />,
-      progress: 3,
-      maxProgress: 7,
+      progress: taskProgress.dailyLoginStreak,
+      maxProgress: taskProgress.maxStreak,
       category: "gaming",
+      // Completed only when streak target reached (keeps green style for true completion)
+      completed: taskProgress.dailyLoginStreak >= taskProgress.maxStreak,
     },
     {
       id: "first-game",
-      name: "Play Your First Game",
+      name: taskConfig.first_game_completed.displayName,
       description: "Complete a game session to unlock achievements",
-      points: 300,
+      points: taskConfig.first_game_completed.solvReward,
       icon: <Target className="w-6 h-6" />,
       category: "gaming",
+      // Keep card non-green; disable button separately when claimed
+      completed: false,
     },
     {
       id: "weekly-champion",
-      name: "Weekly Champion",
+      name: taskConfig.weekly_champion.displayName,
       description: "Reach top 10 on weekly leaderboard",
-      points: 1000,
+      points: taskConfig.weekly_champion.solvReward,
       icon: <Trophy className="w-6 h-6" />,
       category: "special",
+      completed:
+        taskProgress.weeklyRank !== null && taskProgress.weeklyRank <= 10,
+      progress: taskProgress.weeklyRank || 0,
+      maxProgress: 10,
     },
   ];
 
+  // Calculate multiplier tiers based on contract multiplier factor
   const multiplierTiers = [
-    { amount: 1, multiplier: 1.5 },
-    { amount: 5, multiplier: 2 },
-    { amount: 10, multiplier: 3 },
-    { amount: 25, multiplier: 5 },
+    { amount: 1, multiplier: 1 + contractMultiplierFactor * 0.5 },
+    { amount: 5, multiplier: 1 + contractMultiplierFactor * 1 },
+    { amount: 10, multiplier: 1 + contractMultiplierFactor * 2 },
+    { amount: 25, multiplier: 1 + contractMultiplierFactor * 4 },
   ];
+
+  // Debug log for multiplier tiers when contract factor changes
+  useEffect(() => {
+    console.log(
+      "Multiplier tiers updated:",
+      multiplierTiers.map(
+        (tier) => `${tier.amount} NEAR = ${tier.multiplier.toFixed(1)}x`
+      )
+    );
+  }, [contractMultiplierFactor]);
 
   const fetchTasks = async () => {
     try {
       setIsLoadingTasks(true);
-      const response = await fetch("/api/tasks");
+      const response = await throttleApiCall(
+        "tasks",
+        () => fetch("/api/tasks"),
+        200 // 200ms delay
+      );
 
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
@@ -141,9 +220,122 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
     }
   };
 
+  // Initial page load fetch: runs once per user id
   useEffect(() => {
-    fetchTasks();
-  }, []);
+    const userId = userDetails?.id ? String(userDetails.id) : null;
+    if (!userId) return;
+
+    if (didInitialFetchRef.current === userId) return;
+
+    didInitialFetchRef.current = userId;
+
+    const timer = setTimeout(() => {
+      fetchTasks();
+      fetchRealTimeData();
+
+      if (didLoginTrackRef.current !== userId) {
+        didLoginTrackRef.current = userId;
+        throttleApiCall(
+          "login-track",
+          () => trackLoginRef.current(),
+          300
+        ).catch(console.error);
+      }
+
+      // Evaluate first game status once on load
+      checkFirstGameStatus();
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [userDetails?.id, checkFirstGameStatus]);
+
+  // Refresh data when wallet connection state changes (tracked key)
+  useEffect(() => {
+    const key = `${Boolean(isConnected)}:${accountId || ""}`;
+    if (!isConnected || !accountId) {
+      lastWalletKeyRef.current = key;
+      return;
+    }
+
+    if (lastWalletKeyRef.current === key) return;
+    lastWalletKeyRef.current = key;
+
+    const timer = setTimeout(() => {
+      fetchRealTimeData();
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [isConnected, accountId]);
+
+  // Auto-refresh data every 10 minutes (much reduced frequency)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (isConnected && accountId && !isRefreshing) {
+        fetchRealTimeData();
+      }
+    }, 600000); // 10 minutes
+
+    return () => clearInterval(interval);
+  }, [isConnected, accountId, isRefreshing]);
+
+  // Fetch real-time data from contract and wallet (with debounce and caching)
+  const fetchRealTimeData = async () => {
+    if (isRefreshing) {
+      return;
+    }
+
+    setIsRefreshing(true);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    try {
+      // Always-safe public fetches (no wallet required)
+      try {
+        const rateLimitResponse = await fetch(
+          "/api/wallet?action=rate-limit-status"
+        );
+        if (rateLimitResponse.ok) {
+          const rateLimitData = await rateLimitResponse.json();
+          setRateLimitInfo(rateLimitData);
+        }
+      } catch (error) {
+        console.log("Could not fetch rate limit status:", error);
+      }
+
+      // Wallet/contract reads (only when connected with account)
+      if (isConnected && accountId) {
+        if (account) {
+          const nearBalance = await fetchBalance(account, accountId);
+          setNearBalance(nearBalance);
+        }
+
+        const [depositSummary, spins, multiplier] = await Promise.all([
+          getUserDepositSummary(accountId),
+          getSpinsAvailable(accountId),
+          getMultiplierFactor(accountId),
+        ]);
+
+        if (depositSummary.success) {
+          setUserDepositSummary(depositSummary.data);
+        }
+
+        if (spins.success) {
+          setSpinsAvailable(spins.data || 0);
+        }
+
+        if (multiplier.success) {
+          const contractMultiplier = multiplier.data || 1;
+          setContractMultiplierFactor(contractMultiplier);
+          if (userDetails?.multiplier !== contractMultiplier) {
+            await refreshUser();
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching real-time data:", error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const refreshTasks = async () => {
     await fetchTasks();
@@ -293,17 +485,127 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
       return;
     }
 
-    setDepositLoading(true);
-    // Simulate deposit logic
-    setTimeout(() => {
+    if (!isConnected) {
       toast({
-        title: "Deposit Successful",
-        description: `Deposited ${nearAmount} NEAR`,
-        variant: "default",
+        title: "Wallet Not Connected",
+        description: "Please connect your wallet first",
+        variant: "destructive",
       });
+      return;
+    }
+
+    setDepositLoading(true);
+
+    try {
+      // Use the Solvium contract hook
+      const result = await depositToGame(nearAmount);
+
+      if (result.success) {
+        toast({
+          title: "Deposit Successful!",
+          description: `Successfully deposited ${nearAmount} NEAR to the game`,
+          variant: "default",
+        });
+
+        setNearAmount("");
+
+        // Refresh user data and real-time data
+        await refreshUser();
+        await fetchRealTimeData();
+      } else {
+        throw new Error(result.error || "Deposit failed");
+      }
+    } catch (error) {
+      console.error("Deposit error:", error);
+      toast({
+        title: "Deposit Failed",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to deposit NEAR. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
       setDepositLoading(false);
-      setNearAmount("");
-    }, 2000);
+    }
+  };
+
+  // Handle gaming task completion (API-based, no wallet required)
+  const handleGamingTask = async (taskId: string) => {
+    try {
+      setGamingLoadingId(taskId);
+      let success = false;
+      let alreadyToastShown = false;
+
+      switch (taskId) {
+        case "daily-login":
+          console.log("[ui] Daily login clicked. Starting flow...");
+          {
+            const result = await completeDailyLogin();
+            if (result.status === "new") {
+              success = true;
+            } else if (result.status === "already") {
+              toast({
+                title: "Already logged in today",
+                description: `Come back at ${result.nextResetAt} (${result.timeLeft}) to continue your streak. Current streak: ${result.streak} day(s).`,
+                variant: "default",
+              });
+              alreadyToastShown = true;
+              success = true; // treat as handled
+            } else {
+              success = false;
+            }
+          }
+          break;
+        case "first-game":
+          console.log("[ui] First game clicked. Starting flow...");
+          success = await completeFirstGame();
+          console.log("[ui] First game flow finished. Success:", success);
+          break;
+        case "weekly-champion":
+          // Weekly champion is automatically tracked, no manual completion needed
+          toast({
+            title: "Weekly Champion",
+            description:
+              "Your rank is automatically tracked. Keep playing to improve!",
+            variant: "default",
+          });
+          return;
+        default:
+          throw new Error("Unknown task");
+      }
+
+      if (success) {
+        console.log("[ui] Task flow succeeded:", taskId);
+        if (!alreadyToastShown) {
+          toast({
+            title: "Task Completed!",
+            description: "Your progress has been updated.",
+            variant: "default",
+          });
+        }
+        await refreshUser();
+        // Skip wallet/contract reads for non-wallet tasks to avoid near-rpc calls
+        if (taskId !== "daily-login" && taskId !== "first-game") {
+          await fetchRealTimeData();
+        }
+      } else {
+        console.log("[ui] Task flow failed:", taskId);
+        throw new Error("Task completion failed");
+      }
+    } catch (error) {
+      console.error("Gaming task error:", error);
+      toast({
+        title: "Task Failed",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to complete task. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setGamingLoadingId(null);
+    }
   };
 
   const getTaskIcon = (taskName: string) => {
@@ -350,15 +652,13 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-gradient-to-br from-pink-500 to-purple-600 rounded-2xl p-4 text-center">
             <div className="text-2xl font-bold">
-              {"weeklyScore" in (userDetails ?? {})
-                ? (userDetails as any).weeklyScore
-                : 1250}
+              {(userDetails as any)?.totalSOLV ?? userDetails?.totalPoints ?? 0}
             </div>
 
             <div className="text-xs text-white/80 mt-1">SOLV Points</div>
           </div>
           <div className="bg-[#1a1a3e] border-2 border-blue-500/30 rounded-2xl p-4 text-center">
-            <div className="text-2xl font-bold">0.00</div>
+            <div className="text-2xl font-bold">{nearBalance}</div>
             <div className="text-xs text-gray-400 mt-1">NEAR</div>
           </div>
           <div className="bg-[#1a1a3e] border-2 border-purple-500/30 rounded-2xl p-4 text-center">
@@ -394,10 +694,14 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
             />
             <button
               onClick={handleDeposit}
-              disabled={depositLoading}
+              disabled={depositLoading || contractLoading || !isConnected}
               className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 px-6 py-3 rounded-xl font-bold transition-all disabled:opacity-50"
             >
-              {depositLoading ? "..." : "Deposit"}
+              {depositLoading || contractLoading
+                ? "..."
+                : !isConnected
+                ? "Connect Wallet"
+                : "Deposit"}
             </button>
           </div>
 
@@ -419,7 +723,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                 >
                   <span>{tier.amount} NEAR</span>
                   <span className="bg-gradient-to-r from-blue-400 to-cyan-500 text-white text-xs px-2 py-1 rounded-full font-bold">
-                    +{tier.multiplier}x
+                    +{tier.multiplier.toFixed(1)}x
                   </span>
                 </button>
               ))}
@@ -429,8 +733,108 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
           <p className="text-xs text-gray-400 text-center">
             Higher deposits unlock better point multipliers for all tasks
           </p>
+
+          {/* Multiplier Calculation Info */}
+          {isConnected && contractMultiplierFactor > 1 && (
+            <div className="mt-3 p-2 bg-gray-800/50 rounded-lg">
+              <p className="text-xs text-gray-300 text-center">
+                <span className="text-blue-400">Formula:</span> Base (1x) +
+                (Contract Factor × Deposit Tier)
+              </p>
+              <p className="text-xs text-gray-400 text-center mt-1">
+                Current Contract Factor:{" "}
+                <span className="text-purple-400">
+                  {contractMultiplierFactor}x
+                </span>
+              </p>
+            </div>
+          )}
+
+          {/* Contract Multiplier Factor Info */}
+          {isConnected && contractMultiplierFactor > 1 && (
+            <div className="mt-4 p-3 bg-blue-500/20 border border-blue-500/30 rounded-xl">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-xs">⚡</span>
+                </div>
+                <span className="text-sm font-medium text-blue-300">
+                  Contract Multiplier Factor
+                </span>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-400">
+                  {contractMultiplierFactor}x
+                </div>
+                <div className="text-xs text-blue-300">
+                  Base multiplier factor from contract
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Contract Data Display */}
+      {isConnected && (userDepositSummary || spinsAvailable > 0) && (
+        <div className="px-4 mb-6">
+          <div className="bg-[#1a1a3e] border-2 border-green-500/30 rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">
+                <span className="text-lg">📊</span>
+              </div>
+              <h3 className="text-lg font-bold">Contract Data</h3>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              {spinsAvailable > 0 && (
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-400">
+                    {spinsAvailable}
+                  </div>
+                  <div className="text-xs text-gray-400">Spins Available</div>
+                </div>
+              )}
+
+              {userDepositSummary && (
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-400">
+                    {(
+                      parseFloat(userDepositSummary.totalDeposits || "0") / 1e24
+                    ).toFixed(2)}
+                  </div>
+                  <div className="text-xs text-gray-400">Total Deposited</div>
+                </div>
+              )}
+
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-400">
+                  {contractMultiplierFactor}x
+                </div>
+                <div className="text-xs text-gray-400">Multiplier Factor</div>
+              </div>
+            </div>
+
+            {/* Rate Limit Status */}
+            {rateLimitInfo && (
+              <div className="mt-4 p-2 bg-yellow-500/20 border border-yellow-500/30 rounded-lg">
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs">⏱</span>
+                  </div>
+                  <span className="text-xs text-yellow-300">
+                    API Calls: {rateLimitInfo.remaining}/6 remaining
+                    {rateLimitInfo.resetIn > 0 && (
+                      <span className="ml-2">
+                        (resets in {rateLimitInfo.resetIn}s)
+                      </span>
+                    )}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="px-4 mb-6">
         <div className="flex items-center gap-2 mb-4">
@@ -443,18 +847,26 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
             <div
               key={task.id}
               className={`rounded-2xl p-5 border-2 ${
-                task.category === "special"
+                task.completed
+                  ? "bg-gradient-to-br from-green-500 to-green-600 border-green-400/30"
+                  : task.category === "special"
                   ? "bg-gradient-to-br from-pink-500 to-purple-600 border-pink-400/30"
                   : "bg-gradient-to-br from-blue-600/40 to-blue-800/40 border-blue-500/30"
               }`}
             >
               <div className="flex items-start gap-4 mb-4">
                 <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                  {task.icon}
+                  {task.completed ? (
+                    <span className="text-green-400 text-xl">✓</span>
+                  ) : (
+                    task.icon
+                  )}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-start justify-between mb-1">
-                    <h3 className="text-base font-bold">{task.name}</h3>
+                    <h3 className="text-base font-bold">
+                      {task.completed ? `${task.name} ✓` : task.name}
+                    </h3>
                     <span className="bg-gradient-to-r from-orange-400 to-orange-600 text-white text-xs px-3 py-1 rounded-full font-bold whitespace-nowrap ml-2">
                       +{task.points} SOLV
                     </span>
@@ -473,9 +885,16 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                   </div>
                   <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
                     <div
-                      className="bg-gradient-to-r from-cyan-400 to-blue-500 h-full rounded-full transition-all"
+                      className={`h-full rounded-full transition-all ${
+                        task.completed
+                          ? "bg-gradient-to-r from-green-400 to-green-500"
+                          : "bg-gradient-to-r from-cyan-400 to-blue-500"
+                      }`}
                       style={{
-                        width: `${(task.progress / task.maxProgress) * 100}%`,
+                        width: `${Math.min(
+                          (task.progress / task.maxProgress) * 100,
+                          100
+                        )}%`,
                       }}
                     />
                   </div>
@@ -483,13 +902,37 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
               )}
 
               <button
+                onClick={() => handleGamingTask(task.id)}
+                disabled={
+                  gamingLoadingId === task.id ||
+                  (task.id === "daily-login" && alreadyLoggedToday) ||
+                  (task.id === "first-game" && firstGameClaimed) ||
+                  (task.completed && task.id !== "first-game")
+                }
                 className={`w-full py-3 rounded-xl font-bold transition-all ${
-                  task.category === "special"
-                    ? "bg-white text-purple-600 hover:bg-gray-100"
-                    : "bg-[#0A0A1F] text-white hover:bg-black"
+                  (task.completed && task.id !== "first-game") ||
+                  (task.id === "daily-login" && alreadyLoggedToday) ||
+                  (task.id === "first-game" && firstGameClaimed)
+                    ? "bg-green-400 text-green-900 cursor-not-allowed"
+                    : task.category === "special"
+                    ? "bg-white text-purple-600 hover:bg-gray-100 disabled:opacity-50"
+                    : "bg-[#0A0A1F] text-white hover:bg-black disabled:opacity-50"
                 }`}
               >
-                Start Task
+                {gamingLoadingId === task.id ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-t-2 border-white animate-spin rounded-full"></div>
+                    <span>Processing...</span>
+                  </div>
+                ) : (task.completed && task.id !== "first-game") ||
+                  (task.id === "daily-login" && alreadyLoggedToday) ||
+                  (task.id === "first-game" && firstGameClaimed) ? (
+                  "Completed"
+                ) : task.id === "weekly-champion" ? (
+                  "View Rank"
+                ) : (
+                  "Start Task"
+                )}
               </button>
             </div>
           ))}

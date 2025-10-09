@@ -35,8 +35,14 @@ async function main() {
     });
   }
 
-  // Create default tasks
+  // Create default tasks (one-time seed)
   const tasks = [
+    {
+      name: "First Game Reward",
+      points: 50,
+      link: null as any,
+      isCompleted: false,
+    },
     {
       name: "Join Solvium Telegram Group",
       points: 50,
@@ -51,7 +57,7 @@ async function main() {
     },
     {
       name: "Follow X",
-      points: 25,
+      points: 100,
       link: "https://x.com/solvium",
       isCompleted: false,
     },
@@ -71,6 +77,18 @@ async function main() {
       name: "Connect Wallet",
       points: 100,
       link: "",
+      isCompleted: false,
+    },
+    {
+      name: "Like our pinned post",
+      points: 75,
+      link: "https://x.com/solvium",
+      isCompleted: false,
+    },
+    {
+      name: "Retweet the latest update",
+      points: 80,
+      link: "https://x.com/solvium",
       isCompleted: false,
     },
   ];

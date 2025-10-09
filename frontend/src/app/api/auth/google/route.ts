@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtDecode } from "jwt-decode";
 import { prisma } from "@/lib/prisma";
+import { JWTService } from "@/lib/auth/jwt";
 
 export async function POST(request: NextRequest) {
   try {
@@ -136,19 +137,41 @@ export async function POST(request: NextRequest) {
       wallet: walletData, // Include parsed wallet data
     };
 
-    // Create response with simple cookie (without JWT for now)
+    // Issue JWT cookies
+    const accessToken = JWTService.generateAccessToken(userData as any);
+    const refreshToken = JWTService.generateRefreshToken(
+      userData.id,
+      "google_session"
+    );
+
     const response = NextResponse.json({
       success: true,
       user: userData,
+      accessToken,
+      refreshToken,
     });
 
-    // Set a simple auth cookie (root path for all routes)
-    // In development, do not require Secure to allow cookies over http://localhost
-    // Use SameSite=Lax by default; switch to None only if you truly embed in iframes/webviews over HTTPS
-    response.cookies.set("auth_token", userData.id, {
+    response.cookies.set("accessToken", accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
+      path: "/",
+      maxAge: 15 * 60,
+    });
+
+    response.cookies.set("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60,
+    });
+
+    // Also set legacy auth_token for backward compatibility
+    response.cookies.set("auth_token", userData.id, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
       path: "/",
       maxAge: 7 * 24 * 60 * 60, // 7 days
     });

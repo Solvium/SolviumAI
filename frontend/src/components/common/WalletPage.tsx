@@ -4,10 +4,14 @@ import { useEffect, useState } from "react";
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getAccountInfo, formatNearAmount } from "@/lib/nearblocks";
+import {
+  getAccountInfo,
+  formatNearAmount,
+  getAccountTxns,
+} from "@/lib/nearblocks";
 import { getAccountFull, formatYoctoToNear } from "@/lib/fastnear";
 import { getNearUsd } from "@/lib/prices";
-import { getAccountTxnsFastnear } from "@/lib/fastnearExplorer";
+// import { getAccountTxnsFastnear } from "@/lib/fastnearExplorer";
 import Image from "next/image";
 import SendFlow from "@/components/features/wallet/SendFlow";
 import AddFlow from "@/components/features/wallet/AddFlow";
@@ -21,6 +25,8 @@ const WalletPage = () => {
     usePrivateKeyWallet();
   const [nearBalance, setNearBalance] = useState<string | null>(null);
   const [recentTxns, setRecentTxns] = useState<any[] | null>(null);
+  const [allTxns, setAllTxns] = useState<any[] | null>(null);
+  const [showAllTxns, setShowAllTxns] = useState(false);
   const [nearUsd, setNearUsd] = useState<number | null>(null);
   const [activeFlow, setActiveFlow] = useState<ActiveFlow>(null);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -60,19 +66,58 @@ const WalletPage = () => {
           }
         }
 
-        const fast = await getAccountTxnsFastnear(accountId);
-        if (!cancelled && fast?.account_txs) {
-          const normalized = fast.account_txs.map((row: any) => ({
-            id: row.transaction_hash,
-            type: row.signer_id === accountId ? "send" : "receive",
-            amount: "",
-            token: "NEAR",
-            from: row.signer_id,
-            to: accountId,
-            timestamp: row.tx_block_timestamp,
-            status: "completed",
-          }));
-          setRecentTxns(normalized);
+        const nbTxns = await getAccountTxns(accountId);
+        if (!cancelled) {
+          if (Array.isArray(nbTxns)) {
+            console.log("Raw Nearblocks data:", nbTxns.slice(0, 2)); // Debug log
+
+            const normalized = nbTxns.map((row: any) => {
+              // Parse Nearblocks transaction structure
+              const isIncoming = row?.predecessor_account_id === "system";
+              const action = row?.actions?.[0];
+
+              // Format amount from deposit (in yoctoNEAR)
+              let amount = "";
+              if (action?.deposit && action.deposit > 0) {
+                const nearAmount = action.deposit / 1e24; // Convert yoctoNEAR to NEAR
+                amount = nearAmount.toFixed(4);
+              }
+
+              // Determine transaction type and description
+              let type = "unknown";
+              let description = "Transaction";
+
+              if (action?.action === "TRANSFER") {
+                type = isIncoming ? "receive" : "send";
+                description = isIncoming ? "NEAR Received" : "NEAR Sent";
+              } else if (action?.action === "FUNCTION_CALL") {
+                type = "interact";
+                description = action.method || "Contract Call";
+              }
+
+              return {
+                id: row?.transaction_hash || row?.id,
+                type,
+                amount,
+                token: "NEAR",
+                from: row?.predecessor_account_id,
+                to: row?.receiver_account_id,
+                timestamp: row?.block_timestamp,
+                status: row?.outcomes?.status ? "completed" : "failed",
+                description,
+                method: action?.method,
+                fee: row?.outcomes_agg?.transaction_fee
+                  ? (row.outcomes_agg.transaction_fee / 1e24).toFixed(6)
+                  : "0",
+              };
+            });
+
+            setAllTxns(normalized);
+            setRecentTxns(normalized.slice(0, 5)); // Show first 5 by default
+          } else {
+            console.log("Failed to fetch transactions or rate limited");
+            // Keep existing transactions if rate limited
+          }
         }
       } catch (error) {
         console.error("Error fetching wallet data:", error);
@@ -298,29 +343,70 @@ const WalletPage = () => {
                     <div className="text-yellow-400 font-bold">$120.32</div>
                   </div>
 
-                  {recentTxns?.slice(0, 5).map((txn, idx) => (
+                  {(showAllTxns ? allTxns : recentTxns)?.map((txn, idx) => (
                     <div
                       key={txn.id || idx}
                       className="flex items-center justify-between"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
+                        <div
+                          className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                            txn.type === "receive"
+                              ? "bg-gradient-to-br from-green-400 to-green-600"
+                              : txn.type === "send"
+                              ? "bg-gradient-to-br from-red-400 to-red-600"
+                              : "bg-gradient-to-br from-blue-400 to-purple-500"
+                          }`}
+                        >
                           <span className="text-white text-xs font-bold">
-                            {txn.from?.slice(0, 2).toUpperCase()}
+                            {txn.type === "receive"
+                              ? "↗"
+                              : txn.type === "send"
+                              ? "↘"
+                              : "⚡"}
                           </span>
                         </div>
                         <div>
                           <div className="text-white font-medium">
-                            TON Space Beta
+                            {txn.description}
                           </div>
                           <div className="text-white/50 text-xs">
-                            {txn.from?.slice(0, 8)}...{txn.from?.slice(-4)}
+                            {txn.from?.slice(0, 8)}...{txn.from?.slice(-4)} →{" "}
+                            {txn.to?.slice(0, 8)}...{txn.to?.slice(-4)}
                           </div>
+                          {txn.status === "failed" && (
+                            <div className="text-red-400 text-xs">Failed</div>
+                          )}
                         </div>
                       </div>
-                      <div className="text-yellow-400 font-bold">$0.00</div>
+                      <div className="text-right">
+                        {txn.amount && (
+                          <div className="text-yellow-400 font-bold">
+                            {txn.amount} NEAR
+                          </div>
+                        )}
+                        {txn.fee && txn.fee !== "0" && (
+                          <div className="text-white/50 text-xs">
+                            Fee: {txn.fee} NEAR
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
+
+                  {/* See More/Less Button */}
+                  {allTxns && allTxns.length > 5 && (
+                    <div className="flex justify-center mt-4">
+                      <button
+                        onClick={() => setShowAllTxns(!showAllTxns)}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                      >
+                        {showAllTxns
+                          ? "Show Less"
+                          : `See More (${allTxns.length - 5} more)`}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       wallet: walletData, // Include parsed wallet data
     };
     // Generate tokens
-    const accessToken = JWTService.generateAccessToken(userData);
+    const accessToken = JWTService.generateAccessToken(userData as any);
     const refreshToken = JWTService.generateRefreshToken(
       userData.id,
       "telegram_session"
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
     // Create session (commented out for now)
     // const session = await SessionManager.createSession(userData.id, refreshToken);
 
-    // Set cookies
+    // Set cookies (JWT-based)
     const response = NextResponse.json({
       success: true,
       user: userData,
@@ -136,10 +136,29 @@ export async function POST(request: NextRequest) {
       refreshToken,
     });
 
+    // Access token cookie
+    response.cookies.set("accessToken", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // Only secure in production
+      sameSite: "lax", // More permissive for development
+      path: "/",
+      maxAge: 15 * 60, // 15 minutes
+    });
+
+    // Refresh token cookie
+    response.cookies.set("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // Only secure in production
+      sameSite: "lax", // More permissive for development
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+    });
+
+    // Also set legacy auth_token for backward compatibility
     response.cookies.set("auth_token", userData.id, {
       httpOnly: true,
-      secure: true, // required for SameSite=None
-      sameSite: "none", // works in embedded webviews/iframes
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
       path: "/",
       maxAge: 7 * 24 * 60 * 60, // 7 days
     });

@@ -11,6 +11,9 @@ import WebApp from "@twa-dev/sdk";
 import { jwtDecode } from "jwt-decode";
 import { useSimpleWallet } from "@/contexts/SimpleWalletContext";
 
+// Configure axios to send cookies
+axios.defaults.withCredentials = true;
+
 // Types
 export type AuthProvider = "telegram" | "google" | "email" | "wallet";
 
@@ -25,6 +28,7 @@ export interface User {
   avatar?: string;
   avatar_url?: string; // New field for profile avatar
   totalPoints: number;
+  totalSOLV?: number; // SOLV balance
   multiplier: number;
   level: number;
   difficulty: number;
@@ -88,6 +92,7 @@ export interface AuthContextType extends AuthState {
 
   // Utility methods
   refreshUser: () => Promise<void>;
+  trackLogin: () => Promise<boolean>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   refreshToken: () => Promise<void>;
 
@@ -383,6 +388,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  const trackLogin = useCallback(async (): Promise<boolean> => {
+    try {
+      const response = await axios.post("/api/auth/login-track");
+      if (response.data.success) {
+        console.log("Login tracked:", response.data);
+        // Refresh user data to get updated streak
+        await refreshUser();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to track login:", error);
+      return false;
+    }
+  }, [refreshUser]);
+
   const updateUser = useCallback(async (updates: Partial<User>) => {
     try {
       const response = await axios.patch("/api/auth/user", updates);
@@ -486,6 +507,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     registerAuthProvider,
     loginWithProvider,
     refreshUser,
+    trackLogin,
     updateUser,
     refreshToken,
     fetchUserProfile,
