@@ -239,6 +239,36 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // Check if this is the user's first game completion
+      const isFirstGame = (userBefore?.gamesPlayed || 0) === 0;
+
+      if (isFirstGame) {
+        console.log(`🎯 First game completed by user ${userBefore?.username}!`);
+
+        // Award first game completion bonus (50 SOLV with multiplier)
+        const firstGameBonus = 50; // Base bonus
+        const userMultiplier = 1; // TODO: Get from user data or contract
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            totalSOLV: {
+              increment: firstGameBonus * userMultiplier,
+            },
+            totalPoints: {
+              increment: firstGameBonus * userMultiplier,
+            },
+            weeklyPoints: {
+              increment: firstGameBonus * userMultiplier,
+            },
+          },
+        });
+
+        console.log(
+          `🎁 First game bonus awarded: ${firstGameBonus * userMultiplier} SOLV`
+        );
+      }
+
       // Log activity for game completion
       await prisma.userActivity.create({
         data: {
@@ -300,8 +330,48 @@ export async function POST(req: NextRequest) {
       // Log user data for lost games too
       const userData = await prisma.user.findUnique({
         where: { id: userId },
-        select: { username: true, totalSOLV: true, level: true },
+        select: {
+          username: true,
+          totalSOLV: true,
+          level: true,
+          gamesPlayed: true,
+        },
       });
+
+      // Check if this is the user's first game (even if lost)
+      const isFirstGame = (userData?.gamesPlayed || 0) === 0;
+
+      if (isFirstGame) {
+        console.log(
+          `🎯 First game completed by user ${userData?.username}! (Lost but still counts)`
+        );
+
+        // Award first game completion bonus (50 SOLV with multiplier)
+        const firstGameBonus = 50; // Base bonus
+        const userMultiplier = 1; // TODO: Get from user data or contract
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            totalSOLV: {
+              increment: firstGameBonus * userMultiplier,
+            },
+            totalPoints: {
+              increment: firstGameBonus * userMultiplier,
+            },
+            weeklyPoints: {
+              increment: firstGameBonus * userMultiplier,
+            },
+            gamesPlayed: {
+              increment: 1,
+            },
+          },
+        });
+
+        console.log(
+          `🎁 First game bonus awarded: ${firstGameBonus * userMultiplier} SOLV`
+        );
+      }
 
       // Log activity for game loss
       await prisma.userActivity.create({

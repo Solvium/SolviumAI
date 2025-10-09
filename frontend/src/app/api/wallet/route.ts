@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWalletInfo } from "@/lib/crypto";
+import {
+  canMakeNearblocksRequest,
+  getTimeUntilNextNearblocksRequest,
+  getRemainingNearblocksRequests,
+  canMakeRpcRequest,
+  getTimeUntilNextRpcRequest,
+  getRemainingRpcRequests,
+} from "@/lib/rateLimiter";
 
 // Price API
 const DEXSCREENER_URL =
@@ -110,10 +118,31 @@ export async function GET(req: NextRequest) {
 
     // Handle nearblocks account info
     if (action === "nearblocks-info" && account) {
+      // Check rate limit
+      if (!canMakeNearblocksRequest()) {
+        const timeUntilReset = getTimeUntilNextNearblocksRequest();
+        const remaining = getRemainingNearblocksRequests();
+        console.log(
+          `[nearblocks-info] Rate limited. Remaining: ${remaining}, Reset in: ${Math.ceil(
+            timeUntilReset / 1000
+          )}s`
+        );
+
+        return NextResponse.json(
+          {
+            error: "Rate limit exceeded",
+            message: `Too many requests. Try again in ${Math.ceil(
+              timeUntilReset / 1000
+            )} seconds.`,
+            remaining,
+            resetIn: Math.ceil(timeUntilReset / 1000),
+          },
+          { status: 429 }
+        );
+      }
+
       const headers: Record<string, string> = { Accept: "application/json" };
-      const apiKey =
-        process.env.NEARBLOCKS_API_KEY ||
-        process.env.NEXT_PUBLIC_NEARBLOCKS_API_KEY;
+      const apiKey = "FBF3C110E7A844FA84ADC1DA823C6484"; // Provided API key
       if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
 
       const upstream = await fetch(
@@ -124,8 +153,19 @@ export async function GET(req: NextRequest) {
           cache: "no-store",
         }
       );
-
-      return new Response(await upstream.text(), {
+      const bodyText = await upstream.text();
+      const remaining = getRemainingNearblocksRequests();
+      console.log(
+        "[nearblocks-info] account=",
+        account,
+        "status=",
+        upstream.status,
+        "len=",
+        bodyText.length,
+        "remaining=",
+        remaining
+      );
+      return new Response(bodyText, {
         status: upstream.status,
         headers: {
           "Content-Type":
@@ -134,12 +174,46 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Handle rate limit status
+    if (action === "rate-limit-status") {
+      const remaining = getRemainingNearblocksRequests();
+      const resetIn = getTimeUntilNextNearblocksRequest();
+
+      return NextResponse.json({
+        remaining,
+        resetIn: Math.ceil(resetIn / 1000), // Convert to seconds
+        maxRequests: 6,
+        windowMs: 60000, // 1 minute
+      });
+    }
+
     // Handle nearblocks account transactions
     if (action === "nearblocks-txns" && account) {
+      // Check rate limit
+      if (!canMakeNearblocksRequest()) {
+        const timeUntilReset = getTimeUntilNextNearblocksRequest();
+        const remaining = getRemainingNearblocksRequests();
+        console.log(
+          `[nearblocks-txns] Rate limited. Remaining: ${remaining}, Reset in: ${Math.ceil(
+            timeUntilReset / 1000
+          )}s`
+        );
+
+        return NextResponse.json(
+          {
+            error: "Rate limit exceeded",
+            message: `Too many requests. Try again in ${Math.ceil(
+              timeUntilReset / 1000
+            )} seconds.`,
+            remaining,
+            resetIn: Math.ceil(timeUntilReset / 1000),
+          },
+          { status: 429 }
+        );
+      }
+
       const headers: Record<string, string> = { Accept: "application/json" };
-      const apiKey =
-        process.env.NEARBLOCKS_API_KEY ||
-        process.env.NEXT_PUBLIC_NEARBLOCKS_API_KEY;
+      const apiKey = "FBF3C110E7A844FA84ADC1DA823C6484"; // Provided API key
       if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
 
       const upstream = await fetch(
@@ -150,8 +224,19 @@ export async function GET(req: NextRequest) {
           cache: "no-store",
         }
       );
-
-      return new Response(await upstream.text(), {
+      const bodyText = await upstream.text();
+      const remaining = getRemainingNearblocksRequests();
+      console.log(
+        "[nearblocks-txns] account=",
+        account,
+        "status=",
+        upstream.status,
+        "len=",
+        bodyText.length,
+        "remaining=",
+        remaining
+      );
+      return new Response(bodyText, {
         status: upstream.status,
         headers: {
           "Content-Type":
@@ -173,8 +258,16 @@ export async function GET(req: NextRequest) {
           cache: "no-store",
         }
       );
-
-      return new Response(await upstream.text(), {
+      const bodyText = await upstream.text();
+      console.log(
+        "[fastnear-full] account=",
+        account,
+        "status=",
+        upstream.status,
+        "len=",
+        bodyText.length
+      );
+      return new Response(bodyText, {
         status: upstream.status,
         headers: {
           "Content-Type":
@@ -190,8 +283,14 @@ export async function GET(req: NextRequest) {
         headers: { Accept: "application/json" },
         cache: "no-store",
       });
-
-      return new Response(await upstream.text(), {
+      const bodyText = await upstream.text();
+      console.log(
+        "[fastnear-explorer-account][GET] status=",
+        upstream.status,
+        "len=",
+        bodyText.length
+      );
+      return new Response(bodyText, {
         status: upstream.status,
         headers: {
           "Content-Type":
@@ -223,7 +322,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Invalid action. Supported actions: check, price, nearblocks-info, nearblocks-txns, fastnear-full, fastnear-explorer-account, fastnear-explorer-txns",
+          "Invalid action. Supported actions: check, price, nearblocks-info, nearblocks-txns, fastnear-full, fastnear-explorer-account, fastnear-explorer-txns, rate-limit-status",
       },
       { status: 400 }
     );
@@ -243,6 +342,29 @@ export async function POST(req: NextRequest) {
 
     // Handle near-rpc proxy
     if (action === "near-rpc") {
+      // Check RPC rate limit
+      if (!canMakeRpcRequest()) {
+        const timeUntilReset = getTimeUntilNextRpcRequest();
+        const remaining = getRemainingRpcRequests();
+        console.log(
+          `[near-rpc] Rate limited. Remaining: ${remaining}, Reset in: ${Math.ceil(
+            timeUntilReset / 1000
+          )}s`
+        );
+
+        return NextResponse.json(
+          {
+            error: "RPC rate limit exceeded",
+            message: `Too many RPC requests. Try again in ${Math.ceil(
+              timeUntilReset / 1000
+            )} seconds.`,
+            remaining,
+            resetIn: Math.ceil(timeUntilReset / 1000),
+          },
+          { status: 429 }
+        );
+      }
+
       const network =
         searchParams.get("network") ||
         process.env.NEXT_PUBLIC_NEAR_NETWORK_ID ||
@@ -250,17 +372,60 @@ export async function POST(req: NextRequest) {
       const target = RPC_URLS[network.toLowerCase()] || RPC_URLS.mainnet;
 
       const body = await req.text();
-      const upstream = await fetch(target, {
+
+      try {
+        const upstream = await fetch(target, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body,
+          cache: "no-store",
+        });
+
+        const remaining = getRemainingRpcRequests();
+        console.log(`[near-rpc] Request completed. Remaining: ${remaining}`);
+
+        return new Response(await upstream.text(), {
+          status: upstream.status,
+          headers: {
+            "Content-Type":
+              upstream.headers.get("content-type") || "application/json",
+          },
+        });
+      } catch (error) {
+        console.error("RPC proxy error:", error);
+        return NextResponse.json(
+          { error: "RPC proxy failed" },
+          { status: 502 }
+        );
+      }
+    }
+
+    // Handle fastnear explorer account (POST body)
+    if (action === "fastnear-explorer-account") {
+      const payloadText = await req.text();
+      console.log("[fastnear-explorer-account][POST] payload=", payloadText);
+      const upstream = await fetch(`${FASTNEAR_BASE_URL}/v1/explorer/account`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body,
+        body: payloadText,
         cache: "no-store",
       });
-
-      return new Response(await upstream.text(), {
+      const bodyText = await upstream.text();
+      console.log(
+        "[fastnear-explorer-account][POST] status=",
+        upstream.status,
+        "len=",
+        bodyText.length,
+        "preview=",
+        bodyText.slice(0, 200)
+      );
+      return new Response(bodyText, {
         status: upstream.status,
         headers: {
           "Content-Type":

@@ -1,43 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
-import { verify as jwtVerify } from "jsonwebtoken";
+import { JWTService } from "@/lib/auth/jwt";
 
 export async function GET(request: NextRequest) {
   try {
     const cookieStore = await cookies();
-    const authToken = cookieStore.get("auth_token");
+    const accessToken = cookieStore.get("accessToken");
+    const legacyToken = cookieStore.get("auth_token");
 
-    if (!authToken) {
-      return NextResponse.json(
-        { authenticated: false, user: null },
-        { status: 401 }
-      );
-    }
-
-    // Determine user id: support both numeric user id and JWT token formats
+    // Try JWT token first, then fallback to legacy token
     let userId: number | null = null;
-    const raw = authToken.value;
-    // Try numeric id first
-    const asNumber = parseInt(raw);
-    if (!Number.isNaN(asNumber)) {
-      userId = asNumber;
-    } else {
-      // Try JWT (signed with JWT_SECRET) and read `id`
+
+    if (accessToken) {
       try {
-        const decoded = jwtVerify(raw, process.env.JWT_SECRET!) as any;
-        if (decoded && typeof decoded.id === "number") {
-          userId = decoded.id;
-        } else if (decoded && decoded.id && typeof decoded.id === "string") {
-          const fromStr = parseInt(decoded.id);
-          userId = Number.isNaN(fromStr) ? null : fromStr;
-        }
+        const decoded = JWTService.verifyAccessToken(accessToken.value);
+        const uid = parseInt(decoded.userId);
+        userId = Number.isNaN(uid) ? null : uid;
+        console.log("JWT authentication successful for user:", userId);
       } catch (e) {
-        // invalid token; will return 401 below
+        console.log("JWT verification failed:", e);
+        userId = null;
       }
     }
 
-    if (userId === null) {
+    // Fallback to legacy token if JWT fails
+    if (!userId && legacyToken) {
+      try {
+        const uid = parseInt(legacyToken.value);
+        userId = Number.isNaN(uid) ? null : uid;
+        console.log("Legacy token authentication successful for user:", userId);
+      } catch (e) {
+        console.log("Legacy token verification failed:", e);
+        userId = null;
+      }
+    }
+
+    if (userId == null) {
+      console.log("No valid authentication token found");
       return NextResponse.json(
         { authenticated: false, user: null },
         { status: 401 }
@@ -83,6 +83,34 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { authenticated: false, user: null },
         { status: 404 }
+      );
+    }
+
+    // Track daily login
+    const today = new Date();
+    const lastLogin = user.lastClaim ? new Date(user.lastClaim) : null;
+    const isNewDay =
+      !lastLogin || lastLogin.toDateString() !== today.toDateString();
+
+    if (isNewDay) {
+      // Calculate new streak
+      const isConsecutive =
+        lastLogin &&
+        lastLogin.toDateString() ===
+          new Date(today.getTime() - 24 * 60 * 60 * 1000).toDateString();
+      const newStreak = isConsecutive ? (user.claimCount || 0) + 1 : 1;
+
+      // Update user with new login
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          lastClaim: today,
+          claimCount: newStreak,
+        },
+      });
+
+      console.log(
+        `Daily login tracked for user ${user.username}: streak ${newStreak}`
       );
     }
 
