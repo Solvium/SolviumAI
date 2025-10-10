@@ -1256,28 +1256,69 @@ async def reward_structure_choice(update, context):
 async def show_distribution_preview(update, context, structure_type: str):
     """
     Show distribution preview with confirmation for Top 5 or Top 10 winners.
-    
+
     Args:
         update: Telegram update object
         context: Callback context
         structure_type: "top_5" or "top_10"
     """
     from utils.quiz_cards import format_distribution_preview
-    
+
     user_id = update.effective_user.id
     redis_client = RedisClient()
+
+    # Check if this is a token payment
+    payment_method = await redis_client.get_user_data_key(user_id, "payment_method")
     
     # Get reward amount from user data
-    reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
-    reward_amount = float(reward_amount)
+    if payment_method == "TOKEN":
+        reward_amount = await redis_client.get_user_data_key(user_id, "token_reward_amount")
+        token_contract = await redis_client.get_user_data_key(user_id, "selected_token_contract")
+        
+        # Get token symbol
+        try:
+            from services.wallet_service import WalletService
+            from services.near_wallet_service import NEARWalletService
+            from services.token_service import TokenService
+            from py_near.account import Account
+            
+            wallet_service = WalletService()
+            wallet = await wallet_service.get_user_wallet(user_id)
+            
+            if wallet:
+                near_service = NEARWalletService()
+                private_key = near_service.decrypt_private_key(
+                    wallet["encrypted_private_key"], wallet["iv"], wallet["tag"]
+                )
+                
+                account = Account(
+                    account_id=wallet["account_id"],
+                    private_key=private_key,
+                    rpc_addr=Config.NEAR_RPC_ENDPOINT,
+                )
+                await account.startup()
+                
+                token_service = TokenService()
+                metadata = await token_service.get_token_metadata(account, token_contract)
+                currency = metadata["symbol"]
+            else:
+                currency = "TOKEN"
+        except Exception as e:
+            logger.error(f"Error getting token symbol: {e}")
+            currency = "TOKEN"
+    else:
+        reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
+        currency = "NEAR"
     
+    reward_amount = float(reward_amount)
+
     # Format the distribution preview
     preview_message, amounts = format_distribution_preview(
         structure_type=structure_type,
         total_amount=reward_amount,
-        currency="NEAR"
+        currency=currency
     )
-    
+
     # Add confirmation buttons
     buttons = [
         [InlineKeyboardButton(
@@ -1290,15 +1331,15 @@ async def show_distribution_preview(update, context, structure_type: str):
         )]
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
-    
+
     # Send preview message
     await update.callback_query.edit_message_text(
         preview_message,
         reply_markup=reply_markup,
         parse_mode="HTML"
     )
-    
-    return REWARD_CHOICE
+
+    return REWARD_STRUCTURE_CHOICE
 
 
 async def confirm_distribution_structure(update, context):
@@ -1307,23 +1348,127 @@ async def confirm_distribution_structure(update, context):
     redis_client = RedisClient()
     choice = update.callback_query.data
     await update.callback_query.answer()
-    
+
+    # Check if this is a token payment
+    payment_method = await redis_client.get_user_data_key(user_id, "payment_method")
+
     if choice == "confirm_structure_top_5":
         await redis_client.set_user_data_key(user_id, "reward_structure", "top_5")
-        reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
-        await redis_client.set_user_data_key(user_id, "total_cost", float(reward_amount))
-        return await payment_verification(update, context)
-    
+        
+        if payment_method == "TOKEN":
+            # Handle token payment for Top 5
+            token_amount = await redis_client.get_user_data_key(user_id, "token_reward_amount")
+            await redis_client.set_user_data_key(user_id, "reward_amount", token_amount)
+            # Calculate total cost with 2% service fee for token payments
+            token_amount_float = float(token_amount)
+            service_fee = token_amount_float * 0.02
+            total_cost_with_fee = token_amount_float + service_fee
+            await redis_client.set_user_data_key(user_id, "total_cost", total_cost_with_fee)
+            await redis_client.set_user_data_key(user_id, "service_charge", service_fee)
+            return await process_token_payment(update, context)
+        else:
+            # Handle NEAR payment for Top 5
+            reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
+            await redis_client.set_user_data_key(user_id, "total_cost", float(reward_amount))
+            return await payment_verification(update, context)
+
     elif choice == "confirm_structure_top_10":
         await redis_client.set_user_data_key(user_id, "reward_structure", "top_10")
-        reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
-        await redis_client.set_user_data_key(user_id, "total_cost", float(reward_amount))
-        return await payment_verification(update, context)
-    
+        
+        if payment_method == "TOKEN":
+            # Handle token payment for Top 10
+            token_amount = await redis_client.get_user_data_key(user_id, "token_reward_amount")
+            await redis_client.set_user_data_key(user_id, "reward_amount", token_amount)
+            # Calculate total cost with 2% service fee for token payments
+            token_amount_float = float(token_amount)
+            service_fee = token_amount_float * 0.02
+            total_cost_with_fee = token_amount_float + service_fee
+            await redis_client.set_user_data_key(user_id, "total_cost", total_cost_with_fee)
+            await redis_client.set_user_data_key(user_id, "service_charge", service_fee)
+            return await process_token_payment(update, context)
+        else:
+            # Handle NEAR payment for Top 10
+            reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
+            await redis_client.set_user_data_key(user_id, "total_cost", float(reward_amount))
+            return await payment_verification(update, context)
+
     elif choice == "back_to_structure_options":
         # Go back to reward structure options
-        reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
-        return await show_reward_structure_options(update, context, reward_amount)
+        if payment_method == "TOKEN":
+            # For tokens, need to show token structure options again
+            token_amount = await redis_client.get_user_data_key(user_id, "token_reward_amount")
+            token_contract = await redis_client.get_user_data_key(user_id, "selected_token_contract")
+            
+            # Get token symbol
+            try:
+                from services.wallet_service import WalletService
+                from services.near_wallet_service import NEARWalletService
+                from services.token_service import TokenService
+                from py_near.account import Account
+                
+                wallet_service = WalletService()
+                wallet = await wallet_service.get_user_wallet(user_id)
+                
+                if wallet:
+                    near_service = NEARWalletService()
+                    private_key = near_service.decrypt_private_key(
+                        wallet["encrypted_private_key"], wallet["iv"], wallet["tag"]
+                    )
+                    
+                    account = Account(
+                        account_id=wallet["account_id"],
+                        private_key=private_key,
+                        rpc_addr=Config.NEAR_RPC_ENDPOINT,
+                    )
+                    await account.startup()
+                    
+                    token_service = TokenService()
+                    metadata = await token_service.get_token_metadata(account, token_contract)
+                    token_symbol = metadata["symbol"]
+                else:
+                    token_symbol = "TOKEN"
+            except Exception as e:
+                logger.error(f"Error getting token symbol: {e}")
+                token_symbol = "TOKEN"
+            
+            # Show token reward structure options
+            await update.callback_query.edit_message_text(
+                f"💰 **Token Amount:** {token_amount} {token_symbol}\n\n"
+                f"Choose reward structure:",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton(
+                                "🏆 Winner Takes All", callback_data="token_structure_wta"
+                            ),
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                "🥇🥈🥉 Top 3 (50%-30%-20%)",
+                                callback_data="token_structure_top3",
+                            ),
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                "🏆 Top 5 (40/25/15/12/8)",
+                                callback_data="token_structure_top5",
+                            ),
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                "🏆 Top 10 (30/20/10/...)",
+                                callback_data="token_structure_top10",
+                            ),
+                        ],
+                    ]
+                ),
+                parse_mode="Markdown",
+            )
+            return REWARD_STRUCTURE_CHOICE
+        else:
+            # For NEAR, show NEAR structure options
+            reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
+            return await show_reward_structure_options(update, context, reward_amount)
 
 
 async def reward_structure_choice(update, context):
@@ -1376,6 +1521,16 @@ async def reward_structure_choice(update, context):
         await redis_client.set_user_data_key(user_id, "total_cost", total_cost_with_fee)
         await redis_client.set_user_data_key(user_id, "service_charge", service_fee)
         return await process_token_payment(update, context)
+
+    elif choice == "token_structure_top5":
+        # Handle token top 5 structure - show preview first
+        await redis_client.set_user_data_key(user_id, "payment_method", "TOKEN")
+        return await show_distribution_preview(update, context, "top_5")
+
+    elif choice == "token_structure_top10":
+        # Handle token top 10 structure - show preview first
+        await redis_client.set_user_data_key(user_id, "payment_method", "TOKEN")
+        return await show_distribution_preview(update, context, "top_10")
 
     elif choice == "structure_top3":
         reward_amount = await redis_client.get_user_data_key(user_id, "reward_amount")
@@ -1743,6 +1898,18 @@ async def handle_token_amount_selection(update, context):
                             callback_data="token_structure_top3",
                         ),
                     ],
+                    [
+                        InlineKeyboardButton(
+                            "🏆 Top 5 (40/25/15/12/8)",
+                            callback_data="token_structure_top5",
+                        ),
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "🏆 Top 10 (30/20/10/...)",
+                            callback_data="token_structure_top10",
+                        ),
+                    ],
                 ]
             ),
             parse_mode="Markdown",
@@ -1834,6 +2001,18 @@ async def handle_token_custom_amount_input(update, context):
                         InlineKeyboardButton(
                             "🥇🥈🥉 Top 3 (50%-30%-20%)",
                             callback_data="token_structure_top3",
+                        ),
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "🏆 Top 5 (40/25/15/12/8)",
+                            callback_data="token_structure_top5",
+                        ),
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "🏆 Top 10 (30/20/10/...)",
+                            callback_data="token_structure_top10",
                         ),
                     ],
                 ]
@@ -3805,28 +3984,28 @@ async def store_payment_info_in_quiz(user_id: int, payment_info: dict):
             elif reward_structure == "top_5" and reward_amount:
                 # Handle Top 5 structure using Config.TOP_5_DISTRIBUTION
                 from utils.config import Config
-                
+
                 total_amount = float(reward_amount)
                 distribution = Config.TOP_5_DISTRIBUTION
-                
+
                 # Calculate amounts for each place
                 amounts = [round(total_amount * percentage, 6) for percentage in distribution]
                 places = ["1st", "2nd", "3rd", "4th", "5th"]
-                
+
                 # Build details_text
                 if payment_method == "TOKEN" and token_contract_address:
                     try:
                         token_symbol = token_contract_address.split(".")[0].upper()
-                        details_parts = [f"{amount} {token_symbol} for {place}" 
+                        details_parts = [f"{amount} {token_symbol} for {place}"
                                        for amount, place in zip(amounts, places)]
                     except Exception as e:
                         logger.error(f"Error getting token symbol: {e}")
-                        details_parts = [f"{amount} TOKEN for {place}" 
+                        details_parts = [f"{amount} TOKEN for {place}"
                                        for amount, place in zip(amounts, places)]
                 else:
-                    details_parts = [f"{amount} NEAR for {place}" 
+                    details_parts = [f"{amount} NEAR for {place}"
                                    for amount, place in zip(amounts, places)]
-                
+
                 quiz.reward_schedule = {
                     "type": "top5_details",
                     "details_text": ", ".join(details_parts),
@@ -3837,28 +4016,28 @@ async def store_payment_info_in_quiz(user_id: int, payment_info: dict):
             elif reward_structure == "top_10" and reward_amount:
                 # Handle Top 10 structure using Config.TOP_10_DISTRIBUTION
                 from utils.config import Config
-                
+
                 total_amount = float(reward_amount)
                 distribution = Config.TOP_10_DISTRIBUTION
-                
+
                 # Calculate amounts for each place
                 amounts = [round(total_amount * percentage, 6) for percentage in distribution]
                 places = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th"]
-                
+
                 # Build details_text
                 if payment_method == "TOKEN" and token_contract_address:
                     try:
                         token_symbol = token_contract_address.split(".")[0].upper()
-                        details_parts = [f"{amount} {token_symbol} for {place}" 
+                        details_parts = [f"{amount} {token_symbol} for {place}"
                                        for amount, place in zip(amounts, places)]
                     except Exception as e:
                         logger.error(f"Error getting token symbol: {e}")
-                        details_parts = [f"{amount} TOKEN for {place}" 
+                        details_parts = [f"{amount} TOKEN for {place}"
                                        for amount, place in zip(amounts, places)]
                 else:
-                    details_parts = [f"{amount} NEAR for {place}" 
+                    details_parts = [f"{amount} NEAR for {place}"
                                    for amount, place in zip(amounts, places)]
-                
+
                 quiz.reward_schedule = {
                     "type": "top10_details",
                     "details_text": ", ".join(details_parts),

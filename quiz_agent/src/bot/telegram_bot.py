@@ -297,7 +297,7 @@ class TelegramBot:
                 REWARD_STRUCTURE_CHOICE: [
                     CallbackQueryHandler(
                         reward_structure_choice,
-                        pattern="^(structure_wta|structure_top3|structure_top5|structure_top10|structure_custom|token_structure_wta|token_structure_top3)$",
+                        pattern="^(structure_wta|structure_top3|structure_top5|structure_top10|structure_custom|token_structure_wta|token_structure_top3|token_structure_top5|token_structure_top10)$",
                     ),
                     CallbackQueryHandler(
                         confirm_distribution_structure,
