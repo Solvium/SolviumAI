@@ -1806,6 +1806,10 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                 winners_announcement += "\n💰 <b>Reward Type:</b> Winner Takes All"
             elif reward_type == "top3_details":
                 winners_announcement += "\n💰 <b>Reward Type:</b> Top 3 Winners"
+            elif reward_type == "top5_details":
+                winners_announcement += "\n💰 <b>Reward Type:</b> Top 5 Winners"
+            elif reward_type == "top10_details":
+                winners_announcement += "\n💰 <b>Reward Type:</b> Top 10 Winners"
             elif reward_type == "custom_details":
                 winners_announcement += "\n💰 <b>Reward Type:</b> Custom Rewards"
 
@@ -1820,6 +1824,12 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                 elif reward_type == "top3_details":
                     # Top 3 winners with correct answers
                     winners_to_notify = winners_with_scores[:3]
+                elif reward_type == "top5_details":
+                    # Top 5 winners with correct answers
+                    winners_to_notify = winners_with_scores[:5]
+                elif reward_type == "top10_details":
+                    # Top 10 winners with correct answers
+                    winners_to_notify = winners_with_scores[:10]
                 elif reward_type == "custom_details":
                     # Custom rewards - all participants with correct answers
                     winners_to_notify = winners_with_scores
@@ -2290,6 +2300,22 @@ async def _generate_leaderboard_data_for_quiz(
                 winners_count += 1
             else:
                 break  # Stop if we have enough winners or scores are 0
+    elif reward_type == "top5_details":  # Top 5 Winners
+        winners_count = 0
+        for p in ranked_participants:
+            if winners_count < 5 and p["score"] > 0:
+                p["is_winner"] = True
+                winners_count += 1
+            else:
+                break
+    elif reward_type == "top10_details":  # Top 10 Winners
+        winners_count = 0
+        for p in ranked_participants:
+            if winners_count < 10 and p["score"] > 0:
+                p["is_winner"] = True
+                winners_count += 1
+            else:
+                break
     # Add more sophisticated logic for "custom_details", "manual_free_text", "shared_pot" if needed
     # For "custom_details" and "manual_free_text", winner determination might be manual or based on text parsing,
     # which is complex. For now, they won't automatically mark winners here.

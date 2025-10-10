@@ -1452,8 +1452,15 @@ class NEARWalletService:
         self, account_id: str, network: str = "testnet"
     ) -> str:
         """
-        Gets the actual NEAR account balance using RPC
-        Supports both testnet and mainnet based on the network parameter
+        Gets the actual NEAR account balance using FastNear Premium RPC with 30s cache.
+        Supports both testnet and mainnet based on the network parameter.
+
+        Args:
+            account_id: NEAR account ID
+            network: Network type ("testnet" or "mainnet")
+
+        Returns:
+            Balance string (e.g., "1.2345 NEAR")
         """
         try:
             # Choose RPC endpoint based on network
@@ -1464,7 +1471,27 @@ class NEARWalletService:
                 rpc_url = self.testnet_rpc_url
                 logger.debug(f"Using testnet RPC for balance query: {account_id}")
 
-            # Always use RPC for balance queries as it's more reliable
+            # Try FastNear Premium first (mainnet only for now)
+            if network == "mainnet":
+                try:
+                    from services.fastnear_service import get_fastnear_service
+
+                    fastnear = get_fastnear_service()
+                    balance = await fastnear.get_account_balance(
+                        account_id, use_cache=True
+                    )
+                    logger.info(
+                        f"Successfully got balance from FastNear for {account_id}: {balance}"
+                    )
+                    return balance
+
+                except Exception as fastnear_error:
+                    logger.warning(
+                        f"FastNear failed for {account_id}, falling back to RPC fallback: {fastnear_error}"
+                    )
+                    # Fall through to RPC fallback
+
+            # Use RPC fallback for testnet or if FastNear fails
             return await self._get_balance_rpc_fallback(account_id, network)
 
         except Exception as e:

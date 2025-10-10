@@ -255,8 +255,15 @@ class WalletService:
         self, user_id: int, force_refresh: bool = False
     ) -> str:
         """
-        Gets the real NEAR wallet balance with caching
-        Supports both testnet and mainnet based on the wallet's network
+        Gets the real NEAR wallet balance using FastNear Premium RPC with 30s cache.
+        Supports both testnet and mainnet based on the wallet's network.
+
+        Args:
+            user_id: User ID
+            force_refresh: Force refresh cache (bypass 30s cache)
+
+        Returns:
+            Balance string (e.g., "1.2345 NEAR")
         """
         try:
             wallet = await self.get_user_wallet(user_id)
@@ -267,34 +274,32 @@ class WalletService:
                     f"Getting balance for account: {account_id} on {network}, force_refresh: {force_refresh}"
                 )
 
-                # Check cache first (unless force refresh)
-                if not force_refresh:
-                    cached_balance = await cache_service.get_cached_balance(account_id)
-                    if cached_balance:
-                        logger.info(
-                            f"Using cached balance for {account_id}: {cached_balance}"
-                        )
-                        return cached_balance
+                # Try FastNear Premium first (with 30s cache)
+                try:
+                    from services.fastnear_service import get_fastnear_service
 
-                # Fetch from blockchain
-                logger.info(
-                    f"Fetching fresh balance from blockchain for {account_id} on {network}"
-                )
-                balance = await self.near_wallet_service.get_account_balance(
-                    account_id, network
-                )
-                logger.info(
-                    f"Fresh balance from blockchain for {account_id} on {network}: {balance}"
-                )
+                    fastnear = get_fastnear_service()
+                    balance = await fastnear.get_account_balance(
+                        account_id, use_cache=not force_refresh
+                    )
+                    logger.info(
+                        f"Successfully got balance from FastNear for {account_id}: {balance}"
+                    )
+                    return balance
 
-                # Cache the result
-                await cache_service.set_cached_balance(account_id, balance)
+                except Exception as fastnear_error:
+                    logger.warning(
+                        f"FastNear failed for {account_id}, falling back to legacy method: {fastnear_error}"
+                    )
+                    # Fall back to legacy method
+                    balance = await self.near_wallet_service.get_account_balance(
+                        account_id, network
+                    )
+                    logger.info(
+                        f"Got balance from fallback method for {account_id} on {network}: {balance}"
+                    )
+                    return balance
 
-                # Invalidate token inventory cache when balance is refreshed
-                # This ensures token inventory is also refreshed when balance changes
-                await cache_service.invalidate_token_inventory_cache(account_id)
-
-                return balance
             logger.warning(f"No wallet or account_id found for user {user_id}")
             return "0 NEAR"
         except Exception as e:

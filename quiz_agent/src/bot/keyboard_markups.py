@@ -85,16 +85,13 @@ def create_leaderboards_keyboard() -> ReplyKeyboardMarkup:
 
 def create_withdrawal_keyboard() -> ReplyKeyboardMarkup:
     """
-    Creates a keyboard for withdrawal options
+    Creates a keyboard for withdrawal options - NEAR, Token withdrawals, and Transaction History
     """
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton("💎 Withdraw NEAR"), KeyboardButton("🪙 Withdraw Token")],
-            [
-                KeyboardButton("🎯 Withdraw Points"),
-                KeyboardButton("📊 Transaction History"),
-            ],
-            [KeyboardButton("⬅️ Back to Main Menu")],
+            [KeyboardButton("📊 Transaction History")],
+            [KeyboardButton("⬅️ Back to Wallet"), KeyboardButton("⬅️ Back to Main Menu")],
         ],
         resize_keyboard=True,
         one_time_keyboard=False,
