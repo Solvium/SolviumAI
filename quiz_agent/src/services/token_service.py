@@ -690,7 +690,37 @@ class TokenService:
             return []
 
     async def get_token_metadata_from_api(self, token_contract: str) -> Dict:
-        """Get token metadata directly from NearBlocks API with caching and rate limiting handling"""
+        """
+        Get token metadata using FastNear Premium with NearBlocks fallback.
+
+        Updated to use FastNear as primary source with 24h caching.
+        """
+        try:
+            # Try FastNear Premium first
+            from services.fastnear_service import get_fastnear_service
+
+            fastnear = get_fastnear_service()
+            metadata = await fastnear.fetch_token_metadata_rpc(
+                token_contract, use_cache=True
+            )
+
+            logger.info(
+                f"Got token metadata from FastNear for {token_contract}: {metadata.get('symbol', 'UNKNOWN')}"
+            )
+            return metadata
+
+        except Exception as fastnear_error:
+            logger.warning(
+                f"FastNear metadata fetch failed for {token_contract}, falling back to NearBlocks: {fastnear_error}"
+            )
+
+            # Fall back to NearBlocks API
+            return await self._get_token_metadata_nearblocks(token_contract)
+
+    async def _get_token_metadata_nearblocks(self, token_contract: str) -> Dict:
+        """
+        Legacy NearBlocks API implementation for token metadata (fallback only).
+        """
         try:
             # Check cache first
             cached_metadata = self._get_cached_metadata(token_contract)
