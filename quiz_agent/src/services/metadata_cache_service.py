@@ -7,7 +7,6 @@ This service provides caching for:
 3. Token inventory lists - 30s TTL (needs to be fresh)
 """
 
-import json
 import time
 import logging
 from typing import Optional, Dict, List
@@ -51,7 +50,7 @@ class MetadataCacheService:
 
             if cached:
                 logger.info(f"Metadata cache HIT for {contract_id}")
-                return json.loads(cached)
+                return cached  # RedisClient already deserializes JSON
 
             logger.info(f"Metadata cache MISS for {contract_id}")
             return None
@@ -233,7 +232,7 @@ class MetadataCacheService:
 
             if cached:
                 logger.info(f"Token inventory cache HIT for {account_id}")
-                return json.loads(cached)
+                return cached  # RedisClient already deserializes JSON
 
             logger.info(f"Token inventory cache MISS for {account_id}")
             return None
