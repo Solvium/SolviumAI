@@ -1736,8 +1736,14 @@ async def show_token_selection(update, context):
 
         # Store tokens list in Redis with indices (to avoid callback_data length issues)
         import json
-        token_map = {str(idx): token["contract_address"] for idx, token in enumerate(available_tokens[:10])}
-        await redis_client.set_user_data_key(user_id, "token_selection_map", json.dumps(token_map))
+
+        token_map = {
+            str(idx): token["contract_address"]
+            for idx, token in enumerate(available_tokens[:10])
+        }
+        await redis_client.set_user_data_key(
+            user_id, "token_selection_map", json.dumps(token_map)
+        )
 
         # Create keyboard with user's actual tokens using indices
         keyboard = []
@@ -1778,20 +1784,23 @@ async def handle_token_selection(update, context):
     try:
         # Extract token index from callback data
         token_index = query.data.replace("select_token_", "")
-        
+
         # Retrieve token contract address from Redis using index
         import json
-        token_map_json = await redis_client.get_user_data_key(user_id, "token_selection_map")
-        
+
+        token_map_json = await redis_client.get_user_data_key(
+            user_id, "token_selection_map"
+        )
+
         if not token_map_json:
             await query.edit_message_text(
                 "❌ Token selection expired. Please try again."
             )
             return ConversationHandler.END
-            
+
         token_map = json.loads(token_map_json)
         token_contract = token_map.get(token_index)
-        
+
         if not token_contract:
             await query.edit_message_text(
                 "❌ Invalid token selection. Please try again."
