@@ -21,6 +21,7 @@ from .keyboard_markups import (
 from utils.redis_client import RedisClient
 from services.wallet_service import WalletService
 import logging
+import json
 from utils.config import Config
 
 logger = logging.getLogger(__name__)
@@ -271,6 +272,9 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         "📤 Withdraw",
         "📥 Receive",
         "📊 Transactions",
+        # Withdrawal submenu buttons
+        "💎 Withdraw NEAR",
+        "🪙 Withdraw Token",
         # Receive screen buttons
         "🔄 Check NEAR Balance",
         "🪙 Check Token Balance",
@@ -327,6 +331,11 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         await handle_receive(update, context)
     elif message_text == "📊 Transactions":
         await handle_transactions(update, context)
+    # Withdrawal submenu handlers
+    elif message_text == "💎 Withdraw NEAR":
+        await handle_withdraw_near(update, context)
+    elif message_text == "🪙 Withdraw Token":
+        await handle_withdraw_token(update, context)
     # Receive screen handlers
     elif message_text == "🔄 Check NEAR Balance":
         await handle_check_near_balance_after_deposit(update, context)
@@ -656,10 +665,10 @@ async def handle_active_quizzes(update: Update, context: CallbackContext) -> Non
     await update.message.reply_text(
         "🎲 Loading available quizzes...", reply_markup=create_main_menu_keyboard()
     )
-    from services.quiz_service import play_quiz
+    from bot.handlers import play_quiz_handler
 
     context.args = []
-    await play_quiz(update, context)
+    await play_quiz_handler(update, context)
 
 
 async def handle_my_results(update: Update, context: CallbackContext) -> None:
@@ -737,9 +746,6 @@ async def handle_transaction_history(update: Update, context: CallbackContext) -
     )
 
 
-
-
-
 async def handle_back_navigation(update: Update, context: CallbackContext) -> None:
     """Handle 'Back' button press"""
     user_id = update.effective_user.id
@@ -757,6 +763,7 @@ async def handle_back_navigation(update: Update, context: CallbackContext) -> No
 # =============================================================================
 # HISTORY HANDLERS
 # =============================================================================
+
 
 async def handle_history(update: Update, context: CallbackContext) -> None:
     """Handle '📜 History' button press"""
@@ -791,8 +798,14 @@ async def handle_quiz_activity(update: Update, context: CallbackContext) -> None
 
         # Get recent quiz participations (last 10)
         participated_quizzes = (
-            session.query(QuizAnswer.quiz_id, Quiz.topic, func.count(QuizAnswer.id).label('answers_count'),
-                         func.sum(func.case([(QuizAnswer.is_correct == 'True', 1)], else_=0)).label('correct_count'))
+            session.query(
+                QuizAnswer.quiz_id,
+                Quiz.topic,
+                func.count(QuizAnswer.id).label("answers_count"),
+                func.sum(
+                    func.case([(QuizAnswer.is_correct == "True", 1)], else_=0)
+                ).label("correct_count"),
+            )
             .join(Quiz, QuizAnswer.quiz_id == Quiz.id)
             .filter(QuizAnswer.user_id == user_id)
             .group_by(QuizAnswer.quiz_id, Quiz.topic)
@@ -810,8 +823,15 @@ async def handle_quiz_activity(update: Update, context: CallbackContext) -> None
         message += "🎯 **Quizzes You Created:**\n"
         if created_quizzes:
             for i, quiz in enumerate(created_quizzes[:5], 1):
-                status_emoji = {"DRAFT": "✏️", "FUNDING": "💰", "ACTIVE": "🔥", "CLOSED": "✅"}.get(quiz.status.value, "❓")
-                created_date = quiz.created_at.strftime("%m/%d") if quiz.created_at else "N/A"
+                status_emoji = {
+                    "DRAFT": "✏️",
+                    "FUNDING": "💰",
+                    "ACTIVE": "🔥",
+                    "CLOSED": "✅",
+                }.get(quiz.status.value, "❓")
+                created_date = (
+                    quiz.created_at.strftime("%m/%d") if quiz.created_at else "N/A"
+                )
                 message += f"{i}. {status_emoji} {quiz.topic[:30]}{'...' if len(quiz.topic) > 30 else ''} ({created_date})\n"
         else:
             message += "   No quizzes created yet\n"
@@ -821,8 +841,14 @@ async def handle_quiz_activity(update: Update, context: CallbackContext) -> None
         # Participated Quizzes Section
         message += "🎮 **Recent Quiz Participation:**\n"
         if participated_quizzes:
-            for i, (quiz_id, topic, total_answers, correct_answers) in enumerate(participated_quizzes[:5], 1):
-                accuracy = f"{int((correct_answers or 0) / total_answers * 100)}%" if total_answers > 0 else "0%"
+            for i, (quiz_id, topic, total_answers, correct_answers) in enumerate(
+                participated_quizzes[:5], 1
+            ):
+                accuracy = (
+                    f"{int((correct_answers or 0) / total_answers * 100)}%"
+                    if total_answers > 0
+                    else "0%"
+                )
                 message += f"{i}. {topic[:25]}{'...' if len(topic) > 25 else ''}\n   📊 {correct_answers or 0}/{total_answers} ({accuracy})\n"
         else:
             message += "   No quiz participation yet\n"
@@ -868,33 +894,36 @@ async def handle_points_history(update: Update, context: CallbackContext) -> Non
                 break
 
             # Parse transaction data
-            points = transaction.get('points', 0)
-            description = transaction.get('description', 'Unknown transaction')
-            transaction_type = transaction.get('transaction_type', '')
-            created_at = transaction.get('created_at', '')
+            points = transaction.get("points", 0)
+            description = transaction.get("description", "Unknown transaction")
+            transaction_type = transaction.get("transaction_type", "")
+            created_at = transaction.get("created_at", "")
 
             # Format date
             try:
                 from datetime import datetime
-                date_obj = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+
+                date_obj = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
                 date_str = date_obj.strftime("%m/%d %H:%M")
             except:
                 date_str = "Unknown"
 
             # Choose emoji based on transaction type
-            if 'CORRECT_ANSWER' in transaction_type:
+            if "CORRECT_ANSWER" in transaction_type:
                 emoji = "✅"
-            elif 'FIRST_CORRECT' in transaction_type:
+            elif "FIRST_CORRECT" in transaction_type:
                 emoji = "🥇"
-            elif 'CREATOR_UNIQUE' in transaction_type:
+            elif "CREATOR_UNIQUE" in transaction_type:
                 emoji = "👥"
-            elif 'CREATOR_CORRECT' in transaction_type:
+            elif "CREATOR_CORRECT" in transaction_type:
                 emoji = "🎯"
             else:
                 emoji = "💰"
 
             sign = "+" if points > 0 else ""
-            message += f"{emoji} {sign}{points} pts - {description}\n   📅 {date_str}\n\n"
+            message += (
+                f"{emoji} {sign}{points} pts - {description}\n   📅 {date_str}\n\n"
+            )
             total_shown += 1
 
         if len(history) > 10:
@@ -929,7 +958,9 @@ async def handle_wallet_activity(update: Update, context: CallbackContext) -> No
         # Get user's wallet info
         user_wallet = (
             session.query(UserWallet)
-            .filter(UserWallet.telegram_user_id == user_id, UserWallet.is_active == True)
+            .filter(
+                UserWallet.telegram_user_id == user_id, UserWallet.is_active == True
+            )
             .first()
         )
 
@@ -945,7 +976,9 @@ async def handle_wallet_activity(update: Update, context: CallbackContext) -> No
         # Get quiz payments made by this user
         quiz_payments = (
             session.query(Quiz)
-            .filter(Quiz.creator_id == user_id, Quiz.payment_transaction_hash.isnot(None))
+            .filter(
+                Quiz.creator_id == user_id, Quiz.payment_transaction_hash.isnot(None)
+            )
             .order_by(desc(Quiz.created_at))
             .limit(10)
             .all()
@@ -963,9 +996,17 @@ async def handle_wallet_activity(update: Update, context: CallbackContext) -> No
         message += "💰 **Quiz Creation Payments:**\n"
         if quiz_payments:
             for i, quiz in enumerate(quiz_payments[:5], 1):
-                created_date = quiz.created_at.strftime("%m/%d") if quiz.created_at else "N/A"
-                tx_hash_short = f"{quiz.payment_transaction_hash[:8]}...{quiz.payment_transaction_hash[-8:]}" if quiz.payment_transaction_hash else "N/A"
-                message += f"{i}. {quiz.topic[:25]}{'...' if len(quiz.topic) > 25 else ''}\n"
+                created_date = (
+                    quiz.created_at.strftime("%m/%d") if quiz.created_at else "N/A"
+                )
+                tx_hash_short = (
+                    f"{quiz.payment_transaction_hash[:8]}...{quiz.payment_transaction_hash[-8:]}"
+                    if quiz.payment_transaction_hash
+                    else "N/A"
+                )
+                message += (
+                    f"{i}. {quiz.topic[:25]}{'...' if len(quiz.topic) > 25 else ''}\n"
+                )
                 message += f"   📅 {created_date} | 🔗 `{tx_hash_short}`\n"
         else:
             message += "   No quiz payments found\n"
@@ -1005,19 +1046,21 @@ async def handle_achievements(update: Update, context: CallbackContext) -> None:
             return
 
         # Get user's current ranking
-        leaderboard = await PointService.get_leaderboard(limit=100, leaderboard_type="total")
+        leaderboard = await PointService.get_leaderboard(
+            limit=100, leaderboard_type="total"
+        )
         user_rank = None
         for entry in leaderboard:
-            if entry['user_id'] == user_id:
-                user_rank = entry['rank']
+            if entry["user_id"] == user_id:
+                user_rank = entry["rank"]
                 break
 
         # Calculate achievement levels and badges
-        total_points = user_points.get('total_points', 0)
-        total_correct = user_points.get('total_correct_answers', 0)
-        total_created = user_points.get('total_quizzes_created', 0)
-        total_taken = user_points.get('total_quizzes_taken', 0)
-        first_correct = user_points.get('first_correct_answers', 0)
+        total_points = user_points.get("total_points", 0)
+        total_correct = user_points.get("total_correct_answers", 0)
+        total_created = user_points.get("total_quizzes_created", 0)
+        total_taken = user_points.get("total_quizzes_taken", 0)
+        first_correct = user_points.get("first_correct_answers", 0)
 
         # Format the message
         message = "🏆 **Your Achievements**\n\n"
@@ -1031,8 +1074,12 @@ async def handle_achievements(update: Update, context: CallbackContext) -> None:
         elif total_points >= 100:
             message += "🥉 Points Collector (100+ pts) ✅\n"
         else:
-            next_milestone = 100 if total_points < 100 else (500 if total_points < 500 else 1000)
-            message += f"🎯 Next: {next_milestone} pts ({total_points}/{next_milestone})\n"
+            next_milestone = (
+                100 if total_points < 100 else (500 if total_points < 500 else 1000)
+            )
+            message += (
+                f"🎯 Next: {next_milestone} pts ({total_points}/{next_milestone})\n"
+            )
 
         message += "\n"
 
@@ -1048,7 +1095,9 @@ async def handle_achievements(update: Update, context: CallbackContext) -> None:
             message += "🥉 Quiz Explorer (5+ quizzes) ✅\n"
         else:
             next_milestone = 5 if total_taken < 5 else (10 if total_taken < 10 else 20)
-            message += f"🎯 Next: {next_milestone} quizzes ({total_taken}/{next_milestone})\n"
+            message += (
+                f"🎯 Next: {next_milestone} quizzes ({total_taken}/{next_milestone})\n"
+            )
 
         message += "\n"
 
@@ -1611,10 +1660,10 @@ async def handle_quiz_deep_link(
     except ImportError as e:
         logger.error(f"Import error in deep link handler: {e}")
         # Fallback to existing play quiz functionality
-        from services.quiz_service import play_quiz
+        from bot.handlers import play_quiz_handler
 
         context.args = [quiz_id]
-        await play_quiz(update, context)
+        await play_quiz_handler(update, context)
 
 
 # New wallet handlers
@@ -1627,41 +1676,84 @@ async def handle_my_wallet(update: Update, context: CallbackContext) -> None:
 
 
 async def handle_view_balance(update: Update, context: CallbackContext) -> None:
-    """Handle 'View Balance' button press"""
+    """Handle 'View Balance' button press - Instant fetch using FastNear Premium"""
     user_id = update.effective_user.id
     wallet_service = WalletService()
 
     try:
+        # Show instant loading message
+        loading_msg = await update.message.reply_text("⚡ **Fetching Balance...**...")
+
         # Get user's wallet info
         wallet_data = await wallet_service.get_user_wallet(user_id)
 
         if wallet_data:
-            # Get the actual NEAR balance
-            near_balance = await wallet_service.get_wallet_balance(user_id)
             account_id = wallet_data.get("account_id", "N/A")
             network = wallet_data.get("network", "mainnet")
 
+            # Force refresh to get instant real-time balance from FastNear Premium
+            near_balance = await wallet_service.get_wallet_balance(
+                user_id, force_refresh=True
+            )
+
+            # Get token balances using FastNear
+            from services.token_service import TokenService
+
+            token_service = TokenService()
+            tokens = await token_service.get_user_token_inventory(
+                account_id, force_refresh=True
+            )
+
+            # Build comprehensive balance message
             balance_text = f"""💰 **Wallet Balance**
 
-🏛️ **NEAR Balance:** {near_balance} NEAR
+🏛️ **NEAR Balance:** {near_balance}
 🌐 **Network:** {network.title()}
 
 📍 **Account ID:**
-`{account_id}`
+`{account_id}`"""
 
-� **Tip:** Your balance updates automatically every few minutes"""
+            # Add token balances if available
+            if tokens and len(tokens) > 0:
+                balance_text += "\n\n🪙 **Token Balances:**"
+                for token in tokens[:5]:  # Show first 5 tokens
+                    symbol = token.get("symbol", "???")
+                    balance = token.get("balance", "0")
+                    balance_text += f"\n• **{symbol}:** {balance}"
+
+                if len(tokens) > 5:
+                    balance_text += f"\n• ... and {len(tokens) - 5} more tokens"
+            else:
+                balance_text += "\n\n🪙 **Token Balances:** None"
+
+            balance_text += "\n\n⚡ **Powered by FastNear Premium** - Real-time data"
+
+            # Edit the loading message with results
+            await loading_msg.edit_text(balance_text, parse_mode="Markdown")
+
+            # Send wallet keyboard separately
+            await update.message.reply_text(
+                "Choose an option:", reply_markup=create_wallet_keyboard()
+            )
         else:
-            balance_text = "❌ Unable to retrieve wallet information. Please try again."
+            await loading_msg.edit_text(
+                "❌ Unable to retrieve wallet information. Please try again."
+            )
+            await update.message.reply_text(
+                "Choose an option:", reply_markup=create_wallet_keyboard()
+            )
 
-        await update.message.reply_text(
-            balance_text, reply_markup=create_wallet_keyboard(), parse_mode="Markdown"
-        )
     except Exception as e:
         logger.error(f"Error retrieving wallet balance for user {user_id}: {e}")
-        await update.message.reply_text(
-            "❌ Error retrieving wallet balance. Please try again later.",
-            reply_markup=create_wallet_keyboard(),
-        )
+        try:
+            await loading_msg.edit_text(
+                "❌ Error retrieving wallet balance. Please try again later."
+            )
+        except:
+            await update.message.reply_text(
+                "❌ Error retrieving wallet balance. Please try again later.",
+                reply_markup=create_wallet_keyboard(),
+            )
 
 
 async def handle_export_keys(update: Update, context: CallbackContext) -> None:
@@ -1713,7 +1805,887 @@ async def handle_withdraw(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(
         "📤 **Withdraw Funds**\nChoose what you'd like to withdraw:",
         reply_markup=create_withdrawal_keyboard(),
+        parse_mode="Markdown",
     )
+
+
+async def handle_withdraw_near(update: Update, context: CallbackContext) -> None:
+    """Handle 'Withdraw NEAR' button press - initiate NEAR withdrawal flow"""
+    user_id = update.effective_user.id
+    wallet_service = WalletService()
+
+    try:
+        # Get user's wallet and balance
+        wallet_data = await wallet_service.get_user_wallet(user_id)
+
+        if not wallet_data:
+            await update.message.reply_text(
+                "❌ **No Wallet Found**\n\nYou need to create a wallet first.",
+                reply_markup=create_wallet_keyboard(),
+                parse_mode="Markdown",
+            )
+            return
+
+        # Get current balance using FastNear Premium
+        near_balance = await wallet_service.get_wallet_balance(
+            user_id, force_refresh=True
+        )
+        account_id = wallet_data.get("account_id")
+
+        withdraw_text = f"""💎 **Withdraw NEAR**
+
+📊 **Current Balance:** {near_balance}
+📍 **From Account:** `{account_id}`
+
+💡 **How to withdraw:**
+
+1️⃣ Enter the recipient's NEAR account ID
+   (e.g., `receiver.near` or `receiver.testnet`)
+
+2️⃣ Enter the amount of NEAR to send
+   (Keep 0.05 NEAR for gas fees)
+
+3️⃣ Confirm the transaction
+
+⚠️ **Important:**
+• Minimum: 0.1 NEAR
+• Always keep 0.05 NEAR for gas fees
+• Double-check the recipient address
+
+📝 **Reply with the recipient's account ID to continue:**"""
+
+        await update.message.reply_text(
+            withdraw_text,
+            reply_markup=create_cancel_keyboard(),
+            parse_mode="Markdown",
+        )
+
+        # Store withdrawal state in Redis
+        from utils.redis_client import RedisClient
+
+        redis_client = RedisClient()
+        await redis_client.set_user_data_key(
+            user_id, "awaiting", "withdraw_near_address"
+        )
+
+    except Exception as e:
+        logger.error(f"Error in withdraw NEAR handler for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Error initiating NEAR withdrawal. Please try again.",
+            reply_markup=create_withdrawal_keyboard(),
+        )
+
+
+async def handle_withdraw_token(update: Update, context: CallbackContext) -> None:
+    """Handle 'Withdraw Token' button press - show token selection for withdrawal"""
+    user_id = update.effective_user.id
+    wallet_service = WalletService()
+
+    try:
+        # Show loading message
+        loading_msg = await update.message.reply_text(
+            "🪙 **Loading Your Tokens...**\nFetching token inventory..."
+        )
+
+        # Get user's wallet
+        wallet_data = await wallet_service.get_user_wallet(user_id)
+
+        if not wallet_data:
+            await loading_msg.edit_text(
+                "❌ **No Wallet Found**\n\nYou need to create a wallet first."
+            )
+            await update.message.reply_text(
+                "Choose an option:", reply_markup=create_wallet_keyboard()
+            )
+            return
+
+        account_id = wallet_data.get("account_id")
+
+        # Get user's token inventory using FastNear
+        from services.token_service import TokenService
+
+        token_service = TokenService()
+        tokens = await token_service.get_user_token_inventory(
+            account_id, force_refresh=True
+        )
+
+        if not tokens or len(tokens) == 0:
+            await loading_msg.edit_text(
+                "🪙 **No Tokens Found**\n\n"
+                "You don't have any fungible tokens to withdraw.\n\n"
+                "💡 You can receive tokens by sharing your account ID from the 'Receive' menu."
+            )
+            await update.message.reply_text(
+                "Choose an option:", reply_markup=create_withdrawal_keyboard()
+            )
+            return
+
+        # Build token selection message
+        token_text = f"""🪙 **Withdraw Token**
+
+📍 **From Account:** `{account_id}`
+💼 **Available Tokens:** {len(tokens)}
+
+📋 **Select a token to withdraw:**
+
+"""
+
+        # Create inline keyboard with token options
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+
+        token_buttons = []
+
+        for idx, token in enumerate(tokens[:20]):  # Show up to 20 tokens
+            symbol = token.get("symbol", "Unknown")
+            balance = token.get("balance", "0")
+            contract = token.get("contract_id", "")
+
+            # Create short ID for callback data (Telegram has 64 byte limit)
+            # Use index-based callback instead of full contract address
+            button_text = f"{symbol}: {balance}"
+            callback_data = f"withdraw_token_{idx}"
+
+            token_buttons.append(
+                [InlineKeyboardButton(button_text, callback_data=callback_data)]
+            )
+
+        # Add cancel button
+        token_buttons.append(
+            [InlineKeyboardButton("❌ Cancel", callback_data="withdraw_token_cancel")]
+        )
+
+        reply_markup = InlineKeyboardMarkup(token_buttons)
+
+        await loading_msg.edit_text(token_text, parse_mode="Markdown")
+
+        await update.message.reply_text(
+            "👇 **Tap a token to withdraw:**", reply_markup=reply_markup
+        )
+
+        # Store token list in Redis for later reference
+        from utils.redis_client import RedisClient
+
+        redis_client = RedisClient()
+        await redis_client.set_user_data_key(
+            user_id, "withdrawal_tokens", json.dumps(tokens[:20])
+        )
+
+    except Exception as e:
+        logger.error(f"Error in withdraw token handler for user {user_id}: {e}")
+        try:
+            await loading_msg.edit_text("❌ Error loading tokens. Please try again.")
+        except:
+            await update.message.reply_text(
+                "❌ Error loading tokens. Please try again.",
+                reply_markup=create_withdrawal_keyboard(),
+            )
+
+
+async def handle_withdraw_token_selection(
+    update: Update, context: CallbackContext
+) -> None:
+    """Handle token selection callback for withdrawal"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    await query.answer()
+
+    try:
+        callback_data = query.data
+
+        if callback_data == "withdraw_token_cancel":
+            await query.edit_message_text("❌ **Token withdrawal cancelled.**")
+            await query.message.reply_text(
+                "Choose an option:", reply_markup=create_withdrawal_keyboard()
+            )
+            return
+
+        # Extract token index
+        token_idx = int(callback_data.replace("withdraw_token_", ""))
+
+        # Get token list from Redis
+        from utils.redis_client import RedisClient
+
+        redis_client = RedisClient()
+        tokens_json = await redis_client.get_user_data_key(user_id, "withdrawal_tokens")
+
+        if not tokens_json:
+            await query.edit_message_text("❌ **Session expired. Please try again.**")
+            await query.message.reply_text(
+                "Choose an option:", reply_markup=create_withdrawal_keyboard()
+            )
+            return
+
+        tokens = json.loads(tokens_json)
+
+        if token_idx >= len(tokens):
+            await query.edit_message_text("❌ **Invalid token selection.**")
+            return
+
+        selected_token = tokens[token_idx]
+        symbol = selected_token.get("symbol", "Unknown")
+        balance = selected_token.get("balance", "0")
+        # FastNear returns 'contract_address', not 'contract_id'
+        contract_id = selected_token.get(
+            "contract_address", selected_token.get("contract_id", "")
+        )
+        decimals = selected_token.get("decimals", 0)
+
+        # Store selected token info
+        await redis_client.set_user_data_key(
+            user_id, "withdraw_token_contract", contract_id
+        )
+        await redis_client.set_user_data_key(user_id, "withdraw_token_symbol", symbol)
+        await redis_client.set_user_data_key(user_id, "withdraw_token_balance", balance)
+        await redis_client.set_user_data_key(
+            user_id, "withdraw_token_decimals", str(decimals)
+        )
+
+        withdraw_token_text = f"""🪙 **Withdraw {symbol}**
+
+💼 **Available Balance:** {balance} {symbol}
+📍 **Token Contract:** `{contract_id[:20]}...`
+
+💡 **Next Steps:**
+
+1️⃣ Enter the recipient's NEAR account ID
+2️⃣ Enter the amount to send
+3️⃣ Confirm the transaction
+
+📝 **Reply with the recipient's account ID:**"""
+
+        await query.edit_message_text(withdraw_token_text, parse_mode="Markdown")
+
+        await query.message.reply_text(
+            "Enter recipient address:", reply_markup=create_cancel_keyboard()
+        )
+
+        # Set state to await recipient address
+        await redis_client.set_user_data_key(
+            user_id, "awaiting", "withdraw_token_address"
+        )
+
+    except Exception as e:
+        logger.error(f"Error in token selection handler: {e}")
+        await query.edit_message_text("❌ **Error processing selection.**")
+
+
+async def handle_withdrawal_input(update: Update, context: CallbackContext) -> None:
+    """Handle withdrawal address and amount inputs"""
+    user_id = update.effective_user.id
+    message_text = update.message.text.strip()
+
+    from utils.redis_client import RedisClient
+
+    redis_client = RedisClient()
+
+    try:
+        # Skip if message is a menu button (not actual user input)
+        # These are already handled by handle_text_message()
+        menu_button_texts = [
+            "💰 My Wallet",
+            "🎯 My Points",
+            "🏆 Leaderboards",
+            "📜 History",
+            "💰 View Balance",
+            "🔑 Export Keys",
+            "📤 Withdraw",
+            "📥 Receive",
+            "📊 Transactions",
+            "💎 Withdraw NEAR",
+            "🪙 Withdraw Token",
+            "🔄 Check NEAR Balance",
+            "🪙 Check Token Balance",
+            "💰 Check All Balances",
+            "⬅️ Back to Wallet",
+            "⬅️ Back to Main Menu",
+            "🏆 Global Leaderboard",
+            "👥 Group Leaderboard",
+            "📊 Weekly Top",
+            "🎖️ All Time Best",
+            "📝 Quiz Activity",
+            "💰 Points History",
+            "💳 Wallet Activity",
+            "🏆 Achievements",
+        ]
+
+        if message_text in menu_button_texts:
+            # This is a menu button, not user input - ignore it
+            return
+
+        # Check if user wants to cancel
+        if message_text in ["❌ Cancel", "⬅️ Back"]:
+            # Clear all withdrawal states
+            await redis_client.set_user_data_key(user_id, "awaiting", None)
+            await redis_client.set_user_data_key(
+                user_id, "withdraw_near_recipient", None
+            )
+            await redis_client.set_user_data_key(user_id, "withdraw_near_amount", None)
+            await redis_client.set_user_data_key(
+                user_id, "withdraw_token_recipient", None
+            )
+            await redis_client.set_user_data_key(user_id, "withdraw_token_amount", None)
+            await redis_client.set_user_data_key(
+                user_id, "withdraw_token_contract", None
+            )
+            await redis_client.set_user_data_key(user_id, "withdraw_token_symbol", None)
+            await redis_client.set_user_data_key(
+                user_id, "withdraw_token_balance", None
+            )
+            await redis_client.set_user_data_key(
+                user_id, "withdraw_token_decimals", None
+            )
+            await redis_client.set_user_data_key(user_id, "withdrawal_tokens", None)
+
+            await update.message.reply_text(
+                "❌ **Withdrawal cancelled.**",
+                reply_markup=create_wallet_keyboard(),
+                parse_mode="Markdown",
+            )
+            return
+
+        awaiting_state = await redis_client.get_user_data_key(user_id, "awaiting")
+
+        if awaiting_state == "withdraw_near_address":
+            # Validate NEAR address format
+            if (
+                not message_text.endswith(".near")
+                and not message_text.endswith(".testnet")
+                and len(message_text) != 64
+            ):
+                await update.message.reply_text(
+                    "❌ **Invalid NEAR address**\n\n"
+                    "Please enter a valid NEAR account ID:\n"
+                    "• Example: `receiver.near` or `receiver.testnet`\n"
+                    "• Or a 64-character account ID",
+                    reply_markup=create_cancel_keyboard(),
+                    parse_mode="Markdown",
+                )
+                return
+
+            # Store recipient address
+            await redis_client.set_user_data_key(
+                user_id, "withdraw_near_recipient", message_text
+            )
+
+            # Get current balance
+            wallet_service = WalletService()
+            near_balance = await wallet_service.get_wallet_balance(
+                user_id, force_refresh=True
+            )
+
+            amount_text = f"""💎 **Withdraw NEAR**
+
+📤 **To:** `{message_text}`
+💰 **Available:** {near_balance}
+
+💡 **Enter the amount of NEAR to send:**
+
+⚠️ **Remember:**
+• Minimum: 0.1 NEAR
+• Keep 0.05 NEAR for gas fees
+• Example: 1.5
+
+📝 **Reply with the amount:**"""
+
+            await update.message.reply_text(
+                amount_text,
+                reply_markup=create_cancel_keyboard(),
+                parse_mode="Markdown",
+            )
+
+            # Update state
+            await redis_client.set_user_data_key(
+                user_id, "awaiting", "withdraw_near_amount"
+            )
+
+        elif awaiting_state == "withdraw_near_amount":
+            # Validate amount
+            try:
+                amount = float(message_text)
+                if amount < 0.1:
+                    await update.message.reply_text(
+                        "❌ **Amount too small**\n\nMinimum withdrawal is 0.1 NEAR.",
+                        reply_markup=create_cancel_keyboard(),
+                    )
+                    return
+            except ValueError:
+                await update.message.reply_text(
+                    "❌ **Invalid amount**\n\nPlease enter a valid number (e.g., 1.5)",
+                    reply_markup=create_cancel_keyboard(),
+                )
+                return
+
+            # Check balance
+            wallet_service = WalletService()
+            balance_str = await wallet_service.get_wallet_balance(
+                user_id, force_refresh=True
+            )
+            balance = float(balance_str.replace(" NEAR", ""))
+
+            if amount + 0.05 > balance:  # Include gas fee
+                await update.message.reply_text(
+                    f"❌ **Insufficient balance**\n\n"
+                    f"Available: {balance_str}\n"
+                    f"Requested: {amount} NEAR\n"
+                    f"Gas needed: 0.05 NEAR\n\n"
+                    f"You need at least {amount + 0.05} NEAR total.",
+                    reply_markup=create_cancel_keyboard(),
+                    parse_mode="Markdown",
+                )
+                return
+
+            # Store amount and show confirmation
+            await redis_client.set_user_data_key(
+                user_id, "withdraw_near_amount", str(amount)
+            )
+
+            recipient = await redis_client.get_user_data_key(
+                user_id, "withdraw_near_recipient"
+            )
+
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+
+            confirm_keyboard = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "✅ Confirm Withdrawal",
+                            callback_data="confirm_withdraw_near",
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "❌ Cancel", callback_data="cancel_withdraw_near"
+                        )
+                    ],
+                ]
+            )
+
+            confirmation_text = f"""💎 **Confirm NEAR Withdrawal**
+
+📤 **To:** `{recipient}`
+💰 **Amount:** {amount} NEAR
+⛽ **Gas Fee:** ~0.05 NEAR
+━━━━━━━━━━━━━━━━━
+💸 **Total Cost:** ~{amount + 0.05} NEAR
+
+⚠️ **Warning:** This action cannot be undone!
+Double-check the recipient address before confirming.
+
+**Ready to proceed?**"""
+
+            await update.message.reply_text(
+                confirmation_text, reply_markup=confirm_keyboard, parse_mode="Markdown"
+            )
+
+            # Clear awaiting state
+            await redis_client.set_user_data_key(user_id, "awaiting", None)
+
+        elif awaiting_state == "withdraw_token_address":
+            # Validate NEAR address format
+            if (
+                not message_text.endswith(".near")
+                and not message_text.endswith(".testnet")
+                and len(message_text) != 64
+            ):
+                await update.message.reply_text(
+                    "❌ **Invalid NEAR address**\n\n"
+                    "Please enter a valid NEAR account ID:\n"
+                    "• Example: `receiver.near` or `receiver.testnet`\n"
+                    "• Or a 64-character account ID",
+                    reply_markup=create_cancel_keyboard(),
+                    parse_mode="Markdown",
+                )
+                return
+
+            # Store recipient address
+            await redis_client.set_user_data_key(
+                user_id, "withdraw_token_recipient", message_text
+            )
+
+            # Get token info
+            symbol = await redis_client.get_user_data_key(
+                user_id, "withdraw_token_symbol"
+            )
+            balance = await redis_client.get_user_data_key(
+                user_id, "withdraw_token_balance"
+            )
+
+            amount_text = f"""🪙 **Withdraw {symbol}**
+
+📤 **To:** `{message_text}`
+💰 **Available:** {balance} {symbol}
+
+💡 **Enter the amount of {symbol} to send:**
+
+⚠️ **Note:**
+• Enter amount without decimals (e.g., 100)
+• Maximum: {balance} {symbol}
+
+📝 **Reply with the amount:**"""
+
+            await update.message.reply_text(
+                amount_text,
+                reply_markup=create_cancel_keyboard(),
+                parse_mode="Markdown",
+            )
+
+            # Update state
+            await redis_client.set_user_data_key(
+                user_id, "awaiting", "withdraw_token_amount"
+            )
+
+        elif awaiting_state == "withdraw_token_amount":
+            # Validate amount
+            try:
+                amount = float(message_text)
+                if amount <= 0:
+                    await update.message.reply_text(
+                        "❌ **Amount must be greater than 0**",
+                        reply_markup=create_cancel_keyboard(),
+                    )
+                    return
+            except ValueError:
+                await update.message.reply_text(
+                    "❌ **Invalid amount**\n\nPlease enter a valid number",
+                    reply_markup=create_cancel_keyboard(),
+                )
+                return
+
+            # Check balance
+            symbol = await redis_client.get_user_data_key(
+                user_id, "withdraw_token_symbol"
+            )
+            balance_str = await redis_client.get_user_data_key(
+                user_id, "withdraw_token_balance"
+            )
+            balance = float(balance_str)
+
+            if amount > balance:
+                await update.message.reply_text(
+                    f"❌ **Insufficient balance**\n\n"
+                    f"Available: {balance} {symbol}\n"
+                    f"Requested: {amount} {symbol}",
+                    reply_markup=create_cancel_keyboard(),
+                    parse_mode="Markdown",
+                )
+                return
+
+            # Store amount and show confirmation
+            await redis_client.set_user_data_key(
+                user_id, "withdraw_token_amount", str(amount)
+            )
+
+            recipient = await redis_client.get_user_data_key(
+                user_id, "withdraw_token_recipient"
+            )
+            contract_id = await redis_client.get_user_data_key(
+                user_id, "withdraw_token_contract"
+            )
+
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+
+            confirm_keyboard = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "✅ Confirm Withdrawal",
+                            callback_data="confirm_withdraw_token",
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "❌ Cancel", callback_data="cancel_withdraw_token"
+                        )
+                    ],
+                ]
+            )
+
+            confirmation_text = f"""🪙 **Confirm {symbol} Withdrawal**
+
+📤 **To:** `{recipient}`
+💰 **Amount:** {amount} {symbol}
+📝 **Token:** {symbol}
+━━━━━━━━━━━━━━━━━
+
+⚠️ **Warning:** This action cannot be undone!
+Double-check the recipient address before confirming.
+
+**Ready to proceed?**"""
+
+            await update.message.reply_text(
+                confirmation_text, reply_markup=confirm_keyboard, parse_mode="Markdown"
+            )
+
+            # Clear awaiting state
+            await redis_client.set_user_data_key(user_id, "awaiting", None)
+
+    except Exception as e:
+        logger.error(f"Error handling withdrawal input for user {user_id}: {e}")
+        await update.message.reply_text(
+            "❌ Error processing your input. Please try again.",
+            reply_markup=create_withdrawal_keyboard(),
+        )
+
+
+async def handle_confirm_withdraw_near(
+    update: Update, context: CallbackContext
+) -> None:
+    """Handle NEAR withdrawal confirmation"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    await query.answer()
+
+    from utils.redis_client import RedisClient
+
+    redis_client = RedisClient()
+
+    try:
+        if query.data == "cancel_withdraw_near":
+            await query.edit_message_text("❌ **Withdrawal cancelled.**")
+            await query.message.reply_text(
+                "Choose an option:", reply_markup=create_withdrawal_keyboard()
+            )
+            # Clear withdrawal data
+            await redis_client.set_user_data_key(
+                user_id, "withdraw_near_recipient", None
+            )
+            await redis_client.set_user_data_key(user_id, "withdraw_near_amount", None)
+            return
+
+        # Get withdrawal details
+        recipient = await redis_client.get_user_data_key(
+            user_id, "withdraw_near_recipient"
+        )
+        amount_str = await redis_client.get_user_data_key(
+            user_id, "withdraw_near_amount"
+        )
+        amount = float(amount_str)
+
+        # Show processing message
+        await query.edit_message_text(
+            "⏳ **Processing NEAR withdrawal...**\n\n"
+            "Please wait while we process your transaction."
+        )
+
+        # Get user's wallet
+        wallet_service = WalletService()
+        wallet = await wallet_service.get_user_wallet(user_id)
+
+        if not wallet:
+            await query.edit_message_text("❌ **Wallet not found.**")
+            return
+
+        # Process the withdrawal using existing NEAR service
+        from services.near_wallet_service import NEARWalletService
+        from py_near.account import Account
+        from utils.config import Config
+
+        near_service = NEARWalletService()
+        private_key = near_service.decrypt_private_key(
+            wallet["encrypted_private_key"], wallet["iv"], wallet["tag"]
+        )
+
+        # Initialize account using py-near
+        account = Account(
+            account_id=wallet["account_id"],
+            private_key=private_key,
+            rpc_addr=Config.NEAR_RPC_ENDPOINT,
+        )
+        await account.startup()
+
+        # Convert NEAR to yoctoNEAR (1 NEAR = 10^24 yoctoNEAR)
+        amount_yocto = int(amount * 10**24)
+
+        # Send NEAR using py-near's send_money method
+        tx_result = await account.send_money(
+            account_id=recipient, amount=amount_yocto, nowait=False
+        )
+
+        # Extract transaction hash
+        if hasattr(tx_result, "transaction_hash"):
+            tx_hash = tx_result.transaction_hash
+        elif hasattr(tx_result, "hash"):
+            tx_hash = tx_result.hash
+        else:
+            tx_hash = str(tx_result)
+
+        # Create explorer link
+        network = wallet.get("network", "mainnet")
+        explorer_url = f"https://{'testnet.' if network == 'testnet' else ''}nearblocks.io/txns/{tx_hash}"
+
+        success_text = f"""✅ **NEAR Withdrawal Successful!**
+
+📤 **To:** `{recipient}`
+💰 **Amount:** {amount} NEAR
+🔗 **Transaction:** [View on Explorer]({explorer_url})
+
+✨ **Your withdrawal has been processed successfully!**"""
+
+        await query.edit_message_text(success_text, parse_mode="Markdown")
+
+        await query.message.reply_text(
+            "Choose an option:", reply_markup=create_wallet_keyboard()
+        )
+
+        # Clear withdrawal data
+        await redis_client.set_user_data_key(user_id, "withdraw_near_recipient", None)
+        await redis_client.set_user_data_key(user_id, "withdraw_near_amount", None)
+
+        # Clear private key from memory
+        private_key = None
+
+    except Exception as e:
+        logger.error(f"Error confirming NEAR withdrawal for user {user_id}: {e}")
+        await query.edit_message_text(
+            f"❌ **Withdrawal Failed**\n\n"
+            f"Error: {str(e)}\n\n"
+            f"Please try again or contact support."
+        )
+        await query.message.reply_text(
+            "Choose an option:", reply_markup=create_withdrawal_keyboard()
+        )
+
+
+async def handle_confirm_withdraw_token(
+    update: Update, context: CallbackContext
+) -> None:
+    """Handle token withdrawal confirmation"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    await query.answer()
+
+    from utils.redis_client import RedisClient
+
+    redis_client = RedisClient()
+
+    try:
+        if query.data == "cancel_withdraw_token":
+            await query.edit_message_text("❌ **Withdrawal cancelled.**")
+            await query.message.reply_text(
+                "Choose an option:", reply_markup=create_withdrawal_keyboard()
+            )
+            # Clear withdrawal data
+            await redis_client.set_user_data_key(
+                user_id, "withdraw_token_recipient", None
+            )
+            await redis_client.set_user_data_key(user_id, "withdraw_token_amount", None)
+            await redis_client.set_user_data_key(
+                user_id, "withdraw_token_contract", None
+            )
+            await redis_client.set_user_data_key(user_id, "withdraw_token_symbol", None)
+            await redis_client.set_user_data_key(
+                user_id, "withdraw_token_decimals", None
+            )
+            return
+
+        # Get withdrawal details
+        recipient = await redis_client.get_user_data_key(
+            user_id, "withdraw_token_recipient"
+        )
+        amount_str = await redis_client.get_user_data_key(
+            user_id, "withdraw_token_amount"
+        )
+        contract_id = await redis_client.get_user_data_key(
+            user_id, "withdraw_token_contract"
+        )
+        symbol = await redis_client.get_user_data_key(user_id, "withdraw_token_symbol")
+        decimals_str = await redis_client.get_user_data_key(
+            user_id, "withdraw_token_decimals"
+        )
+
+        amount = float(amount_str)
+        decimals = int(decimals_str)
+
+        # Show processing message
+        await query.edit_message_text(
+            f"⏳ **Processing {symbol} withdrawal...**\n\n"
+            "Please wait while we process your transaction."
+        )
+
+        # Get user's wallet
+        wallet_service = WalletService()
+        wallet = await wallet_service.get_user_wallet(user_id)
+
+        if not wallet:
+            await query.edit_message_text("❌ **Wallet not found.**")
+            return
+
+        # Process the token withdrawal using existing TokenService
+        from py_near.account import Account
+        from services.near_wallet_service import NEARWalletService
+        from services.token_service import TokenService
+        from utils.config import Config
+
+        near_service = NEARWalletService()
+        private_key = near_service.decrypt_private_key(
+            wallet["encrypted_private_key"], wallet["iv"], wallet["tag"]
+        )
+
+        # Initialize account using py-near
+        account = Account(
+            account_id=wallet["account_id"],
+            private_key=private_key,
+            rpc_addr=Config.NEAR_RPC_ENDPOINT,
+        )
+        await account.startup()
+
+        # Use TokenService's transfer_tokens method (handles decimals automatically)
+        token_service = TokenService()
+        transfer_result = await token_service.transfer_tokens(
+            account=account,
+            token_contract=contract_id,
+            recipient_account_id=recipient,
+            amount=amount,
+            force_register=True,
+        )
+
+        if not transfer_result.get("success"):
+            error_msg = transfer_result.get("message", "Unknown error")
+            raise Exception(f"Token transfer failed: {error_msg}")
+
+        # Get transaction hash from result
+        tx_hash = transfer_result.get("transaction_hash")
+
+        # Create explorer link
+        network = wallet.get("network", "mainnet")
+        explorer_url = f"https://{'testnet.' if network == 'testnet' else ''}nearblocks.io/txns/{tx_hash}"
+
+        success_text = f"""✅ **{symbol} Withdrawal Successful!**
+
+📤 **To:** `{recipient}`
+💰 **Amount:** {amount} {symbol}
+🪙 **Token:** {symbol}
+🔗 **Transaction:** [View on Explorer]({explorer_url})
+
+✨ **Your withdrawal has been processed successfully!**"""
+
+        await query.edit_message_text(success_text, parse_mode="Markdown")
+
+        await query.message.reply_text(
+            "Choose an option:", reply_markup=create_wallet_keyboard()
+        )
+
+        # Clear withdrawal data
+        await redis_client.set_user_data_key(user_id, "withdraw_token_recipient", None)
+        await redis_client.set_user_data_key(user_id, "withdraw_token_amount", None)
+        await redis_client.set_user_data_key(user_id, "withdraw_token_contract", None)
+        await redis_client.set_user_data_key(user_id, "withdraw_token_symbol", None)
+        await redis_client.set_user_data_key(user_id, "withdraw_token_decimals", None)
+
+        # Clear private key from memory
+        private_key = None
+
+    except Exception as e:
+        logger.error(f"Error confirming token withdrawal for user {user_id}: {e}")
+        await query.edit_message_text(
+            f"❌ **Withdrawal Failed**\n\n"
+            f"Error: {str(e)}\n\n"
+            f"Please try again or contact support."
+        )
+        await query.message.reply_text(
+            "Choose an option:", reply_markup=create_withdrawal_keyboard()
+        )
 
 
 async def handle_receive(update: Update, context: CallbackContext) -> None:
@@ -2064,7 +3036,15 @@ def escape_markdown(text: str) -> str:
     if not text:
         return text
     # Escape common markdown characters that cause parsing issues
-    return text.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]').replace('`', '\\`').replace('~', '\\~')
+    return (
+        text.replace("_", "\\_")
+        .replace("*", "\\*")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("`", "\\`")
+        .replace("~", "\\~")
+    )
+
 
 # Leaderboard handlers for submenu options
 async def handle_global_leaderboard(update: Update, context: CallbackContext) -> None:
@@ -2080,16 +3060,18 @@ async def handle_global_leaderboard(update: Update, context: CallbackContext) ->
         from services.point_service import PointService
 
         # Get leaderboard data
-        leaderboard_data = await PointService.get_leaderboard(limit=10, leaderboard_type="total")
+        leaderboard_data = await PointService.get_leaderboard(
+            limit=10, leaderboard_type="total"
+        )
 
         if leaderboard_data:
             leaderboard_text = "🏆 **Global Leaderboard**\n\n"
 
             # Show top players
             for entry in leaderboard_data:
-                rank = entry['rank']
-                username = entry['username']
-                total_points = entry['total_points']
+                rank = entry["rank"]
+                username = entry["username"]
+                total_points = entry["total_points"]
 
                 # Emoji for top 3
                 if rank == 1:
@@ -2108,7 +3090,7 @@ async def handle_global_leaderboard(update: Update, context: CallbackContext) ->
             # Find user's rank
             user_points_data = await PointService.get_user_points(user_id)
             if user_points_data:
-                user_points = user_points_data['total_points']
+                user_points = user_points_data["total_points"]
                 # Calculate user's rank by counting users with higher points
                 # This is a simplified approach - for better performance, you might want to add a rank field
                 if user_points > 0:
@@ -2133,15 +3115,11 @@ Be the first to play a quiz and claim the top spot!
 • Create quizzes that others play (+2 per player)"""
 
         # Edit the loading message with results
-        await loading_msg.edit_text(
-            leaderboard_text,
-            parse_mode="Markdown"
-        )
+        await loading_msg.edit_text(leaderboard_text, parse_mode="Markdown")
 
         # Send leaderboard keyboard
         await update.message.reply_text(
-            "🏆 **Leaderboard Options:**",
-            reply_markup=create_leaderboards_keyboard()
+            "🏆 **Leaderboard Options:**", reply_markup=create_leaderboards_keyboard()
         )
 
     except Exception as e:
@@ -2158,16 +3136,18 @@ async def handle_group_leaderboard(update: Update, context: CallbackContext) -> 
         from services.point_service import PointService
 
         # Get leaderboard data (using total leaderboard for now - can be enhanced for group-specific later)
-        leaderboard_data = await PointService.get_leaderboard(limit=10, leaderboard_type="total")
+        leaderboard_data = await PointService.get_leaderboard(
+            limit=10, leaderboard_type="total"
+        )
 
         if leaderboard_data:
             leaderboard_text = "👥 **Group Leaderboard**\n\n"
 
             # Show top players (simplified for group - can be enhanced to filter by actual group)
             for entry in leaderboard_data[:5]:  # Show top 5 for group
-                rank = entry['rank']
-                username = entry['username']
-                total_points = entry['total_points']
+                rank = entry["rank"]
+                username = entry["username"]
+                total_points = entry["total_points"]
 
                 if rank == 1:
                     emoji = "🥇"
@@ -2205,7 +3185,7 @@ Invite friends to play quizzes together!
         logger.error(f"Error in group leaderboard handler: {e}")
         await update.message.reply_text(
             "❌ Error loading group leaderboard. Please try again.",
-            reply_markup=create_leaderboards_keyboard()
+            reply_markup=create_leaderboards_keyboard(),
         )
 
 
@@ -2215,17 +3195,19 @@ async def handle_weekly_top(update: Update, context: CallbackContext) -> None:
         from services.point_service import PointService
 
         # Get leaderboard data for quiz creators (weekly focus)
-        leaderboard_data = await PointService.get_leaderboard(limit=10, leaderboard_type="creator")
+        leaderboard_data = await PointService.get_leaderboard(
+            limit=10, leaderboard_type="creator"
+        )
 
         if leaderboard_data:
             leaderboard_text = "📊 **Weekly Top Performers** ⭐\n\n"
             leaderboard_text += "🎯 **Quiz Creators This Week:**\n"
 
             for entry in leaderboard_data[:5]:  # Show top 5 creators
-                rank = entry['rank']
-                username = entry['username']
-                creator_points = entry['quiz_creator_points']
-                quizzes_created = entry['total_quizzes_created']
+                rank = entry["rank"]
+                username = entry["username"]
+                creator_points = entry["quiz_creator_points"]
+                quizzes_created = entry["total_quizzes_created"]
 
                 if rank <= 3:
                     if rank == 1:
@@ -2241,7 +3223,9 @@ async def handle_weekly_top(update: Update, context: CallbackContext) -> None:
                 escaped_username = escape_markdown(username)
                 leaderboard_text += f"{emoji} **{escaped_username}** - {creator_points} creator points ({quizzes_created} quizzes)\n"
 
-            leaderboard_text += "\n💡 **Note:** Showing top quiz creators by creator points earned"
+            leaderboard_text += (
+                "\n💡 **Note:** Showing top quiz creators by creator points earned"
+            )
             leaderboard_text += "\n⏰ **Updated:** Real-time data"
 
         else:
@@ -2264,7 +3248,7 @@ Be the first to create a quiz and earn creator points!
         logger.error(f"Error in weekly top handler: {e}")
         await update.message.reply_text(
             "❌ Error loading weekly top performers. Please try again.",
-            reply_markup=create_leaderboards_keyboard()
+            reply_markup=create_leaderboards_keyboard(),
         )
 
 
@@ -2274,18 +3258,20 @@ async def handle_all_time_best(update: Update, context: CallbackContext) -> None
         from services.point_service import PointService
 
         # Get leaderboard data for quiz takers (all-time focus)
-        leaderboard_data = await PointService.get_leaderboard(limit=10, leaderboard_type="taker")
+        leaderboard_data = await PointService.get_leaderboard(
+            limit=10, leaderboard_type="taker"
+        )
 
         if leaderboard_data:
             leaderboard_text = "🎖️ **All Time Best Players** 🏆\n\n"
             leaderboard_text += "🧠 **Quiz Masters (By Quiz Performance):**\n"
 
             for entry in leaderboard_data[:5]:  # Show top 5 takers
-                rank = entry['rank']
-                username = entry['username']
-                taker_points = entry['quiz_taker_points']
-                correct_answers = entry['total_correct_answers']
-                quizzes_taken = entry['total_quizzes_taken']
+                rank = entry["rank"]
+                username = entry["username"]
+                taker_points = entry["quiz_taker_points"]
+                correct_answers = entry["total_correct_answers"]
+                quizzes_taken = entry["total_quizzes_taken"]
 
                 if rank <= 3:
                     if rank == 1:
@@ -2297,13 +3283,21 @@ async def handle_all_time_best(update: Update, context: CallbackContext) -> None
                 else:
                     emoji = f"{rank}."
 
-                accuracy = (correct_answers / max(quizzes_taken, 1) * 100) if quizzes_taken > 0 else 0
+                accuracy = (
+                    (correct_answers / max(quizzes_taken, 1) * 100)
+                    if quizzes_taken > 0
+                    else 0
+                )
                 # Escape markdown characters in username
                 escaped_username = escape_markdown(username)
-                leaderboard_text += f"{emoji} **{escaped_username}** - {taker_points} quiz points\n"
+                leaderboard_text += (
+                    f"{emoji} **{escaped_username}** - {taker_points} quiz points\n"
+                )
                 leaderboard_text += f"   📊 {correct_answers} correct answers, {accuracy:.1f}% accuracy\n"
 
-            leaderboard_text += "\n🏆 **Hall of Fame** - Greatest quiz performers of all time!"
+            leaderboard_text += (
+                "\n🏆 **Hall of Fame** - Greatest quiz performers of all time!"
+            )
 
         else:
             leaderboard_text = """🎖️ **All Time Best**
@@ -2326,7 +3320,7 @@ Be the first to earn your place in the Hall of Fame!
         logger.error(f"Error in all time best handler: {e}")
         await update.message.reply_text(
             "❌ Error loading all-time best players. Please try again.",
-            reply_markup=create_leaderboards_keyboard()
+            reply_markup=create_leaderboards_keyboard(),
         )
 
 
