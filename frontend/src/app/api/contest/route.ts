@@ -1,8 +1,8 @@
 import { getCurrentYear, getISOWeekNumber } from "@/lib/utils/utils";
-// import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
-// const prisma = new PrismaClient();
+const prisma = new PrismaClient();
 
 export async function POST(req: NextRequest) {
   const { type, userId, np: points } = await req.json();
@@ -128,27 +128,30 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // const weeklyScore = await prisma.weeklyScore.findMany({
-      //   orderBy: {
-      //     points: "desc",
-      //   },
-      //   take: 10,
+      const currentWeek = getISOWeekNumber(new Date());
+      const currentYear = getCurrentYear();
 
-      //   include: {
-      //     user: {
-      //       select: {
-      //         name: true,
-      //         weeklyPoints: true,
-      //         totalPoints: true,
-      //       },
-      //     },
-      //   },
-      // });
+      const weeklyScore = await prisma.weeklyScore.findMany({
+        where: {
+          weekNumber: currentWeek,
+          year: currentYear,
+        },
+        orderBy: {
+          points: "desc",
+        },
+        take: 50,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+            },
+          },
+        },
+      });
 
-      return NextResponse.json(
-        { message: "Leaderboard fetched" },
-        { status: 200 }
-      );
+      return NextResponse.json({ weeklyScore }, { status: 200 });
     } catch (error) {
       console.error("Error fetching weekly points:", error);
       return NextResponse.json(

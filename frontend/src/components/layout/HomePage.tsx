@@ -69,8 +69,11 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
 
           {/* Contest */}
           <button
-            onClick={() => navigate("Contest")}
-            className="flex-1 max-w-[100px] sm:max-w-[120px] hover:scale-105 transition-transform"
+            onClick={() => {
+              /* Contest disabled for now */
+            }}
+            aria-disabled
+            className="flex-1 max-w-[100px] sm:max-w-[120px] opacity-60 cursor-not-allowed"
           >
             <ContestIcon className="h-10 sm:h-12 w-full object-contain text-white" />
           </button>
