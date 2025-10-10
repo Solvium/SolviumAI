@@ -302,7 +302,7 @@ class TelegramBot:
                     CallbackQueryHandler(
                         confirm_distribution_structure,
                         pattern="^(confirm_structure_top_5|confirm_structure_top_10|back_to_structure_options)$",
-                    )
+                    ),
                 ],
                 # Payment verification state
                 PAYMENT_VERIFICATION: [

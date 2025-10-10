@@ -763,12 +763,17 @@ class BlockchainMonitor:
                                     )
                                     if fallback_match:
                                         from utils.config import Config
+
                                         total_amount = float(fallback_match.group(1))
                                         # Use Config.TOP_5_DISTRIBUTION
                                         if rank <= len(Config.TOP_5_DISTRIBUTION):
-                                            reward_percentage = Config.TOP_5_DISTRIBUTION[rank - 1]
+                                            reward_percentage = (
+                                                Config.TOP_5_DISTRIBUTION[rank - 1]
+                                            )
                                             reward_amount_near_str = str(
-                                                round(total_amount * reward_percentage, 6)
+                                                round(
+                                                    total_amount * reward_percentage, 6
+                                                )
                                             )
                                             try:
                                                 reward_amount_yoctonear = int(
@@ -835,12 +840,17 @@ class BlockchainMonitor:
                                     )
                                     if fallback_match:
                                         from utils.config import Config
+
                                         total_amount = float(fallback_match.group(1))
                                         # Use Config.TOP_10_DISTRIBUTION
                                         if rank <= len(Config.TOP_10_DISTRIBUTION):
-                                            reward_percentage = Config.TOP_10_DISTRIBUTION[rank - 1]
+                                            reward_percentage = (
+                                                Config.TOP_10_DISTRIBUTION[rank - 1]
+                                            )
                                             reward_amount_near_str = str(
-                                                round(total_amount * reward_percentage, 6)
+                                                round(
+                                                    total_amount * reward_percentage, 6
+                                                )
                                             )
                                             try:
                                                 reward_amount_yoctonear = int(

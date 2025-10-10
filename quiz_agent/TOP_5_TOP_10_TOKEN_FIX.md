@@ -3,23 +3,28 @@
 ## Issues Fixed
 
 ### Issue 1: Top 5 and Top 10 Options Not Available for Token Payments
+
 **Problem**: When creating a quiz with token payment, only "Winner Takes All" and "Top 3" options were shown.
 
 **Root Cause**: Token reward structure selection UI didn't include Top 5 and Top 10 buttons.
 
 **Fix**: Added Top 5 and Top 10 buttons to token reward structure selection in two places:
+
 - When selecting token amount from preset options
 - When entering custom token amount
 
 ### Issue 2: Confirm Button Not Working
+
 **Problem**: Clicking "✅ Confirm This Structure" button did nothing.
 
 **Root Causes**:
+
 1. `show_distribution_preview()` returned wrong conversation state (`REWARD_CHOICE` instead of `REWARD_STRUCTURE_CHOICE`)
 2. `confirm_distribution_structure()` didn't handle token payments
 3. Token-specific callback patterns (`token_structure_top5`, `token_structure_top10`) weren't registered
 
 **Fixes**:
+
 1. Updated `show_distribution_preview()` to return `REWARD_STRUCTURE_CHOICE`
 2. Updated `confirm_distribution_structure()` to handle both NEAR and token payments
 3. Updated `reward_structure_choice()` to handle `token_structure_top5` and `token_structure_top10`
@@ -73,12 +78,14 @@ elif choice == "token_structure_top10":
 **Location**: Lines ~1256-1340
 
 Updated `show_distribution_preview()` to:
+
 - Detect payment method (NEAR vs TOKEN)
 - Fetch token metadata to get currency symbol
 - Use correct amount field (`token_reward_amount` vs `reward_amount`)
 - Return correct conversation state (`REWARD_STRUCTURE_CHOICE`)
 
 Key changes:
+
 ```python
 # Check if this is a token payment
 payment_method = await redis_client.get_user_data_key(user_id, "payment_method")
@@ -100,6 +107,7 @@ return REWARD_STRUCTURE_CHOICE  # Was REWARD_CHOICE before
 **Location**: Lines ~1343-1470
 
 Updated `confirm_distribution_structure()` to:
+
 - Handle both NEAR and token payments for Top 5
 - Handle both NEAR and token payments for Top 10
 - Calculate service fee for token payments (2%)
@@ -107,10 +115,11 @@ Updated `confirm_distribution_structure()` to:
 - Handle "Back" button for both NEAR and token
 
 Key logic:
+
 ```python
 if choice == "confirm_structure_top_5":
     await redis_client.set_user_data_key(user_id, "reward_structure", "top_5")
-    
+
     if payment_method == "TOKEN":
         # Token payment logic with 2% service fee
         token_amount_float = float(token_amount)
@@ -145,23 +154,28 @@ REWARD_STRUCTURE_CHOICE: [
 ### ✅ Token Payment - Top 5 Winners
 
 1. **Start Quiz Creation**:
+
    - `/createquiz` → Enter topic → Select questions
-   
+
 2. **Choose Token Payment**:
+
    - Select "🪙 Pay with Token"
    - Choose a token from your inventory
    - Enter amount (e.g., 1000 tokens)
 
 3. **Verify Top 5 Option Appears**:
+
    - ✅ Should see "🏆 Top 5 (40/25/15/12/8)" button
-   
+
 4. **Test Preview Screen**:
+
    - Click "Top 5" button
    - ✅ Should see distribution preview with token symbol
    - ✅ Shows amounts in tokens (not NEAR)
    - ✅ Percentages: 40/25/15/12/8%
 
 5. **Test Confirm Button**:
+
    - Click "✅ Confirm This Structure"
    - ✅ Should proceed to token payment screen
    - ✅ Shows total cost + 2% service fee
@@ -174,6 +188,7 @@ REWARD_STRUCTURE_CHOICE: [
 ### ✅ Token Payment - Top 10 Winners
 
 Same testing flow as Top 5, but verify:
+
 - ✅ "🏆 Top 10 (30/20/10/...)" button appears
 - ✅ Preview shows 10 ranks with correct percentages
 - ✅ Confirm button works
@@ -182,6 +197,7 @@ Same testing flow as Top 5, but verify:
 ### ✅ NEAR Payment - Top 5 & Top 10
 
 Verify existing NEAR functionality still works:
+
 1. `/createquiz` → Topic → Questions
 2. Select "💰 Pay with NEAR"
 3. Select amount (e.g., 1 NEAR)
@@ -261,10 +277,10 @@ payment_method = await redis_client.get_user_data_key(user_id, "payment_method")
 
 Different fields are used for NEAR vs Token:
 
-| Payment Method | Amount Field          | Used In                     |
-|----------------|-----------------------|-----------------------------|
-| NEAR           | `reward_amount`       | Preview, Confirm, Payment   |
-| TOKEN          | `token_reward_amount` | Preview, Confirm, Payment   |
+| Payment Method | Amount Field          | Used In                   |
+| -------------- | --------------------- | ------------------------- |
+| NEAR           | `reward_amount`       | Preview, Confirm, Payment |
+| TOKEN          | `token_reward_amount` | Preview, Confirm, Payment |
 
 ### Service Fee Calculation
 
@@ -280,10 +296,10 @@ total_cost_with_fee = token_amount_float + service_fee
 
 ## Files Modified
 
-| File | Lines Changed | Purpose |
-|------|---------------|---------|
-| `src/bot/handlers.py` | ~200 lines | Added token Top 5/10 support, enhanced preview/confirm handlers |
-| `src/bot/telegram_bot.py` | 1 line | Updated callback patterns to include token Top 5/10 |
+| File                      | Lines Changed | Purpose                                                         |
+| ------------------------- | ------------- | --------------------------------------------------------------- |
+| `src/bot/handlers.py`     | ~200 lines    | Added token Top 5/10 support, enhanced preview/confirm handlers |
+| `src/bot/telegram_bot.py` | 1 line        | Updated callback patterns to include token Top 5/10             |
 
 ---
 
@@ -292,21 +308,25 @@ total_cost_with_fee = token_amount_float + service_fee
 Run these checks to verify the fix:
 
 1. **Import Check**:
+
 ```bash
 python3 -c "from src.bot import handlers; print('✅ No syntax errors')"
 ```
 
 2. **Pattern Check** (telegram_bot.py):
+
 ```bash
 grep "token_structure_top5\|token_structure_top10" src/bot/telegram_bot.py
 ```
 
 Expected output:
+
 ```
 pattern="^(structure_wta|structure_top3|structure_top5|structure_top10|structure_custom|token_structure_wta|token_structure_top3|token_structure_top5|token_structure_top10)$",
 ```
 
 3. **Button Check** (handlers.py):
+
 ```bash
 grep -A 2 "token_structure_top5\|token_structure_top10" src/bot/handlers.py | head -20
 ```
@@ -317,11 +337,13 @@ Expected: Should show button definitions and callback handlers
 
 ## Summary
 
-**Issues**: 
+**Issues**:
+
 - ❌ Token quizzes missing Top 5/Top 10 options
 - ❌ Confirm button not working
 
 **Fixes**:
+
 - ✅ Added Top 5 and Top 10 buttons to token reward structure UI (2 locations)
 - ✅ Enhanced `show_distribution_preview()` to handle token payments
 - ✅ Enhanced `confirm_distribution_structure()` to handle token payments

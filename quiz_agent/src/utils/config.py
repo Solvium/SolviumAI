@@ -273,7 +273,7 @@ class Config:
     # Top 5 Winners: Balanced competitive model
     # 1st: 40%, 2nd: 25%, 3rd: 15%, 4th: 12%, 5th: 8%
     TOP_5_DISTRIBUTION = [0.40, 0.25, 0.15, 0.12, 0.08]
-    
+
     # Top 10 Winners: Tiered model
     # Tier 1 (1-3): 60% total | Tier 2 (4-6): 25% total | Tier 3 (7-10): 15% total
     # 1st: 30%, 2nd: 20%, 3rd: 10%, 4th: 10%, 5th: 8%, 6th: 7%

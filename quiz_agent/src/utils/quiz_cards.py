@@ -35,7 +35,9 @@ def create_quiz_announcement_card(
         safe_reward_structure = "Top 5 Winners (40/25/15/12/8%)"
     elif "top_10" in reward_structure or "Top 10" in reward_structure:
         safe_reward_structure = "Top 10 Winners (30/20/10/...)"
-    elif "Winner-takes-all" in reward_structure or reward_structure == "winner_takes_all":
+    elif (
+        "Winner-takes-all" in reward_structure or reward_structure == "winner_takes_all"
+    ):
         safe_reward_structure = "Winner Takes All"
     elif "Free Quiz" in reward_structure or reward_structure.lower() == "free":
         safe_reward_structure = "Free Quiz"
@@ -342,23 +344,21 @@ def create_achievement_card(
 
 
 def format_distribution_preview(
-    structure_type: str,
-    total_amount: float,
-    currency: str = "NEAR"
+    structure_type: str, total_amount: float, currency: str = "NEAR"
 ) -> tuple[str, List[float]]:
     """
     Format distribution preview for Top 5 or Top 10 reward structures.
-    
+
     Args:
         structure_type: "top_5" or "top_10"
         total_amount: Total prize pool amount
         currency: Currency symbol (e.g., "NEAR", "USDT", "TOKEN")
-    
+
     Returns:
         tuple: (formatted message string, list of amounts for each position)
     """
     from utils.config import Config
-    
+
     # Get distribution percentages
     if structure_type == "top_5":
         distribution = Config.TOP_5_DISTRIBUTION
@@ -369,46 +369,54 @@ def format_distribution_preview(
         distribution = Config.TOP_10_DISTRIBUTION
         title = "🏆 Top 10 Winners Distribution"
         emojis = ["🥇", "🥈", "🥉", "🏅", "🏅", "🏅", "🎖️", "🎖️", "🎖️", "🎖️"]
-        places = [f"{i+1}{'st' if i==0 else 'nd' if i==1 else 'rd' if i==2 else 'th'} Place" 
-                  for i in range(10)]
+        places = [
+            f"{i+1}{'st' if i==0 else 'nd' if i==1 else 'rd' if i==2 else 'th'} Place"
+            for i in range(10)
+        ]
     else:
         raise ValueError(f"Unknown structure_type: {structure_type}")
-    
+
     # Calculate amounts for each position
     amounts = [round(total_amount * percentage, 6) for percentage in distribution]
-    
+
     # Build the formatted message
     message = f"{title}\n"
     message += "═" * 45 + "\n"
-    message += f"💰 <b>Total Prize Pool:</b> <code>{total_amount:.6g} {currency}</code>\n\n"
-    
+    message += (
+        f"💰 <b>Total Prize Pool:</b> <code>{total_amount:.6g} {currency}</code>\n\n"
+    )
+
     # Add each position's breakdown
     for i, (emoji, place, percentage, amount) in enumerate(
         zip(emojis, places, distribution, amounts)
     ):
-        percent_display = f"{percentage * 100:.1f}%" if percentage >= 0.01 else f"{percentage * 100:.2f}%"
+        percent_display = (
+            f"{percentage * 100:.1f}%"
+            if percentage >= 0.01
+            else f"{percentage * 100:.2f}%"
+        )
         message += f"{emoji} <b>{place}:</b> <code>{amount:.6g} {currency}</code> ({percent_display})\n"
-    
+
     message += "\n" + "─" * 45 + "\n"
     message += "💡 <b>Winners determined by:</b>\n"
     message += "   1️⃣ Most correct answers\n"
     message += "   2️⃣ Fastest response time\n"
-    
+
     return message, amounts
 
 
 def get_compact_distribution_text(structure_type: str) -> str:
     """
     Get compact distribution text for quiz announcements.
-    
+
     Args:
         structure_type: "top_5" or "top_10"
-    
+
     Returns:
         Compact distribution string (e.g., "40/25/15/12/8%")
     """
     from utils.config import Config
-    
+
     if structure_type == "top_5":
         distribution = Config.TOP_5_DISTRIBUTION
         # Show top 5 percentages
