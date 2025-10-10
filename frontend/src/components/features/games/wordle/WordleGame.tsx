@@ -486,25 +486,37 @@ const WordleGame: React.FC<WordleGameProps> = ({
             targetWord: targetWord,
           });
 
-          fetch(`/api/wordle/complete`, {
+          fetch(`/api/games/complete`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              dailyId,
+              userId: user?.id ? parseInt(user.id) : null,
+              gameType: "wordle",
+              gameId: dailyId,
               level: level,
               difficulty: difficulty,
               won: false,
-              guesses: newGuesses.length,
+              score: newGuesses.length,
               completionTime: timeRemaining,
               hintUsed,
+              hintCost: hintUsed ? config.wordle.hintCost : 0,
               rewards: 0,
-              targetWord: targetWord,
-              userId: user?.id ? parseInt(user.id) : null,
+              metadata: { targetWord },
             }),
           })
-            .then((response) => {
+            .then(async (response) => {
               if (response.ok) {
-                console.log("✅ Game loss saved to database");
+                const result = await response.json();
+                console.log("✅ Game loss saved to database", result);
+                if (result.userUpdate?.newBalance !== undefined) {
+                  setUserBalance(result.userUpdate.newBalance);
+                }
+                if (result.userUpdate?.rewardsEarned) {
+                  toast.success(
+                    `Thanks for playing! +${result.userUpdate.rewardsEarned} SOLV`
+                  );
+                }
+                await fetchUserProfile();
               } else {
                 console.error("❌ Failed to save game loss to database");
               }

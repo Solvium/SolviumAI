@@ -22,7 +22,7 @@ const AddFlow = ({ onClose, accountId }: AddFlowProps) => {
   console.log("[v0] Using address:", address);
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] z-50 overflow-y-auto">
+    <div className="fixed inset-0 bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] z-50 overflow-y-auto pb-20">
       <div className="max-w-md mx-auto min-h-screen pb-6">
         <div className="px-4 pt-6">
           <div className="flex items-center justify-between mb-8">

@@ -38,7 +38,12 @@ const ContestBoard = ({ user }: any) => {
       }
 
       const data = await response.data;
-      setLeaderboard(data.weeklyScore);
+      const sorted = Array.isArray(data.weeklyScore)
+        ? [...data.weeklyScore].sort(
+            (a: any, b: any) => (b?.points || 0) - (a?.points || 0)
+          )
+        : [];
+      setLeaderboard(sorted);
       setLoading(false);
     } catch (err) {
       setError(
