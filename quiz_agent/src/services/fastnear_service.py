@@ -43,7 +43,7 @@ class FastNearService:
 
         # Determine network
         self.network = Config.get_current_network()
-        
+
         # Set RPC and API URLs based on network
         if self.network == "mainnet":
             self.rpc_url = self.mainnet_rpc_url
@@ -216,8 +216,16 @@ class FastNearService:
                 },
             )
 
-            # Decode result
-            result_bytes = base64.b64decode(result.get("result", []))
+            # Decode result - handle both list and base64 string formats
+            result_data = result.get("result", [])
+
+            # If result is a list of byte values, convert to bytes
+            if isinstance(result_data, list):
+                result_bytes = bytes(result_data)
+            else:
+                # If it's a base64 string, decode it
+                result_bytes = base64.b64decode(result_data)
+
             metadata_json = json.loads(result_bytes.decode("utf-8"))
 
             # Format metadata

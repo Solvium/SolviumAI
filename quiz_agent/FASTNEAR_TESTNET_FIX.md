@@ -3,8 +3,9 @@
 ## 🐛 Issue Identified
 
 From the logs:
+
 ```
-FastNearService initialized for testnet network 
+FastNearService initialized for testnet network
 (API: https://test.api.fastnear.com, RPC: https://rpc.mainnet.fastnear.com)
                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
                                             WRONG! Should be testnet RPC
@@ -19,6 +20,7 @@ FastNearService initialized for testnet network
 ### 1. Added Testnet RPC URL to Config (`src/utils/config.py`)
 
 **Before:**
+
 ```python
 FASTNEAR_MAINNET_RPC_URL = "https://rpc.mainnet.fastnear.com"
 FASTNEAR_MAINNET_API_URL = "https://api.fastnear.com"
@@ -27,6 +29,7 @@ FASTNEAR_TESTNET_API_URL = "https://test.api.fastnear.com"
 ```
 
 **After:**
+
 ```python
 FASTNEAR_MAINNET_RPC_URL = "https://rpc.mainnet.fastnear.com"
 FASTNEAR_TESTNET_RPC_URL = "https://rpc.testnet.fastnear.com"  # ✅ ADDED
@@ -37,21 +40,23 @@ FASTNEAR_TESTNET_API_URL = "https://test.api.fastnear.com"
 ### 2. Updated FastNearService to Use Correct RPC URL (`src/services/fastnear_service.py`)
 
 **Before:**
+
 ```python
 def __init__(self):
     self.mainnet_rpc_url = Config.FASTNEAR_MAINNET_RPC_URL
     # Always used mainnet_rpc_url regardless of network!
-    
+
 def _get_rpc_url_with_auth(self):
     return f"{self.mainnet_rpc_url}?apiKey={self.api_key}"  # ❌ WRONG
 ```
 
 **After:**
+
 ```python
 def __init__(self):
     self.mainnet_rpc_url = Config.FASTNEAR_MAINNET_RPC_URL
     self.testnet_rpc_url = Config.FASTNEAR_TESTNET_RPC_URL  # ✅ ADDED
-    
+
     # Determine network and set correct RPC URL
     self.network = Config.get_current_network()
     if self.network == "mainnet":
@@ -60,7 +65,7 @@ def __init__(self):
     else:
         self.rpc_url = self.testnet_rpc_url  # ✅ Now uses testnet RPC
         self.api_base_url = self.testnet_api_url
-    
+
 def _get_rpc_url_with_auth(self):
     return f"{self.rpc_url}?apiKey={self.api_key}"  # ✅ Uses correct URL
 ```
@@ -73,23 +78,25 @@ def _get_rpc_url_with_auth(self):
 
 The service now correctly selects RPC URLs based on network:
 
-| Network | RPC URL | API URL |
-|---------|---------|---------|
-| **Mainnet** | `https://rpc.mainnet.fastnear.com` | `https://api.fastnear.com` |
+| Network     | RPC URL                            | API URL                         |
+| ----------- | ---------------------------------- | ------------------------------- |
+| **Mainnet** | `https://rpc.mainnet.fastnear.com` | `https://api.fastnear.com`      |
 | **Testnet** | `https://rpc.testnet.fastnear.com` | `https://test.api.fastnear.com` |
 
 ### Log Output Now Shows Correct URLs
 
 **Before:**
+
 ```
-FastNearService initialized for testnet network 
+FastNearService initialized for testnet network
 (API: https://test.api.fastnear.com, RPC: https://rpc.mainnet.fastnear.com)
                                             ^^^^^^ WRONG - mainnet RPC
 ```
 
 **After:**
+
 ```
-FastNearService initialized for testnet network 
+FastNearService initialized for testnet network
 (API: https://test.api.fastnear.com, RPC: https://rpc.testnet.fastnear.com)
                                             ^^^^^^ CORRECT - testnet RPC
 ```
@@ -101,6 +108,7 @@ FastNearService initialized for testnet network
 ### For Testnet Accounts (like `unicornaede.kindpuma8958.testnet`)
 
 **Before Fix:**
+
 ```
 ❌ FastNear RPC error: Server error
 ❌ Returns "0 NEAR" (incorrect)
@@ -108,6 +116,7 @@ FastNearService initialized for testnet network
 ```
 
 **After Fix:**
+
 ```
 ✅ Uses testnet RPC URL
 ✅ Returns correct balance
@@ -131,8 +140,9 @@ To verify the fix works:
 ```
 
 **Expected logs:**
+
 ```
-FastNearService initialized for testnet network 
+FastNearService initialized for testnet network
 (API: https://test.api.fastnear.com, RPC: https://rpc.testnet.fastnear.com)
 
 Fetching fresh balance for unicornaede.kindpuma8958.testnet from FastNear
@@ -154,6 +164,7 @@ Successfully got balance from FastNear for unicornaede.kindpuma8958.testnet: X.X
 ## 🎉 Issue Resolved
 
 The bot will now correctly:
+
 - Use **testnet RPC** for testnet accounts
 - Use **mainnet RPC** for mainnet accounts
 - Get accurate balance data without server errors

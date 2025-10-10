@@ -73,8 +73,8 @@ class MetadataCacheService:
         """
         try:
             cache_key = f"metadata:{contract_id}"
-            await self.redis_client.setex(
-                cache_key, self.metadata_ttl, json.dumps(metadata)
+            await self.redis_client.set_value(
+                cache_key, metadata, ttl_seconds=self.metadata_ttl
             )
             logger.info(
                 f"Cached metadata for {contract_id} (TTL: {self.metadata_ttl}s)"
@@ -145,7 +145,9 @@ class MetadataCacheService:
         """
         try:
             cache_key = f"balance:near:{account_id}"
-            await self.redis_client.setex(cache_key, self.balance_ttl, balance)
+            await self.redis_client.set_value(
+                cache_key, balance, ttl_seconds=self.balance_ttl
+            )
             logger.debug(f"Cached balance for {account_id} (TTL: {self.balance_ttl}s)")
             return True
 
@@ -199,7 +201,9 @@ class MetadataCacheService:
         """
         try:
             cache_key = f"balance:token:{account_id}:{contract_id}"
-            await self.redis_client.setex(cache_key, self.balance_ttl, balance)
+            await self.redis_client.set_value(
+                cache_key, balance, ttl_seconds=self.balance_ttl
+            )
             logger.debug(
                 f"Cached token balance for {account_id}:{contract_id} (TTL: {self.balance_ttl}s)"
             )
@@ -251,8 +255,8 @@ class MetadataCacheService:
         """
         try:
             cache_key = f"inventory:{account_id}"
-            await self.redis_client.setex(
-                cache_key, self.inventory_ttl, json.dumps(inventory)
+            await self.redis_client.set_value(
+                cache_key, inventory, ttl_seconds=self.inventory_ttl
             )
             logger.info(
                 f"Cached token inventory for {account_id} (TTL: {self.inventory_ttl}s)"
