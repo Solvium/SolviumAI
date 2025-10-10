@@ -86,33 +86,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Track daily login
-    const today = new Date();
-    const lastLogin = user.lastClaim ? new Date(user.lastClaim) : null;
-    const isNewDay =
-      !lastLogin || lastLogin.toDateString() !== today.toDateString();
-
-    if (isNewDay) {
-      // Calculate new streak
-      const isConsecutive =
-        lastLogin &&
-        lastLogin.toDateString() ===
-          new Date(today.getTime() - 24 * 60 * 60 * 1000).toDateString();
-      const newStreak = isConsecutive ? (user.claimCount || 0) + 1 : 1;
-
-      // Update user with new login
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          lastClaim: today,
-          claimCount: newStreak,
-        },
-      });
-
-      console.log(
-        `Daily login tracked for user ${user.username}: streak ${newStreak}`
-      );
-    }
+    // Note: Do NOT mutate lastClaim/claimCount here.
+    // Visiting the page or checking auth must not auto-claim or advance streak.
 
     // Parse wallet data if it exists
     let walletData = null;

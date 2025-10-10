@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type WebApp from "@twa-dev/sdk";
 import axios from "axios";
 import { FaXTwitter, FaTelegram } from "react-icons/fa6";
@@ -24,6 +25,7 @@ import { taskConfig } from "@/config/taskConfig";
 
 const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   const [loading, setLoading] = useState({ id: "", status: false });
+  const router = useRouter();
   const [onGoing, setOnGoing] = useState(false);
   const [error, setError] = useState("");
   const [tasks, setTasks] = useState<any[]>([]);
@@ -159,22 +161,37 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
         setTasks([
           {
             id: 1,
-            name: "Follow X",
-            points: 100,
-            link: "https://x.com/solvium",
+            name: "Subscribe to YouTube",
+            points: 10,
+            link: "https://www.youtube.com/@solvium_puzzle",
             category: "social",
           },
           {
             id: 2,
-            name: "Join Telegram Channel",
-            points: 150,
-            link: "https://t.me/solviumgame",
+            name: "Follow X",
+            points: 10,
+            link: "https://x.com/Solvium_game",
             category: "social",
           },
           {
             id: 3,
-            name: "Invite 5 Friends",
-            points: 500,
+            name: "Join Solvium Telegram Group",
+            points: 10,
+            link: "https://t.me/solvium_puzzle",
+            category: "social",
+          },
+          {
+            id: 4,
+            name: "Join Announcement Channel",
+            points: 10,
+            link: "https://t.me/solviumupdate",
+            category: "social",
+          },
+          {
+            id: 5,
+            name: "Follow Facebook",
+            points: 10,
+            link: "https://www.facebook.com/profile.php?id=61566560151625&mibextid=LQQJ4d",
             category: "social",
           },
         ]);
@@ -195,22 +212,37 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
       setTasks([
         {
           id: 1,
-          name: "Follow X",
-          points: 100,
-          link: "https://x.com/solvium",
+          name: "Subscribe to YouTube",
+          points: 10,
+          link: "https://www.youtube.com/@solvium_puzzle",
           category: "social",
         },
         {
           id: 2,
-          name: "Join Telegram Channel",
-          points: 150,
-          link: "https://t.me/solviumgame",
+          name: "Follow X",
+          points: 10,
+          link: "https://x.com/Solvium_game",
           category: "social",
         },
         {
           id: 3,
-          name: "Invite 5 Friends",
-          points: 500,
+          name: "Join Solvium Telegram Group",
+          points: 10,
+          link: "https://t.me/solvium_puzzle",
+          category: "social",
+        },
+        {
+          id: 4,
+          name: "Join Announcement Channel",
+          points: 10,
+          link: "https://t.me/solviumupdate",
+          category: "social",
+        },
+        {
+          id: 5,
+          name: "Follow Facebook",
+          points: 10,
+          link: "https://www.facebook.com/profile.php?id=61566560151625&mibextid=LQQJ4d",
           category: "social",
         },
       ]);
@@ -223,10 +255,18 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   // Initial page load fetch: runs once per user id
   useEffect(() => {
     const userId = userDetails?.id ? String(userDetails.id) : null;
+    // Always fetch tasks on initial mount (even without a user)
+    if (!didInitialFetchRef.current) {
+      didInitialFetchRef.current = "mounted";
+      const anonTimer = setTimeout(() => {
+        fetchTasks();
+      }, 50);
+      return () => clearTimeout(anonTimer);
+    }
+
+    // If we have a user, run user-specific initializations once per user id
     if (!userId) return;
-
     if (didInitialFetchRef.current === userId) return;
-
     didInitialFetchRef.current = userId;
 
     const timer = setTimeout(() => {
@@ -630,7 +670,10 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   return (
     <div className="min-h-screen bg-[#0A0A1F] text-white pb-20">
       <div className="px-4 pt-6 pb-4">
-        <button className="flex items-center gap-2 text-white mb-4">
+        <button
+          className="flex items-center gap-2 text-white mb-4"
+          onClick={() => router.push("/")}
+        >
           <ArrowLeft className="w-5 h-5" />
           <span className="text-sm font-medium">Back</span>
         </button>

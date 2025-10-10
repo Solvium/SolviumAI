@@ -11,7 +11,7 @@ interface TaskProgress {
 }
 
 export const useTaskProgress = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [taskProgress, setTaskProgress] = useState<TaskProgress>({
     dailyLoginStreak: 0,
     maxStreak: 7,
@@ -103,7 +103,11 @@ export const useTaskProgress = () => {
     }
 
     try {
-      console.log("[daily-login] Posting to /api/auth/login-track...");
+      console.log("[daily-login] Posting to /api/auth/login-track...", {
+        userId: user.id,
+        currentLastClaim: user.lastClaim || null,
+        currentClaimCount: user.claimCount || 0,
+      });
       // First, track the login
       const loginResponse = await fetch("/api/auth/login-track", {
         method: "POST",
@@ -113,11 +117,15 @@ export const useTaskProgress = () => {
       });
 
       const loginResult = await loginResponse.json();
-      console.log(
-        "[daily-login] login-track response:",
-        loginResponse.status,
-        loginResult
-      );
+      console.log("[daily-login] login-track response:", {
+        status: loginResponse.status,
+        streak: loginResult?.streak,
+        isNewDay: loginResult?.isNewDay,
+        lastLogin: loginResult?.lastLogin,
+        newLogin: loginResult?.newLogin,
+        nextClaimAt: loginResult?.nextClaimAt,
+        timeLeftMs: loginResult?.timeLeftMs,
+      });
 
       if (!loginResponse.ok || !loginResult.success) {
         console.error("Failed to track login:", loginResult.error);
@@ -146,15 +154,32 @@ export const useTaskProgress = () => {
         });
 
         const result = await response.json();
-        console.log(
-          "[daily-login] /api/tasks result:",
-          response.status,
-          result
-        );
+        console.log("[daily-login] /api/tasks result:", {
+          status: response.status,
+          streak: result?.streak,
+          solvEarned: result?.solvEarned,
+          lastLogin: result?.lastLogin,
+          newLogin: result?.newLogin,
+          nextClaimAt: result?.nextClaimAt,
+          timeLeftMs: result?.timeLeftMs,
+        });
 
         if (response.ok && result.success) {
+          // Optimistically update streak immediately using server result
+          if (typeof result.streak === "number") {
+            setTaskProgress((prev) => ({
+              ...prev,
+              dailyLoginStreak: result.streak,
+              lastLoginDate: result.newLogin || new Date().toISOString(),
+            }));
+          }
+
+          // Ensure the latest profile is loaded (totalSOLV, claimCount, lastClaim)
+          try {
+            await refreshUser();
+          } catch {}
           await updateTaskProgress();
-          return { status: "new", streak: loginResult.streak };
+          return { status: "new", streak: result.streak ?? loginResult.streak };
         }
         return { status: "error" };
       } else {
@@ -241,9 +266,11 @@ export const useTaskProgress = () => {
     const totalGames = (user?.puzzleCount || 0) + (user?.spinCount || 0);
     const isCompleted = totalGames > 0;
     console.log(
-      `First game status: ${isCompleted ? "Completed" : "Not completed"} (puzzleCount: ${
-        user?.puzzleCount || 0
-      }, spinCount: ${user?.spinCount || 0})`
+      `First game status: ${
+        isCompleted ? "Completed" : "Not completed"
+      } (puzzleCount: ${user?.puzzleCount || 0}, spinCount: ${
+        user?.spinCount || 0
+      })`
     );
     return isCompleted;
   }, [user]);

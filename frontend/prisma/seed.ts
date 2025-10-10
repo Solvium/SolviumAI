@@ -35,7 +35,24 @@ async function main() {
     });
   }
 
-  // Create default tasks (one-time seed)
+  // Create default tasks (aligned with provided social links)
+  // 1) Remove all existing social tasks (tasks with a non-null link)
+  const existingSocialTasks = await prisma.task.findMany({
+    where: { NOT: { link: null as any } },
+    select: { id: true },
+  });
+
+  if (existingSocialTasks.length > 0) {
+    const socialTaskIds = existingSocialTasks.map((t) => t.id);
+    // Remove user-task relations first to avoid FK issues
+    await prisma.userTask.deleteMany({
+      where: { taskId: { in: socialTaskIds } },
+    });
+    // Now remove the tasks
+    await prisma.task.deleteMany({ where: { id: { in: socialTaskIds } } });
+  }
+
+  // 2) Create the canonical set of tasks
   const tasks = [
     {
       name: "First Game Reward",
@@ -44,59 +61,41 @@ async function main() {
       isCompleted: false,
     },
     {
-      name: "Join Solvium Telegram Group",
-      points: 50,
-      link: "https://t.me/solvium_group",
-      isCompleted: false,
-    },
-    {
-      name: "Join Solvium Chat",
-      points: 30,
-      link: "https://t.me/solvium_chat",
+      name: "Subscribe to YouTube",
+      points: 10,
+      link: "https://www.youtube.com/@solvium_puzzle",
       isCompleted: false,
     },
     {
       name: "Follow X",
-      points: 100,
-      link: "https://x.com/solvium",
+      points: 10,
+      link: "https://x.com/Solvium_game",
+      isCompleted: false,
+    },
+    {
+      name: "Join Solvium Telegram Group",
+      points: 10,
+      link: "https://t.me/solvium_puzzle",
+      isCompleted: false,
+    },
+    {
+      name: "Join Announcement Channel",
+      points: 10,
+      link: "https://t.me/solviumupdate",
       isCompleted: false,
     },
     {
       name: "Follow Facebook",
-      points: 20,
-      link: "https://facebook.com/solvium",
-      isCompleted: false,
-    },
-    {
-      name: "Subscribe to Youtube",
-      points: 35,
-      link: "https://youtube.com/@solvium",
-      isCompleted: false,
-    },
-    {
-      name: "Connect Wallet",
-      points: 100,
-      link: "",
-      isCompleted: false,
-    },
-    {
-      name: "Like our pinned post",
-      points: 75,
-      link: "https://x.com/solvium",
-      isCompleted: false,
-    },
-    {
-      name: "Retweet the latest update",
-      points: 80,
-      link: "https://x.com/solvium",
+      points: 10,
+      link: "https://www.facebook.com/profile.php?id=61566560151625&mibextid=LQQJ4d",
       isCompleted: false,
     },
   ];
 
   for (const task of tasks) {
-    const result = await prisma.task.upsert({
+    await prisma.task.upsert({
       where: { name: task.name },
-      update: {},
+      update: { points: task.points, link: task.link },
       create: task,
     });
   }

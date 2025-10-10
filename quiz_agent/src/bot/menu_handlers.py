@@ -1494,8 +1494,10 @@ async def show_menu_in_group(update: Update, context: CallbackContext) -> None:
     user_name = update.effective_user.username or update.effective_user.first_name
 
     await update.message.reply_text(
-        f"🎉 Hi {user_name}! I'm SolviumAI bot.\n"
-        "For the best experience, please DM me to access all features!",
+        f"🎉 Welcome to SolviumAI, {user_name}! 🚀\n\n"
+        "🎮 Ready to play quizzes and earn crypto rewards?\n"
+        "💬 DM me to get started with all the amazing features!\n\n"
+        "✨ Join the fun and start earning SOLV tokens today!",
     )
 
 
