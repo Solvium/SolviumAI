@@ -45,6 +45,23 @@ class Config:
     NEAR_RPC_ENDPOINT_TRANS = os.getenv(
         "NEAR_RPC_ENDPOINT", "https://allthatnode.com/protocol/near.dsrv"
     )
+
+    # FastNear Premium RPC Configuration
+    FASTNEAR_API_KEY = os.getenv(
+        "FASTNEAR_API_KEY", "TEMP648WSeY9y1XDyiAHL2KMbZxxnn3Tq4Dxggdd3eGniSy2"
+    )
+    FASTNEAR_MAINNET_RPC_URL = os.getenv(
+        "FASTNEAR_MAINNET_RPC_URL", "https://rpc.mainnet.fastnear.com"
+    )
+    FASTNEAR_TESTNET_RPC_URL = os.getenv(
+        "FASTNEAR_TESTNET_RPC_URL", "https://rpc.testnet.fastnear.com"
+    )
+    FASTNEAR_MAINNET_API_URL = os.getenv(
+        "FASTNEAR_MAINNET_API_URL", "https://api.fastnear.com"
+    )
+    FASTNEAR_TESTNET_API_URL = os.getenv(
+        "FASTNEAR_TESTNET_API_URL", "https://test.api.fastnear.com"
+    )
     # Database Configuration
     # In production, use PostgreSQL; in development, fallback to SQLite
     DATABASE_URL = os.getenv(
@@ -114,7 +131,8 @@ class Config:
 
     # NEAR RPC Fallback Endpoints (ordered by preference)
     NEAR_MAINNET_RPC_ENDPOINTS = [
-        "https://free.rpc.fastnear.com",  # Primary (current)
+        "https://rpc.mainnet.fastnear.com",  # PREMIUM - Primary (authenticated)
+        "https://free.rpc.fastnear.com",  # Free FastNear fallback
         "https://near.drpc.org",  # dRPC
         "https://rpc.ankr.com/near",  # Ankr
         "https://near.blockpi.network/v1/rpc/public",  # BlockPI
@@ -125,7 +143,8 @@ class Config:
     ]
 
     NEAR_TESTNET_RPC_ENDPOINTS = [
-        "https://test.rpc.fastnear.com",  # Primary
+        "https://rpc.testnet.fastnear.com",  # PREMIUM - Primary (authenticated)
+        "https://test.rpc.fastnear.com",  # Free FastNear fallback
         "https://rpc.testnet.near.org",  # Official NEAR testnet
         "https://near-testnet.drpc.org",  # dRPC testnet
     ]
@@ -242,3 +261,10 @@ class Config:
     TESTNET_ROBUST_MODE_ENABLED = (
         os.getenv("TESTNET_ROBUST_MODE_ENABLED", "false").lower() == "true"
     )
+
+    # Cache TTL Configuration
+    BALANCE_CACHE_TTL = int(os.getenv("BALANCE_CACHE_TTL", "30"))  # 30 seconds
+    METADATA_CACHE_TTL = int(os.getenv("METADATA_CACHE_TTL", "86400"))  # 24 hours
+    TOKEN_INVENTORY_CACHE_TTL = int(
+        os.getenv("TOKEN_INVENTORY_CACHE_TTL", "30")
+    )  # 30 seconds

@@ -352,6 +352,93 @@ def get_rpc_endpoints(network: str) -> List[str]:
         return Config.NEAR_MAINNET_RPC_ENDPOINTS
 
 
+def get_fastnear_headers() -> Dict[str, str]:
+    """
+    Get authentication headers for FastNear premium RPC calls.
+
+    Returns:
+        Dict with Authorization header and Content-Type
+    """
+    return {
+        "Authorization": f"Bearer {Config.FASTNEAR_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+
+def get_fastnear_rpc_url(include_api_key: bool = True) -> str:
+    """
+    Get FastNear RPC URL with optional API key parameter.
+
+    Args:
+        include_api_key: Whether to include API key in URL (default: True)
+
+    Returns:
+        FastNear RPC URL (with or without API key)
+    """
+    base_url = Config.FASTNEAR_MAINNET_RPC_URL
+    if include_api_key:
+        return f"{base_url}?apiKey={Config.FASTNEAR_API_KEY}"
+    return base_url
+
+
+async def execute_fastnear_rpc_call(
+    method: str,
+    params: Dict,
+    use_header_auth: bool = True,
+    max_retries: int = None,
+) -> Any:
+    """
+    Execute an authenticated RPC call to FastNear premium endpoint.
+
+    Supports two authentication methods:
+    1. Authorization header (use_header_auth=True) - Recommended
+    2. API key in URL (use_header_auth=False)
+
+    Args:
+        method: RPC method name (e.g., "query", "block")
+        params: RPC method parameters
+        use_header_auth: Use header auth vs URL param (default: True)
+        max_retries: Maximum retry attempts (defaults to config)
+
+    Returns:
+        RPC result
+
+    Raises:
+        Exception: If all retries fail
+    """
+    max_retries = max_retries or Config.RPC_MAX_RETRIES
+
+    payload = {
+        "jsonrpc": "2.0",
+        "id": "dontcare",
+        "method": method,
+        "params": params,
+    }
+
+    # Choose authentication method
+    if use_header_auth:
+        url = Config.FASTNEAR_MAINNET_RPC_URL
+        headers = get_fastnear_headers()
+    else:
+        url = get_fastnear_rpc_url(include_api_key=True)
+        headers = {"Content-Type": "application/json"}
+
+    async def _rpc_call():
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            result = response.json()
+
+            if "error" in result:
+                error_msg = result["error"].get("message", "Unknown error")
+                raise Exception(f"FastNear RPC error: {error_msg}")
+
+            return result.get("result", {})
+
+    # Execute with retry logic
+    return await rpc_retry_handler.execute_with_retry(_rpc_call, url, max_retries)
+
+
 async def execute_with_rpc_fallback(
     func: Callable, network: str, max_retries_per_endpoint: int = None, *args, **kwargs
 ) -> Any:
