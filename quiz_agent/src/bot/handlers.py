@@ -1695,6 +1695,7 @@ async def show_token_selection(update, context):
     """Show user's actual tokens from NearBlocks API"""
     try:
         user_id = update.effective_user.id
+        redis_client = RedisClient()
 
         # Get user's wallet
         from services.wallet_service import WalletService
@@ -1733,16 +1734,21 @@ async def show_token_selection(update, context):
             )
             return ConversationHandler.END
 
-        # Create keyboard with user's actual tokens
+        # Store tokens list in Redis with indices (to avoid callback_data length issues)
+        import json
+        token_map = {str(idx): token["contract_address"] for idx, token in enumerate(available_tokens[:10])}
+        await redis_client.set_user_data_key(user_id, "token_selection_map", json.dumps(token_map))
+
+        # Create keyboard with user's actual tokens using indices
         keyboard = []
-        for token in available_tokens[:10]:  # Limit to 10 tokens for UI
+        for idx, token in enumerate(available_tokens[:10]):  # Limit to 10 tokens for UI
             balance = token["balance"]
             symbol = token["symbol"]
             keyboard.append(
                 [
                     InlineKeyboardButton(
                         f"{symbol} - {balance}",
-                        callback_data=f"select_token_{token['contract_address']}",
+                        callback_data=f"select_token_{idx}",  # Use index instead of full contract address
                     )
                 ]
             )
@@ -1770,8 +1776,27 @@ async def handle_token_selection(update, context):
     redis_client = RedisClient()
 
     try:
-        # Extract token contract from callback data
-        token_contract = query.data.replace("select_token_", "")
+        # Extract token index from callback data
+        token_index = query.data.replace("select_token_", "")
+        
+        # Retrieve token contract address from Redis using index
+        import json
+        token_map_json = await redis_client.get_user_data_key(user_id, "token_selection_map")
+        
+        if not token_map_json:
+            await query.edit_message_text(
+                "❌ Token selection expired. Please try again."
+            )
+            return ConversationHandler.END
+            
+        token_map = json.loads(token_map_json)
+        token_contract = token_map.get(token_index)
+        
+        if not token_contract:
+            await query.edit_message_text(
+                "❌ Invalid token selection. Please try again."
+            )
+            return ConversationHandler.END
 
         # Store selected token
         await redis_client.set_user_data_key(
