@@ -141,6 +141,8 @@ class TelegramBot:
             reward_custom_input,
             show_reward_structure_options,
             reward_structure_choice,
+            show_distribution_preview,
+            confirm_distribution_structure,
             payment_verification,
             process_payment,
             show_funding_instructions,
@@ -295,7 +297,11 @@ class TelegramBot:
                 REWARD_STRUCTURE_CHOICE: [
                     CallbackQueryHandler(
                         reward_structure_choice,
-                        pattern="^(structure_wta|structure_top3|structure_custom|token_structure_wta|token_structure_top3)$",
+                        pattern="^(structure_wta|structure_top3|structure_top5|structure_top10|structure_custom|token_structure_wta|token_structure_top3)$",
+                    ),
+                    CallbackQueryHandler(
+                        confirm_distribution_structure,
+                        pattern="^(confirm_structure_top_5|confirm_structure_top_10|back_to_structure_options)$",
                     )
                 ],
                 # Payment verification state

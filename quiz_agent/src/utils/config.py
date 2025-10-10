@@ -268,3 +268,14 @@ class Config:
     TOKEN_INVENTORY_CACHE_TTL = int(
         os.getenv("TOKEN_INVENTORY_CACHE_TTL", "30")
     )  # 30 seconds
+
+    # Quiz Reward Distribution Presets
+    # Top 5 Winners: Balanced competitive model
+    # 1st: 40%, 2nd: 25%, 3rd: 15%, 4th: 12%, 5th: 8%
+    TOP_5_DISTRIBUTION = [0.40, 0.25, 0.15, 0.12, 0.08]
+    
+    # Top 10 Winners: Tiered model
+    # Tier 1 (1-3): 60% total | Tier 2 (4-6): 25% total | Tier 3 (7-10): 15% total
+    # 1st: 30%, 2nd: 20%, 3rd: 10%, 4th: 10%, 5th: 8%, 6th: 7%
+    # 7th: 4.5%, 8th: 4%, 9th: 3.5%, 10th: 3%
+    TOP_10_DISTRIBUTION = [0.30, 0.20, 0.10, 0.10, 0.08, 0.07, 0.045, 0.04, 0.035, 0.03]
