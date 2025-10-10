@@ -160,6 +160,19 @@ export async function POST(request: NextRequest) {
         // Calculate streak (using existing fields)
         const today = new Date();
         const lastLogin = user.lastClaim ? new Date(user.lastClaim) : null;
+        // Compute next potential claim (next midnight)
+        const now = new Date();
+        const nextMidnight = new Date(now);
+        nextMidnight.setHours(24, 0, 0, 0);
+        const msUntilNextClaim = nextMidnight.getTime() - now.getTime();
+        console.log(
+          "[tasks POST daily_login] lastLogin=",
+          lastLogin?.toISOString(),
+          " nextPotentialClaim=",
+          nextMidnight.toISOString(),
+          " timeLeftMs=",
+          msUntilNextClaim
+        );
         const isConsecutive =
           lastLogin &&
           lastLogin.toDateString() ===
@@ -168,13 +181,14 @@ export async function POST(request: NextRequest) {
         // Use claimCount as streak counter for now
         const newStreak = isConsecutive ? (user.claimCount || 0) + 1 : 1;
 
-        await prisma.user.update({
+        const updatedUser = await prisma.user.update({
           where: { id: parseInt(userId) }, // Convert string to number
           data: {
             lastClaim: today,
             claimCount: newStreak,
-            totalSOLV:
-              (user.totalSOLV || 0) + DAILY_LOGIN_SOLV * (userMultipler || 1),
+            totalSOLV: {
+              increment: DAILY_LOGIN_SOLV * (userMultipler || 1),
+            },
           },
         });
 
@@ -183,6 +197,12 @@ export async function POST(request: NextRequest) {
           message: "Daily login recorded",
           streak: newStreak,
           solvEarned: DAILY_LOGIN_SOLV * (userMultipler || 1),
+          lastLogin: lastLogin?.toISOString(),
+          newLogin: today.toISOString(),
+          nextClaimAt: nextMidnight.toISOString(),
+          timeLeftMs: msUntilNextClaim,
+          totalSOLV: updatedUser.totalSOLV,
+          claimCount: updatedUser.claimCount,
         });
 
       case "first_game_completed":

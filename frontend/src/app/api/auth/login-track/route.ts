@@ -71,40 +71,40 @@ export async function POST(request: NextRequest) {
     const isNewDay =
       !lastLogin || lastLogin.toDateString() !== today.toDateString();
 
+    // Compute next potential claim (next midnight)
+    const now = new Date();
+    const nextMidnight = new Date(now);
+    nextMidnight.setHours(24, 0, 0, 0);
+    const msUntilNextClaim = nextMidnight.getTime() - now.getTime();
+    console.log(
+      "[login-track] nextPotentialClaim:",
+      nextMidnight.toISOString(),
+      "timeLeftMs=",
+      msUntilNextClaim
+    );
+
     if (isNewDay) {
-      // Calculate new streak
+      // Calculate proposed streak, but DO NOT persist here.
       const isConsecutive =
         !!lastLogin &&
         lastLogin.toDateString() ===
           new Date(today.getTime() - 24 * 60 * 60 * 1000).toDateString();
       const newStreak = isConsecutive ? (user.claimCount || 0) + 1 : 1;
       console.log(
-        "[login-track] New day. isConsecutive=",
+        "[login-track] New day detected (no DB write). isConsecutive=",
         isConsecutive,
-        "newStreak=",
+        "proposedStreak=",
         newStreak
-      );
-
-      // Update user with new login
-      await prisma.user.update({
-        where: { id: parseInt(userId) },
-        data: {
-          lastClaim: today,
-          claimCount: newStreak,
-        },
-      });
-
-      console.log(
-        `Manual login tracked for user ${user.username}: streak ${newStreak}`
       );
 
       return NextResponse.json({
         success: true,
-        message: "Daily login tracked",
+        message: "Eligible to claim daily login",
         streak: newStreak,
         isNewDay: true,
         lastLogin: lastLogin?.toISOString(),
-        newLogin: today.toISOString(),
+        nextClaimAt: nextMidnight.toISOString(),
+        timeLeftMs: msUntilNextClaim,
       });
     } else {
       console.log(
@@ -117,6 +117,8 @@ export async function POST(request: NextRequest) {
         streak: user.claimCount || 0,
         isNewDay: false,
         lastLogin: lastLogin?.toISOString(),
+        nextClaimAt: nextMidnight.toISOString(),
+        timeLeftMs: msUntilNextClaim,
       });
     }
   } catch (error) {

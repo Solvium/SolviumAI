@@ -441,7 +441,7 @@ async def start_createquiz_group(update, context):
 
         if chat_type != "private":
             await update.message.reply_text(
-                f"@{user.username}, I'll create a wallet for you first, then we'll set up your quiz in private chat.",
+                f"@{user.username}, I'll create a wallet for you first, then we'll create your quiz in private chat! 🎮",
             )
 
         # Send initial loading message
