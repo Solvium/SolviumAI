@@ -1,36 +1,70 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { ArrowLeft, Copy } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { useState } from "react";
+import { ArrowLeft, Copy } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface SwapFlowProps {
-  onClose: () => void
-  onSuccess: () => void
+  onClose: () => void;
+  onSuccess: () => void;
 }
 
-type SwapStep = "select" | "swap" | "confirm"
+type SwapStep = "select" | "swap" | "confirm";
 
 const tokens = [
-  { symbol: "BTC", name: "Bitcoin", amount: "0.0000013", usd: "$29.56", color: "bg-orange-500" },
-  { symbol: "ETH", name: "Ethereum", amount: "0.17", usd: "$234", color: "bg-purple-500" },
-  { symbol: "BNB", name: "Binance", amount: "0.01745", usd: "$4.98", color: "bg-yellow-500" },
-  { symbol: "MATIC", name: "Polygon", amount: "34.3", usd: "$30", color: "bg-purple-600" },
-  { symbol: "XRP", name: "Ripple", amount: "3.00912", usd: "$30", color: "bg-green-500" },
-]
+  {
+    symbol: "BTC",
+    name: "Bitcoin",
+    amount: "0.0000013",
+    usd: "$29.56",
+    color: "bg-orange-500",
+  },
+  {
+    symbol: "ETH",
+    name: "Ethereum",
+    amount: "0.17",
+    usd: "$234",
+    color: "bg-purple-500",
+  },
+  {
+    symbol: "BNB",
+    name: "Binance",
+    amount: "0.01745",
+    usd: "$4.98",
+    color: "bg-yellow-500",
+  },
+  {
+    symbol: "MATIC",
+    name: "Polygon",
+    amount: "34.3",
+    usd: "$30",
+    color: "bg-purple-600",
+  },
+  {
+    symbol: "XRP",
+    name: "Ripple",
+    amount: "3.00912",
+    usd: "$30",
+    color: "bg-green-500",
+  },
+];
 
 const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
-  const [step, setStep] = useState<SwapStep>("swap")
-  const [fromToken, setFromToken] = useState("SOLV")
-  const [toToken, setToToken] = useState("SOL")
+  const [step, setStep] = useState<SwapStep>("swap");
+  const [fromToken, setFromToken] = useState("SOLV");
+  const [toToken, setToToken] = useState("SOL");
 
   if (step === "swap") {
     return (
-      <div className="fixed inset-0 bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] z-50 overflow-y-auto">
+      <div className="fixed inset-0 bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] z-50 overflow-y-auto pb-20">
         <div className="max-w-md mx-auto min-h-screen pb-6">
           <div className="px-4 pt-6">
             <div className="flex items-center justify-between mb-8">
-              <Button variant="ghost" className="text-white hover:bg-white/10 p-2" onClick={onClose}>
+              <Button
+                variant="ghost"
+                className="text-white hover:bg-white/10 p-2"
+                onClick={onClose}
+              >
                 <ArrowLeft className="w-5 h-5 mr-2" />
                 Back
               </Button>
@@ -51,7 +85,8 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
               <div
                 className="rounded-3xl p-[2px]"
                 style={{
-                  background: "linear-gradient(135deg, #00d4ff 0%, #9d4edd 100%)",
+                  background:
+                    "linear-gradient(135deg, #00d4ff 0%, #9d4edd 100%)",
                 }}
               >
                 <div className="bg-[#0a0e27] rounded-3xl p-8 space-y-8">
@@ -59,12 +94,19 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                     <div className="w-16 h-16 bg-yellow-500 rounded-full flex items-center justify-center">
                       <span className="text-white font-bold text-xl">$</span>
                     </div>
-                    <div className="text-4xl font-bold text-white">{fromToken}</div>
+                    <div className="text-4xl font-bold text-white">
+                      {fromToken}
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-center">
                     <button className="w-12 h-12 bg-[#1a1f3a] rounded-full flex items-center justify-center hover:bg-[#252a4a] transition-colors">
-                      <svg className="w-6 h-6 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        className="w-6 h-6 text-cyan-500"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -85,7 +127,9 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                         </div>
                       </div>
                     </div>
-                    <div className="text-4xl font-bold text-white">{toToken}</div>
+                    <div className="text-4xl font-bold text-white">
+                      {toToken}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -100,7 +144,7 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   if (step === "confirm") {
@@ -109,7 +153,11 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
         <div className="max-w-md mx-auto min-h-screen pb-6">
           <div className="px-4 pt-6">
             <div className="flex items-center justify-between mb-8">
-              <Button variant="ghost" className="text-white hover:bg-white/10 p-2" onClick={() => setStep("swap")}>
+              <Button
+                variant="ghost"
+                className="text-white hover:bg-white/10 p-2"
+                onClick={() => setStep("swap")}
+              >
                 <ArrowLeft className="w-5 h-5 mr-2" />
                 Back
               </Button>
@@ -136,7 +184,9 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                       <span className="text-white font-bold">$</span>
                     </div>
                     <div>
-                      <div className="text-white text-xl font-bold">0.1298 solv</div>
+                      <div className="text-white text-xl font-bold">
+                        0.1298 solv
+                      </div>
                       <div className="text-white/50 text-sm">$3.00912</div>
                     </div>
                   </div>
@@ -144,7 +194,12 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
 
                 <div className="flex items-center justify-center">
                   <div className="w-10 h-10 bg-[#1a1f3a] rounded-full flex items-center justify-center">
-                    <svg className="w-5 h-5 text-[#0075EA]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      className="w-5 h-5 text-[#0075EA]"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -159,7 +214,9 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-gradient-to-b from-cyan-400 via-purple-400 to-pink-400 rounded-full" />
                     <div>
-                      <div className="text-white text-xl font-bold">0.1642 SOL</div>
+                      <div className="text-white text-xl font-bold">
+                        0.1642 SOL
+                      </div>
                       <div className="text-white/50 text-sm">$3.00</div>
                     </div>
                   </div>
@@ -170,7 +227,9 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                 <div className="flex items-center justify-between">
                   <div className="text-white/70 text-sm">From:</div>
                   <div className="flex items-center gap-2">
-                    <div className="text-white text-sm font-mono">0x8dfu8dfjfj8a289d93djd3...0Okdiwjd</div>
+                    <div className="text-white text-sm font-mono">
+                      0x8dfu8dfjfj8a289d93djd3...0Okdiwjd
+                    </div>
                     <button className="text-[#0075EA]">
                       <Copy className="w-4 h-4" />
                     </button>
@@ -179,7 +238,9 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                 <div className="flex items-center justify-between">
                   <div className="text-white/70 text-sm">To:</div>
                   <div className="flex items-center gap-2">
-                    <div className="text-white text-sm font-mono">0x8dfu8dfjfj8a289d93djd3...0Okdiwjd</div>
+                    <div className="text-white text-sm font-mono">
+                      0x8dfu8dfjfj8a289d93djd3...0Okdiwjd
+                    </div>
                     <button className="text-[#0075EA]">
                       <Copy className="w-4 h-4" />
                     </button>
@@ -202,7 +263,9 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                 <div className="w-5 h-5 border-2 border-[#0075EA] rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                   <div className="w-2 h-2 bg-[#0075EA] rounded-full" />
                 </div>
-                <p className="text-white/70 text-sm">Please double check recipient address</p>
+                <p className="text-white/70 text-sm">
+                  Please double check recipient address
+                </p>
               </div>
 
               <button
@@ -215,10 +278,10 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
-  return null
-}
+  return null;
+};
 
-export default SwapFlow
+export default SwapFlow;

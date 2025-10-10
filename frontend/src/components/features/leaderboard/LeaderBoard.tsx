@@ -20,7 +20,14 @@ const LeaderBoard = () => {
           throw new Error("Failed to fetch leaderboard");
         }
         const data = await response.json();
-        setLeader(data.leaderboard || []);
+        const sorted = Array.isArray(data.leaderboard)
+          ? [...data.leaderboard].sort((a: any, b: any) => {
+              const aPts = (a.totalSOLV ?? a.totalPoints ?? 0) as number;
+              const bPts = (b.totalSOLV ?? b.totalPoints ?? 0) as number;
+              return bPts - aPts;
+            })
+          : [];
+        setLeader(sorted);
       } catch (err) {
         console.error("Error fetching leaderboard:", err);
         setError(

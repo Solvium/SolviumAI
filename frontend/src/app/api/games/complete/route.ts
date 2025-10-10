@@ -373,12 +373,47 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // Award consolation points for Wordle losses and update weekly score
+      const lossSolv = gameType === "wordle" ? 2 : 0;
+      if (lossSolv > 0) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            totalSOLV: { increment: lossSolv },
+            totalPoints: { increment: lossSolv },
+            weeklyPoints: { increment: lossSolv },
+            gamesPlayed: { increment: 1 },
+          },
+        });
+
+        const currentWeek = getISOWeekNumber(new Date());
+        const currentYear = getCurrentYear();
+        await prisma.weeklyScore.upsert({
+          where: {
+            userId_weekNumber_year: {
+              userId: userId,
+              weekNumber: currentWeek,
+              year: currentYear,
+            },
+          },
+          update: {
+            points: { increment: lossSolv },
+          },
+          create: {
+            userId: userId,
+            weekNumber: currentWeek,
+            year: currentYear,
+            points: lossSolv,
+          },
+        });
+      }
+
       // Log activity for game loss
       await prisma.userActivity.create({
         data: {
           userId: userId,
           activity_type: `${gameType.toUpperCase()}_LOSS`,
-          points_earned: 0, // No XP for losing
+          points_earned: lossSolv, // small consolation SOLV
           metadata: {
             gameType: gameType,
             level: level,
@@ -404,7 +439,7 @@ export async function POST(req: NextRequest) {
           levelUp: false,
           newLevel: userData?.level || 1,
           totalGamesWon: 0,
-          rewardsEarned: 0,
+          rewardsEarned: lossSolv,
           newBalance: userData?.totalSOLV || 0,
         },
       });
