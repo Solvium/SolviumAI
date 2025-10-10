@@ -205,6 +205,9 @@ class TelegramBot:
             handle_text_message,
             handle_reset_wallet,
             handle_export_confirmation_callback,
+            handle_withdraw_token_selection,
+            handle_confirm_withdraw_near,
+            handle_confirm_withdraw_token,
         )
 
         # Conversation for interactive quiz creation needs to be registered FIRST
@@ -411,6 +414,32 @@ class TelegramBot:
             CallbackQueryHandler(
                 handle_wallet_retry_callback,
                 pattern="^retry_wallet_creation:",
+            ),
+            group=0,
+        )
+
+        # Handle withdrawal callbacks
+        logger.info("Registering withdrawal callback handlers")
+        self.app.add_handler(
+            CallbackQueryHandler(
+                handle_withdraw_token_selection,
+                pattern="^withdraw_token_",
+            ),
+            group=0,
+        )
+
+        self.app.add_handler(
+            CallbackQueryHandler(
+                handle_confirm_withdraw_near,
+                pattern="^(confirm_withdraw_near|cancel_withdraw_near)$",
+            ),
+            group=0,
+        )
+
+        self.app.add_handler(
+            CallbackQueryHandler(
+                handle_confirm_withdraw_token,
+                pattern="^(confirm_withdraw_token|cancel_withdraw_token)$",
             ),
             group=0,
         )

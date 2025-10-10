@@ -4399,11 +4399,25 @@ async def private_message_handler(update: Update, context: CallbackContext):
         user_id, "awaiting"
     )  # Use static method
     logger.info(f"User {user_id} 'awaiting' state from Redis: {is_awaiting_wallet}")
+
     if is_awaiting_wallet == "wallet_address":
         logger.info(
             f"User {user_id} is awaiting wallet_address. Calling service_handle_wallet_address."
         )
         await service_handle_wallet_address(update, context)
+        return
+
+    # Check if awaiting withdrawal inputs
+    if is_awaiting_wallet in [
+        "withdraw_near_address",
+        "withdraw_near_amount",
+        "withdraw_token_address",
+        "withdraw_token_amount",
+    ]:
+        logger.info(f"User {user_id} is in withdrawal flow: {is_awaiting_wallet}")
+        from bot.menu_handlers import handle_withdrawal_input
+
+        await handle_withdrawal_input(update, context)
         return
 
     # Check if awaiting payment hash
