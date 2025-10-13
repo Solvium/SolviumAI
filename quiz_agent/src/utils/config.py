@@ -56,6 +56,7 @@ class Config:
     FASTNEAR_TESTNET_RPC_URL = os.getenv(
         "FASTNEAR_TESTNET_RPC_URL", "https://rpc.testnet.fastnear.com"
     )
+
     FASTNEAR_MAINNET_API_URL = os.getenv(
         "FASTNEAR_MAINNET_API_URL", "https://api.fastnear.com"
     )
