@@ -248,6 +248,50 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Handle nearblocks account inventory (tokens/NFTs)
+    if (action === "nearblocks-inventory" && account) {
+      // Rate limit shared with Nearblocks requests
+      if (!canMakeNearblocksRequest()) {
+        const timeUntilReset = getTimeUntilNextNearblocksRequest();
+        const remaining = getRemainingNearblocksRequests();
+        return NextResponse.json(
+          {
+            error: "Rate limit exceeded",
+            message: `Too many requests. Try again in ${Math.ceil(
+              timeUntilReset / 1000
+            )} seconds.`,
+            remaining,
+            resetIn: Math.ceil(timeUntilReset / 1000),
+          },
+          { status: 429 }
+        );
+      }
+
+      const headers: Record<string, string> = { Accept: "application/json" };
+      const apiKey =
+        process.env.NEARBLOCKS_API_KEY || "FBF3C110E7A844FA84ADC1DA823C6484";
+      if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+
+      const upstream = await fetch(
+        `${NEARBLOCKS_BASE_URL}/v1/account/${encodeURIComponent(
+          account
+        )}/inventory`,
+        {
+          method: "GET",
+          headers,
+          cache: "no-store",
+        }
+      );
+      const bodyText = await upstream.text();
+      return new Response(bodyText, {
+        status: upstream.status,
+        headers: {
+          "Content-Type":
+            upstream.headers.get("content-type") || "application/json",
+        },
+      });
+    }
+
     // Handle fastnear account full
     if (action === "fastnear-full" && account) {
       const search = req.nextUrl.search;

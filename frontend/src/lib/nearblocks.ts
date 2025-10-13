@@ -60,6 +60,29 @@ export async function getAccountTxns(
   }
 }
 
+export async function getAccountInventory(
+  accountId: string
+): Promise<any | null> {
+  try {
+    const res = await fetch(
+      `${LOCAL_BASE}/api/wallet?action=nearblocks-inventory&account=${encodeURIComponent(
+        accountId
+      )}`,
+      {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data;
+  } catch (e) {
+    console.error("Nearblocks getAccountInventory error", e);
+    return null;
+  }
+}
+
 export function formatNearAmount(yocto: string | number | undefined): string {
   if (!yocto && yocto !== 0) return "0";
   try {
