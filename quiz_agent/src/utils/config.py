@@ -39,12 +39,13 @@ class Config:
     GOOGLE_API_KEY = os.getenv("GOOGLE_GEMINI_API_KEY")
 
     # NEAR Blockchain Configuration
-    NEAR_API_KEY = os.getenv("NEAR_API_KEY", "TEMP648WSeY9y1XDyiAHL2KMbZxxnn3Tq4Dxggdd3eGniSy2")
-    NEAR_RPC_ENDPOINT = os.getenv("NEAR_RPC_ENDPOINT", f"https://rpc.mainnet.fastnear.com?apiKey={NEAR_API_KEY}")
+    NEAR_RPC_ENDPOINT = os.getenv(
+        "NEAR_RPC_ENDPOINT", "https://rpc.mainnet.fastnear.com"
+    )
     NEAR_WALLET_PRIVATE_KEY = os.getenv("NEAR_WALLET_PRIVATE_KEY")
     NEAR_WALLET_ADDRESS = os.getenv("NEAR_WALLET_ADDRESS")
     NEAR_RPC_ENDPOINT_TRANS = os.getenv(
-        "NEAR_RPC_ENDPOINT_TRANS", f"https://rpc.mainnet.fastnear.com?apiKey={NEAR_API_KEY}"
+        "NEAR_RPC_ENDPOINT", "https://allthatnode.com/protocol/near.dsrv"
     )
 
     # FastNear Premium RPC Configuration
@@ -116,16 +117,20 @@ class Config:
 
     # NEAR Wallet Configuration
     NEAR_TESTNET_RPC_URL = os.getenv(
-        "NEAR_TESTNET_RPC_URL", f"https://rpc.testnet.fastnear.com?apiKey={NEAR_API_KEY}"
+        "NEAR_TESTNET_RPC_URL",
+        f"https://rpc.testnet.fastnear.com?apiKey={NEAR_API_KEY}",
     )
     NEAR_TESTNET_HELPER_URL = os.getenv(
-        "NEAR_TESTNET_HELPER_URL", f"https://rpc.testnet.fastnear.com?apiKey={NEAR_API_KEY}"
+        "NEAR_TESTNET_HELPER_URL",
+        f"https://rpc.testnet.fastnear.com?apiKey={NEAR_API_KEY}",
     )
     NEAR_MAINNET_RPC_URL = os.getenv(
-        "NEAR_MAINNET_RPC_URL", f"https://rpc.mainnet.fastnear.com?apiKey={NEAR_API_KEY}"
+        "NEAR_MAINNET_RPC_URL",
+        f"https://rpc.mainnet.fastnear.com?apiKey={NEAR_API_KEY}",
     )
     NEAR_MAINNET_HELPER_URL = os.getenv(
-        "NEAR_MAINNET_HELPER_URL", f"https://rpc.mainnet.fastnear.com?apiKey={NEAR_API_KEY}"
+        "NEAR_MAINNET_HELPER_URL",
+        f"https://rpc.mainnet.fastnear.com?apiKey={NEAR_API_KEY}",
     )
 
     # NEAR RPC Fallback Endpoints (ordered by preference)
