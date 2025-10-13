@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
 import { ArrowLeft, QrCode, Search, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getAccountInventory } from "@/lib/nearblocks";
 
 interface SendFlowProps {
   onClose: () => void;
@@ -20,7 +21,7 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
   const [error, setError] = useState<string | null>(null);
   const [verifyingRecipient, setVerifyingRecipient] = useState(false);
   const [recipientValid, setRecipientValid] = useState<boolean | null>(null);
-  const { sendNearNative, verifyRecipient } = usePrivateKeyWallet();
+  const { sendNearNative, verifyRecipient, accountId } = usePrivateKeyWallet();
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -32,6 +33,7 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     name: string;
     kind: "native" | "ft";
     address?: string;
+    balance?: string | number;
   };
   const [tokenSelectorOpen, setTokenSelectorOpen] = useState(false);
   const [selectedToken, setSelectedToken] = useState<Token>({
@@ -39,11 +41,31 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     name: "NEAR",
     kind: "native",
   });
-  const availableTokens: Token[] = [
+  const [availableTokens, setAvailableTokens] = useState<Token[]>([
     { symbol: "NEAR", name: "NEAR", kind: "native" },
-    // Placeholder FT example (disabled for now):
-    // { symbol: "JAMBO", name: "Jambo Meme", kind: "ft", address: "jambo-1679.meme-cooking.near" },
-  ];
+  ]);
+
+  // Load token inventory for selector
+  useEffect(() => {
+    (async () => {
+      const acc = accountId as string | null;
+      if (!acc) return;
+      const inv = await getAccountInventory(acc);
+      // Expect nearblocks inventory: { ft: [...], nft: [...], ... }
+      const ft = (inv?.ft || []) as Array<any>;
+      const tokens: Token[] = [
+        { symbol: "NEAR", name: "NEAR", kind: "native" },
+        ...ft.map((t: any) => ({
+          symbol: t?.symbol || t?.token || "FT",
+          name: t?.name || t?.token || "Fungible Token",
+          kind: "ft" as const,
+          address: t?.contract || t?.token_contract || t?.token,
+          balance: t?.balance || t?.amount || t?.quantity || t?.total,
+        })),
+      ];
+      setAvailableTokens(tokens);
+    })();
+  }, [accountId]);
 
   // TODO: Implement contact management system
   // This could fetch recent transaction recipients from the database
@@ -260,7 +282,9 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                         {selectedToken.name}
                       </div>
                       <div className="text-white/50 text-xs">
-                        {selectedToken.kind === "native" ? "Native" : "Token"}
+                        {selectedToken.kind === "native"
+                          ? "Native"
+                          : selectedToken.address}
                       </div>
                     </div>
                   </div>
@@ -268,43 +292,65 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                 </button>
 
                 {tokenSelectorOpen && (
-                  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60">
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
                     <div className="bg-[#0f1535] w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-4">
                       <div className="text-white font-semibold mb-3">
                         Select asset
                       </div>
                       <div className="space-y-2 max-h-80 overflow-y-auto">
-                        {availableTokens.map((t) => (
-                          <button
-                            key={t.symbol}
-                            onClick={() => {
-                              setSelectedToken(t);
-                              setTokenSelectorOpen(false);
-                            }}
-                            className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
-                                <span className="text-white font-bold text-sm">
-                                  {t.symbol.slice(0, 2)}
-                                </span>
-                              </div>
-                              <div className="text-left">
-                                <div className="text-white font-medium">
-                                  {t.name}
+                        {availableTokens.map((t) => {
+                          const numericBal =
+                            typeof t.balance === "string"
+                              ? parseFloat(t.balance)
+                              : (t.balance as number | undefined) ?? 0;
+                          const isDisabled =
+                            t.kind === "ft" &&
+                            (isNaN(numericBal) || numericBal <= 0);
+                          return (
+                            <button
+                              key={t.symbol}
+                              onClick={() => {
+                                if (isDisabled) return;
+                                setSelectedToken(t);
+                                setTokenSelectorOpen(false);
+                              }}
+                              disabled={isDisabled}
+                              className={`w-full flex items-center justify-between p-3 rounded-xl transition-colors ${
+                                isDisabled
+                                  ? "opacity-40 cursor-not-allowed"
+                                  : "hover:bg-white/5"
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
+                                  <span className="text-white font-bold text-sm">
+                                    {t.symbol.slice(0, 2)}
+                                  </span>
                                 </div>
-                                <div className="text-white/50 text-xs">
-                                  {t.kind === "native" ? "Native" : t.address}
+                                <div className="text-left">
+                                  <div className="text-white font-medium">
+                                    {t.name}
+                                  </div>
+                                  <div className="text-white/50 text-xs">
+                                    {t.kind === "native" ? "Native" : t.address}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                            {selectedToken.symbol === t.symbol && (
-                              <span className="text-cyan-400 text-xs">
-                                Selected
-                              </span>
-                            )}
-                          </button>
-                        ))}
+                              <div className="text-right">
+                                {t.balance !== undefined && (
+                                  <div className="text-white text-xs">
+                                    {String(t.balance)}
+                                  </div>
+                                )}
+                                {selectedToken.symbol === t.symbol && (
+                                  <div className="text-cyan-400 text-xs">
+                                    Selected
+                                  </div>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
                       <div className="flex justify-end mt-3">
                         <Button
