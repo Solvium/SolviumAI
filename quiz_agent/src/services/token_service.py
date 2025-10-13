@@ -580,6 +580,9 @@ class TokenService:
                     f"Token {token_contract} has {metadata['decimals']} decimals instead of expected 24 - verify this is correct"
                 )
 
+            # Refresh account state before transfer to sync nonce
+            await account.fetch_state()
+            
             result = await account.ft.transfer(
                 ft_model,
                 recipient_account_id,
@@ -587,6 +590,16 @@ class TokenService:
                 force_register=force_register,
                 nowait=True,  # Return transaction hash immediately
             )
+
+            # Check if result is a dict (error) or string (tx hash)
+            if isinstance(result, dict):
+                # This is an error response from py-near
+                logger.error(f"py-near returned error dict: {result}")
+                return {
+                    "success": False,
+                    "error": str(result),
+                    "message": "Token transfer failed - nonce or RPC error",
+                }
 
             return {
                 "success": True,
