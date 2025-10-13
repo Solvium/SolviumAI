@@ -49,6 +49,7 @@ class Config:
     )
 
     # FastNear Premium RPC Configuration
+    NEAR_API_KEY = os.getenv("FASTNEAR_API_KEY", "")
     FASTNEAR_API_KEY = os.getenv("FASTNEAR_API_KEY", "")
     FASTNEAR_MAINNET_RPC_URL = os.getenv(
         "FASTNEAR_MAINNET_RPC_URL", "https://rpc.mainnet.fastnear.com"
