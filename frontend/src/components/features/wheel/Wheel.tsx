@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { CONTRACTID, MEME_TOKEN_ADDRESS } from "@/lib/constants/contractId";
 import { Bounce, toast, ToastContainer } from "react-toastify";
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
+import { useSolviumContract } from "@/hooks/useSolviumContract";
 import { useAuth } from "@/contexts/AuthContext";
 import { ACTIVITY_POINTS } from "@/lib/services/pointsService";
 import { checkTokenRegistration } from "@/lib/nearWallet";
@@ -131,6 +132,7 @@ export const WheelOfFortune = () => {
     checkTokenRegistration: checkTokenRegistrationCallback,
     registerToken: registerTokenCallback,
   } = usePrivateKeyWallet();
+  const { getAllUserDeposits } = useSolviumContract();
 
   const [mustSpin, setMustSpin] = useState(false);
   const [prizeNumber, setPrizeNumber] = useState(0);
@@ -417,6 +419,36 @@ export const WheelOfFortune = () => {
     }
 
     if (isSpinning) return; // Prevent multiple spins
+
+    // Require user to have at least one deposit in the game (not storage deposit)
+    try {
+      let hasDeposits = false;
+      if (nearAddress) {
+        try {
+          const res = (await getAllUserDeposits(nearAddress)) as unknown;
+          const list = res as any[];
+          if (Array.isArray(list) && list.length > 0) hasDeposits = true;
+        } catch {}
+        if (!hasDeposits && nearAccount) {
+          try {
+            const alt = await nearAccount.viewFunction({
+              contractId: CONTRACTID!,
+              methodName: "getAllUserDeposits",
+              args: { accountId: nearAddress },
+            });
+            if (Array.isArray(alt) && alt.length > 0) hasDeposits = true;
+          } catch {}
+        }
+      }
+
+      if (!hasDeposits) {
+        toast.info("No game deposit found. Please deposit to play the wheel.");
+        return;
+      }
+    } catch {
+      toast.error("Unable to verify game deposit. Please try again later.");
+      return;
+    }
 
     // Log wheel spin activity
     try {

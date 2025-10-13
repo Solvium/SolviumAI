@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
-import { ArrowLeft, QrCode, Search } from "lucide-react";
+import { ArrowLeft, QrCode, Search, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface SendFlowProps {
@@ -18,7 +18,32 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
   const [recipient, setRecipient] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { sendNearNative } = usePrivateKeyWallet();
+  const [verifyingRecipient, setVerifyingRecipient] = useState(false);
+  const [recipientValid, setRecipientValid] = useState<boolean | null>(null);
+  const { sendNearNative, verifyRecipient } = usePrivateKeyWallet();
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Simple token selector state
+  type Token = {
+    symbol: string;
+    name: string;
+    kind: "native" | "ft";
+    address?: string;
+  };
+  const [tokenSelectorOpen, setTokenSelectorOpen] = useState(false);
+  const [selectedToken, setSelectedToken] = useState<Token>({
+    symbol: "NEAR",
+    name: "NEAR",
+    kind: "native",
+  });
+  const availableTokens: Token[] = [
+    { symbol: "NEAR", name: "NEAR", kind: "native" },
+    // Placeholder FT example (disabled for now):
+    // { symbol: "JAMBO", name: "Jambo Meme", kind: "ft", address: "jambo-1679.meme-cooking.near" },
+  ];
 
   // TODO: Implement contact management system
   // This could fetch recent transaction recipients from the database
@@ -35,6 +60,105 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     setAmount((prev) => prev.slice(0, -1));
   };
 
+  const handleRecipientChange = async (value: string) => {
+    setRecipient(value);
+    setRecipientValid(null);
+
+    // Only verify if the recipient looks like a valid NEAR account ID
+    if (value.trim() && /^[a-zA-Z0-9._-]+$/.test(value.trim())) {
+      setVerifyingRecipient(true);
+      try {
+        const isValid = await verifyRecipient(value.trim());
+        setRecipientValid(isValid);
+      } catch (error) {
+        console.error("Error verifying recipient:", error);
+        setRecipientValid(false);
+      } finally {
+        setVerifyingRecipient(false);
+      }
+    }
+  };
+
+  const stopScanner = () => {
+    setScannerOpen(false);
+    setScannerError(null);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+  };
+
+  const startScanner = async () => {
+    setScannerError(null);
+    try {
+      // Check support for camera
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setScannerError("Camera access is not supported on this device.");
+        setScannerOpen(true);
+        return;
+      }
+
+      setScannerOpen(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+    } catch (e: any) {
+      setScannerError(e?.message || "Failed to start camera");
+      setScannerOpen(true);
+    }
+  };
+
+  useEffect(() => {
+    if (!scannerOpen) return;
+
+    let cancelled = false;
+    let rafId = 0;
+
+    // Use native BarcodeDetector if available
+    // @ts-ignore
+    const SupportedDetector: any = (window as any).BarcodeDetector;
+    const detector = SupportedDetector
+      ? // @ts-ignore
+        new SupportedDetector({ formats: ["qr_code"] })
+      : null;
+
+    const scan = async () => {
+      try {
+        if (cancelled || !videoRef.current) return;
+        if (detector && videoRef.current.readyState >= 2) {
+          const results = await detector.detect(videoRef.current as any);
+          if (results && results.length > 0) {
+            const value = results[0]?.rawValue || results[0]?.rawText;
+            if (value) {
+              // Extract address if a transfer URL was scanned, otherwise use raw value
+              const matched = /transfer\/(.+)$/i.exec(value);
+              const addr = matched ? matched[1] : value;
+              await handleRecipientChange(addr.trim());
+              stopScanner();
+              return;
+            }
+          }
+        }
+      } catch (e) {
+        // Swallow errors to keep scanning
+      }
+      rafId = requestAnimationFrame(scan);
+    };
+
+    rafId = requestAnimationFrame(scan);
+
+    return () => {
+      cancelled = true;
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [scannerOpen]);
+
   const handleConfirm = async () => {
     if (step === "amount") {
       setStep("recipient");
@@ -42,6 +166,18 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
       // Execute native NEAR transfer
       setError(null);
       if (!amount || !recipient) return;
+
+      // Check if recipient is valid
+      if (recipientValid === false) {
+        setError("Recipient account does not exist");
+        return;
+      }
+
+      if (recipientValid === null && !verifyingRecipient) {
+        setError("Please wait for recipient verification");
+        return;
+      }
+
       // Convert human NEAR string to yoctoNEAR precisely
       const normalized = amount.trim();
       if (!/^\d*(?:\.\d+)?$/.test(normalized)) {
@@ -107,34 +243,80 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
               </div>
 
               <div className="mt-8">
-                <div className="text-white/70 text-sm mb-3">
-                  Available Balance
-                </div>
-                <div className="bg-[#1a1f3a] rounded-2xl p-4 flex items-center justify-between">
+                <div className="text-white/70 text-sm mb-3">Asset</div>
+                <button
+                  type="button"
+                  onClick={() => setTokenSelectorOpen(true)}
+                  className="w-full bg-[#1a1f3a] rounded-2xl p-4 flex items-center justify-between hover:bg-white/5 transition-colors"
+                >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
-                      <span className="text-white font-bold text-sm">₿</span>
+                    <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">
+                        {selectedToken.symbol.slice(0, 2)}
+                      </span>
                     </div>
-                    <div>
-                      <div className="text-white font-medium">BTC</div>
-                      <div className="text-white/50 text-xs">Bitcoin</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <svg className="w-16 h-8" viewBox="0 0 60 30">
-                      <polyline
-                        points="0,20 10,15 20,18 30,10 40,12 50,8 60,5"
-                        fill="none"
-                        stroke="#00d4ff"
-                        strokeWidth="2"
-                      />
-                    </svg>
-                    <div className="text-right">
-                      <div className="text-white font-bold">3.00912</div>
-                      <div className="text-white/50 text-xs">($3000)</div>
+                    <div className="text-left">
+                      <div className="text-white font-medium">
+                        {selectedToken.name}
+                      </div>
+                      <div className="text-white/50 text-xs">
+                        {selectedToken.kind === "native" ? "Native" : "Token"}
+                      </div>
                     </div>
                   </div>
-                </div>
+                  <div className="text-white/60 text-sm">Change</div>
+                </button>
+
+                {tokenSelectorOpen && (
+                  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60">
+                    <div className="bg-[#0f1535] w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-4">
+                      <div className="text-white font-semibold mb-3">
+                        Select asset
+                      </div>
+                      <div className="space-y-2 max-h-80 overflow-y-auto">
+                        {availableTokens.map((t) => (
+                          <button
+                            key={t.symbol}
+                            onClick={() => {
+                              setSelectedToken(t);
+                              setTokenSelectorOpen(false);
+                            }}
+                            className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
+                                <span className="text-white font-bold text-sm">
+                                  {t.symbol.slice(0, 2)}
+                                </span>
+                              </div>
+                              <div className="text-left">
+                                <div className="text-white font-medium">
+                                  {t.name}
+                                </div>
+                                <div className="text-white/50 text-xs">
+                                  {t.kind === "native" ? "Native" : t.address}
+                                </div>
+                              </div>
+                            </div>
+                            {selectedToken.symbol === t.symbol && (
+                              <span className="text-cyan-400 text-xs">
+                                Selected
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex justify-end mt-3">
+                        <Button
+                          onClick={() => setTokenSelectorOpen(false)}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          Close
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-3 gap-4 mt-12">
@@ -196,6 +378,33 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
   if (step === "recipient") {
     return (
       <div className="fixed inset-0 bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] z-50 overflow-y-auto">
+        {scannerOpen && (
+          <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+            <div className="relative w-full max-w-md bg-[#0f1535] rounded-2xl p-4">
+              <div className="text-white mb-2 font-medium">Scan QR Code</div>
+              <div className="relative rounded-lg overflow-hidden bg-black">
+                <video
+                  ref={videoRef}
+                  className="w-full h-72 object-cover"
+                  playsInline
+                  muted
+                />
+                <div className="absolute inset-0 border-2 border-cyan-400/60 m-8 rounded-xl pointer-events-none" />
+              </div>
+              {scannerError && (
+                <div className="text-red-400 text-sm mt-2">{scannerError}</div>
+              )}
+              <div className="flex justify-end mt-3">
+                <Button
+                  onClick={stopScanner}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="max-w-md mx-auto min-h-screen pb-6">
           <div className="px-4 pt-6">
             <div className="flex items-center justify-between mb-8">
@@ -228,13 +437,48 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                     type="text"
                     placeholder="Enter recipient address"
                     value={recipient}
-                    onChange={(e) => setRecipient(e.target.value)}
-                    className="w-full bg-[#1a1f3a] text-white/50 rounded-xl px-4 py-3 pr-12 outline-none focus:ring-2 focus:ring-cyan-500"
+                    onChange={(e) => handleRecipientChange(e.target.value)}
+                    className={`w-full bg-[#1a1f3a] text-white/50 rounded-xl px-4 py-3 pr-12 outline-none focus:ring-2 ${
+                      recipientValid === true
+                        ? "focus:ring-green-500 border-green-500"
+                        : recipientValid === false
+                        ? "focus:ring-red-500 border-red-500"
+                        : "focus:ring-cyan-500"
+                    }`}
                   />
-                  <button className="absolute right-3 top-1/2 -translate-y-1/2 text-[#0075EA]">
-                    <QrCode className="w-5 h-5" />
-                  </button>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                    {verifyingRecipient && (
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-cyan-500 border-t-transparent" />
+                    )}
+                    {recipientValid === true && !verifyingRecipient && (
+                      <div className="text-green-500">
+                        <CheckCircle className="w-5 h-5" />
+                      </div>
+                    )}
+                    {recipientValid === false && !verifyingRecipient && (
+                      <div className="text-red-500">
+                        <XCircle className="w-5 h-5" />
+                      </div>
+                    )}
+                    <button
+                      className="text-[#0075EA]"
+                      onClick={startScanner}
+                      title="Scan QR"
+                    >
+                      <QrCode className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
+                {recipientValid === false && recipient.trim() && (
+                  <div className="text-red-500 text-sm mt-2">
+                    Account does not exist
+                  </div>
+                )}
+                {recipientValid === true && recipient.trim() && (
+                  <div className="text-green-500 text-sm mt-2">
+                    Account verified
+                  </div>
+                )}
                 <button className="text-[#0075EA] text-sm mt-2 flex items-center gap-1">
                   <span className="text-lg">+</span> Add this to your address
                   book
@@ -257,7 +501,7 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                     contacts.map((contact, idx) => (
                       <button
                         key={idx}
-                        onClick={() => setRecipient(contact.address)}
+                        onClick={() => handleRecipientChange(contact.address)}
                         className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl transition-colors"
                       >
                         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-orange-400 flex-shrink-0" />

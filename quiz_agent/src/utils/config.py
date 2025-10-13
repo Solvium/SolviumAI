@@ -39,11 +39,12 @@ class Config:
     GOOGLE_API_KEY = os.getenv("GOOGLE_GEMINI_API_KEY")
 
     # NEAR Blockchain Configuration
-    NEAR_RPC_ENDPOINT = os.getenv("NEAR_RPC_ENDPOINT", "https://free.rpc.fastnear.com")
+    NEAR_API_KEY = os.getenv("NEAR_API_KEY", "TEMP648WSeY9y1XDyiAHL2KMbZxxnn3Tq4Dxggdd3eGniSy2")
+    NEAR_RPC_ENDPOINT = os.getenv("NEAR_RPC_ENDPOINT", f"https://rpc.mainnet.fastnear.com?apiKey={NEAR_API_KEY}")
     NEAR_WALLET_PRIVATE_KEY = os.getenv("NEAR_WALLET_PRIVATE_KEY")
     NEAR_WALLET_ADDRESS = os.getenv("NEAR_WALLET_ADDRESS")
     NEAR_RPC_ENDPOINT_TRANS = os.getenv(
-        "NEAR_RPC_ENDPOINT", "https://allthatnode.com/protocol/near.dsrv"
+        "NEAR_RPC_ENDPOINT_TRANS", f"https://rpc.mainnet.fastnear.com?apiKey={NEAR_API_KEY}"
     )
     # Database Configuration
     # In production, use PostgreSQL; in development, fallback to SQLite
@@ -100,21 +101,21 @@ class Config:
 
     # NEAR Wallet Configuration
     NEAR_TESTNET_RPC_URL = os.getenv(
-        "NEAR_TESTNET_RPC_URL", "https://test.rpc.fastnear.com"
+        "NEAR_TESTNET_RPC_URL", f"https://rpc.testnet.fastnear.com?apiKey={NEAR_API_KEY}"
     )
     NEAR_TESTNET_HELPER_URL = os.getenv(
-        "NEAR_TESTNET_HELPER_URL", "https://rpc.testnet.fastnear.com"
+        "NEAR_TESTNET_HELPER_URL", f"https://rpc.testnet.fastnear.com?apiKey={NEAR_API_KEY}"
     )
     NEAR_MAINNET_RPC_URL = os.getenv(
-        "NEAR_MAINNET_RPC_URL", "https://free.rpc.fastnear.com"
+        "NEAR_MAINNET_RPC_URL", f"https://rpc.mainnet.fastnear.com?apiKey={NEAR_API_KEY}"
     )
     NEAR_MAINNET_HELPER_URL = os.getenv(
-        "NEAR_MAINNET_HELPER_URL", "https://free.rpc.fastnear.com"
+        "NEAR_MAINNET_HELPER_URL", f"https://rpc.mainnet.fastnear.com?apiKey={NEAR_API_KEY}"
     )
 
     # NEAR RPC Fallback Endpoints (ordered by preference)
     NEAR_MAINNET_RPC_ENDPOINTS = [
-        "https://free.rpc.fastnear.com",  # Primary (current)
+        f"https://rpc.mainnet.fastnear.com?apiKey={NEAR_API_KEY}",  # Primary (FastNear authenticated)
         "https://near.drpc.org",  # dRPC
         "https://rpc.ankr.com/near",  # Ankr
         "https://near.blockpi.network/v1/rpc/public",  # BlockPI
@@ -125,7 +126,7 @@ class Config:
     ]
 
     NEAR_TESTNET_RPC_ENDPOINTS = [
-        "https://test.rpc.fastnear.com",  # Primary
+        f"https://rpc.testnet.fastnear.com?apiKey={NEAR_API_KEY}",  # Primary (FastNear authenticated)
         "https://rpc.testnet.near.org",  # Official NEAR testnet
         "https://near-testnet.drpc.org",  # dRPC testnet
     ]
