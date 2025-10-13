@@ -18,10 +18,13 @@ const DEXSCREENER_URL =
 const NEARBLOCKS_BASE_URL = "https://api.nearblocks.io";
 const FASTNEAR_BASE_URL = "https://api.fastnear.com";
 
-// NEAR RPC URLs
+// FastNear API Key
+const FASTNEAR_API_KEY = "TEMP648WSeY9y1XDyiAHL2KMbZxxnn3Tq4Dxggdd3eGniSy2";
+
+// NEAR RPC URLs with FastNear authentication
 const RPC_URLS: Record<string, string> = {
-  mainnet: "https://rpc.mainnet.near.org",
-  testnet: "https://rpc.testnet.near.org",
+  mainnet: `https://rpc.mainnet.fastnear.com?apiKey=${FASTNEAR_API_KEY}`,
+  testnet: `https://rpc.testnet.fastnear.com?apiKey=${FASTNEAR_API_KEY}`,
 };
 
 export async function GET(req: NextRequest) {
@@ -342,28 +345,7 @@ export async function POST(req: NextRequest) {
 
     // Handle near-rpc proxy
     if (action === "near-rpc") {
-      // Check RPC rate limit
-      if (!canMakeRpcRequest()) {
-        const timeUntilReset = getTimeUntilNextRpcRequest();
-        const remaining = getRemainingRpcRequests();
-        console.log(
-          `[near-rpc] Rate limited. Remaining: ${remaining}, Reset in: ${Math.ceil(
-            timeUntilReset / 1000
-          )}s`
-        );
-
-        return NextResponse.json(
-          {
-            error: "RPC rate limit exceeded",
-            message: `Too many RPC requests. Try again in ${Math.ceil(
-              timeUntilReset / 1000
-            )} seconds.`,
-            remaining,
-            resetIn: Math.ceil(timeUntilReset / 1000),
-          },
-          { status: 429 }
-        );
-      }
+      // Local RPC rate limiting removed per FastNear usage
 
       const network =
         searchParams.get("network") ||
@@ -379,13 +361,13 @@ export async function POST(req: NextRequest) {
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
+            Authorization: `Bearer ${FASTNEAR_API_KEY}`,
           },
           body,
           cache: "no-store",
         });
 
-        const remaining = getRemainingRpcRequests();
-        console.log(`[near-rpc] Request completed. Remaining: ${remaining}`);
+        // Local RPC rate limiting removed; no remaining counter
 
         return new Response(await upstream.text(), {
           status: upstream.status,

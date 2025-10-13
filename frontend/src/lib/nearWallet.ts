@@ -6,16 +6,19 @@ const FILE_NAME = "nearWallet.ts";
 const BLOCKCHAIN_NET =
   (process.env.NEXT_PUBLIC_NEAR_NETWORK_ID as string) || "mainnet";
 
+// FastNear API Key
+const FASTNEAR_API_KEY = "TEMP648WSeY9y1XDyiAHL2KMbZxxnn3Tq4Dxggdd3eGniSy2";
+
 function getNetworkUrls(networkId: string) {
   if (networkId === "testnet") {
     return {
-      nodeUrl: "https://rpc.testnet.near.org",
+      nodeUrl: `https://rpc.testnet.fastnear.com?apiKey=${FASTNEAR_API_KEY}`,
       walletUrl: "https://wallet.testnet.near.org",
       helperUrl: "https://helper.testnet.near.org",
     };
   }
   return {
-    nodeUrl: "https://rpc.mainnet.near.org",
+    nodeUrl: `https://rpc.mainnet.fastnear.com?apiKey=${FASTNEAR_API_KEY}`,
     walletUrl: "https://wallet.mainnet.near.org",
     helperUrl: "https://helper.mainnet.near.org",
   };
@@ -165,5 +168,42 @@ export const registerToken = async (
     return result;
   } catch (error) {
     throw error;
+  }
+};
+
+// Verify if a NEAR account exists
+export const verifyAccountExists = async (
+  accountId: string
+): Promise<boolean> => {
+  try {
+    const response = await fetch("/api/wallet?action=near-rpc", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "verify-account",
+        method: "query",
+        params: {
+          request_type: "view_account",
+          finality: "final",
+          account_id: accountId,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const data = await response.json();
+
+    // If the account exists, we'll get account info
+    // If it doesn't exist, we'll get an error
+    return !data.error && data.result;
+  } catch (error) {
+    console.error("Error verifying account:", error);
+    return false;
   }
 };

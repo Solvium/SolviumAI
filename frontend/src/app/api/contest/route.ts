@@ -1,8 +1,6 @@
 import { getCurrentYear, getISOWeekNumber } from "@/lib/utils/utils";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-
-const prisma = new PrismaClient();
 
 export async function POST(req: NextRequest) {
   const { type, userId, np: points } = await req.json();
@@ -41,13 +39,13 @@ export async function POST(req: NextRequest) {
       //   })
       // );
 
-      NextResponse.json(
+      return NextResponse.json(
         { message: "Weekly points reset successfully" },
         { status: 200 }
       );
     } catch (error) {
       console.error("Error resetting weekly points:", error);
-      NextResponse.json(
+      return NextResponse.json(
         { error: "Failed to reset weekly points" },
         { status: 500 }
       );
@@ -106,14 +104,14 @@ export async function POST(req: NextRequest) {
       //   return { weeklyScore, updatedUser };
       // });
 
-      NextResponse.json(
+      return NextResponse.json(
         { message: "Points added successfully" },
         { status: 200 }
       );
     } catch (error) {
       console.error("Error adding weekly points:", error);
-      NextResponse.json(
-        { error: "Failed to add weekly points kk" },
+      return NextResponse.json(
+        { error: "Failed to add weekly points" },
         { status: 500 }
       );
     }
@@ -155,7 +153,7 @@ export async function POST(req: NextRequest) {
     } catch (error) {
       console.error("Error fetching weekly points:", error);
       return NextResponse.json(
-        { error: "Failed to fetch weekly points hhjkkk" },
+        { error: "Failed to fetch weekly points" },
         { status: 500 }
       );
     }

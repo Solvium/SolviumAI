@@ -73,8 +73,13 @@ const WalletPage = () => {
 
             const normalized = nbTxns.map((row: any) => {
               // Parse Nearblocks transaction structure
-              const isIncoming = row?.predecessor_account_id === "system";
               const action = row?.actions?.[0];
+
+              // Determine direction relative to current account
+              const signer = row?.signer_account_id;
+              const receiver = row?.receiver_account_id;
+              const isSend = signer === accountId;
+              const isReceive = receiver === accountId && signer !== accountId;
 
               // Format amount from deposit (in yoctoNEAR)
               let amount = "";
@@ -88,8 +93,17 @@ const WalletPage = () => {
               let description = "Transaction";
 
               if (action?.action === "TRANSFER") {
-                type = isIncoming ? "receive" : "send";
-                description = isIncoming ? "NEAR Received" : "NEAR Sent";
+                if (isSend) {
+                  type = "send";
+                  description = "NEAR Sent";
+                } else if (isReceive) {
+                  type = "receive";
+                  description = "NEAR Received";
+                } else {
+                  // Fallback when neither side clearly matches (e.g., contract transfers)
+                  type = signer && signer !== receiver ? "send" : "receive";
+                  description = type === "send" ? "NEAR Sent" : "NEAR Received";
+                }
               } else if (action?.action === "FUNCTION_CALL") {
                 type = "interact";
                 description = action.method || "Contract Call";
@@ -100,7 +114,7 @@ const WalletPage = () => {
                 type,
                 amount,
                 token: "NEAR",
-                from: row?.predecessor_account_id,
+                from: signer ?? row?.predecessor_account_id,
                 to: row?.receiver_account_id,
                 timestamp: row?.block_timestamp,
                 status: row?.outcomes?.status ? "completed" : "failed",

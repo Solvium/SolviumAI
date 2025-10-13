@@ -8,7 +8,10 @@ import React, {
   useCallback,
 } from "react";
 import { Account } from "near-api-js";
-import { initializeNearWithPrivateKey } from "@/lib/nearWallet";
+import {
+  initializeNearWithPrivateKey,
+  verifyAccountExists,
+} from "@/lib/nearWallet";
 import { WalletCheckResponse } from "@/lib/crypto";
 import { useAuth } from "./AuthContext";
 
@@ -43,6 +46,7 @@ interface PrivateKeyWalletContextType {
   sendNearNative: (receiverId: string, amountYocto: string) => Promise<any>;
   checkTokenRegistration: (tokenId: string) => Promise<boolean>;
   registerToken: (tokenId: string) => Promise<boolean>;
+  verifyRecipient: (accountId: string) => Promise<boolean>;
 }
 
 const PrivateKeyWalletContext =
@@ -307,6 +311,14 @@ export const PrivateKeyWalletProvider = ({
       } catch (error) {
         console.error("Error sending NEAR:", error);
         throw error;
+      }
+    },
+    verifyRecipient: async (accountId: string) => {
+      try {
+        return await verifyAccountExists(accountId);
+      } catch (error) {
+        console.error("Error verifying recipient:", error);
+        return false;
       }
     },
   };

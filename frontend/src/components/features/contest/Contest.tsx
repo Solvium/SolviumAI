@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Trophy, Medal, ArrowUp } from "lucide-react";
 import axios from "axios";
 import { getISOWeekNumber } from "@/lib/utils/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface LeaderboardEntry {
   userId: number;
@@ -13,7 +14,8 @@ interface LeaderboardEntry {
   user: { name: string };
 }
 
-const ContestBoard = ({ user }: any) => {
+const ContestBoard = () => {
+  const { user } = useAuth();
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,10 +25,18 @@ const ContestBoard = ({ user }: any) => {
   });
 
   useEffect(() => {
-    fetchLeaderboard();
-  }, []);
+    if (user?.id) {
+      fetchLeaderboard();
+    }
+  }, [user?.id]);
 
   const fetchLeaderboard = async () => {
+    if (!user?.id) {
+      setError("User not authenticated");
+      setLoading(false);
+      return;
+    }
+
     try {
       // This is a mock API - you'd need to implement this endpoint
       const response = await axios("/api/contest", {
@@ -58,9 +68,9 @@ const ContestBoard = ({ user }: any) => {
       case 1:
         return <Trophy className="text-yellow-500 w-6 h-6 mr-2" />;
       case 2:
-        return <Medal className="text-silver-500 w-6 h-6 mr-2" />;
+        return <Medal className="text-gray-400 w-6 h-6 mr-2" />;
       case 3:
-        return <Medal className="text-bronze-500 w-6 h-6 mr-2" />;
+        return <Medal className="text-orange-600 w-6 h-6 mr-2" />;
       default:
         return <ArrowUp className="text-gray-500 w-6 h-6 mr-2" />;
     }
