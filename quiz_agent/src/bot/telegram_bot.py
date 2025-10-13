@@ -141,6 +141,8 @@ class TelegramBot:
             reward_custom_input,
             show_reward_structure_options,
             reward_structure_choice,
+            show_distribution_preview,
+            confirm_distribution_structure,
             payment_verification,
             process_payment,
             show_funding_instructions,
@@ -203,6 +205,9 @@ class TelegramBot:
             handle_text_message,
             handle_reset_wallet,
             handle_export_confirmation_callback,
+            handle_withdraw_token_selection,
+            handle_confirm_withdraw_near,
+            handle_confirm_withdraw_token,
         )
 
         # Conversation for interactive quiz creation needs to be registered FIRST
@@ -295,8 +300,12 @@ class TelegramBot:
                 REWARD_STRUCTURE_CHOICE: [
                     CallbackQueryHandler(
                         reward_structure_choice,
-                        pattern="^(structure_wta|structure_top3|structure_custom|token_structure_wta|token_structure_top3)$",
-                    )
+                        pattern="^(structure_wta|structure_top3|structure_top5|structure_top10|structure_custom|token_structure_wta|token_structure_top3|token_structure_top5|token_structure_top10)$",
+                    ),
+                    CallbackQueryHandler(
+                        confirm_distribution_structure,
+                        pattern="^(confirm_structure_top_5|confirm_structure_top_10|back_to_structure_options)$",
+                    ),
                 ],
                 # Payment verification state
                 PAYMENT_VERIFICATION: [
@@ -405,6 +414,32 @@ class TelegramBot:
             CallbackQueryHandler(
                 handle_wallet_retry_callback,
                 pattern="^retry_wallet_creation:",
+            ),
+            group=0,
+        )
+
+        # Handle withdrawal callbacks
+        logger.info("Registering withdrawal callback handlers")
+        self.app.add_handler(
+            CallbackQueryHandler(
+                handle_withdraw_token_selection,
+                pattern="^withdraw_token_",
+            ),
+            group=0,
+        )
+
+        self.app.add_handler(
+            CallbackQueryHandler(
+                handle_confirm_withdraw_near,
+                pattern="^(confirm_withdraw_near|cancel_withdraw_near)$",
+            ),
+            group=0,
+        )
+
+        self.app.add_handler(
+            CallbackQueryHandler(
+                handle_confirm_withdraw_token,
+                pattern="^(confirm_withdraw_token|cancel_withdraw_token)$",
             ),
             group=0,
         )

@@ -25,12 +25,12 @@ class CustomFtTokenMetadata(BaseModel):
 
 
 class TokenService:
-    """Robust token service using py-near FTS and NearBlocks API"""
+    """Robust token service using FastNear Premium RPC/API with NearBlocks fallback"""
 
-    # Class-level caches shared across all instances
+    # Class-level caches shared across all instances (DEPRECATED - use MetadataCacheService)
     _class_metadata_cache = {}
     _class_inventory_cache = {}
-    _cache_ttl = 300  # 5 minutes cache TTL
+    _cache_ttl = 300  # 5 minutes cache TTL (DEPRECATED)
 
     def __init__(self):
         # Use the correct NearBlocks API URL based on current network
@@ -39,14 +39,14 @@ class TokenService:
         self.main_wallet_address = Config.NEAR_WALLET_ADDRESS
         self.main_wallet_private_key = Config.NEAR_WALLET_PRIVATE_KEY
 
-        # Use class-level caches
+        # Legacy caches (kept for backward compatibility)
         self._metadata_cache = TokenService._class_metadata_cache
         self._inventory_cache = TokenService._class_inventory_cache
 
         # Log which network we're using
         current_network = Config.get_current_network()
         logger.info(
-            f"TokenService initialized for {current_network} network using API: {self.nearblocks_api_url}"
+            f"TokenService initialized for {current_network} network using FastNear Premium"
         )
 
     def _is_cache_valid(self, cache_entry: Dict) -> bool:
@@ -258,7 +258,63 @@ class TokenService:
     async def get_user_token_inventory(
         self, account_id: str, force_refresh: bool = False
     ) -> List[Dict]:
-        """Get all tokens for a user using NearBlocks API with caching and rate limiting handling"""
+        """
+        Get all tokens for a user using FastNear Premium API with NearBlocks fallback.
+
+        Strategy:
+        1. Try FastNear Premium API first (30s cache for balance, 24h cache for metadata)
+        2. Fall back to NearBlocks API if FastNear fails
+        3. Returns enriched token list with balance + metadata
+
+        Args:
+            account_id: NEAR account ID
+            force_refresh: Force refresh cache (bypasses 30s cache)
+
+        Returns:
+            List of token dicts with balance and metadata
+        """
+        try:
+            # Try FastNear Premium first
+            from services.fastnear_service import get_fastnear_service
+
+            fastnear = get_fastnear_service()
+            tokens = await fastnear.get_enriched_token_inventory(
+                account_id, use_cache=not force_refresh
+            )
+
+            if tokens:
+                logger.info(
+                    f"Successfully fetched {len(tokens)} tokens from FastNear for {account_id}"
+                )
+                return tokens
+            else:
+                logger.warning(
+                    f"FastNear returned no tokens for {account_id}, trying NearBlocks fallback"
+                )
+
+        except Exception as e:
+            logger.warning(
+                f"FastNear failed for {account_id}, falling back to NearBlocks: {e}"
+            )
+
+        # Fall back to NearBlocks API (existing implementation)
+        return await self._get_user_token_inventory_nearblocks(
+            account_id, force_refresh
+        )
+
+    async def _get_user_token_inventory_nearblocks(
+        self, account_id: str, force_refresh: bool = False
+    ) -> List[Dict]:
+        """
+        Legacy NearBlocks API implementation (kept as fallback).
+
+        Args:
+            account_id: NEAR account ID
+            force_refresh: Force refresh cache
+
+        Returns:
+            List of token dicts
+        """
         try:
             # Check cache first (unless force refresh is requested)
             if not force_refresh:
@@ -322,7 +378,69 @@ class TokenService:
             return []
 
     async def get_token_balance(self, account: Account, token_contract: str) -> str:
-        """Get token balance using NearBlocks API (more reliable)"""
+        """
+        Get token balance using FastNear Premium with NearBlocks fallback (30s cache).
+
+        Args:
+            account: NEAR Account object
+            token_contract: Token contract address
+
+        Returns:
+            Formatted balance string (e.g., "1000.000000 TOKEN")
+        """
+        try:
+            # Try FastNear Premium first
+            from services.fastnear_service import get_fastnear_service
+
+            fastnear = get_fastnear_service()
+
+            # Get user's token inventory from FastNear (with 30s cache)
+            tokens = await fastnear.get_enriched_token_inventory(account.account_id)
+
+            logger.info(
+                f"Found {len(tokens)} tokens in inventory for {account.account_id}"
+            )
+
+            # Find the specific token
+            for token in tokens:
+                logger.info(
+                    f"Checking token: {token['contract_address']} vs {token_contract}"
+                )
+                if token["contract_address"] == token_contract:
+                    balance_str = f"{token['balance']} {token['symbol']}"
+                    logger.info(f"Found token balance from FastNear: {balance_str}")
+                    return balance_str
+
+            # If token not found in inventory, it means balance is 0
+            # Get metadata for symbol
+            logger.info(
+                f"Token {token_contract} not found in inventory, getting metadata..."
+            )
+            metadata = await fastnear.fetch_token_metadata_rpc(token_contract)
+            balance_str = f"0.000000 {metadata['symbol']}"
+            logger.info(f"Returning zero balance: {balance_str}")
+            return balance_str
+
+        except Exception as e:
+            logger.warning(
+                f"FastNear failed for token balance, falling back to NearBlocks: {e}"
+            )
+            # Fall back to legacy NearBlocks method
+            return await self._get_token_balance_nearblocks(account, token_contract)
+
+    async def _get_token_balance_nearblocks(
+        self, account: Account, token_contract: str
+    ) -> str:
+        """
+        Legacy NearBlocks implementation for token balance (fallback).
+
+        Args:
+            account: NEAR Account object
+            token_contract: Token contract address
+
+        Returns:
+            Formatted balance string
+        """
         try:
             # Get user's token inventory from NearBlocks API
             tokens = await self.get_user_token_inventory(account.account_id)
@@ -572,7 +690,37 @@ class TokenService:
             return []
 
     async def get_token_metadata_from_api(self, token_contract: str) -> Dict:
-        """Get token metadata directly from NearBlocks API with caching and rate limiting handling"""
+        """
+        Get token metadata using FastNear Premium with NearBlocks fallback.
+
+        Updated to use FastNear as primary source with 24h caching.
+        """
+        try:
+            # Try FastNear Premium first
+            from services.fastnear_service import get_fastnear_service
+
+            fastnear = get_fastnear_service()
+            metadata = await fastnear.fetch_token_metadata_rpc(
+                token_contract, use_cache=True
+            )
+
+            logger.info(
+                f"Got token metadata from FastNear for {token_contract}: {metadata.get('symbol', 'UNKNOWN')}"
+            )
+            return metadata
+
+        except Exception as fastnear_error:
+            logger.warning(
+                f"FastNear metadata fetch failed for {token_contract}, falling back to NearBlocks: {fastnear_error}"
+            )
+
+            # Fall back to NearBlocks API
+            return await self._get_token_metadata_nearblocks(token_contract)
+
+    async def _get_token_metadata_nearblocks(self, token_contract: str) -> Dict:
+        """
+        Legacy NearBlocks API implementation for token metadata (fallback only).
+        """
         try:
             # Check cache first
             cached_metadata = self._get_cached_metadata(token_contract)

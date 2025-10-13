@@ -346,6 +346,20 @@ class BlockchainMonitor:
             ):
                 # Top 3 Winners - only the top 3 participants
                 winners = eligible_participants[:3] if eligible_participants else []
+            elif (
+                reward_schedule
+                and isinstance(reward_schedule, dict)
+                and reward_schedule.get("type") == "top5_details"
+            ):
+                # Top 5 Winners - only the top 5 participants
+                winners = eligible_participants[:5] if eligible_participants else []
+            elif (
+                reward_schedule
+                and isinstance(reward_schedule, dict)
+                and reward_schedule.get("type") == "top10_details"
+            ):
+                # Top 10 Winners - only the top 10 participants
+                winners = eligible_participants[:10] if eligible_participants else []
             else:
                 # Default: all participants with correct answers
                 winners = eligible_participants
@@ -714,6 +728,155 @@ class BlockchainMonitor:
                             else:
                                 logger.warning(
                                     f"[distribute_rewards] Rank {rank} is beyond top 3, skipping reward for quiz {quiz_id}"
+                                )
+                                continue
+                        elif schedule_type == "top5_details":  # Top 5 Winners
+                            amount_text = str(reward_schedule.get("details_text", ""))
+
+                            # Parse format like "4 NEAR for 1st, 2.5 NEAR for 2nd, ..."
+                            rank_patterns = [
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*1st",
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*2nd",
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*3rd",
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*4th",
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*5th",
+                            ]
+
+                            if rank <= 5:  # Only process top 5 ranks
+                                pattern = rank_patterns[rank - 1]
+                                match = re.search(pattern, amount_text)
+                                if match:
+                                    reward_amount_near_str = match.group(1)
+                                    try:
+                                        reward_amount_yoctonear = int(
+                                            float(reward_amount_near_str) * NEAR
+                                        )
+                                    except ValueError:
+                                        logger.error(
+                                            f"[distribute_rewards] Invalid reward amount for Top 5 rank {rank} in details_text: {amount_text} for quiz {quiz_id}"
+                                        )
+                                        continue
+                                else:
+                                    # Fallback: Use preset distribution percentages from Config
+                                    fallback_match = re.search(
+                                        r"(\d+\.?\d*)\s*([A-Za-z]{3,})\b", amount_text
+                                    )
+                                    if fallback_match:
+                                        from utils.config import Config
+
+                                        total_amount = float(fallback_match.group(1))
+                                        # Use Config.TOP_5_DISTRIBUTION
+                                        if rank <= len(Config.TOP_5_DISTRIBUTION):
+                                            reward_percentage = (
+                                                Config.TOP_5_DISTRIBUTION[rank - 1]
+                                            )
+                                            reward_amount_near_str = str(
+                                                round(
+                                                    total_amount * reward_percentage, 6
+                                                )
+                                            )
+                                            try:
+                                                reward_amount_yoctonear = int(
+                                                    float(reward_amount_near_str) * NEAR
+                                                )
+                                                logger.info(
+                                                    f"[distribute_rewards] Using Top 5 distribution for rank {rank}: {reward_amount_near_str} NEAR ({reward_percentage*100}% of {total_amount} NEAR)"
+                                                )
+                                            except ValueError:
+                                                logger.error(
+                                                    f"[distribute_rewards] Invalid fallback reward amount for Top 5 rank {rank}: {reward_amount_near_str} for quiz {quiz_id}"
+                                                )
+                                                continue
+                                        else:
+                                            logger.error(
+                                                f"[distribute_rewards] Rank {rank} exceeds Top 5 distribution array for quiz {quiz_id}"
+                                            )
+                                            continue
+                                    else:
+                                        logger.error(
+                                            f"[distribute_rewards] Could not parse reward amount for Top 5 rank {rank} from details_text: {amount_text} for quiz {quiz_id}"
+                                        )
+                                        continue
+                            else:
+                                logger.warning(
+                                    f"[distribute_rewards] Rank {rank} is beyond top 5, skipping reward for quiz {quiz_id}"
+                                )
+                                continue
+                        elif schedule_type == "top10_details":  # Top 10 Winners
+                            amount_text = str(reward_schedule.get("details_text", ""))
+
+                            # Parse format like "3 NEAR for 1st, 2 NEAR for 2nd, ..."
+                            rank_patterns = [
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*1st",
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*2nd",
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*3rd",
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*4th",
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*5th",
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*6th",
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*7th",
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*8th",
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*9th",
+                                r"(\d+\.?\d*)\s*([A-Za-z]{3,})\s*for\s*10th",
+                            ]
+
+                            if rank <= 10:  # Only process top 10 ranks
+                                pattern = rank_patterns[rank - 1]
+                                match = re.search(pattern, amount_text)
+                                if match:
+                                    reward_amount_near_str = match.group(1)
+                                    try:
+                                        reward_amount_yoctonear = int(
+                                            float(reward_amount_near_str) * NEAR
+                                        )
+                                    except ValueError:
+                                        logger.error(
+                                            f"[distribute_rewards] Invalid reward amount for Top 10 rank {rank} in details_text: {amount_text} for quiz {quiz_id}"
+                                        )
+                                        continue
+                                else:
+                                    # Fallback: Use preset distribution percentages from Config
+                                    fallback_match = re.search(
+                                        r"(\d+\.?\d*)\s*([A-Za-z]{3,})\b", amount_text
+                                    )
+                                    if fallback_match:
+                                        from utils.config import Config
+
+                                        total_amount = float(fallback_match.group(1))
+                                        # Use Config.TOP_10_DISTRIBUTION
+                                        if rank <= len(Config.TOP_10_DISTRIBUTION):
+                                            reward_percentage = (
+                                                Config.TOP_10_DISTRIBUTION[rank - 1]
+                                            )
+                                            reward_amount_near_str = str(
+                                                round(
+                                                    total_amount * reward_percentage, 6
+                                                )
+                                            )
+                                            try:
+                                                reward_amount_yoctonear = int(
+                                                    float(reward_amount_near_str) * NEAR
+                                                )
+                                                logger.info(
+                                                    f"[distribute_rewards] Using Top 10 distribution for rank {rank}: {reward_amount_near_str} NEAR ({reward_percentage*100}% of {total_amount} NEAR)"
+                                                )
+                                            except ValueError:
+                                                logger.error(
+                                                    f"[distribute_rewards] Invalid fallback reward amount for Top 10 rank {rank}: {reward_amount_near_str} for quiz {quiz_id}"
+                                                )
+                                                continue
+                                        else:
+                                            logger.error(
+                                                f"[distribute_rewards] Rank {rank} exceeds Top 10 distribution array for quiz {quiz_id}"
+                                            )
+                                            continue
+                                    else:
+                                        logger.error(
+                                            f"[distribute_rewards] Could not parse reward amount for Top 10 rank {rank} from details_text: {amount_text} for quiz {quiz_id}"
+                                        )
+                                        continue
+                            else:
+                                logger.warning(
+                                    f"[distribute_rewards] Rank {rank} is beyond top 10, skipping reward for quiz {quiz_id}"
                                 )
                                 continue
                         # Example for rank-based rewards (if you add this type later)
