@@ -5,6 +5,32 @@ const nextConfig = {
       ...config.experiments,
       topLevelAwait: true,
     };
+    // Enable importing SVGs as React components via SVGR
+    config.module.rules.push({
+      test: /\.svg$/,
+      issuer: { and: [/[\\/](?=src|app)[^\\/]*(?:$|[\\/])/] },
+      use: [
+        {
+          loader: "@svgr/webpack",
+          options: {
+            ref: true,
+            svgo: true,
+            svgoConfig: {
+              plugins: [
+                { name: "preset-default" },
+                { name: "removeRasterImages", active: false },
+                { name: "removeViewBox", active: false },
+              ],
+            },
+            titleProp: true,
+            replaceAttrValues: {
+              "#000": "currentColor",
+              "#000000": "currentColor",
+            },
+          },
+        },
+      ],
+    });
     // Optimize chunk loading
     config.optimization = {
       ...config.optimization,
@@ -39,12 +65,14 @@ const nextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: https:",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://accounts.google.com https://telegram.org",
+              "script-src-elem 'self' 'unsafe-eval' 'unsafe-inline' https://accounts.google.com https://telegram.org",
+              "style-src 'self' 'unsafe-inline' https://accounts.google.com",
+              "style-src-elem 'self' 'unsafe-inline' https://accounts.google.com",
+              "img-src 'self' data: https: blob:",
               "font-src 'self'",
-              "connect-src 'self' https://rpc.testnet.near.org https://api.telegram.org",
-              "frame-src 'self'",
+              "connect-src 'self' https://rpc.testnet.near.org https://api.telegram.org https://accounts.google.com",
+              "frame-src 'self' https://accounts.google.com",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",

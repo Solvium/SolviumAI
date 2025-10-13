@@ -5,20 +5,23 @@ import { JWTService } from "@/lib/auth/jwt";
 
 export async function POST(request: NextRequest) {
   try {
-    const { telegramData } = await request.json();
-
-    if (!telegramData) {
+    const { initData } = await request.json();
+    if (!initData) {
       return NextResponse.json(
         { error: "Telegram data is required" },
         { status: 400 }
       );
     }
 
-    // Extract user data from Telegram WebApp
-    const telegramId = telegramData.id?.toString();
-    const username = telegramData.username;
-    const firstName = telegramData.first_name;
-    const lastName = telegramData.last_name;
+    // Extract user data from Telegram WebApp (be tolerant to shapes)
+    const src = initData || {};
+    const tgUser =
+      src.user || src.telegramData || src.initDataUnsafe?.user || {};
+    const telegramId = (tgUser.id ?? src.id)?.toString();
+    const username = tgUser.username ?? src.username;
+    const firstName = tgUser.first_name ?? src.first_name;
+    const lastName = tgUser.last_name ?? src.last_name;
+    const avatarUrl = tgUser.photo_url ?? src.photo_url;
 
     if (!telegramId) {
       return NextResponse.json(
@@ -41,6 +44,7 @@ export async function POST(request: NextRequest) {
           username: username || `telegram_${telegramId}`,
           name: `${firstName || ""} ${lastName || ""}`.trim(),
           chatId: telegramId,
+          avatar_url: avatarUrl || null,
           email: null, // Telegram users don't have email
           referredBy: "", // Default empty value
           level: 1,
@@ -52,6 +56,8 @@ export async function POST(request: NextRequest) {
           claimCount: 0,
           lastSpinClaim: new Date(),
           totalPoints: 0,
+          totalSOLV: 0,
+          experience_points: 0,
           isOfficial: false,
           isMining: false,
           isPremium: false,
@@ -59,10 +65,14 @@ export async function POST(request: NextRequest) {
           weeklyPoints: 0,
         },
       });
-
-      console.log("New Telegram user created:", user.username);
     } else {
-      console.log("Existing Telegram user logged in:", user.username);
+      // Update existing user with avatar if not already set
+      if (avatarUrl && !user.avatar_url) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { avatar_url: avatarUrl },
+        });
+      }
     }
 
     // Parse wallet data if it exists
@@ -83,7 +93,7 @@ export async function POST(request: NextRequest) {
       id: user.id.toString(),
       username: user.username,
       email: user.email || undefined, // Convert null to undefined for User interface
-      telegramId: telegramId,
+
       googleId: undefined, // Not available for Telegram auth
       firstName: firstName,
       lastName: lastName,
@@ -108,11 +118,8 @@ export async function POST(request: NextRequest) {
       chatId: user.chatId || undefined,
       wallet: walletData, // Include parsed wallet data
     };
-
-    console.log("Complete user data from Telegram auth:", userData);
-
     // Generate tokens
-    const accessToken = JWTService.generateAccessToken(userData);
+    const accessToken = JWTService.generateAccessToken(userData as any);
     const refreshToken = JWTService.generateRefreshToken(
       userData.id,
       "telegram_session"
@@ -121,7 +128,7 @@ export async function POST(request: NextRequest) {
     // Create session (commented out for now)
     // const session = await SessionManager.createSession(userData.id, refreshToken);
 
-    // Set cookies
+    // Set cookies (JWT-based)
     const response = NextResponse.json({
       success: true,
       user: userData,
@@ -129,10 +136,30 @@ export async function POST(request: NextRequest) {
       refreshToken,
     });
 
+    // Access token cookie
+    response.cookies.set("accessToken", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // Only secure in production
+      sameSite: "lax", // More permissive for development
+      path: "/",
+      maxAge: 15 * 60, // 15 minutes
+    });
+
+    // Refresh token cookie
+    response.cookies.set("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // Only secure in production
+      sameSite: "lax", // More permissive for development
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+    });
+
+    // Also set legacy auth_token for backward compatibility
     response.cookies.set("auth_token", userData.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
+      path: "/",
       maxAge: 7 * 24 * 60 * 60, // 7 days
     });
 

@@ -1,23 +1,32 @@
 "use client";
-import { GoHome } from "react-icons/go";
-import { MdOutlineLeaderboard } from "react-icons/md";
 import { useEffect, useState } from "react";
-import LeaderBoard from "@/components/LeaderBoard";
+import LeaderBoard from "@/components/features/leaderboard/LeaderBoard";
 import type WebApp from "@twa-dev/sdk";
-import UserProfile from "@/components/Profile";
-import ContestBoard from "@/components/Contest";
-import { Wallet } from "lucide-react";
-import WalletPage from "@/components/WalletPage";
-import LoginModule from "@/components/auth/LoginModule";
-import { useAuth } from "./contexts/AuthContext";
-import GamesPage from "@/components/games/GamesPage";
-import { WheelOfFortune } from "@/components/Wheel";
+import UserProfile from "@/components/features/profile/Profile";
+import Contest from "@/components/features/contest/Contest";
+import WalletPage from "@/components/common/WalletPage";
+import LoginModule from "@/components/features/auth/LoginModule";
+import { useAuth } from "@/contexts/AuthContext";
+import GamesPage from "@/components/features/games/GamesPage";
+import { WheelOfFortune } from "@/components/features/wheel/Wheel";
+import HomePage from "@/components/layout/HomePage";
+import {
+  NavigationProvider,
+  useNavigation,
+} from "@/contexts/NavigationContext";
+import Image from "next/image";
+import HomeIcon from "@/components/common/icons/HomeIcon";
+import GameIcon from "@/components/common/icons/GameIcon";
+import RankIcon from "@/components/common/icons/RankIcon";
+import WalletIcon from "@/components/common/icons/WalletIcon";
+import SpinIcon from "@/components/common/icons/SpinIcon";
+import TasksPage from "@/components/features/tasks/TasksPage";
 
 // Force dynamic rendering since this page uses client-side features
 export const dynamic = "force-dynamic";
 
-function Home() {
-  const [selectedTab, setSelectedTab]: any = useState("Home");
+function HomeShell() {
+  const { currentPage, navigate } = useNavigation();
   const [tg, setTg] = useState<typeof WebApp | null>(null);
 
   const { user, isAuthenticated, isLoading, logout } = useAuth();
@@ -34,149 +43,214 @@ function Home() {
         clearInterval(getTg);
       }
 
-    
-
       if (count > 10) {
         clearInterval(getTg);
       }
       count++;
-    }, 10000)
+    }, 10000);
   }, []);
 
-  const handlePageChange = (page: string) => {
-    setSelectedTab(page);
-  };
+  const handlePageChange = (page: string) => navigate(page as any);
 
   // Show loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0B0B14] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="min-h-screen tropical-gradient flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-4 border-b-4 border-orange-400"></div>
       </div>
     );
   }
-
-
 
   // Show login if not authenticated
   if (!isAuthenticated) {
     return <LoginModule />;
   }
-  console.log(user);
   return (
-    <div className="min-h-screen bg-[#0B0B14]">
+    <div className="max-h-screen tropical-gradient">
       <div>
-        <div className="max-w-[430px] no-scrollbar mx-auto relative min-h-screen">
+        <div className="max-w-[630px] no-scrollbar mx-auto relative min-h-screen">
           <div className="flex flex-col no-scrollbar h-screen">
-            <button onClick={() => logout()}>Logout</button>
-            <div className="flex-1 overflow-y-auto no-scrollbar pb-20 h-[90vh]">
-              {selectedTab === "Home" && <UserProfile tg={tg} />}
-              {selectedTab === "Contest" && <ContestBoard />}
-              {selectedTab === "Wheel" && <WheelOfFortune />}
-              {selectedTab === "Game" && <GamesPage />}
-              {selectedTab === "Leaderboard" && <LeaderBoard />}
-              {selectedTab === "Wallet" && <WalletPage />}
+            {/* <button
+              onClick={() => logout()}
+              className="absolute top-6 mt-10 right-6 z-50 w-12 h-12 bg-cover bg-center bg-no-repeat hover:scale-110 transition-all duration-200 shadow-lg"
+              style={{
+                backgroundImage: "url('/assets/buttons/power-button.png')",
+              }}
+              title="Logout"
+            ></button> */}
+
+            <div className="flex-1 overflow-y-auto no-scrollbar pb-20">
+              {currentPage === "Home" && (
+                <HomePage onNavigate={handlePageChange} />
+              )}
+              {currentPage === "Profile" && <UserProfile tg={tg} />}
+              {currentPage === "Tasks" && <TasksPage tg={tg} />}
+              {currentPage === "Contest" && <Contest />}
+              {currentPage === "Wheel" && <WheelOfFortune />}
+              {currentPage === "Game" && <GamesPage />}
+              {currentPage === "Leaderboard" && <LeaderBoard />}
+              {currentPage === "Wallet" && <WalletPage />}
             </div>
 
-            <div className="fixed bottom-0 left-0 right-0 bg-[#151524] border-t border-[#2A2A45] shadow-glow-blue">
-              <div className="max-w-[430px] mx-auto">
-                <div className="flex justify-around items-center px-4 py-2">
-                  <button
-                    onClick={() => handlePageChange("Home")}
-                    className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
-                      selectedTab === "Home"
-                        ? "text-[#4C6FFF] bg-[#1A1A2F] shadow-glow-sm"
-                        : "text-[#8E8EA8] hover:text-[#4C6FFF] hover:bg-[#1A1A2F]/50"
-                    }`}
-                  >
-                    <GoHome className="text-2xl mb-1" />
-                    <span className="text-xs">Profile</span>
-                  </button>
-
-                  <button
-                    onClick={() => handlePageChange("Wheel")}
-                    className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
-                      selectedTab === "Wheel"
-                        ? "text-[#4C6FFF] bg-[#1A1A2F] shadow-glow-sm"
-                        : "text-[#8E8EA8] hover:text-[#4C6FFF] hover:bg-[#1A1A2F]/50"
-                    }`}
-                  >
-                    <svg
-                      className="w-6 h-6 mb-1"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <circle
-                        cx="12"
-                        cy="12"
-                        r="9"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      />
-                      <path
-                        d="M12 3V12L17 15"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <span className="text-xs">Wheel</span>
-                  </button>
-
-                  <button
-                    onClick={() => handlePageChange("Game")}
-                    className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
-                      selectedTab === "Game"
-                        ? "text-[#4C6FFF] bg-[#1A1A2F] shadow-glow-sm"
-                        : "text-[#8E8EA8] hover:text-[#4C6FFF] hover:bg-[#1A1A2F]/50"
-                    }`}
-                  >
-                    <svg
-                      className="w-6 h-6 mb-1"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M6 11H10M8 9V13"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                      />
-                      <circle cx="15" cy="11" r="1" fill="currentColor" />
-                      <circle cx="18" cy="13" r="1" fill="currentColor" />
-                      <path
-                        d="M3 7C3 4.79086 4.79086 3 7 3H17C19.2091 3 21 4.79086 21 7V17C21 19.2091 19.2091 21 17 21H7C4.79086 21 3 19.2091 3 17V7Z"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      />
-                    </svg>
-                    <span className="text-xs">Game</span>
-                  </button>
-
-                  <button
-                    onClick={() => handlePageChange("Leaderboard")}
-                    className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
-                      selectedTab === "Leaderboard"
-                        ? "text-[#4C6FFF] bg-[#1A1A2F] shadow-glow-sm"
-                        : "text-[#8E8EA8] hover:text-[#4C6FFF] hover:bg-[#1A1A2F]/50"
-                    }`}
-                  >
-                    <MdOutlineLeaderboard className="text-2xl mb-1" />
-                    <span className="text-xs">Ranks</span>
-                    </button>
+            <div className=" bottom-0 left-0 right-0 z-50">
+              <div className="max-w-[630px] mx-auto px-2 pb-2">
+                <div className="bg-gradient-to-r from-purple-900 to-indigo-900 rounded-3xl shadow-2xl border border-purple-700/50">
+                  <div className="flex justify-around items-center px-2 py-2">
                     <button
-                    onClick={() => handlePageChange("Wallet")}
-                    className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
-                      selectedTab === "Wallet"
-                        ? "text-[#4C6FFF] bg-[#1A1A2F] shadow-glow-sm"
-                        : "text-[#8E8EA8] hover:text-[#4C6FFF] hover:bg-[#1A1A2F]/50"
-                    }`}
-                  >
-                    <Wallet className="text-2xl mb-1" />
-                    <span className="text-xs">Wallet</span>
-                  </button>
+                      onClick={() => handlePageChange("Home")}
+                      className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 min-w-[40px] ${
+                        currentPage === "Home"
+                          ? "bg-pink-500/20 scale-110"
+                          : "hover:bg-white/10 hover:scale-105"
+                      }`}
+                    >
+                      <HomeIcon
+                        className={`mb-1 transition-all duration-300 ${
+                          currentPage === "Home"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                        isActive={currentPage === "Home"}
+                        activeColor="#FF309B"
+                        color="currentColor"
+                        width={16}
+                        height={16}
+                      />
+                      <span
+                        className={`text-[9px] font-semibold transition-all duration-300 ${
+                          currentPage === "Home"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                      >
+                        Home
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => handlePageChange("Wheel")}
+                      className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 min-w-[40px] ${
+                        currentPage === "Wheel"
+                          ? "bg-pink-500/20 scale-110"
+                          : "hover:bg-white/10 hover:scale-105"
+                      }`}
+                    >
+                      <SpinIcon
+                        className={`mb-1 transition-all duration-300 ${
+                          currentPage === "Wheel"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                        isActive={currentPage === "Wheel"}
+                        activeColor="#FF309B"
+                        color="currentColor"
+                        width={16}
+                        height={16}
+                      />
+                      <span
+                        className={`text-[9px] font-semibold transition-all duration-300 ${
+                          currentPage === "Wheel"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                      >
+                        Spin
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => handlePageChange("Game")}
+                      className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 min-w-[40px] ${
+                        currentPage === "Game"
+                          ? "bg-pink-500/20 scale-110"
+                          : "hover:bg-white/10 hover:scale-105"
+                      }`}
+                    >
+                      <GameIcon
+                        className={`mb-1 transition-all duration-300 ${
+                          currentPage === "Game"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                        isActive={currentPage === "Game"}
+                        activeColor="#FF309B"
+                        color="currentColor"
+                        width={16}
+                        height={16}
+                      />
+                      <span
+                        className={`text-[9px] font-semibold transition-all duration-300 ${
+                          currentPage === "Game"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                      >
+                        Game
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => handlePageChange("Leaderboard")}
+                      className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 min-w-[40px] ${
+                        currentPage === "Leaderboard"
+                          ? "bg-pink-500/20 scale-110"
+                          : "hover:bg-white/10 hover:scale-105"
+                      }`}
+                    >
+                      <RankIcon
+                        className={`mb-1 transition-all duration-300 ${
+                          currentPage === "Leaderboard"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                        isActive={currentPage === "Leaderboard"}
+                        activeColor="#FF309B"
+                        color="currentColor"
+                        width={16}
+                        height={16}
+                      />
+                      <span
+                        className={`text-[9px] font-semibold transition-all duration-300 ${
+                          currentPage === "Leaderboard"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                      >
+                        Rank
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => handlePageChange("Wallet")}
+                      className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all duration-300 min-w-[40px] ${
+                        currentPage === "Wallet"
+                          ? "bg-pink-500/20 scale-110"
+                          : "hover:bg-white/10 hover:scale-105"
+                      }`}
+                    >
+                      <WalletIcon
+                        className={`mb-1 transition-all duration-300 ${
+                          currentPage === "Wallet"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                        isActive={currentPage === "Wallet"}
+                        activeColor="#FF309B"
+                        color="currentColor"
+                        width={16}
+                        height={16}
+                      />
+                      <span
+                        className={`text-[9px] font-semibold transition-all duration-300 ${
+                          currentPage === "Wallet"
+                            ? "text-white"
+                            : "text-white/50"
+                        }`}
+                      >
+                        Wallet
+                      </span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -187,4 +261,10 @@ function Home() {
   );
 }
 
-export default Home;
+export default function Home() {
+  return (
+    <NavigationProvider>
+      <HomeShell />
+    </NavigationProvider>
+  );
+}

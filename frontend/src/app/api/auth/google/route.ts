@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtDecode } from "jwt-decode";
 import { prisma } from "@/lib/prisma";
+import { JWTService } from "@/lib/auth/jwt";
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +35,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Debug logging for Google token data
+    console.log("Google token decoded data:", {
+      email: decoded.email,
+      picture: decoded.picture,
+      given_name: decoded.given_name,
+      family_name: decoded.family_name,
+    });
+
     // Check if user already exists in database
     let user = await prisma.user.findUnique({
       where: { email: decoded.email },
@@ -48,6 +57,7 @@ export async function POST(request: NextRequest) {
           name: `${decoded.given_name || ""} ${
             decoded.family_name || ""
           }`.trim(),
+          avatar_url: decoded.picture || null, // Google profile picture
           referredBy: "", // Default empty value
           level: 1,
           difficulty: 1,
@@ -65,10 +75,22 @@ export async function POST(request: NextRequest) {
           weeklyPoints: 0,
         },
       });
-
-      console.log("New user created:", user.email);
     } else {
-      console.log("Existing user logged in:", user.email);
+      // Update existing user's avatar with latest Google profile picture
+      if (decoded.picture) {
+        console.log("Updating existing user avatar:", {
+          userId: user.id,
+          currentAvatar: user.avatar_url,
+          newAvatar: decoded.picture,
+        });
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { avatar_url: decoded.picture },
+        });
+        console.log("User avatar updated successfully");
+      } else {
+        console.log("No picture in Google token for existing user");
+      }
     }
 
     // Parse wallet data if it exists
@@ -115,19 +137,42 @@ export async function POST(request: NextRequest) {
       wallet: walletData, // Include parsed wallet data
     };
 
-    console.log("Complete user data from Google auth:", userData);
+    // Issue JWT cookies
+    const accessToken = JWTService.generateAccessToken(userData as any);
+    const refreshToken = JWTService.generateRefreshToken(
+      userData.id,
+      "google_session"
+    );
 
-    // Create response with simple cookie (without JWT for now)
     const response = NextResponse.json({
       success: true,
       user: userData,
+      accessToken,
+      refreshToken,
     });
 
-    // Set a simple auth cookie
+    response.cookies.set("accessToken", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
+      path: "/",
+      maxAge: 15 * 60,
+    });
+
+    response.cookies.set("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60,
+    });
+
+    // Also set legacy auth_token for backward compatibility
     response.cookies.set("auth_token", userData.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
+      path: "/",
       maxAge: 7 * 24 * 60 * 60, // 7 days
     });
 

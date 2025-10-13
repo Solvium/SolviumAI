@@ -117,16 +117,20 @@ class Config:
 
     # NEAR Wallet Configuration
     NEAR_TESTNET_RPC_URL = os.getenv(
-        "NEAR_TESTNET_RPC_URL", "https://test.rpc.fastnear.com"
+        "NEAR_TESTNET_RPC_URL",
+        f"https://rpc.testnet.fastnear.com?apiKey={NEAR_API_KEY}",
     )
     NEAR_TESTNET_HELPER_URL = os.getenv(
-        "NEAR_TESTNET_HELPER_URL", "https://rpc.testnet.fastnear.com"
+        "NEAR_TESTNET_HELPER_URL",
+        f"https://rpc.testnet.fastnear.com?apiKey={NEAR_API_KEY}",
     )
     NEAR_MAINNET_RPC_URL = os.getenv(
-        "NEAR_MAINNET_RPC_URL", "https://free.rpc.fastnear.com"
+        "NEAR_MAINNET_RPC_URL",
+        f"https://rpc.mainnet.fastnear.com?apiKey={NEAR_API_KEY}",
     )
     NEAR_MAINNET_HELPER_URL = os.getenv(
-        "NEAR_MAINNET_HELPER_URL", "https://free.rpc.fastnear.com"
+        "NEAR_MAINNET_HELPER_URL",
+        f"https://rpc.mainnet.fastnear.com?apiKey={NEAR_API_KEY}",
     )
 
     # NEAR RPC Fallback Endpoints (ordered by preference)

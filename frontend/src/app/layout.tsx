@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import AuthProviderWrapper from "./providers/AuthProviderWrapper";
-import { MultiLoginProvider } from "./contexts/MultiLoginContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { SimpleWalletProvider } from "@/contexts/SimpleWalletContext";
+import { PrivateKeyWalletProvider } from "@/contexts/PrivateKeyWalletContext";
+import { GameConfigProvider } from "@/contexts/GameConfigContext";
+import { GameProvider } from "@/contexts/GameContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,10 +21,16 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <AuthProviderWrapper>
-          <MultiLoginProvider>{children}</MultiLoginProvider>
-        </AuthProviderWrapper>
+      <body className={`${inter.className} max-w-[630px] mx-auto`}>
+        <SimpleWalletProvider>
+          <AuthProvider>
+            <PrivateKeyWalletProvider>
+              <GameConfigProvider>
+                <GameProvider>{children}</GameProvider>
+              </GameConfigProvider>
+            </PrivateKeyWalletProvider>
+          </AuthProvider>
+        </SimpleWalletProvider>
       </body>
     </html>
   );

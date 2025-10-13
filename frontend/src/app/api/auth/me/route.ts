@@ -1,23 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
+import { JWTService } from "@/lib/auth/jwt";
 
 export async function GET(request: NextRequest) {
   try {
     const cookieStore = await cookies();
-    const authToken = cookieStore.get("auth_token");
+    const accessToken = cookieStore.get("accessToken");
+    const legacyToken = cookieStore.get("auth_token");
 
-    if (!authToken) {
-      return NextResponse.json(
-        { authenticated: false, user: null },
-        { status: 401 }
-      );
+    // Try JWT token first, then fallback to legacy token
+    let userId: number | null = null;
+
+    if (accessToken) {
+      try {
+        const decoded = JWTService.verifyAccessToken(accessToken.value);
+        const uid = parseInt(decoded.userId);
+        userId = Number.isNaN(uid) ? null : uid;
+        console.log("JWT authentication successful for user:", userId);
+      } catch (e) {
+        console.log("JWT verification failed:", e);
+        userId = null;
+      }
     }
 
-    // Get user ID from token
-    const userId = parseInt(authToken.value);
-    
-    if (isNaN(userId)) {
+    // Fallback to legacy token if JWT fails
+    if (!userId && legacyToken) {
+      try {
+        const uid = parseInt(legacyToken.value);
+        userId = Number.isNaN(uid) ? null : uid;
+        console.log("Legacy token authentication successful for user:", userId);
+      } catch (e) {
+        console.log("Legacy token verification failed:", e);
+        userId = null;
+      }
+    }
+
+    if (userId == null) {
+      console.log("No valid authentication token found");
       return NextResponse.json(
         { authenticated: false, user: null },
         { status: 401 }
@@ -48,6 +68,14 @@ export async function GET(request: NextRequest) {
         lastClaim: true,
         chatId: true,
         totalPoints: true,
+        experience_points: true,
+        totalSOLV: true,
+        gamesPlayed: true,
+        gamesWon: true,
+        avatar_url: true,
+        contests_participated: true,
+        tasks_completed: true,
+        last_level_up: true,
       },
     });
 
@@ -58,13 +86,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Note: Do NOT mutate lastClaim/claimCount here.
+    // Visiting the page or checking auth must not auto-claim or advance streak.
+
     // Parse wallet data if it exists
     let walletData = null;
     if (user.wallet) {
       try {
-        walletData = typeof user.wallet === 'string' 
-          ? JSON.parse(user.wallet) 
-          : user.wallet;
+        walletData =
+          typeof user.wallet === "string"
+            ? JSON.parse(user.wallet)
+            : user.wallet;
       } catch (error) {
         console.error("Error parsing wallet data:", error);
       }
@@ -75,10 +107,9 @@ export async function GET(request: NextRequest) {
       id: user.id.toString(),
       username: user.username,
       email: user.email || undefined,
-      telegramId: undefined, // Not in current schema
       googleId: undefined, // Not in current schema
-      firstName: user.name ? user.name.split(' ')[0] : undefined,
-      lastName: user.name ? user.name.split(' ').slice(1).join(' ') : undefined,
+      firstName: user.name ? user.name.split(" ")[0] : undefined,
+      lastName: user.name ? user.name.split(" ").slice(1).join(" ") : undefined,
       avatar: undefined, // Add if you have avatar field
       totalPoints: user.totalPoints || 0,
       multiplier: 1, // Default multiplier since it's not in schema
@@ -99,15 +130,20 @@ export async function GET(request: NextRequest) {
       lastClaim: user.lastClaim || undefined,
       chatId: user.chatId || undefined,
       wallet: walletData, // Include parsed wallet data
+      experience_points: user.experience_points || 0,
+      totalSOLV: user.totalSOLV || 0,
+      gamesPlayed: user.gamesPlayed || 0,
+      gamesWon: user.gamesWon || 0,
+      avatar_url: user.avatar_url || undefined,
+      contests_participated: user.contests_participated || 0,
+      tasks_completed: user.tasks_completed || 0,
+      last_level_up: user.last_level_up || undefined,
     };
-
-    console.log("User data from /api/auth/me:", userData);
 
     return NextResponse.json({
       authenticated: true,
       user: userData,
     });
-
   } catch (error) {
     console.error("Error in /api/auth/me:", error);
     return NextResponse.json(
