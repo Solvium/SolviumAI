@@ -66,10 +66,10 @@ function HomeShell() {
     return <LoginModule />;
   }
   return (
-    <div className="max-h-screen tropical-gradient">
+    <div className="h-screen overflow-hidden tropical-gradient">
       <div>
-        <div className="max-w-[630px] no-scrollbar mx-auto relative min-h-screen">
-          <div className="flex flex-col no-scrollbar h-screen">
+        <div className="max-w-[630px] no-scrollbar mx-auto relative h-screen">
+          <div className="flex flex-col no-scrollbar h-full">
             {/* <button
               onClick={() => logout()}
               className="absolute top-6 mt-10 right-6 z-50 w-12 h-12 bg-cover bg-center bg-no-repeat hover:scale-110 transition-all duration-200 shadow-lg"
@@ -79,7 +79,7 @@ function HomeShell() {
               title="Logout"
             ></button> */}
 
-            <div className="flex-1 overflow-y-auto no-scrollbar pb-20">
+            <div className="flex-1 overflow-hidden no-scrollbar">
               {currentPage === "Home" && (
                 <HomePage onNavigate={handlePageChange} />
               )}
