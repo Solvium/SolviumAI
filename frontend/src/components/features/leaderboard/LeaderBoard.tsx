@@ -331,24 +331,48 @@ const LeaderBoard = () => {
   }
 
   return (
-    <div className="w-full min-h-screen bg-[#040022] text-white pb-8">
-      <div className="flex items-center justify-between px-6 py-6">
+    <div className="w-full h-screen bg-[#040022] text-white overflow-y-auto">
+
+
+      {/* <div className="flex items-center justify-between px-6 py-6">
         <button className="flex items-center gap-2 text-white">
           <ChevronLeft className="w-5 h-5" />
           <span className="text-sm">Back</span>
         </button>
-      </div>
+      </div> */}
 
-      <h1
+      {/* <h1
         className="text-center text-3xl font-bold tracking-wider mb-8"
         style={{ fontFamily: "monospace", letterSpacing: "0.2em" }}
       >
         LEADER BOARD
-      </h1>
+      </h1> */}
+
+      <div className="absolute top-6 left-4 z-20 mt-1 mb-5">
+            <button
+              // onClick={() => navigate.back()}
+              className="flex items-center gap-2 text-white hover:text-purple-300 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span className="text-sm font-semibold">Back</span>
+            </button>
+          </div>
+
+          <div className="absolute top-5 right-8 z-20">
+            <h1
+              className="text-3xl md:text-4xl font-bold text-white tracking-[0.3em] drop-shadow-2xl"
+              style={{ fontFamily: "'Pixelify Sans', monospace", letterSpacing: "0.2em" }}
+            >
+              LEADER BOARD
+            </h1>
+          </div>
+
+<div className="relative mt-20"> 
+
 
       <TopThreePodium />
 
-      <div className="mt-8">
+      <div className="mt-8 pb-24">
         {leaderboardData.map((userData, index) => (
           <RankingCard
             key={`${userData.username}-${index}`}
@@ -362,14 +386,15 @@ const LeaderBoard = () => {
             <UserRankingCard />
           </div>
         )}
-      </div>
 
-      <div className="flex justify-center mt-8">
-        <button className="text-white font-semibold flex items-center gap-2 hover:text-gray-300 transition-colors">
-          View All
-          <ChevronLeft className="w-4 h-4 rotate-180" />
-        </button>
+        <div className="flex justify-center mt-8">
+          <button className="text-white font-semibold flex items-center gap-2 hover:text-gray-300 transition-colors">
+            View All
+            <ChevronLeft className="w-4 h-4 rotate-180" />
+          </button>
+        </div>
       </div>
+</div>
     </div>
   );
 };
