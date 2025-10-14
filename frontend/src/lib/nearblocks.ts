@@ -76,7 +76,8 @@ export async function getAccountInventory(
     );
     if (!res.ok) return null;
     const data = await res.json();
-    return data;
+    // Some responses wrap inventory under `inventory`
+    return (data && (data.inventory ?? data)) || null;
   } catch (e) {
     console.error("Nearblocks getAccountInventory error", e);
     return null;

@@ -425,8 +425,9 @@ export const WheelOfFortune = () => {
       let hasDeposits = false;
       if (nearAddress) {
         try {
-          const res = (await getAllUserDeposits(nearAddress)) as unknown;
-          const list = res as any[];
+          const res = await getAllUserDeposits(nearAddress);
+          console.log("getAllUserDeposits (hook) raw:", res);
+          const list = (res as any)?.data;
           if (Array.isArray(list) && list.length > 0) hasDeposits = true;
         } catch {}
         if (!hasDeposits && nearAccount) {
@@ -436,6 +437,7 @@ export const WheelOfFortune = () => {
               methodName: "getAllUserDeposits",
               args: { accountId: nearAddress },
             });
+            console.log("getAllUserDeposits (direct view) raw:", alt);
             if (Array.isArray(alt) && alt.length > 0) hasDeposits = true;
           } catch {}
         }
