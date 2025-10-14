@@ -359,7 +359,7 @@ const WalletPage = () => {
 
                   {(showAllTxns ? allTxns : recentTxns)?.map((txn, idx) => (
                     <div
-                      key={txn.id || idx}
+                      key={`${txn.id || "noid"}-${txn.timestamp || idx}`}
                       className="flex items-center justify-between"
                     >
                       <div className="flex items-center gap-3">

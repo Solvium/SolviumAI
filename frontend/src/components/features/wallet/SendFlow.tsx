@@ -5,6 +5,7 @@ import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
 import { ArrowLeft, QrCode, Search, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAccountInventory } from "@/lib/nearblocks";
+import { DEFAULT_TOKENS } from "@/lib/tokens";
 
 interface SendFlowProps {
   onClose: () => void;
@@ -21,11 +22,38 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
   const [error, setError] = useState<string | null>(null);
   const [verifyingRecipient, setVerifyingRecipient] = useState(false);
   const [recipientValid, setRecipientValid] = useState<boolean | null>(null);
-  const { sendNearNative, verifyRecipient, accountId } = usePrivateKeyWallet();
+  const {
+    sendNearNative,
+    verifyRecipient,
+    accountId,
+    sendFungibleToken,
+    checkTokenRegistrationFor,
+    registerTokenFor,
+  } = usePrivateKeyWallet();
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Live NEAR price (USD) for confirmation fiat value
+  const [nearPriceUsd, setNearPriceUsd] = useState<number | null>(null);
+  const [priceLoading, setPriceLoading] = useState(false);
+  const fetchNearPrice = async () => {
+    try {
+      setPriceLoading(true);
+      const res = await fetch(
+        "https://api.coingecko.com/api/v3/simple/price?ids=near&vs_currencies=usd",
+        { cache: "no-store" }
+      );
+      const data = await res.json().catch(() => null);
+      const p = Number(data?.near?.usd);
+      if (!isNaN(p) && p > 0) setNearPriceUsd(p);
+    } catch {
+      // ignore price failures
+    } finally {
+      setPriceLoading(false);
+    }
+  };
 
   // Simple token selector state
   type Token = {
@@ -34,6 +62,8 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     kind: "native" | "ft";
     address?: string;
     balance?: string | number;
+    rawAmount?: string;
+    decimals?: number;
   };
   const [tokenSelectorOpen, setTokenSelectorOpen] = useState(false);
   const [selectedToken, setSelectedToken] = useState<Token>({
@@ -45,33 +75,139 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     { symbol: "NEAR", name: "NEAR", kind: "native" },
   ]);
 
+  // Helper to format raw amount by decimals -> human string
+  const formatByDecimals = (
+    raw: string | number | undefined,
+    decimals?: number
+  ): string => {
+    if (raw === undefined || raw === null) return "0";
+    const rawStr = String(raw);
+    const d = typeof decimals === "number" && decimals >= 0 ? decimals : 0;
+    if (d === 0) return rawStr;
+    const negative = rawStr.startsWith("-");
+    const digits = negative ? rawStr.slice(1) : rawStr;
+    const padded = digits.padStart(d + 1, "0");
+    const i = padded.length - d;
+    const whole = padded.slice(0, i);
+    const frac = padded.slice(i).replace(/0+$/, "");
+    const out = frac ? `${whole}.${frac}` : whole;
+    return negative ? `-${out}` : out;
+  };
+
   // Load token inventory for selector
   useEffect(() => {
     (async () => {
       const acc = accountId as string | null;
       if (!acc) return;
-      const inv = await getAccountInventory(acc);
-      // Expect nearblocks inventory: { ft: [...], nft: [...], ... }
-      const ft = (inv?.ft || []) as Array<any>;
-      const tokens: Token[] = [
-        { symbol: "NEAR", name: "NEAR", kind: "native" },
-        ...ft.map((t: any) => ({
-          symbol: t?.symbol || t?.token || "FT",
-          name: t?.name || t?.token || "Fungible Token",
+      try {
+        const inv = await getAccountInventory(acc);
+        // Nearblocks inventory: prefer inventory.fts shape
+        const fts =
+          (Array.isArray((inv as any)?.fts) && (inv as any).fts) || [];
+
+        const mapped: Token[] = (fts as Array<any>)
+          .filter(Boolean)
+          .map((t: any) => {
+            const decimals: number | undefined = t?.ft_meta?.decimals;
+            const raw =
+              t?.amount ||
+              t?.balance ||
+              t?.quantity ||
+              t?.total ||
+              t?.balance_formatted;
+            const balance = formatByDecimals(raw, decimals);
+            return {
+              symbol:
+                t?.ft_meta?.symbol ||
+                t?.symbol ||
+                t?.token ||
+                t?.ticker ||
+                "FT",
+              name:
+                t?.ft_meta?.name ||
+                t?.name ||
+                t?.token ||
+                t?.contract ||
+                "Fungible Token",
+              kind: "ft" as const,
+              address: t?.contract || t?.token_contract || t?.token,
+              balance,
+              rawAmount: raw ? String(raw) : undefined,
+              decimals,
+            };
+          });
+
+        // Deduplicate by address+symbol
+        const uniqMap = new Map<string, Token>();
+        for (const m of mapped) {
+          const key = `${m.address || m.symbol}`;
+          if (!uniqMap.has(key)) uniqMap.set(key, m);
+        }
+
+        // Merge known defaults (USDC/USDT) so they appear even if not held
+        const known: Token[] = DEFAULT_TOKENS.filter(
+          (k) => k.kind === "ft"
+        ).map((k) => ({
+          symbol: k.symbol,
+          name: k.name,
           kind: "ft" as const,
-          address: t?.contract || t?.token_contract || t?.token,
-          balance: t?.balance || t?.amount || t?.quantity || t?.total,
-        })),
-      ];
-      setAvailableTokens(tokens);
+          address: k.address,
+          balance: k.symbol === "NEAR" ? undefined : undefined,
+          decimals: k.decimals,
+        }));
+        const tokens: Token[] = [
+          { symbol: "NEAR", name: "NEAR", kind: "native" },
+          ...known,
+          ...uniqMap.values(),
+        ];
+        setAvailableTokens(tokens);
+      } catch (e) {
+        // On failure, keep NEAR only
+        setAvailableTokens([{ symbol: "NEAR", name: "NEAR", kind: "native" }]);
+      }
     })();
   }, [accountId]);
 
-  // TODO: Implement contact management system
-  // This could fetch recent transaction recipients from the database
-  // or allow users to save/manage their contacts
-  const contacts: Array<{ name: string; address: string; avatar?: string }> =
-    [];
+  // Address book (localStorage)
+  type Contact = { name: string; address: string; avatar?: string };
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contactSearch, setContactSearch] = useState("");
+  const addressBookKey = "wallet_address_book";
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(addressBookKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setContacts(parsed);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+  const persistContacts = (items: Contact[]) => {
+    setContacts(items);
+    try {
+      localStorage.setItem(addressBookKey, JSON.stringify(items));
+    } catch {
+      // ignore
+    }
+  };
+  const handleSaveContact = () => {
+    const addr = recipient.trim();
+    if (!addr) return;
+    // Basic account id pattern check to avoid empty/garbage saves
+    if (!/^[a-zA-Z0-9._-]+$/.test(addr)) return;
+    const exists = contacts.some(
+      (c) => c.address.toLowerCase() === addr.toLowerCase()
+    );
+    if (exists) return;
+    const defaultName = addr.includes(".") ? addr.split(".")[0] : addr;
+    const next = [{ name: defaultName, address: addr }, ...contacts].slice(
+      0,
+      100
+    );
+    persistContacts(next);
+  };
 
   const handleNumberClick = (num: string) => {
     if (num === "." && amount.includes(".")) return;
@@ -80,6 +216,14 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
 
   const handleBackspace = () => {
     setAmount((prev) => prev.slice(0, -1));
+  };
+
+  // Allow typing amount with physical keyboard (desktop) or mobile keyboard
+  const handleAmountChange = (value: string) => {
+    // Accept only digits and one optional decimal point, up to 24 fractional places
+    if (/^\d*(?:\.\d{0,24})?$/.test(value)) {
+      setAmount(value);
+    }
   };
 
   const handleRecipientChange = async (value: string) => {
@@ -185,22 +329,23 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     if (step === "amount") {
       setStep("recipient");
     } else if (step === "recipient") {
-      // Execute native NEAR transfer
+      // Move to confirm step and refresh NEAR price just before showing
       setError(null);
       if (!amount || !recipient) return;
-
-      // Check if recipient is valid
       if (recipientValid === false) {
         setError("Recipient account does not exist");
         return;
       }
-
       if (recipientValid === null && !verifyingRecipient) {
         setError("Please wait for recipient verification");
         return;
       }
-
-      // Convert human NEAR string to yoctoNEAR precisely
+      fetchNearPrice();
+      setStep("confirm");
+    } else if (step === "confirm") {
+      // Execute transfer from confirm step
+      setError(null);
+      if (!amount || !recipient) return;
       const normalized = amount.trim();
       if (!/^\d*(?:\.\d+)?$/.test(normalized)) {
         setError("Invalid amount");
@@ -214,10 +359,52 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
       ).toString();
       try {
         setSubmitting(true);
-        await sendNearNative(recipient.trim(), yocto);
+        let txResult: any = null;
+        if (selectedToken.kind === "native") {
+          txResult = await sendNearNative(recipient.trim(), yocto);
+        } else {
+          const tokenAddr = selectedToken.address || "";
+          // Ensure recipient storage registration for the FT
+          let shouldSend = true;
+          try {
+            const isReg = await checkTokenRegistrationFor(
+              tokenAddr,
+              recipient.trim()
+            );
+            if (!isReg) shouldSend = false;
+          } catch (e) {
+            shouldSend = false;
+          }
+          if (!shouldSend) {
+            setError(
+              "Recipient not registered for this token. Please ask them to call storage_deposit on the token contract."
+            );
+            setSubmitting(false);
+            return;
+          }
+          txResult = await sendFungibleToken(
+            tokenAddr,
+            recipient.trim(),
+            normalized,
+            selectedToken.decimals
+          );
+        }
+        try {
+          // Notify listeners for post-send UI refresh
+          window.dispatchEvent(
+            new CustomEvent("wallet:sent", {
+              detail: {
+                to: recipient.trim(),
+                token: selectedToken,
+                amount: normalized,
+                tx: txResult,
+              },
+            })
+          );
+        } catch {}
         onSuccess();
       } catch (e: any) {
-        setError(e?.message || "Failed to send NEAR");
+        setError(e?.message || "Failed to send");
       } finally {
         setSubmitting(false);
       }
@@ -255,9 +442,14 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
               <div className="text-center space-y-4">
                 <div className="text-white/50 text-sm">Enter Amount</div>
                 <div className="flex items-center justify-center gap-2">
-                  <div className="text-white text-4xl font-light min-w-[200px] text-center">
-                    {amount || "|"}
-                  </div>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.0"
+                    value={amount}
+                    onChange={(e) => handleAmountChange(e.target.value)}
+                    className="text-white text-4xl font-light min-w-[200px] text-center bg-transparent outline-none focus:border-cyan-500"
+                  />
                 </div>
                 <button className="px-6 py-2 bg-[#0075EA] text-white rounded-full text-sm font-medium hover:bg-cyan-600 transition-colors">
                   Max
@@ -308,7 +500,7 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                             (isNaN(numericBal) || numericBal <= 0);
                           return (
                             <button
-                              key={t.symbol}
+                              key={`${t.address || t.symbol}`}
                               onClick={() => {
                                 if (isDisabled) return;
                                 setSelectedToken(t);
@@ -339,7 +531,7 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                               <div className="text-right">
                                 {t.balance !== undefined && (
                                   <div className="text-white text-xs">
-                                    {String(t.balance)}
+                                    {String(t.balance)} {t.symbol}
                                   </div>
                                 )}
                                 {selectedToken.symbol === t.symbol && (
@@ -525,9 +717,12 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                     Account verified
                   </div>
                 )}
-                <button className="text-[#0075EA] text-sm mt-2 flex items-center gap-1">
-                  <span className="text-lg">+</span> Add this to your address
-                  book
+                <button
+                  className="text-[#0075EA] text-sm mt-2 flex items-center gap-1 disabled:opacity-40"
+                  onClick={handleSaveContact}
+                  disabled={!recipient.trim() || verifyingRecipient}
+                >
+                  <span className="text-lg">+</span> Save to address book
                 </button>
               </div>
 
@@ -537,6 +732,8 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                   <input
                     type="text"
                     placeholder="Search recipient"
+                    value={contactSearch}
+                    onChange={(e) => setContactSearch(e.target.value)}
                     className="w-full bg-[#1a1f3a] text-white/50 rounded-xl px-4 py-3 pr-12 outline-none focus:ring-2 focus:ring-cyan-500"
                   />
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 w-5 h-5" />
@@ -544,23 +741,32 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
 
                 <div className="space-y-3">
                   {contacts.length > 0 ? (
-                    contacts.map((contact, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleRecipientChange(contact.address)}
-                        className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl transition-colors"
-                      >
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-orange-400 flex-shrink-0" />
-                        <div className="text-left">
-                          <div className="text-white font-medium">
-                            {contact.name}
+                    contacts
+                      .filter((c) => {
+                        const q = contactSearch.trim().toLowerCase();
+                        if (!q) return true;
+                        return (
+                          c.name.toLowerCase().includes(q) ||
+                          c.address.toLowerCase().includes(q)
+                        );
+                      })
+                      .map((contact, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleRecipientChange(contact.address)}
+                          className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl transition-colors"
+                        >
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-orange-400 flex-shrink-0" />
+                          <div className="text-left">
+                            <div className="text-white font-medium">
+                              {contact.name}
+                            </div>
+                            <div className="text-white/50 text-sm">
+                              {contact.address}
+                            </div>
                           </div>
-                          <div className="text-white/50 text-sm">
-                            {contact.address}
-                          </div>
-                        </div>
-                      </button>
-                    ))
+                        </button>
+                      ))
                   ) : (
                     <div className="text-center py-8">
                       <div className="text-white/50 text-sm mb-2">
@@ -580,8 +786,94 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
               )}
               <button
                 onClick={handleConfirm}
-                disabled={!recipient || submitting}
+                disabled={!recipient || submitting || recipientValid === false}
                 className="w-full py-4 bg-[#0075EA] text-white rounded-full text-lg font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-8"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "confirm") {
+    const normalized = amount.trim();
+    const tokenLabel =
+      selectedToken.kind === "native"
+        ? "NEAR"
+        : `${selectedToken.symbol} (${selectedToken.address})`;
+    const fiatValue =
+      selectedToken.kind === "native" && nearPriceUsd
+        ? (Number(normalized || 0) * nearPriceUsd).toFixed(2)
+        : null;
+    const feeNote =
+      selectedToken.kind === "native"
+        ? "Network fee (gas)"
+        : "Gas + 1 yoctoNEAR";
+    return (
+      <div className="fixed inset-0 bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] z-50 overflow-y-auto">
+        <div className="max-w-md mx-auto min-h-screen pb-6">
+          <div className="px-4 pt-6">
+            <div className="flex items-center justify-between mb-8">
+              <Button
+                variant="ghost"
+                className="text-white hover:bg:white/10 p-2"
+                onClick={() => setStep("recipient")}
+              >
+                <ArrowLeft className="w-5 h-5 mr-2" />
+                Back
+              </Button>
+              <h1
+                className="text-3xl font-bold text-white tracking-wider"
+                style={{
+                  fontFamily: "monospace",
+                  letterSpacing: "0.2em",
+                  textShadow: "0 0 10px rgba(255,255,255,0.5)",
+                }}
+              >
+                CONFIRM
+              </h1>
+              <div className="w-20" />
+            </div>
+
+            <div className="space-y-6">
+              <div className="bg-[#0f1535] rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between text-white/80">
+                  <span>Recipient</span>
+                  <span className="text-white">{recipient.trim()}</span>
+                </div>
+                <div className="flex items-center justify-between text-white/80">
+                  <span>Token</span>
+                  <span className="text-white">{tokenLabel}</span>
+                </div>
+                <div className="flex items-center justify-between text-white/80">
+                  <span>Amount</span>
+                  <span className="text-white">{normalized}</span>
+                </div>
+                <div className="flex items-center justify-between text-white/80">
+                  <span>Estimated Fee</span>
+                  <span className="text-white">{feeNote}</span>
+                </div>
+                {selectedToken.kind === "native" && (
+                  <div className="flex items-center justify-between text-white/80">
+                    <span>Fiat (USD)</span>
+                    <span className="text-white">
+                      {priceLoading ? "..." : fiatValue ? `$${fiatValue}` : "-"}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {error && (
+                <div className="text-red-400 text-sm mt-2">{error}</div>
+              )}
+
+              <button
+                onClick={handleConfirm}
+                disabled={submitting}
+                className="w-full py-4 bg-[#0075EA] text-white rounded-full text-lg font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4"
               >
                 {submitting ? "Sending..." : "Send"}
               </button>

@@ -47,6 +47,33 @@ interface PrivateKeyWalletContextType {
   checkTokenRegistration: (tokenId: string) => Promise<boolean>;
   registerToken: (tokenId: string) => Promise<boolean>;
   verifyRecipient: (accountId: string) => Promise<boolean>;
+  sendFungibleToken: (
+    tokenAddress: string,
+    receiverId: string,
+    amountHuman: string,
+    decimals?: number
+  ) => Promise<any>;
+  checkTokenRegistrationFor: (
+    tokenId: string,
+    accountId: string
+  ) => Promise<boolean>;
+  registerTokenFor: (tokenId: string, accountId: string) => Promise<boolean>;
+  // Intents / swap helpers
+  depositInto: (
+    tokenId: string,
+    receiverId: string,
+    amountRaw: string
+  ) => Promise<any>;
+  executeIntents: (
+    verifierId: string,
+    args: { intents: any[]; beneficiary: string }
+  ) => Promise<any>;
+  wrapNear: (amountYocto: string) => Promise<any>;
+  unwrapNear: (amountYocto: string) => Promise<any>;
+  simulateIntents: (
+    verifierId: string,
+    args: { intents: any[]; beneficiary: string }
+  ) => Promise<any>;
 }
 
 const PrivateKeyWalletContext =
@@ -299,6 +326,69 @@ export const PrivateKeyWalletProvider = ({
         return false;
       }
     },
+    checkTokenRegistrationFor: async (
+      tokenId: string,
+      accountToCheck: string
+    ) => {
+      if (!account) throw new Error("NEAR account not initialized");
+      try {
+        const result = await account.viewFunction({
+          contractId: tokenId,
+          methodName: "storage_balance_of",
+          args: { account_id: accountToCheck },
+        });
+        // Only true when a non-null storage balance object is returned
+        return result !== null && result !== undefined;
+      } catch (error) {
+        // Propagate so caller can avoid auto-deposit on API errors
+        throw error as Error;
+      }
+    },
+    registerTokenFor: async (tokenId: string, accountToRegister: string) => {
+      if (!account) throw new Error("NEAR account not initialized");
+      try {
+        const result = await account.functionCall({
+          contractId: tokenId,
+          methodName: "storage_deposit",
+          args: { account_id: accountToRegister, registration_only: true },
+          attachedDeposit: BigInt("1250000000000000000000"),
+        });
+        return result !== null;
+      } catch (error) {
+        console.error("Error registering token for recipient:", error);
+        return false;
+      }
+    },
+    sendFungibleToken: async (
+      tokenAddress: string,
+      receiverId: string,
+      amountHuman: string,
+      decimals?: number
+    ) => {
+      if (!account) throw new Error("NEAR account not initialized");
+      if (!tokenAddress) throw new Error("Token address is required");
+      if (!receiverId) throw new Error("Receiver is required");
+      const d = typeof decimals === "number" && decimals >= 0 ? decimals : 24;
+      const [w = "0", f = ""] = String(amountHuman).trim().split(".");
+      const frac = (f + "0".repeat(d)).slice(0, d);
+      const raw = (
+        BigInt(w) * BigInt(10) ** BigInt(d) +
+        BigInt(frac || "0")
+      ).toString();
+      try {
+        const result = await (account as any).functionCall({
+          contractId: tokenAddress,
+          methodName: "ft_transfer",
+          args: { receiver_id: receiverId, amount: raw },
+          gas: BigInt("150000000000000"),
+          attachedDeposit: BigInt(1),
+        });
+        return result;
+      } catch (error) {
+        console.error("Error sending FT:", error);
+        throw error;
+      }
+    },
     sendNearNative: async (receiverId: string, amountYocto: string) => {
       if (!account) throw new Error("NEAR account not initialized");
       try {
@@ -320,6 +410,72 @@ export const PrivateKeyWalletProvider = ({
         console.error("Error verifying recipient:", error);
         return false;
       }
+    },
+    depositInto: async (
+      tokenId: string,
+      receiverId: string,
+      amountRaw: string
+    ) => {
+      if (!account) throw new Error("NEAR account not initialized");
+      if (!tokenId || !receiverId)
+        throw new Error("tokenId and receiverId are required");
+      return (account as any).functionCall({
+        contractId: tokenId,
+        methodName: "ft_transfer_call",
+        args: { receiver_id: receiverId, amount: amountRaw, msg: "deposit" },
+        gas: BigInt("150000000000000"),
+        attachedDeposit: BigInt(1),
+      });
+    },
+    executeIntents: async (
+      verifierId: string,
+      args: { intents: any[]; beneficiary: string }
+    ) => {
+      if (!account) throw new Error("NEAR account not initialized");
+      if (!verifierId) throw new Error("verifierId is required");
+      return (account as any).functionCall({
+        contractId: verifierId,
+        methodName: "execute_intents",
+        args,
+        gas: BigInt("200000000000000"),
+      });
+    },
+    simulateIntents: async (
+      verifierId: string,
+      args: { intents: any[]; beneficiary: string }
+    ) => {
+      if (!account) throw new Error("NEAR account not initialized");
+      if (!verifierId) throw new Error("verifierId is required");
+      try {
+        const result = await (account as any).viewFunction({
+          contractId: verifierId,
+          methodName: "simulate_intents",
+          args,
+        });
+        return result;
+      } catch (e) {
+        // Surface simulation errors to caller
+        throw e as Error;
+      }
+    },
+    wrapNear: async (amountYocto: string) => {
+      if (!account) throw new Error("NEAR account not initialized");
+      return (account as any).functionCall({
+        contractId: "wrap.near",
+        methodName: "near_deposit",
+        args: {},
+        gas: BigInt("80000000000000"),
+        attachedDeposit: BigInt(amountYocto),
+      });
+    },
+    unwrapNear: async (amountYocto: string) => {
+      if (!account) throw new Error("NEAR account not initialized");
+      return (account as any).functionCall({
+        contractId: "wrap.near",
+        methodName: "near_withdraw",
+        args: { amount: amountYocto },
+        gas: BigInt("80000000000000"),
+      });
     },
   };
 
