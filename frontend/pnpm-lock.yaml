@@ -150,14 +150,14 @@ importers:
         specifier: ^4.24.4
         version: 4.40.1(react-dom@18.3.1(react@18.3.1))(react-native@0.80.2(@babel/core@7.28.0)(@types/react@18.3.23)(bufferutil@4.0.9)(react@18.3.1)(utf-8-validate@5.0.10))(react@18.3.1)
       '@ton/core':
-        specifier: ^0.59.0
-        version: 0.59.1(@ton/crypto@3.3.0)
+        specifier: ^0.62.0
+        version: 0.62.0(@ton/crypto@3.3.0)
       '@ton/crypto':
         specifier: ^3.3.0
         version: 3.3.0
       '@ton/ton':
         specifier: ^15.1.0
-        version: 15.3.1(@ton/core@0.59.1(@ton/crypto@3.3.0))(@ton/crypto@3.3.0)
+        version: 15.3.1(@ton/core@0.62.0(@ton/crypto@3.3.0))(@ton/crypto@3.3.0)
       '@tonconnect/ui-react':
         specifier: ^2.0.0-beta.2
         version: 2.2.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -3654,8 +3654,8 @@ packages:
     peerDependencies:
       '@testing-library/dom': '>=7.21.4'
 
-  '@ton/core@0.59.1':
-    resolution: {integrity: sha512-SxFBAvutYJaIllTkv82vbHTJhJI6NxzqUhi499CDEjJEZ9i6i9lHJiK2df4dlLAb/4SiWX6+QUzESkK4DEdnCw==}
+  '@ton/core@0.62.0':
+    resolution: {integrity: sha512-GCYlzzx11rSESKkiHvNy9tL8zWth+ZtUbvV29WH478FvBp8xTw24AyoigwXWNV+OLCAcnwlGhZpTpxjD3wzCwA==}
     peerDependencies:
       '@ton/crypto': '>=3.2.0'
 
@@ -14609,7 +14609,7 @@ snapshots:
     dependencies:
       '@testing-library/dom': 10.4.1
 
-  '@ton/core@0.59.1(@ton/crypto@3.3.0)':
+  '@ton/core@0.62.0(@ton/crypto@3.3.0)':
     dependencies:
       '@ton/crypto': 3.3.0
       symbol.inspect: 1.0.1
@@ -14624,9 +14624,9 @@ snapshots:
       jssha: 3.2.0
       tweetnacl: 1.0.3
 
-  '@ton/ton@15.3.1(@ton/core@0.59.1(@ton/crypto@3.3.0))(@ton/crypto@3.3.0)':
+  '@ton/ton@15.3.1(@ton/core@0.62.0(@ton/crypto@3.3.0))(@ton/crypto@3.3.0)':
     dependencies:
-      '@ton/core': 0.59.1(@ton/crypto@3.3.0)
+      '@ton/core': 0.62.0(@ton/crypto@3.3.0)
       '@ton/crypto': 3.3.0
       axios: 1.11.0
       dataloader: 2.2.3
