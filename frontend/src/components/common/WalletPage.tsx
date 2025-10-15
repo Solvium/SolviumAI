@@ -195,14 +195,14 @@ const WalletPage = () => {
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] pb-24 relative overflow-hidden h-[calc(100vh-75px)]">
+      <div className="min-h-screen bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] pb-24 relative overflow-y-auto">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-20 left-10 w-2 h-2 bg-pink-500 rounded-full animate-pulse" />
           <div className="absolute top-40 right-20 w-3 h-3 bg-purple-500 rounded-full animate-pulse delay-100" />
           <div className="absolute bottom-40 left-20 w-2 h-2 bg-blue-500 rounded-full animate-pulse delay-200" />
         </div>
 
-        <div className="relative z-10 px-4 pt-6 space-y-6 overflow-y-auto h-full">
+        <div className="relative z-10 px-4 pt-6 space-y-6">
           <div className="flex items-center justify-between">
             <Button
               variant="ghost"

@@ -124,15 +124,17 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
           </div>
 
           {/* Big home image */}
-          <div className="flex items-center pt-1 justify-center">
-            <Image
-              src="/assets/background/home-image.svg"
-              alt="Home"
-              width={364}
-              height={390}
-              className="w-[97%] max-w-[630px] h-auto object-contain"
-            />
-          </div>
+      <div className="flex items-center pt-1 justify-center">
+  <Image
+    src="/assets/background/home-image.svg"
+    alt="Home"
+    width={364}
+    height={390}
+    className="object-contain w-auto md:w-[600px] h-[320px] max-w-[630px] lg:h-[500px] xs:h-[200px]"
+  />
+</div>
+
+
         </div>
       </div>
     </div>
