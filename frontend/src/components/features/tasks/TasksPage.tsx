@@ -668,16 +668,16 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A1F] text-white pb-20">
-      <div className="px-4 pt-6 pb-4">
-        <button
+    <div className="h-screen bg-[#0A0A1F] text-white overflow-y-auto">
+      <div className="px-4 pt-6 pb-12">
+        {/* <button
           className="flex items-center gap-2 text-white mb-4"
           onClick={() => router.push("/")}
         >
           <ArrowLeft className="w-5 h-5" />
           <span className="text-sm font-medium">Back</span>
-        </button>
-        <h1
+        </button> */}
+        {/* <h1
           className="text-3xl font-bold text-center mb-2 tracking-wider"
           style={{
             fontFamily: "'Press Start 2P', monospace",
@@ -685,8 +685,28 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
           }}
         >
           TASK CENTER
-        </h1>
-        <p className="text-center text-sm text-gray-400">
+        </h1> */}
+
+
+        <div className="absolute top-6 left-4 z-20 mt-1 mb-5">
+                    <button
+                        onClick={() => router.push("/")}
+                      className="flex items-center gap-2 text-white hover:text-purple-300 transition-colors"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      <span className="text-[8px] lg:text-lg font-semibold">Back</span>
+                    </button>
+                  </div>
+        
+                  <div className="absolute top-5 right-11 z-20">
+                    <h1
+                      className="text-3xl md:text-4xl font-bold text-white tracking-[0.3em] drop-shadow-2xl"
+                      style={{ fontFamily: "'Pixelify Sans', monospace", letterSpacing: "0.1em" }}
+                    >
+                       TASK CENTER
+                    </h1>
+                  </div>
+        <p className="text-center mt-10 text-sm text-gray-400">
           Complete tasks to earn SOLV points and unlock multipliers
         </p>
       </div>
