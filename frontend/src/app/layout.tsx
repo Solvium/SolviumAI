@@ -6,6 +6,7 @@ import { SimpleWalletProvider } from "@/contexts/SimpleWalletContext";
 import { PrivateKeyWalletProvider } from "@/contexts/PrivateKeyWalletContext";
 import { GameConfigProvider } from "@/contexts/GameConfigContext";
 import { GameProvider } from "@/contexts/GameContext";
+import { WalletPortfolioProvider } from "@/contexts/WalletPortfolioContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,9 +26,11 @@ export default function RootLayout({
         <SimpleWalletProvider>
           <AuthProvider>
             <PrivateKeyWalletProvider>
-              <GameConfigProvider>
-                <GameProvider>{children}</GameProvider>
-              </GameConfigProvider>
+              <WalletPortfolioProvider>
+                <GameConfigProvider>
+                  <GameProvider>{children}</GameProvider>
+                </GameConfigProvider>
+              </WalletPortfolioProvider>
             </PrivateKeyWalletProvider>
           </AuthProvider>
         </SimpleWalletProvider>

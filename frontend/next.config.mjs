@@ -5,6 +5,23 @@ const nextConfig = {
       ...config.experiments,
       topLevelAwait: true,
     };
+
+    // Handle Node.js modules for Ref SDK
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      net: false,
+      tls: false,
+      crypto: false,
+      stream: false,
+      url: false,
+      zlib: false,
+      http: false,
+      https: false,
+      assert: false,
+      os: false,
+      path: false,
+    };
     // Enable importing SVGs as React components via SVGR
     config.module.rules.push({
       test: /\.svg$/,
@@ -63,20 +80,46 @@ const nextConfig = {
         headers: [
           {
             key: "Content-Security-Policy",
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://accounts.google.com https://telegram.org",
-              "script-src-elem 'self' 'unsafe-eval' 'unsafe-inline' https://accounts.google.com https://telegram.org",
-              "style-src 'self' 'unsafe-inline' https://accounts.google.com",
-              "style-src-elem 'self' 'unsafe-inline' https://accounts.google.com",
-              "img-src 'self' data: https: blob:",
-              "font-src 'self'",
-              "connect-src 'self' https://rpc.testnet.near.org https://api.telegram.org https://accounts.google.com",
-              "frame-src 'self' https://accounts.google.com",
-              "object-src 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-            ].join("; "),
+            value: (() => {
+              const extraConnect = [
+                process.env.NEXT_PUBLIC_REF_NODE_URL,
+                process.env.NEXT_PUBLIC_REF_INDEXER_URL,
+              ]
+                .filter(Boolean)
+                .join(" ");
+              const connectSrc = [
+                "connect-src 'self'",
+                "https://rpc.testnet.near.org",
+                "https://rpc.mainnet.near.org",
+                "https://beta.rpc.mainnet.near.org",
+                "https://rpc.mainnet.fastnear.com",
+                "https://rpc.testnet.fastnear.com",
+                "https://api.fastnear.com",
+                "https://free.rpc.fastnear.com",
+                "https://test.api.fastnear.com",
+                "https://indexer.ref.finance",
+                "https://testnet-indexer.ref-finance.com",
+                "https://api.telegram.org",
+                "https://accounts.google.com",
+                extraConnect,
+              ]
+                .filter(Boolean)
+                .join(" ");
+              return [
+                "default-src 'self'",
+                "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://accounts.google.com https://telegram.org",
+                "script-src-elem 'self' 'unsafe-eval' 'unsafe-inline' https://accounts.google.com https://telegram.org",
+                "style-src 'self' 'unsafe-inline' https://accounts.google.com",
+                "style-src-elem 'self' 'unsafe-inline' https://accounts.google.com",
+                "img-src 'self' data: https: blob:",
+                "font-src 'self'",
+                connectSrc,
+                "frame-src 'self' https://accounts.google.com",
+                "object-src 'none'",
+                "base-uri 'self'",
+                "form-action 'self'",
+              ].join("; ");
+            })(),
           },
           {
             key: "Access-Control-Allow-Origin",

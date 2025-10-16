@@ -1,11 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ArrowLeft, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { buildTokenDiff, toRawAmount } from "@/lib/nearIntents";
+import { toRawAmount } from "@/lib/nearIntents";
+// Quotes are now retrieved from server-side Ref SDK via /api/ref-quote
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
-import { DEFAULT_TOKENS, getKnownTokenBySymbol } from "@/lib/tokens";
+import {
+  DEFAULT_TOKENS,
+  getKnownTokenBySymbol,
+  getWNEARAddress,
+} from "@/lib/tokens";
+// Removed Ref SDK config; using Rhea instead
 
 interface SwapFlowProps {
   onClose: () => void;
@@ -59,18 +65,114 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
   const [slippageBps, setSlippageBps] = useState(50); // 0.50%
   const [amount, setAmount] = useState("0");
   const [submitting, setSubmitting] = useState(false);
+  const [quoteOut, setQuoteOut] = useState<string | null>(null);
+  const [liveQuote, setLiveQuote] = useState<string | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+
+  // Convert raw integer token amount to human string
+  const fromRawAmount = useCallback((raw: string, decimals: number) => {
+    if (!raw) return "0";
+    if (decimals <= 0) return raw;
+    const negative = raw.startsWith("-");
+    const digits = negative ? raw.slice(1) : raw;
+    const len = digits.length;
+    const intPart = len > decimals ? digits.slice(0, len - decimals) : "0";
+    const fracPart = digits.padStart(decimals + 1, "0").slice(-decimals);
+    const trimmed = fracPart.replace(/0+$/, "");
+    const result = trimmed ? `${intPart}.${trimmed}` : intPart;
+    return negative ? `-${result}` : result;
+  }, []);
+
+  // Real-time quote fetching (server-side Ref SDK)
+  const fetchLiveQuote = useCallback(async () => {
+    console.log("fetchLiveQuote called with:", { amount, fromToken, toToken });
+    if (!amount || Number(amount) <= 0) {
+      setLiveQuote(null);
+      return;
+    }
+
+    try {
+      setQuoteLoading(true);
+      const fromMeta = getKnownTokenBySymbol(fromToken) || DEFAULT_TOKENS[0];
+      const toMeta = getKnownTokenBySymbol(toToken) || DEFAULT_TOKENS[0];
+      const isFromNear = fromMeta.symbol === "NEAR";
+      const isToNear = toMeta.symbol === "NEAR";
+      const wnearAddr = getWNEARAddress();
+      const tokenInId = isFromNear ? wnearAddr : fromMeta.address || "";
+      const tokenOutId = isToNear ? wnearAddr : toMeta.address || "";
+
+      if (!tokenInId || !tokenOutId) {
+        setLiveQuote(null);
+        return;
+      }
+      const res = await fetch("/api/ref-quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tokenInId,
+          tokenOutId,
+          amountInHuman: amount,
+        }),
+      });
+      if (!res.ok) throw new Error("quote_failed");
+      const data = await res.json();
+      setLiveQuote(String(data?.expectedOut || "0"));
+    } catch (e) {
+      console.warn("Live quote failed:", e);
+      setLiveQuote(null);
+    } finally {
+      setQuoteLoading(false);
+    }
+  }, [amount, fromToken, toToken, slippageBps, fromRawAmount]);
+
+  // Debounced quote fetching
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchLiveQuote();
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [fetchLiveQuote]);
+
+  // Ensure confirm screen has a backend quote ready for min receive display
+  useEffect(() => {
+    (async () => {
+      if (step !== "confirm") return;
+      const fromMeta = getKnownTokenBySymbol(fromToken) || DEFAULT_TOKENS[0];
+      const toMeta = getKnownTokenBySymbol(toToken) || DEFAULT_TOKENS[0];
+      const isFromNear = fromMeta.symbol === "NEAR";
+      const isToNear = toMeta.symbol === "NEAR";
+      const wnearAddr = getWNEARAddress();
+      const tokenInId = isFromNear ? wnearAddr : fromMeta.address || "";
+      const tokenOutId = isToNear ? wnearAddr : toMeta.address || "";
+      if (!amount || Number(amount) <= 0 || !tokenInId || !tokenOutId) return;
+      try {
+        const res = await fetch("/api/ref-quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tokenInId,
+            tokenOutId,
+            amountInHuman: amount,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.expectedOut) setQuoteOut(String(data.expectedOut));
+        }
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, amount, fromToken, toToken]);
 
   const {
     accountId,
-    depositInto,
-    executeIntents,
     wrapNear,
     unwrapNear,
     registerToken,
     registerTokenFor,
-    simulateIntents,
+    signAndSendTransaction,
   } = usePrivateKeyWallet();
-  const verifierId = process.env.NEXT_PUBLIC_NEAR_INTENTS_VERIFIER || "";
 
   const [error, setError] = useState<string | null>(null);
 
@@ -80,96 +182,105 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
       setError("Wallet not connected");
       return;
     }
-    if (!verifierId) {
-      console.error(
-        "Verifier not configured (NEXT_PUBLIC_NEAR_INTENTS_VERIFIER)"
-      );
-      setError("Verifier not configured");
-      return;
-    }
     // Resolve tokens
     const fromMeta = getKnownTokenBySymbol(fromToken) || DEFAULT_TOKENS[0];
     const toMeta = getKnownTokenBySymbol(toToken) || DEFAULT_TOKENS[0];
     const isFromNear = fromMeta.symbol === "NEAR";
     const isToNear = toMeta.symbol === "NEAR";
-    const tokenInAddr = isFromNear ? "wrap.near" : fromMeta.address || "";
-    const tokenOutAddr = isToNear ? "wrap.near" : toMeta.address || "";
-    const decimalsIn = (isFromNear ? 24 : fromMeta.decimals) ?? 24;
-    const decimalsOut = (isToNear ? 24 : toMeta.decimals) ?? 24;
+    const wnearAddr = getWNEARAddress();
+    const tokenInId = isFromNear ? wnearAddr : fromMeta.address || "";
+    const tokenOutId = isToNear ? wnearAddr : toMeta.address || "";
 
-    if (!tokenInAddr || !tokenOutAddr) {
-      console.error("Missing token contract address for swap");
+    if (!tokenInId || !tokenOutId) {
       setError("Missing token contract address");
       return;
     }
 
-    const rawIn = toRawAmount(amount, decimalsIn);
-    // Apply slippage to compute min receive for the intent
-    const amountNum = Number(amount || 0) || 0;
-    const minOutHuman = Math.max(
-      0,
-      amountNum * (1 - (slippageBps || 0) / 10000)
-    );
-    const minOutFinalRaw = toRawAmount(String(minOutHuman), decimalsOut);
-
     try {
       setSubmitting(true);
-      // Ensure storage (skip for wrap.near which doesn't require FT storage for near_deposit)
-      if (tokenInAddr !== "wrap.near") {
-        try {
-          await registerTokenFor(tokenInAddr, verifierId);
-        } catch {}
+      // Refresh backend quote for accurate confirm display
+      try {
+        const q = await fetch("/api/ref-quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tokenInId,
+            tokenOutId,
+            amountInHuman: amount,
+          }),
+        });
+        if (q.ok) {
+          const j = await q.json();
+          if (j?.expectedOut) setQuoteOut(String(j.expectedOut));
+        }
+      } catch {}
+      // Build transactions on the server to avoid CSP and SDK env issues
+      const res = await fetch("/api/ref-swap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tokenInId,
+          tokenOutId,
+          amountInHuman: amount,
+          slippageBps,
+          accountId,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as any));
+        throw new Error(err?.message || "Failed to build swap transactions");
       }
-      if (tokenOutAddr !== "wrap.near") {
-        try {
-          await registerToken(tokenOutAddr);
-        } catch {}
+      const { txs } = await res.json();
+
+      // Ensure storage and wrapping before sending
+      try {
+        // Register output token for user (so we can receive it)
+        if (tokenOutId !== wnearAddr) {
+          await registerToken(tokenOutId);
+        }
+      } catch {}
+      try {
+        // Register receiver (Ref contract) on input token contract
+        const firstFc = txs?.[0]?.functionCalls?.[0];
+        const refReceiver: string | undefined = firstFc?.args?.receiver_id;
+        if (refReceiver) {
+          await registerTokenFor(tokenInId, refReceiver);
+        }
+      } catch {}
+      try {
+        // Wrap NEAR to wNEAR if needed
+        if (isFromNear) {
+          const raw = toRawAmount(amount, 24);
+          await wrapNear(raw);
+        }
+      } catch {}
+      for (const tx of txs) {
+        const normalizeYocto = (v?: string) => {
+          if (!v) return "0";
+          return v.includes(".") ? toRawAmount(v, 24) : v;
+        };
+        const actions = Array.isArray(tx.functionCalls)
+          ? tx.functionCalls.map((fc: any) => ({
+              type: "FunctionCall",
+              params: {
+                methodName: fc.methodName,
+                args: fc.args,
+                gas: fc.gas || "180000000000000",
+                deposit: normalizeYocto(fc.amount || fc.deposit || "0"),
+              },
+            }))
+          : [];
+        await signAndSendTransaction(tx.receiverId, actions as any);
       }
 
-      // 0) Wrap if sending NEAR (convert to WNEAR first)
-      if (isFromNear) {
-        await wrapNear(rawIn);
-      }
-      // 1) Deposit input tokens (tokenInAddr) to verifier
-      await depositInto(tokenInAddr, verifierId, rawIn);
-      // 2) Build intents (multi-leg example; use one or many legs as needed)
-      const intents = [
-        buildTokenDiff(
-          tokenInAddr,
-          rawIn,
-          tokenOutAddr,
-          minOutFinalRaw,
-          5 * 60 * 1000
-        ),
-      ];
-      // 2.5) Simulate and log response
+      // Optionally unwrap if receiving NEAR
       try {
-        const sim = await simulateIntents(verifierId, {
-          intents,
-          beneficiary: accountId,
-        });
-        console.log("simulate_intents response:", sim);
-      } catch (e: any) {
-        const msg = typeof e?.message === "string" ? e.message : String(e);
-        // Some verifiers require signed payloads for simulation; skip hard error
-        if (msg.includes("missing field `signed")) {
-          console.info(
-            "simulate_intents requires signed payload; skipping simulation"
-          );
-        } else {
-          console.warn("simulate_intents failed:", e);
+        if (isToNear) {
+          const raw = toRawAmount(String(quoteOut || liveQuote || "0"), 24);
+          await unwrapNear(raw);
         }
-      }
-      // 3) Execute intents
-      await executeIntents(verifierId, { intents, beneficiary: accountId });
-      // 4) Unwrap if receiving NEAR (convert from WNEAR)
-      if (isToNear) {
-        try {
-          await unwrapNear(minOutFinalRaw);
-        } catch (e) {
-          console.warn("Unwrap NEAR failed (will remain WNEAR):", e);
-        }
-      }
+      } catch {}
+
       onSuccess();
     } catch (e: any) {
       console.error("Swap failed", e);
@@ -184,7 +295,12 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     }
   };
 
-  const selectable = DEFAULT_TOKENS; // include NEAR + FTs
+  // Filter out wNEAR and bridged tokens from selectors
+  const isBridged = (addr?: string) =>
+    !!addr && /\.factory\.bridge\.near$/i.test(addr);
+  const selectable = DEFAULT_TOKENS.filter((t) =>
+    t.symbol === "NEAR" ? true : t.symbol !== "WNEAR" && !isBridged(t.address)
+  );
 
   if (step === "swap") {
     return (
@@ -282,6 +398,12 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                       placeholder="0.00"
                       className="w-full bg-[#1a1f3a] text-white/90 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-cyan-500"
                     />
+                    {liveQuote && Number(amount) > 0 && (
+                      <div className="text-cyan-400 text-sm">
+                        Expected: {liveQuote} {toToken}
+                        {quoteLoading && <span className="ml-2">⏳</span>}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -318,11 +440,11 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     const fromMeta = getKnownTokenBySymbol(fromToken) || DEFAULT_TOKENS[0];
     const toMeta = getKnownTokenBySymbol(toToken) || DEFAULT_TOKENS[0];
     const amountNum = Number(amount || 0) || 0;
-    const minReceiveNum = Math.max(
-      0,
-      amountNum * (1 - (slippageBps || 0) / 10000)
-    );
-    const verifierLabel = verifierId || "(not configured)";
+    const basisQuote = quoteOut ?? liveQuote;
+    const minReceiveNum = basisQuote
+      ? Number(basisQuote) * (1 - (slippageBps || 0) / 10000)
+      : Math.max(0, amountNum * (1 - (slippageBps || 0) / 10000));
+    const verifierLabel = "Rhea Router";
     return (
       <div className="fixed inset-0 bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] z-50 overflow-y-auto">
         <div className="max-w-md mx-auto min-h-screen pb-6">
@@ -385,7 +507,7 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <div className="text-white/70">Verifier</div>
+                  <div className="text-white/70">Router</div>
                   <div className="text-white/60 text-sm font-mono truncate max-w-[55%] text-right">
                     {verifierLabel}
                   </div>
@@ -424,21 +546,17 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                 </div>
               </div>
 
-              <div className="bg-[#1a1f3a] rounded-xl p-4 flex items-start gap-3">
-                <div className="w-5 h-5 border-2 border-[#0075EA] rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <div className="w-2 h-2 bg-[#0075EA] rounded-full" />
-                </div>
-                <p className="text-white/70 text-sm">
-                  Please double check recipient address
-                </p>
-              </div>
-
               <button
                 onClick={handleSwap}
                 className="w-full py-4 bg-[#0075EA] text-white rounded-full text-lg font-bold hover:bg-cyan-600 transition-colors"
               >
                 {submitting ? "SWAPPING..." : "CONFIRM"}
               </button>
+              {error && (
+                <div className="text-red-400 text-sm text-center mt-2">
+                  {error}
+                </div>
+              )}
             </div>
           </div>
         </div>
