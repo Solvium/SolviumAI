@@ -27,7 +27,7 @@ const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
   }, []); // Empty dependency array - only run once on mount
 
   return (
-    <div className="min-h-screen w-full pb-24 bg-gradient-to-b from-[#1a237e] via-[#283593] to-[#1a237e] relative overflow-hidden">
+    <div className="h-screen w-full  bg-gradient-to-b from-[#1a237e] via-[#283593] to-[#1a237e] relative overflow-y-auto">
       {/* Header */}
       <div className="flex items-center justify-between p-4 pt-8">
         <button
@@ -73,7 +73,7 @@ const ProfileHeader = ({ userDetails }: { userDetails: any }) => {
       <div className="relative">
         <img
           src={userDetails?.avatar_url || userDetails?.avatar || profileImg.src}
-          className="w-24 h-24 rounded-full object-cover"
+          className="w-16 md:w-24 md:h-24 h-16 rounded-full object-cover"
           alt="Profile"
           onError={(e) => {
             // Fallback to default image if avatar fails to load
@@ -83,7 +83,7 @@ const ProfileHeader = ({ userDetails }: { userDetails: any }) => {
       </div>
 
       {/* Username */}
-      <h1 className="text-2xl font-bold text-white">
+      <h1 className="text-sm md:text-2xl font-bold text-white">
         {userDetails?.username || "User"}
       </h1>
 
@@ -98,7 +98,7 @@ const ProfileHeader = ({ userDetails }: { userDetails: any }) => {
 
       {/* Edit Profile Button */}
       <div className="relative">
-        <button className="w-[fit] font-bold h-[40px] px-[44px] rounded-[40px] border-2 border-[rgba(23,61,231,1)] bg-transparent text-white font-medium text-sm hover:bg-blue-500/10 transition-all duration-200 flex items-center justify-center shadow-[5px_-1px_56.3px_0px_rgba(0,0,0,0.5)] sm:text-xs md:text-sm">
+        <button className="w-[fit] font-bold md:h-[40px] h-[25px] px-[44px] rounded-[40px] border-2 border-[rgba(23,61,231,1)] bg-transparent text-white font-medium text-sm hover:bg-blue-500/10 transition-all duration-200 flex items-center justify-center shadow-[5px_-1px_56.3px_0px_rgba(0,0,0,0.5)] sm:text-xs md:text-sm">
           Edit Profile
         </button>
       </div>
@@ -181,7 +181,7 @@ const LevelProgress = ({ userDetails }: { userDetails: any }) => {
   }
 
   return (
-    <div className="bg-blue-800/50 rounded-3xl p-6 border border-blue-600/30">
+    <div className="bg-blue-800/50 rounded-3xl md:p-6 p-3 border border-blue-600/30">
       <div className="flex items-center justify-between mb-4 w-full">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
@@ -190,10 +190,10 @@ const LevelProgress = ({ userDetails }: { userDetails: any }) => {
             </span>
           </div>
           <div>
-            <h3 className="text-white font-bold text-lg">
+            <h3 className="text-white font-bold md:text-lg text-sm">
               Level {levelInfo.currentLevel} - {levelInfo.levelTitle}
             </h3>
-            <p className="text-blue-300 text-sm">
+            <p className="text-blue-300 md:text-sm text-xs">
               {levelInfo.pointsToNext} Points to next level
             </p>
           </div>
@@ -202,7 +202,7 @@ const LevelProgress = ({ userDetails }: { userDetails: any }) => {
 
       {/* Real Progress Bar */}
       <div className="relative">
-        <div className="relative flex items-center w-[100%] overflow-hidden justify-between bg-[rgba(243,177,78,0.7)] rounded-full h-8">
+        <div className="relative flex items-center w-[100%] overflow-hidden justify-between bg-[rgba(243,177,78,0.7)] rounded-full lg:h-8 h-6">
           <div
             className="bg-[rgba(243,177,78,1)] rounded-full h-full absolute transition-all duration-500"
             style={{ width: `${levelInfo.progressPercentage}%` }}
@@ -232,34 +232,34 @@ const StatsSection = ({ userDetails }: { userDetails: any }) => {
   return (
     <div className="grid grid-cols-3 gap-4">
       {/* SOLV Points */}
-      <div className="bg-blue-800/50 border-2 border-[#173DE7] flex flex-col items-center justify-center rounded-3xl p-6 text-center">
-        <img src={coins.src} className="w-[30px]" alt="Coins" />
-        <div className="text-[15px] font-bold text-white mb-1">
+      <div className="bg-blue-800/50 border-2 border-[#173DE7] flex flex-col items-center justify-center rounded-3xl md:p-6 p-3 text-center">
+        <img src={coins.src} className="md:w-[30px] w-[20px]" alt="Coins" />
+        <div className="md:text-[15px] text-[10px] font-bold text-white mb-1">
           {userDetails?.totalSOLV || userDetails?.totalPoints || 0}
         </div>
-        <div className="text-blue-300 text-[10px] font-medium uppercase tracking-wider mt-2">
+        <div className="text-blue-300 md:text-[10px] text-[8px] font-medium uppercase tracking-wider mt-2">
           SOLV
         </div>
       </div>
 
       {/* Contests */}
-      <div className="bg-blue-800/50 border-2 border-[#173DE7] flex flex-col items-center justify-center rounded-3xl p-6 text-center">
-        <img src={trophy.src} className="w-[30px]" alt="Trophy" />
-        <div className="text-[15px] font-bold text-white mb-1">
+      <div className="bg-blue-800/50 border-2 border-[#173DE7] flex flex-col items-center justify-center rounded-3xl md:p-6 p-3 text-center">
+        <img src={trophy.src} className="md:w-[30px] w-[20px]" alt="Trophy" />
+        <div className="md:text-[15px] text-[10px] font-bold text-white mb-1">
           {userDetails?.contests_participated || 0}
         </div>
-        <div className="text-blue-300 text-[10px] font-medium uppercase tracking-wider mt-2">
+        <div className="text-blue-300 md:text-[10px] text-[8px] font-medium uppercase tracking-wider mt-2">
           CONTESTS
         </div>
       </div>
 
       {/* Tasks */}
-      <div className="bg-blue-800/50 border-2 border-[#173DE7] flex flex-col items-center justify-center rounded-3xl p-6 text-center">
-        <img src={task.src} className="w-[30px]" alt="Tasks" />
-        <div className="text-[15px] font-bold text-white mb-1">
+      <div className="bg-blue-800/50 border-2 border-[#173DE7] flex flex-col items-center justify-center rounded-3xl md:p-6 p-3 text-center">
+        <img src={task.src} className="md:w-[30px] w-[20px]" alt="Tasks" />
+        <div className="md:text-[15px] text-[10px] font-bold text-white mb-1">
           {userDetails?.tasks_completed || 0}
         </div>
-        <div className="text-blue-300 text-[10px] font-medium uppercase tracking-wider mt-2">
+        <div className="text-blue-300 md:text-[10px] text-[8px] font-medium uppercase tracking-wider mt-2">
           TASKS
         </div>
       </div>
@@ -299,14 +299,14 @@ const InviteSection = ({ userDetails }: any) => {
   };
 
   return (
-    <div className="bg-blue-800/50 rounded-3xl p-6 border border-blue-600/30">
+    <div className="bg-blue-800/50 rounded-3xl md:p-6 p-3 border border-blue-600/30">
       <h3 className="text-white font-bold text-center flex justify-center  w-full mb-4">
         Invite friends and earn rewards
       </h3>
 
       <button
         onClick={handleCopy}
-        className="w-fit bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-yellow-900 font-bold py-3 px-6 rounded-full transition-all duration-200 flex items-center justify-center gap-2 mx-auto"
+        className="w-fit bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-yellow-900 font-bold md:py-3 py-1 md:px-6 px-3 rounded-full transition-all duration-200 flex items-center justify-center gap-2 mx-auto"
       >
         <span>{copyState}</span>
         <Copy className="w-4 h-4" />
