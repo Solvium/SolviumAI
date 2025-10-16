@@ -32,6 +32,9 @@ const WalletPage = () => {
   const [tokenHoldings, setTokenHoldings] = useState<
     { id: string; symbol: string; balance: string; decimals?: number }[]
   >([]);
+  const [tokenPricesUsd, setTokenPricesUsd] = useState<Record<string, number>>(
+    {}
+  );
   const portfolio = useWalletPortfolioContext();
 
   // Disable background scroll when a modal/flow is active
@@ -117,6 +120,54 @@ const WalletPage = () => {
     }));
     setTokenHoldings(mapped);
   }, [portfolio]);
+
+  // Fetch USD prices for all token holdings
+  useEffect(() => {
+    (async () => {
+      try {
+        const uniqueIds = Array.from(
+          new Set(
+            (tokenHoldings || []).map((t) =>
+              t.symbol === "NEAR" ? "wrap.near" : t.id
+            )
+          )
+        ).filter(Boolean) as string[];
+        if (uniqueIds.length === 0) return;
+        const entries = await Promise.all(
+          uniqueIds.map(async (id) => {
+            // Stablecoins
+            if (
+              id.toLowerCase() ===
+                "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.factory.bridge.near" ||
+              id.toLowerCase() ===
+                "dac17f958d2ee523a2206206994597c13d831ec7.factory.bridge.near"
+            ) {
+              return [id, 1] as const;
+            }
+            const res = await fetch(
+              `/api/wallet?action=price&token=${encodeURIComponent(id)}`,
+              {
+                method: "GET",
+                headers: { Accept: "application/json" },
+                cache: "no-store",
+              }
+            );
+            if (!res.ok) return [id, NaN] as const;
+            const data = await res.json().catch(() => null);
+            const p = Number(data?.priceUsd);
+            return [id, Number.isFinite(p) && p > 0 ? p : NaN] as const;
+          })
+        );
+        const map: Record<string, number> = {};
+        for (const [id, p] of entries) if (Number.isFinite(p)) map[id] = p;
+        // Mirror NEAR if present
+        if (map["wrap.near"] && nearUsd && !Number.isNaN(nearUsd)) {
+          map["near"] = nearUsd;
+        }
+        setTokenPricesUsd(map);
+      } catch {}
+    })();
+  }, [tokenHoldings, nearUsd]);
 
   useEffect(() => {
     if (!account || nearBalance) return;
@@ -355,13 +406,26 @@ const WalletPage = () => {
                           <td className="py-2 pr-4">{nearBalance ?? "0"}</td>
                           <td className="py-2 pr-4">${usdBalance}</td>
                         </tr>
-                        {tokenHoldings.map((t) => (
-                          <tr key={t.id}>
-                            <td className="py-2 pr-4">{t.symbol}</td>
-                            <td className="py-2 pr-4">{t.balance}</td>
-                            <td className="py-2 pr-4">—</td>
-                          </tr>
-                        ))}
+                        {tokenHoldings.map((t) => {
+                          const idOrNear =
+                            t.symbol === "NEAR" ? "wrap.near" : t.id;
+                          const price =
+                            t.symbol === "NEAR" && nearUsd
+                              ? nearUsd
+                              : tokenPricesUsd[idOrNear] || 0;
+                          const balNum = Number(t.balance || 0);
+                          const usd =
+                            Number.isFinite(balNum) && price
+                              ? balNum * price
+                              : 0;
+                          return (
+                            <tr key={t.id}>
+                              <td className="py-2 pr-4">{t.symbol}</td>
+                              <td className="py-2 pr-4">{t.balance}</td>
+                              <td className="py-2 pr-4">${usd.toFixed(4)}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

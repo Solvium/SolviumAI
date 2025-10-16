@@ -7,6 +7,7 @@ import {
   refQuoteSimple,
   refQuoteSimpleNoInit,
 } from "@/lib/ref";
+import { REF_NODE_URL } from "@/config/ref";
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Force FastNear node URL if provided
-    const preferNode = process.env.NEXT_PUBLIC_REF_NODE_URL;
+    const preferNode = REF_NODE_URL;
     let cfg;
     if (preferNode) {
       cfg = await initRefEnvWithNodeUrl(preferNode);
@@ -56,9 +57,11 @@ export async function POST(req: NextRequest) {
 
     let expectedOut: string | undefined;
     let swapTodos: any;
-    // Try primary
+    // Try primary (respect override): use NoInit variant if we already set nodeUrl
     try {
-      const res = await refQuoteSimple(tokenInId, tokenOutId, amountInHuman);
+      const res = preferNode
+        ? await refQuoteSimpleNoInit(tokenInId, tokenOutId, amountInHuman)
+        : await refQuoteSimple(tokenInId, tokenOutId, amountInHuman);
       expectedOut = res.expectedOut;
       swapTodos = res.swapTodos;
     } catch (e) {

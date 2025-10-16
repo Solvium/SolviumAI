@@ -6,7 +6,9 @@ import {
   buildRefInstantSwapTransactionsNoInit,
   ensureRefEnv,
   initRefEnvWithNodeUrl,
+  validateFtIds,
 } from "@/lib/ref";
+import { REF_NODE_URL } from "@/config/ref";
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Force FastNear node URL if provided
-    const preferNode = process.env.NEXT_PUBLIC_REF_NODE_URL;
+    const preferNode = REF_NODE_URL;
     if (preferNode) {
       await initRefEnvWithNodeUrl(preferNode);
     } else {
@@ -50,15 +52,44 @@ export async function POST(req: NextRequest) {
     }
     let txs: any;
     let swapTodos: any;
+
+    // Validate tokens exist before building transactions to avoid opaque SDK errors
     try {
-      const r = await buildRefInstantSwapTransactions({
-        tokenInId,
-        tokenOutId,
-        amountInHuman,
-        slippageBps: typeof slippageBps === "number" ? slippageBps : 50,
-        accountId,
-        referralId,
-      });
+      await validateFtIds(tokenInId, tokenOutId);
+    } catch (e: any) {
+      const code = e?.code || "invalid_token";
+      const details = e?.details || {};
+      return NextResponse.json(
+        {
+          error: code,
+          message:
+            code === "token_in_not_exist"
+              ? `Input token does not exist: ${details.id}`
+              : code === "token_out_not_exist"
+              ? `Output token does not exist: ${details.id}`
+              : "Invalid token provided",
+        },
+        { status: 400 }
+      );
+    }
+    try {
+      const r = preferNode
+        ? await buildRefInstantSwapTransactionsNoInit({
+            tokenInId,
+            tokenOutId,
+            amountInHuman,
+            slippageBps: typeof slippageBps === "number" ? slippageBps : 50,
+            accountId,
+            referralId,
+          })
+        : await buildRefInstantSwapTransactions({
+            tokenInId,
+            tokenOutId,
+            amountInHuman,
+            slippageBps: typeof slippageBps === "number" ? slippageBps : 50,
+            accountId,
+            referralId,
+          });
       txs = r.txs;
       swapTodos = r.swapTodos;
     } catch (e) {

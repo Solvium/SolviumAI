@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ArrowLeft, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toRawAmount } from "@/lib/nearIntents";
 // Quotes are now retrieved from server-side Ref SDK via /api/ref-quote
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
+import { useWalletPortfolioContext } from "@/contexts/WalletPortfolioContext";
 import {
   DEFAULT_TOKENS,
   getKnownTokenBySymbol,
@@ -59,6 +60,7 @@ const tokens = [
 ];
 
 const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
+  const { tokens: walletTokens, nearBalance } = useWalletPortfolioContext();
   const [step, setStep] = useState<SwapStep>("swap");
   const [fromToken, setFromToken] = useState("NEAR");
   const [toToken, setToToken] = useState("USDC");
@@ -68,6 +70,31 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
   const [quoteOut, setQuoteOut] = useState<string | null>(null);
   const [liveQuote, setLiveQuote] = useState<string | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
+
+  // Simple USD price map for display
+  const [pricesUsd, setPricesUsd] = useState<Record<string, number>>({});
+  // prices are fetched later once `selectable` is computed
+
+  // Balance helpers and MAX handler
+  const getFromTokenBalance = useCallback((): string => {
+    if (fromToken === "NEAR") return nearBalance || "0";
+    const t = (walletTokens || []).find(
+      (x) => String(x.symbol).toUpperCase() === String(fromToken).toUpperCase()
+    );
+    return t?.balance || "0";
+  }, [fromToken, walletTokens, nearBalance]);
+
+  const handleMax = useCallback(() => {
+    const balStr = getFromTokenBalance();
+    const bal = Number(balStr || 0);
+    if (!isFinite(bal) || bal <= 0) return;
+    if (fromToken === "NEAR") {
+      const safe = Math.max(0, bal - 0.02);
+      setAmount(safe > 0 ? safe.toFixed(5) : "0");
+    } else {
+      setAmount(bal.toString());
+    }
+  }, [fromToken, getFromTokenBalance]);
 
   // Convert raw integer token amount to human string
   const fromRawAmount = useCallback((raw: string, decimals: number) => {
@@ -83,6 +110,80 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     return negative ? `-${result}` : result;
   }, []);
 
+  // Build selectable tokens early: wallet tokens first, include defaults, hide WNEAR
+  const selectable = useMemo(() => {
+    const walletKnown = Array.isArray(walletTokens)
+      ? walletTokens
+          .filter((t) => !!t?.id && !!t?.symbol)
+          .map((t) => ({
+            symbol: String(t.symbol).toUpperCase(),
+            name: String(t.symbol).toUpperCase(),
+            kind: "ft" as const,
+            address: t.id,
+            decimals: t.decimals,
+          }))
+      : [];
+    const mergedBySymbol = new Map<string, any>();
+    for (const tk of walletKnown) {
+      if (tk.symbol !== "WNEAR") mergedBySymbol.set(tk.symbol, tk);
+    }
+    for (const tk of DEFAULT_TOKENS) {
+      if (tk.symbol !== "WNEAR" && !mergedBySymbol.has(tk.symbol)) {
+        mergedBySymbol.set(tk.symbol, tk);
+      }
+    }
+    return Array.from(mergedBySymbol.values());
+  }, [walletTokens]);
+
+  // Fetch token prices after selectable is ready
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!Array.isArray(selectable) || selectable.length === 0) return;
+        const entries = await Promise.all(
+          selectable.map(async (t) => {
+            if (t.symbol === "USDC" || t.symbol === "USDT") {
+              return [t.symbol, 1] as const;
+            }
+            const tokenId = t.symbol === "NEAR" ? "wrap.near" : t.address;
+            if (!tokenId) return [t.symbol, NaN] as const;
+            const res = await fetch(
+              `/api/wallet?action=price&token=${encodeURIComponent(tokenId)}`,
+              {
+                method: "GET",
+                headers: { Accept: "application/json" },
+                cache: "no-store",
+              }
+            );
+            if (!res.ok) return [t.symbol, NaN] as const;
+            const data = await res.json().catch(() => null);
+            const p = Number(data?.priceUsd);
+            return [t.symbol, Number.isFinite(p) && p > 0 ? p : NaN] as const;
+          })
+        );
+        const map: Record<string, number> = {};
+        for (const [sym, p] of entries) if (Number.isFinite(p)) map[sym] = p;
+        if (map.WNEAR && !map.NEAR) map.NEAR = map.WNEAR;
+        if (map.NEAR && !map.WNEAR) map.WNEAR = map.NEAR;
+        setPricesUsd(map);
+      } catch {}
+    })();
+  }, [selectable]);
+
+  const resolveToken = useCallback(
+    (symbol: string) =>
+      selectable.find(
+        (t) => t.symbol.toLowerCase() === String(symbol).toLowerCase()
+      ) ||
+      getKnownTokenBySymbol(symbol) ||
+      DEFAULT_TOKENS[0],
+    [selectable]
+  );
+
+  // Keep a monotonically increasing request id to ignore stale responses
+  const lastRequestIdRef = useRef(0);
+  let inFlightController: AbortController | null = null;
+
   // Real-time quote fetching (server-side Ref SDK)
   const fetchLiveQuote = useCallback(async () => {
     console.log("fetchLiveQuote called with:", { amount, fromToken, toToken });
@@ -93,18 +194,26 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
 
     try {
       setQuoteLoading(true);
-      const fromMeta = getKnownTokenBySymbol(fromToken) || DEFAULT_TOKENS[0];
-      const toMeta = getKnownTokenBySymbol(toToken) || DEFAULT_TOKENS[0];
+      const fromMeta = resolveToken(fromToken);
+      const toMeta = resolveToken(toToken);
       const isFromNear = fromMeta.symbol === "NEAR";
       const isToNear = toMeta.symbol === "NEAR";
       const wnearAddr = getWNEARAddress();
       const tokenInId = isFromNear ? wnearAddr : fromMeta.address || "";
       const tokenOutId = isToNear ? wnearAddr : toMeta.address || "";
 
-      if (!tokenInId || !tokenOutId) {
+      if (!tokenInId || !tokenOutId || tokenInId === tokenOutId) {
         setLiveQuote(null);
         return;
       }
+      // Abort any previous in-flight request
+      try {
+        inFlightController?.abort();
+      } catch {}
+      const controller = new AbortController();
+      inFlightController = controller;
+      const requestId = ++lastRequestIdRef.current;
+
       const res = await fetch("/api/ref-quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -113,17 +222,21 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
           tokenOutId,
           amountInHuman: amount,
         }),
+        signal: controller.signal,
       });
       if (!res.ok) throw new Error("quote_failed");
       const data = await res.json();
-      setLiveQuote(String(data?.expectedOut || "0"));
+      // Ignore stale responses if a newer request completed after this one
+      if (requestId === lastRequestIdRef.current) {
+        setLiveQuote(String(data?.expectedOut || "0"));
+      }
     } catch (e) {
       console.warn("Live quote failed:", e);
       setLiveQuote(null);
     } finally {
       setQuoteLoading(false);
     }
-  }, [amount, fromToken, toToken, slippageBps, fromRawAmount]);
+  }, [amount, fromToken, toToken, resolveToken]);
 
   // Debounced quote fetching
   useEffect(() => {
@@ -138,14 +251,26 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
   useEffect(() => {
     (async () => {
       if (step !== "confirm") return;
-      const fromMeta = getKnownTokenBySymbol(fromToken) || DEFAULT_TOKENS[0];
-      const toMeta = getKnownTokenBySymbol(toToken) || DEFAULT_TOKENS[0];
+      const fromMeta = resolveToken(fromToken);
+      const toMeta = resolveToken(toToken);
       const isFromNear = fromMeta.symbol === "NEAR";
       const isToNear = toMeta.symbol === "NEAR";
       const wnearAddr = getWNEARAddress();
       const tokenInId = isFromNear ? wnearAddr : fromMeta.address || "";
       const tokenOutId = isToNear ? wnearAddr : toMeta.address || "";
-      if (!amount || Number(amount) <= 0 || !tokenInId || !tokenOutId) return;
+      if (
+        !amount ||
+        Number(amount) <= 0 ||
+        !tokenInId ||
+        !tokenOutId ||
+        tokenInId === tokenInId // placeholder, kept structure consistent
+      )
+        return;
+      // Reuse latest live quote if present for same inputs
+      if (liveQuote && Number(liveQuote) > 0) {
+        setQuoteOut(liveQuote);
+        return;
+      }
       try {
         const res = await fetch("/api/ref-quote", {
           method: "POST",
@@ -163,7 +288,7 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
       } catch {}
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, amount, fromToken, toToken]);
+  }, [step, amount, fromToken, toToken, resolveToken, liveQuote]);
 
   const {
     accountId,
@@ -183,16 +308,16 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
       return;
     }
     // Resolve tokens
-    const fromMeta = getKnownTokenBySymbol(fromToken) || DEFAULT_TOKENS[0];
-    const toMeta = getKnownTokenBySymbol(toToken) || DEFAULT_TOKENS[0];
+    const fromMeta = resolveToken(fromToken);
+    const toMeta = resolveToken(toToken);
     const isFromNear = fromMeta.symbol === "NEAR";
     const isToNear = toMeta.symbol === "NEAR";
     const wnearAddr = getWNEARAddress();
     const tokenInId = isFromNear ? wnearAddr : fromMeta.address || "";
     const tokenOutId = isToNear ? wnearAddr : toMeta.address || "";
 
-    if (!tokenInId || !tokenOutId) {
-      setError("Missing token contract address");
+    if (!tokenInId || !tokenOutId || tokenInId === tokenOutId) {
+      setError("Select two different tokens");
       return;
     }
 
@@ -295,12 +420,7 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     }
   };
 
-  // Filter out wNEAR and bridged tokens from selectors
-  const isBridged = (addr?: string) =>
-    !!addr && /\.factory\.bridge\.near$/i.test(addr);
-  const selectable = DEFAULT_TOKENS.filter((t) =>
-    t.symbol === "NEAR" ? true : t.symbol !== "WNEAR" && !isBridged(t.address)
-  );
+  // selectable already built above
 
   if (step === "swap") {
     return (
@@ -345,16 +465,27 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                       onChange={(e) => setFromToken(e.target.value)}
                       className="w-full bg-[#1a1f3a] text-white/90 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-cyan-500"
                     >
-                      {selectable.map((t) => (
-                        <option key={t.symbol} value={t.symbol}>
-                          {t.symbol} - {t.name}
-                        </option>
-                      ))}
+                      {selectable.map((t) => {
+                        const p = pricesUsd[t.symbol];
+                        const priceText = p ? ` - $${p.toFixed(2)}` : "";
+                        return (
+                          <option key={t.symbol} value={t.symbol}>
+                            {t.symbol} - {t.name}
+                            {priceText}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
                   <div className="flex items-center justify-center">
-                    <button className="w-12 h-12 bg-[#1a1f3a] rounded-full flex items-center justify-center hover:bg-[#252a4a] transition-colors">
+                    <button
+                      className="w-12 h-12 bg-[#1a1f3a] rounded-full flex items-center justify-center hover:bg-[#252a4a] transition-colors"
+                      onClick={() => {
+                        setFromToken(toToken);
+                        setToToken(fromToken);
+                      }}
+                    >
                       <svg
                         className="w-6 h-6 text-cyan-500"
                         fill="none"
@@ -380,27 +511,57 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                     >
                       {selectable
                         .filter((t) => t.symbol !== fromToken)
-                        .map((t) => (
-                          <option key={t.symbol} value={t.symbol}>
-                            {t.symbol} - {t.name}
-                          </option>
-                        ))}
+                        .map((t) => {
+                          const p = pricesUsd[t.symbol];
+                          const priceText = p ? ` - $${p.toFixed(2)}` : "";
+                          return (
+                            <option key={t.symbol} value={t.symbol}>
+                              {t.symbol} - {t.name}
+                              {priceText}
+                            </option>
+                          );
+                        })}
                     </select>
                   </div>
 
                   <div className="space-y-2">
-                    <div className="text-white/70 text-sm">Amount</div>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full bg-[#1a1f3a] text-white/90 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-cyan-500"
-                    />
+                    <div className="flex items-center justify-between">
+                      <div className="text-white/70 text-sm">Amount</div>
+                      <div className="text-white/60 text-xs">
+                        Bal: {getFromTokenBalance()} {fromToken}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full bg-[#1a1f3a] text-white/90 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-cyan-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleMax}
+                        className="px-4 py-3 bg-[#1a1f3a] text-cyan-400 rounded-xl border border-white/10 hover:bg-[#252a4a]"
+                      >
+                        MAX
+                      </button>
+                    </div>
                     {liveQuote && Number(amount) > 0 && (
                       <div className="text-cyan-400 text-sm">
-                        Expected: {liveQuote} {toToken}
+                        Estimated: {liveQuote} {toToken}
+                        {(() => {
+                          const p = pricesUsd[toToken];
+                          if (!p) return null;
+                          const usd = Number(liveQuote) * p;
+                          if (!isFinite(usd)) return null;
+                          return (
+                            <span className="text-white/60 ml-2">
+                              (~${usd.toFixed(2)})
+                            </span>
+                          );
+                        })()}
                         {quoteLoading && <span className="ml-2">⏳</span>}
                       </div>
                     )}
