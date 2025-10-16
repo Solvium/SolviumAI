@@ -10,9 +10,8 @@ import {
   getRemainingRpcRequests,
 } from "@/lib/rateLimiter";
 
-// Price API
-const DEXSCREENER_URL =
-  "https://api.dexscreener.com/latest/dex/tokens/wrap.near";
+// Price API base
+const DEXSCREENER_TOKEN_BASE = "https://api.dexscreener.com/latest/dex/tokens";
 
 // External API URLs
 const NEARBLOCKS_BASE_URL = "https://api.nearblocks.io";
@@ -83,10 +82,12 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Handle price check
+    // Handle price check (optional token address via ?token=<nep141_id>)
     if (action === "price") {
       try {
-        const res = await fetch(DEXSCREENER_URL, {
+        const token = (searchParams.get("token") || "wrap.near").trim();
+        const url = `${DEXSCREENER_TOKEN_BASE}/${encodeURIComponent(token)}`;
+        const res = await fetch(url, {
           method: "GET",
           headers: { Accept: "application/json" },
           cache: "no-store",

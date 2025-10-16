@@ -172,6 +172,29 @@ export async function buildRefInstantSwapTransactions(params: {
   return { txs, swapTodos };
 }
 
+export async function validateFtIds(tokenInId: string, tokenOutId: string) {
+  await ensureRefEnv();
+  const { ftGetTokenMetadata } = await loadRefSdk();
+  try {
+    await ftGetTokenMetadata(tokenInId);
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    const err: any = new Error("token_in_not_exist");
+    err.code = "token_in_not_exist";
+    err.details = { id: tokenInId, message: msg };
+    throw err;
+  }
+  try {
+    await ftGetTokenMetadata(tokenOutId);
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    const err: any = new Error("token_out_not_exist");
+    err.code = "token_out_not_exist";
+    err.details = { id: tokenOutId, message: msg };
+    throw err;
+  }
+}
+
 export async function buildRefInstantSwapTransactionsNoInit(params: {
   tokenInId: string;
   tokenOutId: string;

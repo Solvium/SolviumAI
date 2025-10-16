@@ -8,6 +8,7 @@ import { useNavigation } from "@/contexts/NavigationContext";
 import { useAuth } from "@/contexts/AuthContext";
 import profilepng from "@/components/assets/icons/home/profile.png";
 import Profilebot from "@/components/assets/icons/home/profileBot.svg";
+//
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -18,6 +19,8 @@ const montserrat = Montserrat({
 const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
   const { navigate } = useNavigation();
   const { user } = useAuth();
+  //
+
   return (
     <div className="h-[calc(100vh-75px)] w-full bg-[#040022] flex flex-col">
       {/* Header */}
@@ -124,17 +127,15 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
           </div>
 
           {/* Big home image */}
-      <div className="flex items-center pt-1 justify-center">
-  <Image
-    src="/assets/background/home-image.svg"
-    alt="Home"
-    width={364}
-    height={390}
-    className="object-contain w-auto md:w-[600px] h-[320px] max-w-[630px] lg:h-[500px] xs:h-[200px]"
-  />
-</div>
-
-
+          <div className="flex items-center pt-1 justify-center">
+            <Image
+              src="/assets/background/home-image.svg"
+              alt="Home"
+              width={364}
+              height={390}
+              className="object-contain w-auto md:w-[600px] h-[320px] max-w-[630px] lg:h-[500px] xs:h-[200px]"
+            />
+          </div>
         </div>
       </div>
     </div>

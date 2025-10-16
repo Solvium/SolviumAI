@@ -17,4 +17,4 @@ export const REF_INDEXER_URL: string | undefined =
   process.env.NEXT_PUBLIC_REF_INDEXER_URL || undefined;
 
 export const REF_NODE_URL: string | undefined =
-  process.env.NEXT_PUBLIC_REF_NODE_URL || undefined;
+  process.env.REF_NODE_URL || process.env.NEXT_PUBLIC_REF_NODE_URL || undefined;
