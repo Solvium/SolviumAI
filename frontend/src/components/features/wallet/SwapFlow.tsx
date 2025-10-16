@@ -134,6 +134,37 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     return () => clearTimeout(timer);
   }, [fetchLiveQuote]);
 
+  // Ensure confirm screen has a backend quote ready for min receive display
+  useEffect(() => {
+    (async () => {
+      if (step !== "confirm") return;
+      const fromMeta = getKnownTokenBySymbol(fromToken) || DEFAULT_TOKENS[0];
+      const toMeta = getKnownTokenBySymbol(toToken) || DEFAULT_TOKENS[0];
+      const isFromNear = fromMeta.symbol === "NEAR";
+      const isToNear = toMeta.symbol === "NEAR";
+      const wnearAddr = getWNEARAddress();
+      const tokenInId = isFromNear ? wnearAddr : fromMeta.address || "";
+      const tokenOutId = isToNear ? wnearAddr : toMeta.address || "";
+      if (!amount || Number(amount) <= 0 || !tokenInId || !tokenOutId) return;
+      try {
+        const res = await fetch("/api/ref-quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tokenInId,
+            tokenOutId,
+            amountInHuman: amount,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.expectedOut) setQuoteOut(String(data.expectedOut));
+        }
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, amount, fromToken, toToken]);
+
   const {
     accountId,
     wrapNear,
@@ -167,6 +198,22 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
 
     try {
       setSubmitting(true);
+      // Refresh backend quote for accurate confirm display
+      try {
+        const q = await fetch("/api/ref-quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tokenInId,
+            tokenOutId,
+            amountInHuman: amount,
+          }),
+        });
+        if (q.ok) {
+          const j = await q.json();
+          if (j?.expectedOut) setQuoteOut(String(j.expectedOut));
+        }
+      } catch {}
       // Build transactions on the server to avoid CSP and SDK env issues
       const res = await fetch("/api/ref-swap", {
         method: "POST",
@@ -184,9 +231,55 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
         throw new Error(err?.message || "Failed to build swap transactions");
       }
       const { txs } = await res.json();
+
+      // Ensure storage and wrapping before sending
+      try {
+        // Register output token for user (so we can receive it)
+        if (tokenOutId !== wnearAddr) {
+          await registerToken(tokenOutId);
+        }
+      } catch {}
+      try {
+        // Register receiver (Ref contract) on input token contract
+        const firstFc = txs?.[0]?.functionCalls?.[0];
+        const refReceiver: string | undefined = firstFc?.args?.receiver_id;
+        if (refReceiver) {
+          await registerTokenFor(tokenInId, refReceiver);
+        }
+      } catch {}
+      try {
+        // Wrap NEAR to wNEAR if needed
+        if (isFromNear) {
+          const raw = toRawAmount(amount, 24);
+          await wrapNear(raw);
+        }
+      } catch {}
       for (const tx of txs) {
-        await signAndSendTransaction(tx.receiverId, tx.functionCalls as any);
+        const normalizeYocto = (v?: string) => {
+          if (!v) return "0";
+          return v.includes(".") ? toRawAmount(v, 24) : v;
+        };
+        const actions = Array.isArray(tx.functionCalls)
+          ? tx.functionCalls.map((fc: any) => ({
+              type: "FunctionCall",
+              params: {
+                methodName: fc.methodName,
+                args: fc.args,
+                gas: fc.gas || "180000000000000",
+                deposit: normalizeYocto(fc.amount || fc.deposit || "0"),
+              },
+            }))
+          : [];
+        await signAndSendTransaction(tx.receiverId, actions as any);
       }
+
+      // Optionally unwrap if receiving NEAR
+      try {
+        if (isToNear) {
+          const raw = toRawAmount(String(quoteOut || liveQuote || "0"), 24);
+          await unwrapNear(raw);
+        }
+      } catch {}
 
       onSuccess();
     } catch (e: any) {
@@ -202,7 +295,12 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     }
   };
 
-  const selectable = DEFAULT_TOKENS; // include NEAR + FTs
+  // Filter out wNEAR and bridged tokens from selectors
+  const isBridged = (addr?: string) =>
+    !!addr && /\.factory\.bridge\.near$/i.test(addr);
+  const selectable = DEFAULT_TOKENS.filter((t) =>
+    t.symbol === "NEAR" ? true : t.symbol !== "WNEAR" && !isBridged(t.address)
+  );
 
   if (step === "swap") {
     return (
@@ -342,8 +440,9 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     const fromMeta = getKnownTokenBySymbol(fromToken) || DEFAULT_TOKENS[0];
     const toMeta = getKnownTokenBySymbol(toToken) || DEFAULT_TOKENS[0];
     const amountNum = Number(amount || 0) || 0;
-    const minReceiveNum = quoteOut
-      ? Number(quoteOut) * (1 - (slippageBps || 0) / 10000)
+    const basisQuote = quoteOut ?? liveQuote;
+    const minReceiveNum = basisQuote
+      ? Number(basisQuote) * (1 - (slippageBps || 0) / 10000)
       : Math.max(0, amountNum * (1 - (slippageBps || 0) / 10000));
     const verifierLabel = "Rhea Router";
     return (

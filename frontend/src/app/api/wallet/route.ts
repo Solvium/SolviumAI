@@ -219,14 +219,28 @@ export async function GET(req: NextRequest) {
       const apiKey = "FBF3C110E7A844FA84ADC1DA823C6484"; // Provided API key
       if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
 
-      const upstream = await fetch(
-        `${NEARBLOCKS_BASE_URL}/v1/account/${encodeURIComponent(account)}/txns`,
-        {
-          method: "GET",
-          headers,
-          cache: "no-store",
-        }
-      );
+      // Forward selected query params to upstream (per_page, order, page, from, to)
+      const params = new URLSearchParams();
+      const perPage = searchParams.get("per_page");
+      const order = searchParams.get("order");
+      const page = searchParams.get("page");
+      const from = searchParams.get("from");
+      const to = searchParams.get("to");
+      if (perPage) params.set("per_page", perPage);
+      if (order) params.set("order", order);
+      if (page) params.set("page", page);
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+
+      const url = `${NEARBLOCKS_BASE_URL}/v1/account/${encodeURIComponent(
+        account
+      )}/txns${params.toString() ? `?${params.toString()}` : ""}`;
+
+      const upstream = await fetch(url, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
       const bodyText = await upstream.text();
       const remaining = getRemainingNearblocksRequests();
       console.log(

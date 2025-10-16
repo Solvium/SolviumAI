@@ -1,5 +1,12 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { buildRefInstantSwapTransactions, ensureRefEnv } from "@/lib/ref";
+import {
+  buildRefInstantSwapTransactions,
+  buildRefInstantSwapTransactionsNoInit,
+  ensureRefEnv,
+  initRefEnvWithNodeUrl,
+} from "@/lib/ref";
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,15 +41,69 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await ensureRefEnv();
-    const { txs, swapTodos } = await buildRefInstantSwapTransactions({
-      tokenInId,
-      tokenOutId,
-      amountInHuman,
-      slippageBps: typeof slippageBps === "number" ? slippageBps : 50,
-      accountId,
-      referralId,
-    });
+    // Force FastNear node URL if provided
+    const preferNode = process.env.NEXT_PUBLIC_REF_NODE_URL;
+    if (preferNode) {
+      await initRefEnvWithNodeUrl(preferNode);
+    } else {
+      await ensureRefEnv();
+    }
+    let txs: any;
+    let swapTodos: any;
+    try {
+      const r = await buildRefInstantSwapTransactions({
+        tokenInId,
+        tokenOutId,
+        amountInHuman,
+        slippageBps: typeof slippageBps === "number" ? slippageBps : 50,
+        accountId,
+        referralId,
+      });
+      txs = r.txs;
+      swapTodos = r.swapTodos;
+    } catch (e) {
+      const env = (
+        process.env.NEXT_PUBLIC_REF_ENV ||
+        process.env.NEAR_ENV ||
+        "mainnet"
+      ).toLowerCase();
+      const apiKey =
+        process.env.FASTNEAR_API_KEY ||
+        process.env.NEXT_PUBLIC_FASTNEAR_API_KEY ||
+        "";
+      const fallbacks =
+        env === "testnet"
+          ? [
+              apiKey
+                ? `https://rpc.testnet.fastnear.com?apiKey=${apiKey}`
+                : "https://test.rpc.fastnear.com",
+            ]
+          : [
+              apiKey
+                ? `https://rpc.mainnet.fastnear.com?apiKey=${apiKey}`
+                : "https://free.rpc.fastnear.com",
+            ];
+      let lastErr = e;
+      for (const url of fallbacks) {
+        try {
+          await initRefEnvWithNodeUrl(url);
+          const r = await buildRefInstantSwapTransactionsNoInit({
+            tokenInId,
+            tokenOutId,
+            amountInHuman,
+            slippageBps: typeof slippageBps === "number" ? slippageBps : 50,
+            accountId,
+            referralId,
+          });
+          txs = r.txs;
+          swapTodos = r.swapTodos;
+          break;
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      if (!txs) throw lastErr;
+    }
 
     return NextResponse.json({ txs, swapTodos });
   } catch (error) {

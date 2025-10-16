@@ -1,14 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  getAccountInfo,
-  formatNearAmount,
-  getAccountTxns,
-} from "@/lib/nearblocks";
+import { getAccountInfo, formatNearAmount } from "@/lib/nearblocks";
 import { getAccountFull, formatYoctoToNear } from "@/lib/fastnear";
 import { getNearUsd } from "@/lib/prices";
 // import { getAccountTxnsFastnear } from "@/lib/fastnearExplorer";
@@ -17,6 +13,7 @@ import SendFlow from "@/components/features/wallet/SendFlow";
 import AddFlow from "@/components/features/wallet/AddFlow";
 import SwapFlow from "@/components/features/wallet/SwapFlow";
 import SuccessModal from "@/components/features/wallet/SuccessModal";
+import { useWalletPortfolioContext } from "@/contexts/WalletPortfolioContext";
 
 type ActiveFlow = "send" | "add" | "swap" | null;
 
@@ -27,9 +24,29 @@ const WalletPage = () => {
   const [recentTxns, setRecentTxns] = useState<any[] | null>(null);
   const [allTxns, setAllTxns] = useState<any[] | null>(null);
   const [showAllTxns, setShowAllTxns] = useState(false);
+  const [activeTab, setActiveTab] = useState<"assets" | "txns">("assets");
   const [nearUsd, setNearUsd] = useState<number | null>(null);
   const [activeFlow, setActiveFlow] = useState<ActiveFlow>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const lastWalletFetchAtRef = useRef<number>(0);
+  const [tokenHoldings, setTokenHoldings] = useState<
+    { id: string; symbol: string; balance: string; decimals?: number }[]
+  >([]);
+  const portfolio = useWalletPortfolioContext();
+
+  // Disable background scroll when a modal/flow is active
+  useEffect(() => {
+    try {
+      if (activeFlow) {
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => {
+          document.body.style.overflow = prev;
+        };
+      }
+    } catch {}
+    return;
+  }, [activeFlow]);
 
   useEffect(() => {
     if (!isConnected && !isLoading) {
@@ -50,6 +67,11 @@ const WalletPage = () => {
 
   useEffect(() => {
     if (!accountId) return;
+    const now = Date.now();
+    // Debounce wallet data fetch to at most once every 30s
+    if (now - lastWalletFetchAtRef.current < 30000) return;
+    lastWalletFetchAtRef.current = now;
+
     let cancelled = false;
     (async () => {
       try {
@@ -66,73 +88,7 @@ const WalletPage = () => {
           }
         }
 
-        const nbTxns = await getAccountTxns(accountId);
-        if (!cancelled) {
-          if (Array.isArray(nbTxns)) {
-            console.log("Raw Nearblocks data:", nbTxns.slice(0, 2)); // Debug log
-
-            const normalized = nbTxns.map((row: any) => {
-              // Parse Nearblocks transaction structure
-              const action = row?.actions?.[0];
-
-              // Determine direction relative to current account
-              const signer = row?.signer_account_id;
-              const receiver = row?.receiver_account_id;
-              const isSend = signer === accountId;
-              const isReceive = receiver === accountId && signer !== accountId;
-
-              // Format amount from deposit (in yoctoNEAR)
-              let amount = "";
-              if (action?.deposit && action.deposit > 0) {
-                const nearAmount = action.deposit / 1e24; // Convert yoctoNEAR to NEAR
-                amount = nearAmount.toFixed(4);
-              }
-
-              // Determine transaction type and description
-              let type = "unknown";
-              let description = "Transaction";
-
-              if (action?.action === "TRANSFER") {
-                if (isSend) {
-                  type = "send";
-                  description = "NEAR Sent";
-                } else if (isReceive) {
-                  type = "receive";
-                  description = "NEAR Received";
-                } else {
-                  // Fallback when neither side clearly matches (e.g., contract transfers)
-                  type = signer && signer !== receiver ? "send" : "receive";
-                  description = type === "send" ? "NEAR Sent" : "NEAR Received";
-                }
-              } else if (action?.action === "FUNCTION_CALL") {
-                type = "interact";
-                description = action.method || "Contract Call";
-              }
-
-              return {
-                id: row?.transaction_hash || row?.id,
-                type,
-                amount,
-                token: "NEAR",
-                from: signer ?? row?.predecessor_account_id,
-                to: row?.receiver_account_id,
-                timestamp: row?.block_timestamp,
-                status: row?.outcomes?.status ? "completed" : "failed",
-                description,
-                method: action?.method,
-                fee: row?.outcomes_agg?.transaction_fee
-                  ? (row.outcomes_agg.transaction_fee / 1e24).toFixed(6)
-                  : "0",
-              };
-            });
-
-            setAllTxns(normalized);
-            setRecentTxns(normalized.slice(0, 5)); // Show first 5 by default
-          } else {
-            console.log("Failed to fetch transactions or rate limited");
-            // Keep existing transactions if rate limited
-          }
-        }
+        // txns and tokens are provided by useWalletPortfolio
       } catch (error) {
         console.error("Error fetching wallet data:", error);
       }
@@ -141,6 +97,26 @@ const WalletPage = () => {
       cancelled = true;
     };
   }, [accountId]);
+
+  // Sync txns from portfolio
+  useEffect(() => {
+    if (!portfolio) return;
+    const all = portfolio.txns || [];
+    setAllTxns(all);
+    setRecentTxns(all.slice(0, 5));
+  }, [portfolio]);
+
+  // Sync tokens from portfolio
+  useEffect(() => {
+    if (!portfolio) return;
+    const mapped = (portfolio.tokens || []).map((t) => ({
+      id: t.id,
+      symbol: t.symbol,
+      balance: t.balance,
+      decimals: t.decimals,
+    }));
+    setTokenHoldings(mapped);
+  }, [portfolio]);
 
   useEffect(() => {
     if (!account || nearBalance) return;
@@ -195,14 +171,19 @@ const WalletPage = () => {
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] pb-24 relative overflow-y-auto">
+      <div className="h-screen bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] pb-24 relative overflow-y-auto">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-20 left-10 w-2 h-2 bg-pink-500 rounded-full animate-pulse" />
           <div className="absolute top-40 right-20 w-3 h-3 bg-purple-500 rounded-full animate-pulse delay-100" />
           <div className="absolute bottom-40 left-20 w-2 h-2 bg-blue-500 rounded-full animate-pulse delay-200" />
         </div>
 
-        <div className="relative z-10 px-4 pt-6 space-y-6">
+        <div
+          className={`relative z-10 px-4 pt-6 space-y-6 ${
+            activeFlow ? "pointer-events-none select-none blur-[1px]" : ""
+          }`}
+          aria-hidden={activeFlow ? "true" : undefined}
+        >
           <div className="flex items-center justify-between">
             <Button
               variant="ghost"
@@ -323,108 +304,184 @@ const WalletPage = () => {
             </button>
           </div>
 
-          <div className="mt-8">
-            <div
-              className="rounded-3xl p-[2px]"
-              style={{
-                background:
-                  "linear-gradient(135deg, #00d4ff 0%, #9d4edd 50%, #7b2cbf 100%)",
-              }}
+          {/* Tabs */}
+          <div className="mt-8 flex items-center gap-4">
+            <button
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                activeTab === "assets"
+                  ? "bg-blue-600 text-white"
+                  : "bg-white/10 text-white/70"
+              }`}
+              onClick={() => setActiveTab("assets")}
             >
-              <div className="bg-[#0f1535] rounded-3xl p-6 space-y-4">
-                <h2 className="text-xl font-bold text-white mb-4">
-                  Transactions
-                </h2>
+              Assets
+            </button>
+            <button
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                activeTab === "txns"
+                  ? "bg-blue-600 text-white"
+                  : "bg-white/10 text-white/70"
+              }`}
+              onClick={() => setActiveTab("txns")}
+            >
+              Transactions
+            </button>
+          </div>
 
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                        <svg
-                          className="w-5 h-5 text-white"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <div className="text-white font-medium">
-                          Wallet Earn
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-yellow-400 font-bold">$120.32</div>
+          {/* Assets tab (default) */}
+          {activeTab === "assets" && (
+            <div className="mt-6">
+              <div
+                className="rounded-3xl p-[2px]"
+                style={{
+                  background:
+                    "linear-gradient(135deg, #00d4ff 0%, #9d4edd 50%, #7b2cbf 100%)",
+                }}
+              >
+                <div className="bg-[#0f1535] rounded-3xl p-6 space-y-4">
+                  <h2 className="text-xl font-bold text-white mb-2">Assets</h2>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-left text-white text-sm">
+                      <thead className="text-white/70">
+                        <tr>
+                          <th className="py-2 pr-4">Token</th>
+                          <th className="py-2 pr-4">Balance</th>
+                          <th className="py-2 pr-4">Value (USD)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="py-2 pr-4">NEAR</td>
+                          <td className="py-2 pr-4">{nearBalance ?? "0"}</td>
+                          <td className="py-2 pr-4">${usdBalance}</td>
+                        </tr>
+                        {tokenHoldings.map((t) => (
+                          <tr key={t.id}>
+                            <td className="py-2 pr-4">{t.symbol}</td>
+                            <td className="py-2 pr-4">{t.balance}</td>
+                            <td className="py-2 pr-4">—</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-
-                  {(showAllTxns ? allTxns : recentTxns)?.map((txn, idx) => (
-                    <div
-                      key={`${txn.id || "noid"}-${txn.timestamp || idx}`}
-                      className="flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            txn.type === "receive"
-                              ? "bg-gradient-to-br from-green-400 to-green-600"
-                              : txn.type === "send"
-                              ? "bg-gradient-to-br from-red-400 to-red-600"
-                              : "bg-gradient-to-br from-blue-400 to-purple-500"
-                          }`}
-                        >
-                          <span className="text-white text-xs font-bold">
-                            {txn.type === "receive"
-                              ? "↗"
-                              : txn.type === "send"
-                              ? "↘"
-                              : "⚡"}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="text-white font-medium">
-                            {txn.description}
-                          </div>
-                          <div className="text-white/50 text-xs">
-                            {txn.from?.slice(0, 8)}...{txn.from?.slice(-4)} →{" "}
-                            {txn.to?.slice(0, 8)}...{txn.to?.slice(-4)}
-                          </div>
-                          {txn.status === "failed" && (
-                            <div className="text-red-400 text-xs">Failed</div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        {txn.amount && (
-                          <div className="text-yellow-400 font-bold">
-                            {txn.amount} NEAR
-                          </div>
-                        )}
-                        {txn.fee && txn.fee !== "0" && (
-                          <div className="text-white/50 text-xs">
-                            Fee: {txn.fee} NEAR
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* See More/Less Button */}
-                  {allTxns && allTxns.length > 5 && (
-                    <div className="flex justify-center mt-4">
-                      <button
-                        onClick={() => setShowAllTxns(!showAllTxns)}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-                      >
-                        {showAllTxns
-                          ? "Show Less"
-                          : `See More (${allTxns.length - 5} more)`}
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* Transactions tab */}
+          {activeTab === "txns" && (
+            <div className="mt-6">
+              <div
+                className="rounded-3xl p-[2px]"
+                style={{
+                  background:
+                    "linear-gradient(135deg, #00d4ff 0%, #9d4edd 50%, #7b2cbf 100%)",
+                }}
+              >
+                <div className="bg-[#0f1535] rounded-3xl p-6 space-y-4">
+                  <h2 className="text-xl font-bold text-white mb-4">
+                    Transactions
+                  </h2>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                          <svg
+                            className="w-5 h-5 text-white"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <div className="text-white font-medium">
+                            Wallet Earn
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-yellow-400 font-bold">$120.32</div>
+                    </div>
+
+                    {((showAllTxns ? allTxns : recentTxns) || []).length ===
+                      0 && (
+                      <div className="text-white/60 text-sm">
+                        No transactions found.
+                      </div>
+                    )}
+                    {(showAllTxns ? allTxns : recentTxns)?.map((txn, idx) => (
+                      <div
+                        key={`${txn.id || "noid"}-${txn.timestamp || idx}`}
+                        className="flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                              txn.type === "receive"
+                                ? "bg-gradient-to-br from-green-400 to-green-600"
+                                : txn.type === "send"
+                                ? "bg-gradient-to-br from-red-400 to-red-600"
+                                : "bg-gradient-to-br from-blue-400 to-purple-500"
+                            }`}
+                          >
+                            <span className="text-white text-xs font-bold">
+                              {txn.type === "receive"
+                                ? "↗"
+                                : txn.type === "send"
+                                ? "↘"
+                                : "⚡"}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="text-white font-medium">
+                              {txn.description}
+                            </div>
+                            <div className="text-white/50 text-xs">
+                              {txn.from?.slice(0, 8)}...{txn.from?.slice(-4)} →{" "}
+                              {txn.to?.slice(0, 8)}...{txn.to?.slice(-4)}
+                            </div>
+                            {txn.status === "failed" && (
+                              <div className="text-red-400 text-xs">Failed</div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          {txn.amount && (
+                            <div className="text-yellow-400 font-bold">
+                              {txn.amount} NEAR
+                            </div>
+                          )}
+                          {txn.fee && txn.fee !== "0" && (
+                            <div className="text-white/50 text-xs">
+                              Fee: {txn.fee} NEAR
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* See More/Less Button */}
+                    {allTxns && allTxns.length > 5 && (
+                      <div className="flex justify-center mt-4">
+                        <button
+                          onClick={() => setShowAllTxns(!showAllTxns)}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                        >
+                          {showAllTxns
+                            ? "Show Less"
+                            : `See More (${allTxns.length - 5} more)`}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {/* Close outer mt-6 wrapper */}
+            </div>
+          )}
         </div>
       </div>
 
