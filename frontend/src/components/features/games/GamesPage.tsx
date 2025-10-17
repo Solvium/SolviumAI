@@ -63,14 +63,14 @@ const GamesPage = () => {
           <div className="absolute top-6 left-4 z-20 mt-1">
             <button
               onClick={() => navigate.back()}
-              className="flex items-center gap-2 text-white hover:text-purple-300 transition-colors"
+              className="flex items-center md:gap-2 gap-1 text-white hover:text-purple-300 transition-colors"
             >
-              <ChevronLeft className="w-4 h-4" />
-              <span className="text-sm font-semibold">Back</span>
+              <ChevronLeft className="md:w-4 md:h-4 w-3 h-3" />
+              <span className="text-xs md:text-sm font-semibold">Back</span>
             </button>
           </div>
 
-          <div className="absolute top-5 right-8 z-20">
+          <div className="absolute top-5 md:right-8 right-4 z-20">
             <h1
               className="text-3xl md:text-4xl font-bold text-white tracking-[0.3em] drop-shadow-2xl"
               style={{ fontFamily: "'Pixelify Sans', monospace", letterSpacing: "0.2em" }}
@@ -80,7 +80,7 @@ const GamesPage = () => {
           </div>
 
           <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 pt-24 pb-8">
-            <div className="flex flex-col gap-6 w-full max-w-md mb-8">
+            <div className="flex flex-col md:gap-6 gap-1 w-full max-w-md mb-8">
               {games.map((game) => (
                 <button
                   key={game.id}
@@ -92,7 +92,7 @@ const GamesPage = () => {
               ))}
             </div>
 
-            <div className="absolute top-[70%] -right-4 w-48 h-48 md:w-56 md:h-56">
+            <div className="absolute md:top-[70%] top-[62%] md:-right-4 -right-12 w-48 h-48 md:w-56 md:h-56">
               <Image
                 src="/assets/games/mascot.svg"
                 alt="Mascot"

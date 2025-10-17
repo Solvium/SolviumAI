@@ -82,7 +82,7 @@ const LeaderBoard = () => {
         {second && (
           <div className="flex flex-col items-center">
             <div className="relative">
-              <div className="w-20 h-20 rounded-full border-4 border-white overflow-hidden bg-white">
+              <div className="md:w-20 md:h-20 w-16 h-16 rounded-full border-4 border-white overflow-hidden bg-white">
                 {second.avatar_url || second.avatar ? (
                   <img
                     src={
@@ -117,7 +117,7 @@ const LeaderBoard = () => {
         {/* 1st Place */}
         {first && (
           <div className="flex flex-col items-center -mt-4">
-            <div className="w-32 h-32 rounded-full border-4 border-yellow-400 overflow-hidden bg-white mb-2">
+            <div className="md:w-32 md:h-32 w-20 h-20 rounded-full border-4 border-yellow-400 overflow-hidden bg-white mb-2">
               {first.avatar_url || first.avatar ? (
                 <img
                   src={first.avatar_url || first.avatar || "/placeholder.svg"}
@@ -147,7 +147,7 @@ const LeaderBoard = () => {
         {third && (
           <div className="flex flex-col items-center">
             <div className="relative">
-              <div className="w-20 h-20 rounded-full border-4 border-white overflow-hidden bg-white">
+              <div className="md:w-20 md:h-20 w-16 h-16 rounded-full border-4 border-white overflow-hidden bg-white">
                 {third.avatar_url || third.avatar ? (
                   <img
                     src={third.avatar_url || third.avatar || "/placeholder.svg"}
@@ -198,25 +198,25 @@ const LeaderBoard = () => {
       >
         <div className="flex items-center gap-3 flex-1">
           {userData.trend === "up" && (
-            <ChevronUp className="w-5 h-5 text-green-500" />
+            <ChevronUp className="md:w-5 md:h-5 w-3 h-3 text-green-500" />
           )}
           {userData.trend === "down" && (
-            <ChevronDown className="w-5 h-5 text-red-500" />
+            <ChevronDown className="md:w-5 md:h-5 w-3 h-3 text-red-500" />
           )}
           {!userData.trend && (
             <span
-              className="w-5 h-5 flex items-center justify-center"
+              className="md:w-5 md:h-5 w-3 h-3 flex items-center justify-center"
               style={{ color: textColor }}
             >
               —
             </span>
           )}
 
-          <span className="font-semibold text-lg" style={{ color: textColor }}>
+          <span className="font-semibold md:text-lg text-sm" style={{ color: textColor }}>
             {position}
           </span>
 
-          <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white">
+          <div className="md:w-12 md:h-12 w-10 h-10 rounded-full overflow-hidden border-2 border-white">
             {userData.avatar_url || userData.avatar ? (
               <img
                 src={
@@ -228,7 +228,7 @@ const LeaderBoard = () => {
             ) : (
               <div
                 style={{ background: stringToColour(userData.username) }}
-                className="w-full h-full flex items-center justify-center text-lg font-bold text-white"
+                className="w-full h-full flex items-center justify-center md:text-lg text-sm font-bold text-white"
               >
                 {userData.name?.slice(0, 1)?.toUpperCase()}
               </div>
@@ -236,7 +236,7 @@ const LeaderBoard = () => {
           </div>
 
           <span
-            className="font-semibold text-lg truncate max-w-[120px]"
+            className="font-semibold md:text-lg text-sm truncate max-w-[120px]"
             style={{ color: textColor }}
             title={userData.name}
           >
@@ -244,7 +244,7 @@ const LeaderBoard = () => {
           </span>
         </div>
 
-        <span className="font-semibold text-lg" style={{ color: textColor }}>
+        <span className="font-semibold md:text-lg text-xs" style={{ color: textColor }}>
           {userData.totalSOLV || userData.totalPoints || 0} SOLV
         </span>
       </div>
@@ -254,10 +254,10 @@ const LeaderBoard = () => {
   const UserRankingCard = () => (
     <div className="flex items-center px-6 py-4 rounded-full mb-3 mx-4 bg-[#0F0F20]">
       <div className="flex items-center gap-3 flex-1">
-        <ChevronUp className="w-5 h-5 text-green-500" />
-        <span className="font-semibold text-lg text-white">{userPosition}</span>
+        <ChevronUp className="md:w-5 md:h-5 w-3 h-3 text-green-500" />
+        <span className="font-semibold md:text-lg text-sm text-white">{userPosition}</span>
 
-        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white">
+        <div className="md:w-12 md:h-12 w-10 h-10 rounded-full overflow-hidden border-2 border-white">
           {user?.avatar_url || user?.avatar ? (
             <img
               src={user.avatar_url || user.avatar || "/placeholder.svg"}
@@ -275,7 +275,7 @@ const LeaderBoard = () => {
         </div>
 
         <span
-          className="font-semibold text-lg text-white truncate max-w-[120px]"
+          className="font-semibold md:text-lg text-sm text-white truncate max-w-[120px]"
           title={currentUserData.name}
         >
           {(("name" in currentUserData) as any)
@@ -284,7 +284,7 @@ const LeaderBoard = () => {
         </span>
       </div>
 
-      <span className="font-semibold text-lg text-white">
+      <span className="font-semibold md:text-lg text-xs text-white">
         {currentUserData.totalSOLV} SOLV
       </span>
     </div>
@@ -351,17 +351,17 @@ const LeaderBoard = () => {
       <div className="absolute top-6 left-4 z-20 mt-1 mb-5">
             <button
               // onClick={() => navigate.back()}
-              className="flex items-center gap-2 text-white hover:text-purple-300 transition-colors"
+              className="flex items-center md:gap-2 gap-1 text-white hover:text-purple-300 transition-colors"
             >
-              <ChevronLeft className="w-4 h-4" />
-              <span className="text-sm font-semibold">Back</span>
+              <ChevronLeft className="md:w-4 md:h-4 w-3 h-3" />
+              <span className="md:text-sm text-xs font-semibold">Back</span>
             </button>
           </div>
 
-          <div className="absolute top-5 right-8 z-20">
+          <div className="absolute top-5 md:right-8 right-7 z-20">
             <h1
               className="text-3xl md:text-4xl font-bold text-white tracking-[0.3em] drop-shadow-2xl"
-              style={{ fontFamily: "'Pixelify Sans', monospace", letterSpacing: "0.2em" }}
+              style={{ fontFamily: "'Pixelify Sans', monospace", letterSpacing: "0.1em" }}
             >
               LEADER BOARD
             </h1>
