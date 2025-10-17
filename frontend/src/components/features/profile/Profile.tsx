@@ -32,22 +32,22 @@ const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
       <div className="flex items-center justify-between p-4 pt-8">
         <button
           onClick={() => goBack()}
-          className="flex items-center gap-2 text-white hover:text-blue-300 transition-colors"
+          className="flex items-center md:gap-2 gap-1 text-white hover:text-blue-300 transition-colors"
         >
           {/* Back arrow icon */}
-          <IoChevronBackSharp className="w-5 h-5 text-current" aria-hidden />
-          <span className="text-lg font-medium">Back</span>
+          <IoChevronBackSharp className="md:w-5 md:h-5 w-3 h-3 text-current" aria-hidden />
+          <span className="md:text-lg text-xs font-medium">Back</span>
         </button>
         <button
           onClick={() => logout()}
-          className="px-4 py-2 rounded-full bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors"
+          className="md:px-4 px-2 md:py-2 py-1 rounded-full bg-red-500 hover:bg-red-600 text-white md:text-sm text-xs font-medium transition-colors"
           title="Logout"
         >
           Logout
         </button>
       </div>
 
-      <div className="max-w-[630px] mx-auto px-6 space-y-6 ">
+      <div className="max-w-[630px] mx-auto px-6 md:space-y-6 space-y-4">
         {/* Profile Section */}
         <ProfileHeader userDetails={userDetails} />
 
@@ -68,7 +68,7 @@ const ProfileHeader = ({ userDetails }: { userDetails: any }) => {
   const levelInfo = userDetails?.level_progress;
 
   return (
-    <div className="flex flex-col items-center space-y-4">
+    <div className="flex flex-col items-center md:space-y-4 space-y-2">
       {/* Avatar */}
       <div className="relative">
         <img
@@ -90,7 +90,7 @@ const ProfileHeader = ({ userDetails }: { userDetails: any }) => {
       {/* Level Badge */}
       {levelInfo && (
         <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-2 rounded-full">
-          <span className="text-white font-bold text-sm">
+          <span className="text-white font-bold md:text-sm text-xs">
             Level {levelInfo.current_level} - {levelInfo.level_title}
           </span>
         </div>
@@ -98,7 +98,7 @@ const ProfileHeader = ({ userDetails }: { userDetails: any }) => {
 
       {/* Edit Profile Button */}
       <div className="relative">
-        <button className="w-[fit] font-bold md:h-[40px] h-[25px] px-[44px] rounded-[40px] border-2 border-[rgba(23,61,231,1)] bg-transparent text-white font-medium text-sm hover:bg-blue-500/10 transition-all duration-200 flex items-center justify-center shadow-[5px_-1px_56.3px_0px_rgba(0,0,0,0.5)] sm:text-xs md:text-sm">
+        <button className="w-[fit] font-bold md:h-[40px] h-[25px] px-[44px] rounded-[40px] border-2 border-[rgba(23,61,231,1)] bg-transparent text-white font-medium md:text-sm text-xs hover:bg-blue-500/10 transition-all duration-200 flex items-center justify-center shadow-[5px_-1px_56.3px_0px_rgba(0,0,0,0.5)] sm:text-xs md:text-sm">
           Edit Profile
         </button>
       </div>
@@ -190,7 +190,7 @@ const LevelProgress = ({ userDetails }: { userDetails: any }) => {
             </span>
           </div>
           <div>
-            <h3 className="text-white font-bold md:text-lg text-sm">
+            <h3 className="text-white font-bold md:text-lg text-xs">
               Level {levelInfo.currentLevel} - {levelInfo.levelTitle}
             </h3>
             <p className="text-blue-300 md:text-sm text-xs">
@@ -213,7 +213,7 @@ const LevelProgress = ({ userDetails }: { userDetails: any }) => {
               {levelInfo.currentLevel}{" "}
             </span>
 
-            <span className="text-yellow-900 z-10 font-bold text-sm">
+            <span className="text-yellow-900 z-10 font-bold md:text-sm text-xs">
               ★ {userDetails?.experience_points || 0}/
               {levelInfo.nextLevelPoints}
             </span>

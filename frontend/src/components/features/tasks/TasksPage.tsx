@@ -668,7 +668,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   };
 
   return (
-    <div className="h-screen bg-[#0A0A1F] text-white overflow-y-auto">
+    <div className="h-screen bg-[#0A0A1F] text-white pb-24 overflow-y-auto">
       <div className="px-4 pt-6 pb-12">
         {/* <button
           className="flex items-center gap-2 text-white mb-4"
@@ -691,7 +691,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
         <div className="absolute top-6 left-4 z-20 mt-1 mb-5">
                     <button
                         onClick={() => router.push("/")}
-                      className="flex items-center gap-2 text-white hover:text-purple-300 transition-colors"
+                      className="flex items-center gap-2 text-white  transition-colors"
                     >
                       <ArrowLeft className="w-4 h-4" />
                       <span className="text-[8px] lg:text-lg font-semibold">Back</span>
@@ -758,7 +758,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
             <button
               onClick={handleDeposit}
               disabled={depositLoading || contractLoading || !isConnected}
-              className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 px-6 py-3 rounded-xl font-bold transition-all disabled:opacity-50"
+              className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 px-[fit-content] py-3 rounded-xl font-bold transition-all disabled:opacity-50"
             >
               {depositLoading || contractLoading
                 ? "..."
@@ -911,7 +911,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
               key={task.id}
               className={`rounded-2xl p-5 border-2 ${
                 task.completed
-                  ? "bg-gradient-to-br from-green-500 to-green-600 border-green-400/30"
+                  ? "bg-gradient-to-br from-pink-500 to-green-600 border-green-400/30"
                   : task.category === "special"
                   ? "bg-gradient-to-br from-pink-500 to-purple-600 border-pink-400/30"
                   : "bg-gradient-to-br from-blue-600/40 to-blue-800/40 border-blue-500/30"
@@ -920,7 +920,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
               <div className="flex items-start gap-4 mb-4">
                 <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
                   {task.completed ? (
-                    <span className="text-green-400 text-xl">✓</span>
+                    <span className="text-pink-400 text-xl">✓</span>
                   ) : (
                     task.icon
                   )}
@@ -976,7 +976,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                   (task.completed && task.id !== "first-game") ||
                   (task.id === "daily-login" && alreadyLoggedToday) ||
                   (task.id === "first-game" && firstGameClaimed)
-                    ? "bg-green-400 text-green-900 cursor-not-allowed"
+                    ? "bg-pink-400 text-white-900 cursor-not-allowed"
                     : task.category === "special"
                     ? "bg-white text-purple-600 hover:bg-gray-100 disabled:opacity-50"
                     : "bg-[#0A0A1F] text-white hover:bg-black disabled:opacity-50"

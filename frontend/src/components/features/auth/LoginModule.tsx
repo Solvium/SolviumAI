@@ -199,12 +199,12 @@ export const LoginModule: React.FC<LoginModuleProps> = ({
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
+    <div className="h-screen relative overflow-hidden">
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <Image
           src={Bg.src}
-          className="w-full h-full object-cover"
+          className="w-full md:h-full object-cover"
           width={800}
           height={800}
           alt=""
@@ -212,20 +212,23 @@ export const LoginModule: React.FC<LoginModuleProps> = ({
       </div>
 
       {/* Content positioned in lower portion */}
-      <div className="relative z-10 min-h-screen flex flex-col justify-end pb-10">
+      <div className="relative z-10 h-screen flex flex-col justify-end pb-10">
         {/* Main Logo Section - moved to bottom */}
-        <div className="flex w-full flex-col my-2 justify-center space-y-3 items-center">
-          <LoginText />
-          <Image
-            src={LoginIcon.src}
-            width={300}
-            height={200}
-            alt=""
-            aria-disabled
-            className="h-[80%]"
-          />
-          <LoginText2 />
-        </div>
+        <div className="flex w-full h-screen flex-col my-2 justify-center space-y-3 items-center">
+  <LoginText />
+  <div className="relative w-full h-[40%] md:h-[80%]">
+    <Image
+      src={LoginIcon.src}
+      alt=""
+      fill
+      className="object-contain"
+      aria-disabled
+    />
+  </div>
+  <LoginText2 />
+</div>
+
+
 
         <div className="flex flex-col items-center justify-center px-8 text-center">
           {/* Login Buttons */}
