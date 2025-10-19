@@ -582,7 +582,7 @@ class TokenService:
 
             # Refresh account state before transfer to sync nonce
             await account.fetch_state()
-            
+
             result = await account.ft.transfer(
                 ft_model,
                 recipient_account_id,
