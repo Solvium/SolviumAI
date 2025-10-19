@@ -166,6 +166,13 @@ async def get_or_create_user_wallet(
                 session.commit()
                 logger.info(f"User {telegram_user_id} found and updated")
             
+            # Extract user data before closing session
+            user_data = {
+                "username": user.username,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+            }
+            
         finally:
             session.close()
         
@@ -213,9 +220,9 @@ async def get_or_create_user_wallet(
             "user_exists": user_exists,
             "user": {
                 "telegram_user_id": telegram_user_id,
-                "username": user.username,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
+                "username": user_data["username"],
+                "first_name": user_data["first_name"],
+                "last_name": user_data["last_name"],
             },
             "wallet": wallet_info,
             "message": "User and wallet retrieved successfully" if user_exists and has_wallet 
