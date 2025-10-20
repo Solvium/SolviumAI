@@ -332,42 +332,33 @@ const LeaderBoard = () => {
 
   return (
     <div className="w-full h-screen bg-[#040022] text-white overflow-y-auto">
-
-
-      {/* <div className="flex items-center justify-between px-6 py-6">
-        <button className="flex items-center gap-2 text-white">
-          <ChevronLeft className="w-5 h-5" />
-          <span className="text-sm">Back</span>
-        </button>
-      </div> */}
-
-      {/* <h1
-        className="text-center text-3xl font-bold tracking-wider mb-8"
-        style={{ fontFamily: "monospace", letterSpacing: "0.2em" }}
-      >
-        LEADER BOARD
-      </h1> */}
-
-      <div className="absolute top-6 left-4 z-20 mt-1 mb-5">
-            <button
-              // onClick={() => navigate.back()}
+      {/* Fixed Header with Background */}
+      <div className="sticky top-0 z-30 bg-gradient-to-b from-[#040022] via-[#040022] to-[#040022]/95 backdrop-blur-sm px-4 pt-6 pb-1
+      ">
+        <div className="relative min-h-[40px] md:min-h-[50px]">
+          <div className="absolute top-0 left-0 z-20">
+            {/* <button
               className="flex items-center md:gap-2 gap-1 text-white hover:text-purple-300 transition-colors"
             >
               <ChevronLeft className="md:w-4 md:h-4 w-3 h-3" />
               <span className="md:text-sm text-xs font-semibold">Back</span>
-            </button>
+            </button> */}
           </div>
 
-          <div className="absolute top-5 md:right-8 right-7 z-20">
+          <div className="absolute top-0 md:right-4 
+          left-16
+           z-20">
             <h1
-              className="text-3xl md:text-4xl font-bold text-white tracking-[0.3em] drop-shadow-2xl"
+              className="text-2xl md:text-4xl font-bold text-white tracking-[0.3em] drop-shadow-2xl whitespace-nowrap"
               style={{ fontFamily: "'Pixelify Sans', monospace", letterSpacing: "0.1em" }}
             >
               LEADER BOARD
             </h1>
           </div>
+        </div>
+      </div>
 
-<div className="relative mt-20"> 
+      <div className="relative mt-4"> 
 
 
       <TopThreePodium />

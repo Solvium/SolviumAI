@@ -156,7 +156,7 @@ export const PicturePuzzle = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0A0146] via-[#1a0a3e] to-[#2d1b69] text-white relative overflow-hidden">
+    <div className="h-screen bg-gradient-to-b from-[#0A0146] via-[#1a0a3e] to-[#2d1b69] text-white relative overflow-hidden">
       <div
         className="absolute top-32 left-8 w-3 h-3 bg-pink-400 rounded-full animate-pulse"
         style={{ boxShadow: "0 0 10px rgba(244, 114, 182, 0.8)" }}
@@ -183,34 +183,35 @@ export const PicturePuzzle = () => {
         }}
       ></div>
 
-      <div className="flex items-center justify-between px-4 pt-6 pb-4 max-w-md mx-auto">
-        <button
+      <div className="flex items-center justify-between px-4 pt-4 pb-2 max-w-md mx-auto">
+        {/* <button
           onClick={() => router.back()}
           className="flex items-center gap-2 text-white hover:text-gray-300 transition-colors"
         >
-          <ArrowLeft className="w-5 h-5" />
-          <span className="text-base">Back</span>
-        </button>
+          <ArrowLeft className="w-4 h-4" />
+          <span className="text-sm">Back</span>
+        </button> */}
         <h1
-          className="text-3xl font-bold text-white tracking-[0.3em]"
+          className="text-2xl ml-24
+           font-bold text-white tracking-[0.3em]"
           style={{ fontFamily: "monospace" }}
         >
           PUZZLE
         </h1>
-        <div className="w-20"></div>
+        <div className="w-16"></div>
       </div>
 
       {curImg && (
-        <div className="max-w-md mx-auto px-4 mt-6 mb-8">
-          <div className="flex items-start justify-between gap-4">
+        <div className="max-w-md mx-auto px-4 mt-2 mb-3">
+          <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-2 flex-1">
               <span
-                className="text-pink-500 text-lg mt-0.5"
+                className="text-pink-500 text-base mt-0.5"
                 style={{ textShadow: "0 0 8px rgba(236, 72, 153, 0.6)" }}
               >
                 ✦
               </span>
-              <p className="text-white text-sm leading-relaxed">
+              <p className="text-white text-xs leading-relaxed">
                 Arrange the puzzle
                 <br />
                 correctly and earn
@@ -218,7 +219,7 @@ export const PicturePuzzle = () => {
                 SOLV coin
               </p>
             </div>
-            <div className="w-32 h-24 rounded-lg overflow-hidden border-2 border-cyan-400/40 flex-shrink-0 shadow-lg">
+            <div className="w-24 h-20 rounded-lg overflow-hidden border-2 border-cyan-400/40 flex-shrink-0 shadow-lg">
               <img
                 src={curImg.src || "/placeholder.svg"}
                 alt="Puzzle preview"
@@ -230,11 +231,11 @@ export const PicturePuzzle = () => {
       )}
 
       {!isPlaying && !solved && (
-        <div className="max-w-md mx-auto px-4 text-center mb-8">
+        <div className="max-w-md mx-auto px-4 text-center mb-4">
           <button
             onClick={playGame}
             disabled={!curImg}
-            className="bg-cyan-500 hover:bg-cyan-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg"
+            className="bg-cyan-500 hover:bg-cyan-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg text-base font-semibold transition-colors shadow-lg"
             style={{ boxShadow: "0 0 20px rgba(34, 211, 238, 0.4)" }}
           >
             Start Game
@@ -243,20 +244,20 @@ export const PicturePuzzle = () => {
       )}
 
       {isPlaying && !solved && (
-        <div className="max-w-md mx-auto px-4 mb-6">
-          <div className="mb-4">
+        <div className="max-w-md mx-auto px-4 mb-4">
+          <div className="mb-2">
             <GameTimer time={timer} />
           </div>
           <div className="relative">
             {/* Glow effect */}
-            <div className="absolute -inset-1 bg-gradient-to-br from-cyan-400/30 via-blue-500/30 to-cyan-400/30 rounded-3xl blur-xl"></div>
+            <div className="absolute -inset-1 bg-gradient-to-br from-cyan-400/30 via-blue-500/30 to-cyan-400/30 rounded-2xl blur-xl"></div>
 
             {/* Canvas container */}
             <div
-              className="relative bg-gradient-to-br from-cyan-400/5 via-blue-500/5 to-purple-500/5 p-4 rounded-3xl border-[3px] border-cyan-400/60 shadow-2xl"
+              className="relative bg-gradient-to-br from-cyan-400/5 via-blue-500/5 to-purple-500/5 p-3 rounded-2xl border-2 border-cyan-400/60 shadow-2xl"
               style={{
                 boxShadow:
-                  "0 0 40px rgba(34, 211, 238, 0.3), inset 0 0 20px rgba(34, 211, 238, 0.1)",
+                  "0 0 30px rgba(34, 211, 238, 0.3), inset 0 0 15px rgba(34, 211, 238, 0.1)",
               }}
             >
               <div id="canvas" className="mx-auto rounded-xl"></div>
@@ -266,19 +267,19 @@ export const PicturePuzzle = () => {
       )}
 
       {solved && (
-        <div className="max-w-md mx-auto px-4 text-center space-y-4">
-          <div className="text-2xl font-bold text-green-400">
+        <div className="max-w-md mx-auto px-4 text-center space-y-3">
+          <div className="text-xl font-bold text-green-400">
             Congratulations! Puzzle Solved!
           </div>
-          <div className="text-xl text-cyan-300">Points Earned: {points}</div>
-          {saving && <div className="text-blue-400">Saving points...</div>}
+          <div className="text-lg text-cyan-300">Points Earned: {points}</div>
+          {saving && <div className="text-blue-400 text-sm">Saving points...</div>}
           <button
             onClick={() => {
               setSolved(false);
               setIsPlaying(false);
               setPoints(0);
             }}
-            className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors shadow-lg"
+            className="bg-green-500 hover:bg-green-600 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors shadow-lg"
           >
             Play Again
           </button>
