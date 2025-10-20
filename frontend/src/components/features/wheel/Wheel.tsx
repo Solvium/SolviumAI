@@ -706,11 +706,17 @@ export const WheelOfFortune = () => {
               </div>
 
               {/* Prize Indicator Arrow */}
-              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 -translate-y-2 z-30">
-                <div className="w-0 h-0 border-l-4 border-r-4 border-b-8 border-l-transparent border-r-transparent border-b-red-500"></div>
-              </div>
+              <div className="absolute top-2 left-1/2 transform -translate-x-1/2 -translate-y-2 z-30">
+  <Image
+    src="/assets/wheel/indicator.svg"  // replace with your actual image path
+    alt="indicator"
+    width={48}   // adjust to fit
+    height={48}
+    className="object-contain"
+  />
+</div>
 
-              <div className="  z-30 items-center">
+              <div className="z-30 items-center">
                 <div className="text-center space-y-2">
                   {/* Progress bar */}
                   <div className="h-2 sm:h-3  bg-[#B2D9FF] border border-[#FF309B] rounded-full flex items-center">
@@ -747,7 +753,7 @@ export const WheelOfFortune = () => {
         {/* Mascot and Spins Left */}
 
         {/* Spin Button */}
-        <div className="mb-6 flex justify-center">
+        <div className="mb-6 md:mt-6 mt-12 flex justify-center">
           {hasPlayed && new Date(cooldownTime) > new Date(Date.now()) ? (
             <CountdownTimer targetTime={cooldownTime} />
           ) : (
@@ -757,7 +763,7 @@ export const WheelOfFortune = () => {
                 (hasPlayed && new Date(cooldownTime) > new Date(Date.now())) ||
                 isSpinning
               }
-              className={`w-[287px] h-20 flex items-center justify-center text-white font-bold transition-all duration-300 ${
+              className={`w-[287px] h-20  flex items-center justify-center text-white font-bold transition-all duration-300 ${
                 isSpinning ? "opacity-50 cursor-not-allowed" : "hover:scale-105"
               }`}
               style={{

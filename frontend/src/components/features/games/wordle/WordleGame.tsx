@@ -15,6 +15,7 @@ import {
   Settings,
   Loader2,
   Users,
+  ChevronLeft,
 } from "lucide-react";
 import HintSystem from "../monetization/HintSystem";
 import { useGameConfig } from "@/contexts/GameConfigContext";
@@ -204,6 +205,24 @@ const WordleGame: React.FC<WordleGameProps> = ({
     }
   }, [dailyProgress, level]);
 
+  // Physical keyboard support
+  useEffect(() => {
+    if (!gameStarted || gameOver) return;
+
+    const handlePhysicalKeyPress = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        handleKeyPress("ENTER");
+      } else if (e.key === "Backspace") {
+        handleKeyPress("BACKSPACE");
+      } else if (/^[a-zA-Z]$/.test(e.key)) {
+        handleKeyPress(e.key.toUpperCase());
+      }
+    };
+
+    window.addEventListener("keydown", handlePhysicalKeyPress);
+    return () => window.removeEventListener("keydown", handlePhysicalKeyPress);
+  }, [gameStarted, gameOver, currentGuess, guesses, targetWord]);
+
   // Calculate rewards based on config
   const calculateRewards = (
     guessesUsed: number,
@@ -283,9 +302,22 @@ const WordleGame: React.FC<WordleGameProps> = ({
         console.log(
           `🎯 Word received for game: "${word}" (${word.length} letters)`
         );
+
+        // Accept any word length from 3-10 letters
+        if (word.length < 3 || word.length > 10) {
+          console.error(
+            `❌ Invalid word length: ${word.length} (must be 3-10 letters)`
+          );
+          toast.error(
+            "Error: Invalid word length from server. Please try again."
+          );
+          setIsLoading(false);
+          return;
+        }
+
         setDailyId(dailyId);
         setWordLen(word.length);
-        setTargetWord(word);
+        setTargetWord(word.toUpperCase());
       } else {
         throw new Error("No word received from database - game cannot start");
       }
@@ -329,13 +361,22 @@ const WordleGame: React.FC<WordleGameProps> = ({
   };
 
   const handleKeyPress = async (key: string) => {
+    console.log(
+      `🎹 Key pressed: "${key}", gameOver: ${gameOver}, currentGuess: "${currentGuess}"`
+    );
+
     if (gameOver) return;
 
     if (key === "ENTER") {
+      console.log(
+        `✅ ENTER pressed - currentGuess length: ${currentGuess.length}, wordLen: ${wordLen}`
+      );
+
       if (currentGuess.length !== wordLen) {
         toast.error(`Word must be ${wordLen} letters!`);
         return;
       }
+
       // Validate word using dictionary service
       const guessUpper = currentGuess.toUpperCase();
       console.log(
@@ -343,7 +384,10 @@ const WordleGame: React.FC<WordleGameProps> = ({
       );
 
       // Validate word using frontend dictionary check (fast)
+      console.log(`📖 Calling validateWordFrontend for: "${guessUpper}"`);
       const isValid = await validateWordFrontend(guessUpper);
+      console.log(`📖 Validation result: ${isValid}`);
+
       if (!isValid) {
         console.log(`❌ Invalid word: "${guessUpper}"`);
         toast.error("Word not found in dictionary!");
@@ -352,7 +396,7 @@ const WordleGame: React.FC<WordleGameProps> = ({
       console.log(`✅ Valid word: "${guessUpper}"`);
 
       // Prefer local validation if we have the answer
-      if (targetWord && targetWord.replace(/•/g, "").length === wordLen) {
+      if (targetWord) {
         const colors = computeGuessColors(targetWord, guessUpper);
         const newGuesses = [...guesses, guessUpper];
         setGuesses(newGuesses);
@@ -642,86 +686,83 @@ const WordleGame: React.FC<WordleGameProps> = ({
   );
 
   const TutorialScreen = () => (
-    <div className="flex-1 flex flex-col justify-center items-center px-4 text-white overflow-hidden">
-      <div className="max-w-md mx-auto text-center space-y-4">
-        <div className="mb-3">
-          {/* <Info className="w-8 h-8 mx-auto mb-2 text-blue-400" /> */}
-          <h2 className="text-xl font-bold mb-1 mt-3">Instructions</h2>
-          <p className="text-sm text-gray-300">
-            Guess the {wordLen}-letter word in 6 tries!
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            Word length increases with your level (3-10 letters)
-          </p>
-        </div>
-
-        <div className="space-y-4 text-left">
-          <div className="bg-white/10 rounded-lg p-4 max-h-[800px]:p-3">
-            <h3 className="font-bold text-lg max-h-[800px]:text-base mb-2 text-center">
-              Game Rules
-            </h3>
-            <ul className="space-y-1 text-gray-300 text-sm max-h-[800px]:text-xs">
-              <li>• You have 6 attempts to guess the word</li>
-              <li>• Each guess must be a valid {wordLen}-letter word</li>
-              <li>• After each guess, tiles will change color:</li>
-            </ul>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-500 rounded flex items-center justify-center text-white font-bold">
-                A
-              </div>
-              <span className="text-sm">
-                Green = Correct letter in correct position
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-500 rounded flex items-center justify-center text-white font-bold">
-                B
-              </div>
-              <span className="text-sm">
-                Yellow = Correct letter in wrong position
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gray-500 rounded flex items-center justify-center text-white font-bold">
-                C
-              </div>
-              <span className="text-sm">Gray = Letter not in the word</span>
-            </div>
-          </div>
-
-          <div className="bg-blue-500/20 rounded-lg p-4 border border-blue-400/30">
-            <h4 className="font-bold mb-2 flex items-center gap-2">
-              <Sparkles className="w-4 h-4" />
-              Hints Available
-            </h4>
-            <p className="text-sm">
-              Need help? Use hints for 15 SOLV to reveal letters!
+    <div className="flex-1 flex flex-col justify-center items-center px-6 text-white overflow-hidden">
+      <div
+        className="max-w-md mx-auto w-full md:space-y-2 space-y-2 mt-2
+      "
+      >
+        {/* Instruction Cards */}
+        <div className="space-y-4">
+          <div className="bg-[#000033] border-2 border-blue-600 rounded-3xl p-5">
+            <p className="text-white md:text-sm text-xs">
+              <span className="font-bold">1.</span> Guess the 5 letter words in
+              6 tries!
             </p>
           </div>
 
-          <div className="bg-yellow-500/20 rounded-lg p-4 border border-yellow-400/30">
-            <h4 className="font-bold mb-2 flex items-center gap-2">
-              <Coins className="w-4 h-4" />
-              Earn Rewards
-            </h4>
-            <p className="text-sm">
-              Win SOLV based on how quickly you solve the puzzle!
+          <div className="bg-[#000033] border-2 border-blue-600 rounded-3xl p-5">
+            <p className="text-white md:text-sm text-xs">
+              <span className="font-bold">2.</span> Each guess must be a valid
+              word.
+            </p>
+          </div>
+
+          <div className="bg-[#000033] border-2 border-blue-600 rounded-3xl p-5">
+            <p className="text-white md:text-sm text-xs">
+              <span className="font-bold">3.</span> The color of the tiles shows
+              how close your guess is to the word.
             </p>
           </div>
         </div>
 
-        <Button
+        {/* Color Examples */}
+        <div className="flex justify-center gap-8 py-6">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-green-500 rounded-xl flex items-center justify-center text-white font-bold text-2xl mb-2">
+              A
+            </div>
+            <p className="text-[7px] text-gray-400 leading-tight">
+              correct letter in
+              <br />
+              correct position
+            </p>
+          </div>
+
+          <div className="text-center">
+            <div className="w-16 h-16 bg-yellow-500 rounded-xl flex items-center justify-center text-white font-bold text-2xl mb-2">
+              B
+            </div>
+            <p className="text-[7px] text-gray-400 leading-tight">
+              correct letter in <br />
+              wrong position
+            </p>
+          </div>
+
+          <div className="text-center">
+            <div className="w-16 h-16 bg-gray-500 rounded-xl flex items-center justify-center text-white font-bold text-2xl mb-2">
+              C
+            </div>
+            <p className="text-[7px] text-gray-400 leading-tight">
+              letter not in the <br /> word
+            </p>
+          </div>
+        </div>
+
+        {/* Hints Info */}
+        <div className="bg-[#000033] border-2 border-blue-600 rounded-3xl p-3">
+          <ul className="text-white md:text-xs text-[9px] space-y-1.5">
+            <li>• Need help? Use hints for 15 coins to reveal letters!</li>
+            <li>• win coins based on how quickly you solve the puzzle</li>
+          </ul>
+        </div>
+
+        {/* Start Button */}
+        <button
           onClick={handleStartGame}
-          className="w-full bg-[#1EC7FF] hover:bg-[#1EC7FF]-700 text-[#0A0146] py-4 text-lg font-bold rounded-lg flex items-center justify-center gap-2 mt-12"
+          className="w-full bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-500 hover:to-blue-600 text-white py-2 text-xl font-bold rounded-xl shadow-lg transform transition-all hover:scale-105 border-2 border-cyan-300"
         >
-          <Play className="w-5 h-5" />
           Start Playing
-        </Button>
+        </button>
       </div>
     </div>
   );
@@ -968,63 +1009,30 @@ const WordleGame: React.FC<WordleGameProps> = ({
   };
 
   return (
-    <div className="w-full min-h-screen p-2 bg-[#0A0146] overflow-hidden">
-      <div className="absolute"></div>
+    <div className="w-full min-h-screen bg-gradient-to-b from-[#0a0520] via-[#1a0f3e] to-[#0a0520] overflow-hidden">
+      {/* Animated Background Orbs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-10 w-16 h-16 bg-pink-500/20 rounded-full blur-xl animate-pulse" />
+        <div className="absolute top-40 right-20 w-12 h-12 bg-purple-500/20 rounded-full blur-xl animate-pulse delay-100" />
+        <div className="absolute bottom-40 left-20 w-20 h-20 bg-blue-500/20 rounded-full blur-xl animate-pulse delay-200" />
+      </div>
 
       <div className="relative z-10 h-full flex flex-col">
         <div className="w-full h-full flex flex-col">
           <div className="pb-0 pt-4 px-4 flex-shrink-0">
-            <div className="text-center flex justify-between items-center text-[#1EC7FF]">
-              <span className="text-xl ml-10 md:text-2xl font-bold">
-                Wordle Game
-              </span>
-              <div className="flex items-center gap-2">
-                {/* Multiplayer Buttons */}
-                {!isMultiplayer && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={async () => {
-                        const newRoom = await createRoom("wordle");
-                        if (newRoom) {
-                          setCurrentRoomCode(newRoom.roomCode);
-                          setShowRoomModal(true);
-                        }
-                      }}
-                      className="text-[#1EC7FF] hover:bg-white/10 p-2"
-                      disabled={roomLoading}
-                    >
-                      <Users className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowRoomModal(true)}
-                      className="text-[#1EC7FF] hover:bg-white/10 p-2"
-                    >
-                      <Play className="w-4 h-4" />
-                    </Button>
-                  </>
-                )}
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowSettings(true)}
-                  className="text-[#1EC7FF] hover:bg-white/10 p-2"
-                >
-                  <Settings className="w-4 h-4" />
-                </Button>
-                {gameStarted && !gameOver && config.wordle.showHints && (
-                  <HintSystem
-                    hintCost={config.wordle.hintCost}
-                    hint={generateHint()}
-                    userCoins={userBalance}
-                    onUseHint={handleUseHint}
-                  />
-                )}
-              </div>
+            <div className="flex justify-between items-center">
+              <button className="flex items-center gap-2 text-white hover:text-blue-300 transition-colors">
+                {/* <ChevronLeft className="w-3 h-3 md:w-5 md:h-5" /> */}
+                {/* <span className="text-sm font-semibold">Back</span> */}
+              </button>
+              <h1
+                className="text-2xl md:text-3xl font-bold text-white  md:ml-20 ml-16
+              "
+                style={{ fontFamily: "'Press Start 2P', monospace" }}
+              >
+                WORDLE GAME
+              </h1>
+              <div className="w-20"></div>
             </div>
           </div>
 
@@ -1034,158 +1042,89 @@ const WordleGame: React.FC<WordleGameProps> = ({
             <TutorialScreen />
           ) : (
             <>
-              <div className="px-3 pt-4 flex-1 flex flex-col space-y-2 justify-center items-center">
-                <div className="w-full max-w-lg mb-1 text-[#9DDFFF] text-xs md:text-sm flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded bg-white/10 border border-white/20">
-                      Level: {level}
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-white/10 border border-white/20">
-                      Difficulty: {getDifficultyLabel(level)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded bg-white/10 border border-white/20">
-                      Length: {wordLen}
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-white/10 border border-white/20">
-                      Guesses: {Math.max(0, maxGuesses - guesses.length)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Timer and Daily Progress */}
-                <div className="w-full max-w-lg mb-2 text-[#9DDFFF] text-xs flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded bg-blue-500/20 border border-blue-400/30">
-                      ⏱️ {Math.floor(timeRemaining / 60)}:
-                      {(timeRemaining % 60).toString().padStart(2, "0")}
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-white/10 border border-white/20">
-                      Hints: {hintsUsedToday}/
-                      {
-                        config.wordle.dailyHintsPerDifficulty[
-                          getDifficultyLabel(level)
-                        ]
-                      }
-                    </span>
-                  </div>
-                  {dailyProgress && (
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded bg-white/10 border border-white/20">
-                        🔥 {dailyProgress.currentStreak}
-                      </span>
-                      <span className="px-2 py-0.5 rounded bg-white/10 border border-white/20">
-                        📊 {dailyProgress.gamesWon}/{dailyProgress.gamesPlayed}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                {guesses.map((guess, i) => (
-                  <div
-                    key={i}
-                    className="w-full mx-auto"
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: `repeat(${wordLen}, minmax(0.5rem, 40px))`,
-                      gap: "0.15rem",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {Array.from({ length: wordLen }).map((_, j) => (
-                      <div
-                        key={j}
-                        className={`aspect-square flex items-center justify-center text-[10px] md:text-xs font-bold rounded-sm uppercase ${
-                          colorsByRow[i]?.[j] === "exact"
-                            ? "bg-green-500 text-white"
-                            : colorsByRow[i]?.[j] === "present"
-                            ? "bg-yellow-500 text-white"
-                            : "bg-gray-300 dark:bg-gray-700"
-                        }`}
-                      >
-                        {(guess[j] || "").toUpperCase()}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-
-                {!gameOver && (
-                  <div
-                    className="w-full mx-auto"
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: `repeat(${wordLen}, minmax(0.5rem, 40px))`,
-                      gap: "0.15rem",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {Array.from({ length: wordLen }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="aspect-square flex items-center justify-center text-[10px] md:text-xs font-bold rounded-sm uppercase border border-white/40 bg-white/20 text-white"
-                      >
-                        {currentGuess[i] || ""}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {!gameOver &&
-                  Array.from({
-                    length: Math.max(0, maxGuesses - guesses.length - 1),
-                  }).map((_, r) => (
-                    <div
-                      key={r}
-                      className="w-full mx-auto"
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: `repeat(${wordLen}, minmax(0.5rem, 40px))`,
-                        gap: "0.15rem",
-                        justifyContent: "center",
-                      }}
-                    >
+              <div className="px-3 pt-4 flex-1 flex flex-col justify-center items-center pb-4">
+                {/* Game Board */}
+                <div className="space-y-2 mb-3">
+                  {guesses.map((guess, i) => (
+                    <div key={i} className="flex gap-2 justify-center">
                       {Array.from({ length: wordLen }).map((_, j) => (
                         <div
                           key={j}
-                          className="aspect-square flex items-center justify-center rounded-sm border border-white/30 bg-white/10"
-                        />
+                          className={`w-12 h-12 md:w-14 md:h-14 flex items-center justify-center text-xl md:text-2xl font-bold rounded-lg border-2 ${
+                            colorsByRow[i]?.[j] === "exact"
+                              ? "bg-green-500 border-green-600 text-white"
+                              : colorsByRow[i]?.[j] === "present"
+                              ? "bg-yellow-500 border-yellow-600 text-white"
+                              : "bg-gray-600 border-gray-700 text-white"
+                          }`}
+                        >
+                          {(guess[j] || "").toUpperCase()}
+                        </div>
                       ))}
                     </div>
                   ))}
+
+                  {!gameOver && (
+                    <div className="flex gap-2 justify-center">
+                      {Array.from({ length: wordLen }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="w-12 h-12 md:w-14 md:h-14 flex items-center justify-center text-xl md:text-2xl font-bold rounded-lg border-2 border-blue-500 bg-[#0A0A3E] text-white"
+                        >
+                          {currentGuess[i] || ""}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {!gameOver &&
+                    Array.from({
+                      length: Math.max(0, maxGuesses - guesses.length - 1),
+                    }).map((_, r) => (
+                      <div key={r} className="flex gap-2 justify-center">
+                        {Array.from({ length: wordLen }).map((_, j) => (
+                          <div
+                            key={j}
+                            className="w-12 h-12 md:w-14 md:h-14 rounded-lg border-2 border-blue-500 bg-[#0A0A3E]"
+                          />
+                        ))}
+                      </div>
+                    ))}
+                </div>
               </div>
 
+              {/* Keyboard */}
               {!gameOver && (
-                <div className="space-y-1.5 mt-3 w-full max-w-[360px] mx-auto px-2">
-                  {[
-                    ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
-                    ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
-                    ["ENTER", "Z", "X", "C", "V", "B", "N", "M", "BACKSPACE"],
-                  ].map((row, i) => (
-                    <div key={i} className="flex justify-center gap-1">
-                      {row.map((key) => (
-                        <Button
-                          key={key}
-                          variant="outline"
-                          size="sm"
-                          className={`
-                            h-6 md:h-7 text-[10px] md:text-[11px] font-semibold bg-white/20 border-white/30 text-white hover:bg-white/30 hover:text-white rounded-sm
-                            ${
-                              key === "ENTER" || key === "BACKSPACE"
-                                ? "px-1.5 md:px-2 min-w-[38px] md:min-w-[50px]"
-                                : "px-1 md:px-1 min-w-[20px] md:min-w-[26px] flex-1 max-w-[26px] md:max-w-[34px]"
-                            }
-                          `}
-                          onClick={() => handleKeyPress(key)}
-                        >
-                          {key === "BACKSPACE"
-                            ? "⌫"
-                            : key === "ENTER"
-                            ? "↵"
-                            : key}
-                        </Button>
-                      ))}
-                    </div>
-                  ))}
+                <div className="w-full px-4 pb-6">
+                  <div className="max-w-lg mx-auto space-y-2">
+                    {[
+                      ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+                      ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+                      ["↵", "Z", "X", "C", "V", "B", "N", "M", "@"],
+                    ].map((row, i) => (
+                      <div
+                        key={i}
+                        className="flex justify-center gap-1.5
+                      "
+                      >
+                        {row.map((key) => (
+                          <button
+                            key={key}
+                            onClick={() => {
+                              if (key === "↵") handleKeyPress("ENTER");
+                              else if (key === "@") handleKeyPress("BACKSPACE");
+                              else handleKeyPress(key);
+                            }}
+                            className="w-8 h-10 md:w-10 md:h-12 bg-white/20 hover:bg-white/30 text-white font-semibold rounded-2xl
+                             text-sm md:text-base transition-all active:scale-95 shadow-lg
+                            "
+                          >
+                            {key}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </>

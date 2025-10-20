@@ -669,44 +669,30 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
 
   return (
     <div className="h-screen bg-[#0A0A1F] text-white pb-24 overflow-y-auto">
-      <div className="px-4 pt-6 pb-12">
-        {/* <button
-          className="flex items-center gap-2 text-white mb-4"
-          onClick={() => router.push("/")}
-        >
-          <ArrowLeft className="w-5 h-5" />
-          <span className="text-sm font-medium">Back</span>
-        </button> */}
-        {/* <h1
-          className="text-3xl font-bold text-center mb-2 tracking-wider"
-          style={{
-            fontFamily: "'Press Start 2P', monospace",
-            textShadow: "2px 2px 0px rgba(0,0,0,0.5)",
-          }}
-        >
-          TASK CENTER
-        </h1> */}
-
-
-        <div className="absolute top-6 left-4 z-20 mt-1 mb-5">
-                    <button
-                        onClick={() => router.push("/")}
-                      className="flex items-center gap-2 text-white  transition-colors"
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                      <span className="text-[8px] lg:text-lg font-semibold">Back</span>
-                    </button>
-                  </div>
+      {/* Fixed Header with Background */}
+      <div className="sticky top-0 z-30 bg-gradient-to-b from-[#0A0A1F] via-[#0A0A1F] to-[#0A0A1F]/95 backdrop-blur-sm px-4 pt-6 pb-4">
+        <div className="relative">
+          <div className="absolute top-0 left-0 z-20">
+            <button
+              onClick={() => router.push("/")}
+              className="flex items-center gap-2 text-white hover:text-blue-300 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="text-[8px] lg:text-lg font-semibold">Back</span>
+            </button>
+          </div>
         
-                  <div className="absolute top-5 right-11 z-20">
-                    <h1
-                      className="text-3xl md:text-4xl font-bold text-white tracking-[0.3em] drop-shadow-2xl"
-                      style={{ fontFamily: "'Pixelify Sans', monospace", letterSpacing: "0.1em" }}
-                    >
-                       TASK CENTER
-                    </h1>
-                  </div>
-        <p className="text-center mt-10 text-sm text-gray-400">
+          <div className="absolute top-0 left-20 z-20">
+            <h1
+              className="text-xl md:text-4xl font-bold text-white tracking-[0.3em] drop-shadow-2xl"
+              style={{ fontFamily: "'Pixelify Sans', monospace", letterSpacing: "0.1em" }}
+            >
+              TASK CENTER
+            </h1>
+          </div>
+        </div>
+        
+        <p className="text-center mt-12 text-sm text-gray-400">
           Complete tasks to earn SOLV points and unlock multipliers
         </p>
       </div>

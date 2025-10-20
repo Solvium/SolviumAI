@@ -47,7 +47,7 @@ const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
         </button>
       </div>
 
-      <div className="max-w-[630px] mx-auto px-6 md:space-y-6 space-y-4">
+      <div className="max-w-[630px] mx-auto px-6 md:space-y-4 space-y-2">
         {/* Profile Section */}
         <ProfileHeader userDetails={userDetails} />
 
@@ -56,6 +56,9 @@ const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
 
         {/* Stats Section */}
         <StatsSection userDetails={userDetails} />
+
+        {/* Farming Section */}
+        <FarmingSection />
 
         {/* Invite Section */}
         <InviteSection userDetails={userDetails} />
@@ -267,6 +270,46 @@ const StatsSection = ({ userDetails }: { userDetails: any }) => {
   );
 };
 
+const FarmingSection = () => {
+  const [isMining, setIsMining] = useState(false);
+  const { toast } = useToast();
+
+  const handleStartMining = () => {
+    setIsMining(true);
+    toast({
+      title: "Mining Started!",
+      description: "Your farming session has begun",
+      variant: "default",
+    });
+    
+    // You can add actual mining logic here
+    // For example, start a timer, connect to backend, etc.
+  };
+
+  return (
+    <div className="bg-blue-800/50 rounded-2xl md:p-6 p-3 border border-blue-600/30">
+      <div className="flex items-center justify-between">
+        <h3 className="text-white font-bold md:text-xl text-sm">
+          Farming
+        </h3>
+        
+        <button
+          onClick={handleStartMining}
+          disabled={isMining}
+          className="bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 
+                     disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed
+                     text-yellow-900 font-bold md:py-3 py-2 md:px-6 px-4 rounded-full 
+                     transition-all duration-200 shadow-lg hover:shadow-xl
+                     transform hover:scale-105 active:scale-95
+                     md:text-base text-xs"
+        >
+          {isMining ? "Mining..." : "Start Mining"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const InviteSection = ({ userDetails }: any) => {
   const [copyState, setCopyState] = useState("Copy");
   const [link, setLink] = useState("");
@@ -299,7 +342,7 @@ const InviteSection = ({ userDetails }: any) => {
   };
 
   return (
-    <div className="bg-blue-800/50 rounded-3xl md:p-6 p-3 border border-blue-600/30">
+    <div className="bg-blue-800/50 rounded-2xl md:p-6 p-3 border border-blue-600/30">
       <h3 className="text-white font-bold text-center flex justify-center  w-full mb-4">
         Invite friends and earn rewards
       </h3>
