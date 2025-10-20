@@ -157,7 +157,7 @@ const QuizGame: React.FC<QuizGameProps> = ({ onEarnCoins = () => {} }) => {
   }
 
   return (
-    <div className="h-[calc(100vh-80px)] bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] relative overflow-hidden">
+    <div className="h-screen bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] relative overflow-hidden">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {[...Array(20)].map((_, i) => (
           <div
@@ -177,14 +177,15 @@ const QuizGame: React.FC<QuizGameProps> = ({ onEarnCoins = () => {} }) => {
         ))}
       </div>
 
-      <div className="relative z-10 flex items-center justify-between px-4 py-6">
-        <button onClick={() => router.back()} className="flex items-center gap-2 text-white">
-          <ArrowLeft className="w-5 h-5" />
-          <span className="text-sm">Back</span>
-        </button>
+      <div className="relative z-10 flex items-center justify-between px-4 py-3 
+      ">
+        {/* <button onClick={() => router.back()} className="flex items-center gap-2 text-white">
+          <ArrowLeft className="w-4 h-4" />
+          <span className="text-xs">Back</span>
+        </button> */}
 
         <h1
-          className="text-3xl font-bold text-white tracking-wider"
+          className="text-2xl font-bold text-white tracking-wider ml-16"
           style={{
             fontFamily: "monospace",
             textShadow: "0 0 10px rgba(255,255,255,0.5)",
@@ -198,53 +199,53 @@ const QuizGame: React.FC<QuizGameProps> = ({ onEarnCoins = () => {} }) => {
           <img 
             src="/assets/quiz/hint-button.svg"
             alt="Use Hint"
-            className="w-32 h-auto"
+            className="w-24 h-auto"
           />
         </button>
         
         )}
-        {(selectedAnswer || gameOver) && <div className="w-20" />}
+        {(selectedAnswer || gameOver) && <div className="w-16" />}
       </div>
 
       {!gameOver ? (
-        <div className="relative z-10 px-4 pb-16 overflow-y-auto max-h-[calc(100vh-200px)]">
-          <div className="flex justify-center mb-6">
-            <div className="relative w-16 h-16">
-              <svg className="w-16 h-16 transform -rotate-90">
-                <circle cx="32" cy="32" r="28" stroke="rgba(255,255,255,0.2)" strokeWidth="4" fill="none" />
+        <div className="relative z-10 px-4 pb-8 overflow-y-auto max-h-[calc(100vh-120px)]">
+          <div className="flex justify-center mb-3">
+            <div className="relative w-12 h-12">
+              <svg className="w-12 h-12 transform -rotate-90">
+                <circle cx="24" cy="24" r="20" stroke="rgba(255,255,255,0.2)" strokeWidth="3" fill="none" />
                 <circle
-                  cx="32"
-                  cy="32"
-                  r="28"
+                  cx="24"
+                  cy="24"
+                  r="20"
                   stroke="white"
-                  strokeWidth="4"
+                  strokeWidth="3"
                   fill="none"
-                  strokeDasharray={`${(timer / 5) * 176} 176`}
+                  strokeDasharray={`${(timer / 5) * 125.6} 125.6`}
                   className="transition-all duration-1000"
                 />
               </svg>
-              <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-lg">
+              <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-sm">
                 {String(timer).padStart(2, "0")}
               </div>
             </div>
           </div>
 
-          <div className="mb-6">
+          <div className="mb-3">
             <img
               src={currentQuestion.image || "/placeholder.svg"}
               alt="Question"
-              className="w-full h-48 object-cover rounded-2xl"
+              className="w-full h-32 object-cover rounded-xl"
             />
           </div>
 
-          <div className="mb-6">
-            <p className="text-gray-400 text-sm mb-2">
+          <div className="mb-4">
+            <p className="text-gray-400 text-xs mb-1">
               Question {currentQuestionIndex + 1} of {questions.length}
             </p>
-            <h2 className="text-white text-2xl font-bold leading-tight">{currentQuestion.question}</h2>
+            <h2 className="text-white text-lg font-bold leading-tight">{currentQuestion.question}</h2>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-2.5">
             {currentQuestion.options.map((option) => {
               const isSelected = selectedAnswer === option
               const isCorrectAnswer = option === currentQuestion.correctAnswer
@@ -256,7 +257,7 @@ const QuizGame: React.FC<QuizGameProps> = ({ onEarnCoins = () => {} }) => {
                   key={option}
                   onClick={() => handleAnswer(option)}
                   disabled={selectedAnswer !== null}
-                  className={`w-full p-4 rounded-2xl font-semibold text-lg transition-all ${
+                  className={`w-full p-3 rounded-xl font-semibold text-base transition-all ${
                     showCorrect
                       ? "bg-white text-black"
                       : showIncorrect
@@ -269,14 +270,14 @@ const QuizGame: React.FC<QuizGameProps> = ({ onEarnCoins = () => {} }) => {
                 >
                   <div className="flex items-center justify-between">
                     {showCorrect && (
-                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-3">
-                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center mr-2">
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
                     )}
                     <span className="flex-1 text-center">{option}</span>
-                    {showCorrect && <div className="w-6" />}
+                    {showCorrect && <div className="w-5" />}
                   </div>
                 </button>
               )
@@ -284,26 +285,26 @@ const QuizGame: React.FC<QuizGameProps> = ({ onEarnCoins = () => {} }) => {
           </div>
 
           {selectedAnswer && isCorrect && (
-            <div className="mt-6 text-center space-y-4">
-              <p className="text-white text-lg">That's the right Answer - +10 Solv</p>
+            <div className="mt-4 text-center space-y-2">
+              <p className="text-white text-sm">That's the right Answer - +10 Solv</p>
               <div className="flex justify-center">
-                <img src="/src/app/assets/quiz/solvium-coin.png" alt="Coin" className="w-12 h-12 animate-bounce" />
+                <img src="/assets/games/Solvium-coin.svg" alt="Coin" className="w-10 h-10 animate-bounce" />
               </div>
             </div>
           )}
         </div>
       ) : (
-        <div className="relative z-10 px-4 text-center space-y-6">
-          <div className="text-6xl mb-4">🎉</div>
-          <h2 className="text-white text-3xl font-bold">Quiz Complete!</h2>
-          <p className="text-white text-xl">
+        <div className="relative z-10 px-4 text-center space-y-4">
+          <div className="text-5xl mb-3">🎉</div>
+          <h2 className="text-white text-2xl font-bold">Quiz Complete!</h2>
+          <p className="text-white text-lg">
             Your score: <span className="font-bold">{score}</span>
           </p>
-          <p className="text-gray-400">Hints used: {hintsUsed}</p>
+          <p className="text-gray-400 text-sm">Hints used: {hintsUsed}</p>
 
           <button
             onClick={handlePlayAgain}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:scale-105 transition-transform"
+            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-bold text-base hover:scale-105 transition-transform"
           >
             Play Again
           </button>

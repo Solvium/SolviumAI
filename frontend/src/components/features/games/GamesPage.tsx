@@ -80,7 +80,7 @@ const GamesPage = () => {
           </div>
 
           <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 pt-24 pb-8">
-            <div className="flex flex-col md:gap-6 gap-1 w-full max-w-md mb-8">
+            <div className="grid grid-cols-2 md:gap-6 gap-3 w-full max-w-md mb-8">
               {games.map((game) => (
                 <button
                   key={game.id}
@@ -109,7 +109,7 @@ const GamesPage = () => {
       ) : (
         <div className="relative w-full pb-2 max-h-screen">
           <ChevronLeft
-            className="absolute top-4 left-4 z-20 cursor-pointer text-white hover:text-yellow-400 transition-colors w-6 h-6 md:w-8 md:h-8 mt-3"
+            className="absolute top-2 left-4 z-20 cursor-pointer text-white hover:text-yellow-400 transition-colors w-6 h-6 md:w-8 md:h-8 mt-3"
             onClick={() => setActiveGame(null)}
           />
           <div className="w-full max-h-screen">{activeGame}</div>
