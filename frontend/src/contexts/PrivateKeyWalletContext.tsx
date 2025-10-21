@@ -475,6 +475,7 @@ export const PrivateKeyWalletProvider = ({
         methodName: "near_withdraw",
         args: { amount: amountYocto },
         gas: BigInt("80000000000000"),
+        attachedDeposit: BigInt("1"), // Required 1 yoctoNEAR deposit
       });
     },
   };

@@ -93,8 +93,6 @@ const nextConfig = {
                 "https://rpc.testnet.near.org",
                 "https://rpc.mainnet.near.org",
                 "https://beta.rpc.mainnet.near.org",
-                "https://rpc.mainnet.fastnear.com",
-                "https://rpc.testnet.fastnear.com",
                 "https://api.fastnear.com",
                 "https://free.rpc.fastnear.com",
                 "https://test.api.fastnear.com",

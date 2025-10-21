@@ -39,6 +39,7 @@ const QuizGame: React.FC<QuizGameProps> = ({
     isCorrect: boolean;
     points: number;
   } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Don't auto-start the game - let user choose settings first
 
@@ -110,31 +111,36 @@ const QuizGame: React.FC<QuizGameProps> = ({
   };
 
   const handleSubmitAnswer = async () => {
-    if (!selectedAnswer) return;
+    if (!selectedAnswer || isSubmitting) return;
 
-    const result = await actions.submitAnswer();
-    if (result.success) {
-      // Store validation result for display
-      setValidationResult({
-        isCorrect: result.isCorrect || false,
-        points: result.points || 0,
-      });
+    setIsSubmitting(true);
+    try {
+      const result = await actions.submitAnswer();
+      if (result.success) {
+        // Store validation result for display
+        setValidationResult({
+          isCorrect: result.isCorrect || false,
+          points: result.points || 0,
+        });
 
-      // Use the validation result directly
-      if (result.isCorrect) {
-        const earned = result.points || quizState.currentQuiz?.points || 10;
-        setPointsEarned(earned);
-        setScore((prev) => prev + earned);
-        setUserCoins((prev) => prev + earned);
-        onEarnCoins(earned);
-      } else {
-        setPointsEarned(0);
+        // Use the validation result directly
+        if (result.isCorrect) {
+          const earned = result.points || quizState.currentQuiz?.points || 10;
+          setPointsEarned(earned);
+          setScore((prev) => prev + earned);
+          setUserCoins((prev) => prev + earned);
+          onEarnCoins(earned);
+        } else {
+          setPointsEarned(0);
+        }
+
+        // Show result screen
+        setShowResult(true);
+      } else if (gameState.error) {
+        toast.error(gameState.error);
       }
-
-      // Show result screen
-      setShowResult(true);
-    } else if (gameState.error) {
-      toast.error(gameState.error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -148,6 +154,7 @@ const QuizGame: React.FC<QuizGameProps> = ({
       setShowResult(false);
       setPointsEarned(0);
       setValidationResult(null);
+      setIsSubmitting(false); // Reset loading state
       setTimer(60); // Reset timer to 60 seconds
     } else {
       setGameOver(true);
@@ -178,6 +185,7 @@ const QuizGame: React.FC<QuizGameProps> = ({
     setShowResult(false);
     setPointsEarned(0);
     setValidationResult(null);
+    setIsSubmitting(false); // Reset loading state
     setTimer(60); // Reset timer to 60 seconds
     await handleStartGame();
   };
@@ -528,9 +536,21 @@ const QuizGame: React.FC<QuizGameProps> = ({
               <div className="mt-4 flex justify-center">
                 <button
                   onClick={handleSubmitAnswer}
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl font-bold text-base hover:scale-105 transition-transform"
+                  disabled={isSubmitting}
+                  className={`px-6 py-3 rounded-xl font-bold text-base transition-all duration-200 ${
+                    isSubmitting
+                      ? "bg-gray-500 cursor-not-allowed"
+                      : "bg-gradient-to-r from-blue-500 to-purple-600 hover:scale-105 hover:shadow-lg"
+                  }`}
                 >
-                  Submit Answer
+                  {isSubmitting ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Submitting...</span>
+                    </div>
+                  ) : (
+                    "Submit Answer"
+                  )}
                 </button>
               </div>
             )}

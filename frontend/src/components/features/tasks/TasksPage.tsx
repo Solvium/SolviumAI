@@ -19,6 +19,7 @@ import { useSolviumContract } from "@/hooks/useSolviumContract";
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { useBalanceCache } from "@/hooks/useBalanceCache";
+import { useDepositMultiplier } from "@/hooks/useDepositMultiplier";
 import { useToast } from "@/hooks/use-toast";
 import { throttleApiCall } from "@/lib/requestThrottler";
 import { taskConfig } from "@/config/taskConfig";
@@ -44,6 +45,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
     resetIn: number;
   } | null>(null);
   const [gamingLoadingId, setGamingLoadingId] = useState<string | null>(null);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   const { user: userDetails, refreshUser, trackLogin } = useAuth();
   const {
@@ -62,6 +64,14 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
     checkFirstGameStatus,
   } = useTaskProgress();
   const { fetchBalance, getCachedBalance } = useBalanceCache();
+  const {
+    currentMultiplier,
+    multiplierChanged,
+    trackDepositMultiplier,
+    fetchCurrentMultiplier,
+    fetchUserDepositData,
+    userDepositData,
+  } = useDepositMultiplier();
   const { toast } = useToast();
 
   // Refs to control effect executions
@@ -124,23 +134,38 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
     },
   ];
 
-  // Calculate multiplier tiers based on contract multiplier factor
+  // Calculate multiplier tiers based on deposit amount using contract multiplier
   const multiplierTiers = [
-    { amount: 1, multiplier: 1 + contractMultiplierFactor * 0.5 },
-    { amount: 5, multiplier: 1 + contractMultiplierFactor * 1 },
-    { amount: 10, multiplier: 1 + contractMultiplierFactor * 2 },
-    { amount: 25, multiplier: 1 + contractMultiplierFactor * 4 },
+    { amount: 1, multiplier: currentMultiplier * 1 }, // contract multiplier * 1 NEAR
+    { amount: 5, multiplier: currentMultiplier * 5 }, // contract multiplier * 5 NEAR
+    { amount: 10, multiplier: currentMultiplier * 10 }, // contract multiplier * 10 NEAR
+    { amount: 25, multiplier: currentMultiplier * 25 }, // contract multiplier * 25 NEAR
   ];
 
-  // Debug log for multiplier tiers when contract factor changes
+  // Debug log for multiplier tiers when contract multiplier changes
   useEffect(() => {
     console.log(
-      "Multiplier tiers updated:",
+      "Multiplier tiers (contract multiplier:",
+      currentMultiplier,
+      "):",
       multiplierTiers.map(
         (tier) => `${tier.amount} NEAR = ${tier.multiplier.toFixed(1)}x`
       )
     );
-  }, [contractMultiplierFactor]);
+  }, [currentMultiplier]);
+
+  // Calculate multiplier for the typed amount using contract multiplier
+  const calculateMultiplierForAmount = (amount: string) => {
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) return 1;
+
+    // Calculate multiplier: contract multiplier * deposit amount
+    // This works for any amount, including decimals
+    return currentMultiplier * numAmount; // contract multiplier * deposit amount
+  };
+
+  // Get the calculated multiplier for the current input
+  const calculatedMultiplier = calculateMultiplierForAmount(nearAmount);
 
   const fetchTasks = async () => {
     try {
@@ -249,6 +274,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
       setUserTasks([]);
     } finally {
       setIsLoadingTasks(false);
+      setIsInitialLoading(false);
     }
   };
 
@@ -354,8 +380,23 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
           getMultiplierFactor(accountId),
         ]);
 
+        console.log("🔍 Contract Data Fetch Results:");
+        console.log("📊 Deposit Summary:", depositSummary);
+        console.log("🎰 Spins Available:", spins);
+        console.log("⚡ Contract Multiplier:", multiplier);
+
         if (depositSummary.success) {
+          console.log("✅ User Deposit Summary Data:", depositSummary.data);
+          console.log(
+            "🎯 User Multiplier Factor:",
+            depositSummary.data?.multiplierFactor
+          );
           setUserDepositSummary(depositSummary.data);
+        } else {
+          console.log(
+            "❌ Failed to fetch deposit summary:",
+            depositSummary.error
+          );
         }
 
         if (spins.success) {
@@ -516,10 +557,40 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   };
 
   const handleDeposit = async () => {
-    if (!nearAmount || Number.parseFloat(nearAmount) <= 0) {
+    // Enhanced input validation
+    if (!nearAmount || nearAmount.trim() === "") {
       toast({
         title: "Invalid Amount",
-        description: "Please enter a valid NEAR amount",
+        description: "Please enter a NEAR amount",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const numAmount = Number.parseFloat(nearAmount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      toast({
+        title: "Invalid Amount",
+        description: "Please enter a valid positive number",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check for reasonable deposit limits
+    if (numAmount < 0.001) {
+      toast({
+        title: "Amount Too Small",
+        description: "Minimum deposit is 0.001 NEAR",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (numAmount > 1000) {
+      toast({
+        title: "Amount Too Large",
+        description: "Maximum deposit is 1000 NEAR",
         variant: "destructive",
       });
       return;
@@ -537,13 +608,30 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
     setDepositLoading(true);
 
     try {
+      // Track multiplier before deposit
+      const multiplierTracker = await trackDepositMultiplier(nearAmount);
+      const beforeMultiplier = multiplierTracker.beforeMultiplier;
+
       // Use the Solvium contract hook
       const result = await depositToGame(nearAmount);
 
       if (result.success) {
+        // Check multiplier after deposit
+        const multiplierResult = await multiplierTracker.checkAfterDeposit();
+
+        let depositMessage = `Successfully deposited ${nearAmount} NEAR to the game`;
+
+        // Show multiplier change if it occurred
+        if (multiplierResult.multiplierChanged) {
+          depositMessage += `\n\nMultiplier changed from ${beforeMultiplier}x to ${multiplierResult.afterMultiplier}x`;
+          if (multiplierResult.changeAmount > 0) {
+            depositMessage += ` (+${multiplierResult.changeAmount}x bonus!)`;
+          }
+        }
+
         toast({
           title: "Deposit Successful!",
-          description: `Successfully deposited ${nearAmount} NEAR to the game`,
+          description: depositMessage,
           variant: "default",
         });
 
@@ -667,6 +755,46 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
     return <Star className="w-6 h-6" />;
   };
 
+  // Loading screen component
+  if (isInitialLoading) {
+    return (
+      <div className="h-screen bg-[#0A0A1F] text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="relative mb-8">
+            {/* Animated spinner */}
+            <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
+            {/* Solvium logo or icon */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-purple-600 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-sm">S</span>
+              </div>
+            </div>
+          </div>
+
+          <h2 className="text-2xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent">
+            Loading Tasks
+          </h2>
+          <p className="text-gray-400 text-sm">
+            Fetching your tasks and multiplier data...
+          </p>
+
+          {/* Loading dots animation */}
+          <div className="flex justify-center mt-4 space-x-1">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+            <div
+              className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+              style={{ animationDelay: "0.1s" }}
+            ></div>
+            <div
+              className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+              style={{ animationDelay: "0.2s" }}
+            ></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen bg-[#0A0A1F] text-white pb-24 overflow-y-auto">
       {/* Fixed Header with Background */}
@@ -681,17 +809,20 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
               <span className="text-[8px] lg:text-lg font-semibold">Back</span>
             </button>
           </div>
-        
+
           <div className="absolute top-0 left-20 z-20">
             <h1
               className="text-xl md:text-4xl font-bold text-white tracking-[0.3em] drop-shadow-2xl"
-              style={{ fontFamily: "'Pixelify Sans', monospace", letterSpacing: "0.1em" }}
+              style={{
+                fontFamily: "'Pixelify Sans', monospace",
+                letterSpacing: "0.1em",
+              }}
             >
               TASK CENTER
             </h1>
           </div>
         </div>
-        
+
         <p className="text-center mt-12 text-sm text-gray-400">
           Complete tasks to earn SOLV points and unlock multipliers
         </p>
@@ -711,10 +842,43 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
             <div className="text-xs text-gray-400 mt-1">NEAR</div>
           </div>
           <div className="bg-[#1a1a3e] border-2 border-purple-500/30 rounded-2xl p-4 text-center">
-            <div className="text-2xl font-bold">
-              {userDetails?.multiplier || 1}x
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <div className="text-2xl font-bold">
+                {userDepositData?.multiplierFactor ||
+                  userDepositSummary?.multiplierFactor ||
+                  userDetails?.multiplier ||
+                  1}
+                x
+              </div>
+              <button
+                onClick={async () => {
+                  if (isConnected && accountId) {
+                    console.log(
+                      "🔄 Manually refreshing user multiplier from contract..."
+                    );
+                    console.log("👤 Account ID:", accountId);
+
+                    try {
+                      const result = await fetchUserDepositData(accountId);
+                      console.log("✅ Updated User Deposit Data:", result);
+                      console.log(
+                        "🎯 New User Multiplier Factor:",
+                        result?.multiplierFactor
+                      );
+                    } catch (error) {
+                      console.log("❌ Manual refresh failed:", error);
+                    }
+                  } else {
+                    console.log("⚠️ Cannot refresh - wallet not connected");
+                  }
+                }}
+                className="text-xs bg-purple-500/20 hover:bg-purple-500/30 p-1 rounded-full transition-colors"
+                title="Refresh my multiplier from contract"
+              >
+                🔄
+              </button>
             </div>
-            <div className="text-xs text-gray-400 mt-1">Multiplier</div>
+            <div className="text-xs text-gray-400">My Multiplier</div>
           </div>
         </div>
       </div>
@@ -736,15 +900,28 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
           <div className="flex gap-2 mb-4">
             <input
               type="number"
+              step="0.001"
+              min="0.001"
+              max="1000"
               placeholder="Enter NEAR amount"
               value={nearAmount}
-              onChange={(e) => setNearAmount(e.target.value)}
+              onChange={(e) => {
+                // Sanitize input - only allow numbers and decimal point
+                const value = e.target.value.replace(/[^0-9.]/g, "");
+                // Prevent multiple decimal points
+                const parts = value.split(".");
+                if (parts.length > 2) {
+                  setNearAmount(parts[0] + "." + parts.slice(1).join(""));
+                } else {
+                  setNearAmount(value);
+                }
+              }}
               className="flex-1 bg-[#0f0f2a] border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-pink-500"
             />
             <button
               onClick={handleDeposit}
               disabled={depositLoading || contractLoading || !isConnected}
-              className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 px-[fit-content] py-3 rounded-xl font-bold transition-all disabled:opacity-50"
+              className="bg-gradient-to-r w-[100px] from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 px-[fit-content] py-3 rounded-xl font-bold transition-all disabled:opacity-50"
             >
               {depositLoading || contractLoading
                 ? "..."
@@ -753,6 +930,38 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                 : "Deposit"}
             </button>
           </div>
+
+          {/* Multiplier Preview for Typed Amount */}
+          {nearAmount && parseFloat(nearAmount) > 0 && (
+            <div className="mb-4 p-3 bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-gradient-to-br from-blue-400 to-cyan-500 rounded-full flex items-center justify-center">
+                    <span className="text-xs">⚡</span>
+                  </div>
+                  <span className="text-sm font-medium text-gray-300">
+                    Your Multiplier for {nearAmount} NEAR:
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-bold text-blue-400">
+                    {calculatedMultiplier.toFixed(1)}x
+                  </span>
+                  {calculatedMultiplier > 1 && (
+                    <span className="text-xs text-green-400 bg-green-500/20 px-2 py-1 rounded-full">
+                      +{(calculatedMultiplier - 1).toFixed(1)}x bonus
+                    </span>
+                  )}
+                </div>
+              </div>
+              {calculatedMultiplier > 1 && (
+                <div className="mt-2 text-xs text-gray-400">
+                  You'll earn {calculatedMultiplier.toFixed(1)}x more SOLV
+                  points with this deposit!
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="mb-3">
             <div className="flex items-center gap-2 mb-2">
@@ -764,18 +973,25 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              {multiplierTiers.map((tier) => (
-                <button
-                  key={tier.amount}
-                  onClick={() => setNearAmount(tier.amount.toString())}
-                  className="bg-[#0f0f2a] hover:bg-[#1a1a3e] border border-gray-700 hover:border-blue-500/50 rounded-xl px-3 py-2 text-sm font-medium transition-all flex items-center justify-between"
-                >
-                  <span>{tier.amount} NEAR</span>
-                  <span className="bg-gradient-to-r from-blue-400 to-cyan-500 text-white text-xs px-2 py-1 rounded-full font-bold">
-                    +{tier.multiplier.toFixed(1)}x
-                  </span>
-                </button>
-              ))}
+              {multiplierTiers.map((tier) => {
+                const isSelected = nearAmount === tier.amount.toString();
+                return (
+                  <button
+                    key={tier.amount}
+                    onClick={() => setNearAmount(tier.amount.toString())}
+                    className={`${
+                      isSelected
+                        ? "bg-gradient-to-r from-blue-500/30 to-purple-500/30 border-blue-500/50"
+                        : "bg-[#0f0f2a] hover:bg-[#1a1a3e] border-gray-700 hover:border-blue-500/50"
+                    } border rounded-xl px-3 py-2 text-sm font-medium transition-all flex items-center justify-between`}
+                  >
+                    <span>{tier.amount} NEAR</span>
+                    <span className="bg-gradient-to-r from-blue-400 to-cyan-500 text-white text-xs px-2 py-1 rounded-full font-bold">
+                      +{tier.multiplier.toFixed(1)}x
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -856,10 +1072,22 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
               )}
 
               <div className="text-center">
-                <div className="text-2xl font-bold text-purple-400">
-                  {contractMultiplierFactor}x
+                <div className="flex items-center justify-center gap-2">
+                  <div className="text-2xl font-bold text-purple-400">
+                    {currentMultiplier}x
+                    {multiplierChanged && (
+                      <span className="text-sm text-green-400 ml-1">↑</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={fetchCurrentMultiplier}
+                    className="text-xs bg-purple-500/20 hover:bg-purple-500/30 px-2 py-1 rounded-full transition-colors"
+                    title="Refresh multiplier from contract"
+                  >
+                    🔄
+                  </button>
                 </div>
-                <div className="text-xs text-gray-400">Multiplier Factor</div>
+                <div className="text-xs text-gray-400">Contract Multiplier</div>
               </div>
             </div>
 
