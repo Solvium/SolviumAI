@@ -259,11 +259,7 @@ const WalletPage = () => {
 
       await unwrapNear(amountYocto);
 
-      // Refresh the portfolio to show updated balances
-      if (portfolio?.refresh) {
-        await portfolio.refresh();
-      }
-
+      // Portfolio will automatically refresh when the transaction completes
       setShowSuccess(true);
     } catch (error) {
       console.error("Failed to unwrap NEAR:", error);

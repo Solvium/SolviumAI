@@ -180,7 +180,7 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
             symbol: "NEAR",
             name: "NEAR",
             kind: "native",
-            balance: nearBalance,
+            balance: nearBalance || "0",
           },
           ...known,
           ...uniqMap.values(),
