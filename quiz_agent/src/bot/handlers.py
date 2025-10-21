@@ -3865,6 +3865,7 @@ async def process_questions_with_payment(
             caption=announcement_msg,
             parse_mode="Markdown",
             reply_markup=announcement_keyboard,
+            use_queue=False,  # Need message object to store announcement_message_id for cleanup
         )
 
         # If photo sending failed, fallback to text message
@@ -3878,6 +3879,7 @@ async def process_questions_with_payment(
                 announcement_msg,
                 parse_mode="Markdown",
                 reply_markup=announcement_keyboard,
+                use_queue=False,  # Need message object to store announcement_message_id for cleanup
             )
 
         # Store announcement message ID for cleanup
@@ -4559,6 +4561,7 @@ async def private_message_handler(update: Update, context: CallbackContext):
                             quiz.group_chat_id,
                             announce_text,
                             parse_mode="MarkdownV2",
+                            use_queue=False,  # Need message object to store announcement_message_id for cleanup
                         )
                         if message:
                             # Store announcement message ID for cleanup
@@ -4595,7 +4598,8 @@ async def private_message_handler(update: Update, context: CallbackContext):
                             plain_announce_text += f"Ends: No specific end time set.\n"
                         plain_announce_text += "Type /playquiz to participate!"
                         message = await safe_send_message(
-                            context.bot, quiz.group_chat_id, plain_announce_text
+                            context.bot, quiz.group_chat_id, plain_announce_text,
+                            use_queue=False  # Need message object to store announcement_message_id for cleanup
                         )
                         if message:
                             # Store announcement message ID for cleanup

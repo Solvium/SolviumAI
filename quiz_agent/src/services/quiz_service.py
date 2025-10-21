@@ -1710,13 +1710,29 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
             f"[ANNOUNCE_END] Answers message result: {answers_msg.message_id if answers_msg else 'None'}"
         )
 
-        # Schedule cleanup for answers announcement (2 minutes)
+        # Collect all message IDs to clean up
+        messages_to_cleanup = []
+        
+        # Delete initial quiz announcement IMMEDIATELY when quiz ends
+        if quiz.announcement_message_id:
+            try:
+                await application.bot.delete_message(
+                    chat_id=announcement_chat_id, 
+                    message_id=quiz.announcement_message_id
+                )
+                logger.info(
+                    f"[ANNOUNCE_END] Immediately deleted initial quiz announcement message {quiz.announcement_message_id}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[ANNOUNCE_END] Could not delete initial announcement message {quiz.announcement_message_id}: {e}"
+                )
+        
+        # Add answers announcement for delayed cleanup (20 minutes)
         if answers_msg:
+            messages_to_cleanup.append(answers_msg.message_id)
             logger.info(
-                f"[ANNOUNCE_END] About to schedule cleanup for answers message {answers_msg.message_id}"
-            )
-            await schedule_quiz_announcement_cleanup(
-                application, announcement_chat_id, [answers_msg.message_id], 20, quiz_id
+                f"[ANNOUNCE_END] Will cleanup answers message {answers_msg.message_id} in 20 minutes"
             )
         else:
             logger.warning(
@@ -1869,24 +1885,34 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
         )
 
         if message:
-            # Store announcement message ID for cleanup (this is the main end announcement)
+            # Add winners message to cleanup list
+            messages_to_cleanup.append(message.message_id)
+            logger.info(
+                f"[ANNOUNCE_END] Will cleanup winners message {message.message_id} in 20 minutes"
+            )
+            
+            # Update the stored announcement_message_id to the winners message
             quiz.announcement_message_id = message.message_id
             session.commit()
-
-            # Schedule cleanup for winners announcement (2 minutes)
-            logger.info(
-                f"[ANNOUNCE_END] About to schedule cleanup for winners message {message.message_id}"
-            )
-            await schedule_quiz_announcement_cleanup(
-                application, announcement_chat_id, [message.message_id], 20, quiz_id
-            )
-
-            logger.info(
-                f"[ANNOUNCE_END] Quiz end announcements sent for quiz {quiz_id} with message ID: {message.message_id}"
-            )
         else:
             logger.warning(
                 f"[ANNOUNCE_END] Quiz end announcements sent for quiz {quiz_id} but no message object returned - cleanup will NOT be scheduled!"
+            )
+
+        # Schedule cleanup for all end-of-quiz announcements (answers + winners) after 20 minutes
+        if messages_to_cleanup:
+            logger.info(
+                f"[ANNOUNCE_END] Scheduling cleanup for {len(messages_to_cleanup)} messages: {messages_to_cleanup}"
+            )
+            await schedule_quiz_announcement_cleanup(
+                application, announcement_chat_id, messages_to_cleanup, 20, quiz_id
+            )
+            logger.info(
+                f"[ANNOUNCE_END] Quiz end announcements sent for quiz {quiz_id}. {len(messages_to_cleanup)} messages scheduled for cleanup."
+            )
+        else:
+            logger.warning(
+                f"[ANNOUNCE_END] No messages to schedule for cleanup for quiz {quiz_id}"
             )
 
         # Debug logging to diagnose reward distribution issue
