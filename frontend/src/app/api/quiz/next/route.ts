@@ -15,14 +15,11 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get user's completed quizzes to avoid repetition
+    // Get user's completed quizzes to avoid repetition (ALL TIME, not just today)
     const completedQuizzes = await prisma.game.findMany({
       where: {
         userId: parseInt(userId),
         gameType: "quiz",
-        playedAt: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0)), // Today
-        },
       },
       select: { gameId: true },
     });
@@ -30,7 +27,7 @@ export async function GET(req: NextRequest) {
     const completedQuizIds = completedQuizzes.map((g) => g.gameId);
 
     // Log completed quizzes for debugging
-    console.log("✅ Completed Quizzes Today:", {
+    console.log("✅ Completed Quizzes (All Time):", {
       userId,
       completedQuizIds,
       totalCompleted: completedQuizIds.length,
