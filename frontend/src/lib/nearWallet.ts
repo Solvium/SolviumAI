@@ -12,13 +12,13 @@ const FASTNEAR_API_KEY = "TEMP648WSeY9y1XDyiAHL2KMbZxxnn3Tq4Dxggdd3eGniSy2";
 function getNetworkUrls(networkId: string) {
   if (networkId === "testnet") {
     return {
-      nodeUrl: `https://rpc.testnet.fastnear.com?apiKey=${FASTNEAR_API_KEY}`,
+      nodeUrl: "https://rpc.intea.rs",
       walletUrl: "https://wallet.testnet.near.org",
       helperUrl: "https://helper.testnet.near.org",
     };
   }
   return {
-    nodeUrl: `https://rpc.mainnet.fastnear.com?apiKey=${FASTNEAR_API_KEY}`,
+    nodeUrl: "https://rpc.intea.rs",
     walletUrl: "https://wallet.mainnet.near.org",
     helperUrl: "https://helper.mainnet.near.org",
   };

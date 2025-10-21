@@ -19,13 +19,9 @@ async function loadRefSdk() {
 export async function ensureRefEnv() {
   const env = REF_ENV || "mainnet";
   const { init_env, getConfig } = await loadRefSdk();
-  // Prefer provided URLs; otherwise default to official NEAR RPC to avoid FastNear rate limits in non-signed contexts
+  // Prefer provided URLs; otherwise default to Intea RPC
   const isTestnet = String(env).toLowerCase() === "testnet";
-  const defaultNodeUrl =
-    REF_NODE_URL ||
-    (isTestnet
-      ? "https://rpc.testnet.near.org"
-      : "https://rpc.mainnet.near.org");
+  const defaultNodeUrl = REF_NODE_URL || "https://rpc.intea.rs";
   const indexerUrl = REF_INDEXER_URL || undefined;
   init_env(env, indexerUrl || "", defaultNodeUrl);
   const cfg = getConfig(env);

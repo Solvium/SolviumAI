@@ -302,17 +302,21 @@ const WordleGame: React.FC<WordleGameProps> = ({
         console.log(
           `🎯 Word received for game: "${word}" (${word.length} letters)`
         );
-        
-        // Validate that the word is exactly 5 letters
-        if (word.length !== 5) {
-          console.error(`❌ Word length mismatch: expected 5, got ${word.length}`);
-          toast.error("Error: Invalid word length from server. Please try again.");
+
+        // Accept any word length from 3-10 letters
+        if (word.length < 3 || word.length > 10) {
+          console.error(
+            `❌ Invalid word length: ${word.length} (must be 3-10 letters)`
+          );
+          toast.error(
+            "Error: Invalid word length from server. Please try again."
+          );
           setIsLoading(false);
           return;
         }
-        
+
         setDailyId(dailyId);
-        setWordLen(5);
+        setWordLen(word.length);
         setTargetWord(word.toUpperCase());
       } else {
         throw new Error("No word received from database - game cannot start");
@@ -357,18 +361,22 @@ const WordleGame: React.FC<WordleGameProps> = ({
   };
 
   const handleKeyPress = async (key: string) => {
-    console.log(`🎹 Key pressed: "${key}", gameOver: ${gameOver}, currentGuess: "${currentGuess}"`);
-    
+    console.log(
+      `🎹 Key pressed: "${key}", gameOver: ${gameOver}, currentGuess: "${currentGuess}"`
+    );
+
     if (gameOver) return;
 
     if (key === "ENTER") {
-      console.log(`✅ ENTER pressed - currentGuess length: ${currentGuess.length}, wordLen: ${wordLen}`);
-      
+      console.log(
+        `✅ ENTER pressed - currentGuess length: ${currentGuess.length}, wordLen: ${wordLen}`
+      );
+
       if (currentGuess.length !== wordLen) {
         toast.error(`Word must be ${wordLen} letters!`);
         return;
       }
-      
+
       // Validate word using dictionary service
       const guessUpper = currentGuess.toUpperCase();
       console.log(
@@ -379,7 +387,7 @@ const WordleGame: React.FC<WordleGameProps> = ({
       console.log(`📖 Calling validateWordFrontend for: "${guessUpper}"`);
       const isValid = await validateWordFrontend(guessUpper);
       console.log(`📖 Validation result: ${isValid}`);
-      
+
       if (!isValid) {
         console.log(`❌ Invalid word: "${guessUpper}"`);
         toast.error("Word not found in dictionary!");
@@ -679,25 +687,30 @@ const WordleGame: React.FC<WordleGameProps> = ({
 
   const TutorialScreen = () => (
     <div className="flex-1 flex flex-col justify-center items-center px-6 text-white overflow-hidden">
-      <div className="max-w-md mx-auto w-full md:space-y-2 space-y-2 mt-2
-      ">
+      <div
+        className="max-w-md mx-auto w-full md:space-y-2 space-y-2 mt-2
+      "
+      >
         {/* Instruction Cards */}
         <div className="space-y-4">
           <div className="bg-[#000033] border-2 border-blue-600 rounded-3xl p-5">
             <p className="text-white md:text-sm text-xs">
-              <span className="font-bold">1.</span> Guess the 5 letter words in 6 tries!
+              <span className="font-bold">1.</span> Guess the 5 letter words in
+              6 tries!
             </p>
           </div>
 
           <div className="bg-[#000033] border-2 border-blue-600 rounded-3xl p-5">
             <p className="text-white md:text-sm text-xs">
-              <span className="font-bold">2.</span> Each guess must be a valid word.
+              <span className="font-bold">2.</span> Each guess must be a valid
+              word.
             </p>
           </div>
 
           <div className="bg-[#000033] border-2 border-blue-600 rounded-3xl p-5">
             <p className="text-white md:text-sm text-xs">
-              <span className="font-bold">3.</span> The color of the tiles shows how close your guess is to the word.
+              <span className="font-bold">3.</span> The color of the tiles shows
+              how close your guess is to the word.
             </p>
           </div>
         </div>
@@ -708,21 +721,30 @@ const WordleGame: React.FC<WordleGameProps> = ({
             <div className="w-16 h-16 bg-green-500 rounded-xl flex items-center justify-center text-white font-bold text-2xl mb-2">
               A
             </div>
-            <p className="text-[7px] text-gray-400 leading-tight">correct letter in<br/>correct position</p>
+            <p className="text-[7px] text-gray-400 leading-tight">
+              correct letter in
+              <br />
+              correct position
+            </p>
           </div>
 
           <div className="text-center">
             <div className="w-16 h-16 bg-yellow-500 rounded-xl flex items-center justify-center text-white font-bold text-2xl mb-2">
               B
             </div>
-            <p className="text-[7px] text-gray-400 leading-tight">correct letter in <br/>wrong position</p>
+            <p className="text-[7px] text-gray-400 leading-tight">
+              correct letter in <br />
+              wrong position
+            </p>
           </div>
 
           <div className="text-center">
             <div className="w-16 h-16 bg-gray-500 rounded-xl flex items-center justify-center text-white font-bold text-2xl mb-2">
               C
             </div>
-            <p className="text-[7px] text-gray-400 leading-tight">letter not in the <br/> word</p>
+            <p className="text-[7px] text-gray-400 leading-tight">
+              letter not in the <br /> word
+            </p>
           </div>
         </div>
 
@@ -730,7 +752,7 @@ const WordleGame: React.FC<WordleGameProps> = ({
         <div className="bg-[#000033] border-2 border-blue-600 rounded-3xl p-3">
           <ul className="text-white md:text-xs text-[9px] space-y-1.5">
             <li>• Need help? Use hints for 15 coins to reveal letters!</li>
-            <li>• win coins based  on how quickly you solve the puzzle</li>
+            <li>• win coins based on how quickly you solve the puzzle</li>
           </ul>
         </div>
 
@@ -1003,8 +1025,11 @@ const WordleGame: React.FC<WordleGameProps> = ({
                 {/* <ChevronLeft className="w-3 h-3 md:w-5 md:h-5" /> */}
                 {/* <span className="text-sm font-semibold">Back</span> */}
               </button>
-              <h1 className="text-2xl md:text-3xl font-bold text-white  md:ml-20 ml-16
-              " style={{ fontFamily: "'Press Start 2P', monospace" }}>
+              <h1
+                className="text-2xl md:text-3xl font-bold text-white  md:ml-20 ml-16
+              "
+                style={{ fontFamily: "'Press Start 2P', monospace" }}
+              >
                 WORDLE GAME
               </h1>
               <div className="w-20"></div>
@@ -1021,10 +1046,7 @@ const WordleGame: React.FC<WordleGameProps> = ({
                 {/* Game Board */}
                 <div className="space-y-2 mb-3">
                   {guesses.map((guess, i) => (
-                    <div
-                      key={i}
-                      className="flex gap-2 justify-center"
-                    >
+                    <div key={i} className="flex gap-2 justify-center">
                       {Array.from({ length: wordLen }).map((_, j) => (
                         <div
                           key={j}
@@ -1059,10 +1081,7 @@ const WordleGame: React.FC<WordleGameProps> = ({
                     Array.from({
                       length: Math.max(0, maxGuesses - guesses.length - 1),
                     }).map((_, r) => (
-                      <div
-                        key={r}
-                        className="flex gap-2 justify-center"
-                      >
+                      <div key={r} className="flex gap-2 justify-center">
                         {Array.from({ length: wordLen }).map((_, j) => (
                           <div
                             key={j}
@@ -1083,8 +1102,11 @@ const WordleGame: React.FC<WordleGameProps> = ({
                       ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
                       ["↵", "Z", "X", "C", "V", "B", "N", "M", "@"],
                     ].map((row, i) => (
-                      <div key={i} className="flex justify-center gap-1.5
-                      ">
+                      <div
+                        key={i}
+                        className="flex justify-center gap-1.5
+                      "
+                      >
                         {row.map((key) => (
                           <button
                             key={key}

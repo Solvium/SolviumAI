@@ -75,18 +75,7 @@ export async function POST(req: NextRequest) {
         process.env.FASTNEAR_API_KEY ||
         process.env.NEXT_PUBLIC_FASTNEAR_API_KEY ||
         "";
-      const fallbacks =
-        env === "testnet"
-          ? [
-              apiKey
-                ? `https://rpc.testnet.fastnear.com?apiKey=${apiKey}`
-                : "https://test.rpc.fastnear.com",
-            ]
-          : [
-              apiKey
-                ? `https://rpc.mainnet.fastnear.com?apiKey=${apiKey}`
-                : "https://free.rpc.fastnear.com",
-            ];
+      const fallbacks = ["https://rpc.intea.rs"];
       let lastErr = e;
       for (const url of fallbacks) {
         try {

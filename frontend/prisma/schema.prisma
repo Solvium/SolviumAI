@@ -47,7 +47,7 @@ model User {
   weeklyScores          WeeklyScore[]
   activities            UserActivity[]
   wordUsages            WordUsage[]
-  wordleGames           WordleGame[]
+  games                 Game[]
   // Multiplayer relations
   hostedRooms           GameRoom[]        @relation("RoomHost")
   roomPlayers           RoomPlayer[]      @relation("RoomPlayer")
@@ -171,18 +171,20 @@ model WordFetchLog {
   @@map("word_fetch_logs")
 }
 
-model WordleGame {
+model Game {
   id            Int      @id @default(autoincrement())
   userId        Int
-  dailyId       String
+  gameType      String   @default("wordle") // "wordle", "quiz", "puzzle", etc.
+  gameId        String   // dailyId for wordle, quizId for quiz, etc.
   level         Int
   difficulty    String
   won           Boolean
-  guesses       Int
+  score         Int      // guesses for wordle, points for quiz
   completionTime Int
   hintUsed      Boolean
   rewards       Int
-  targetWord    String
+  targetWord    String   // word for wordle, question for quiz
+  metadata      Json?    // Additional game-specific data
   playedAt      DateTime @default(now())
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
@@ -190,7 +192,7 @@ model WordleGame {
   // Relations
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("wordle_games")
+  @@map("games")
 }
 
 // Multiplayer Game Rooms
@@ -250,4 +252,31 @@ model MultiplayerGame {
   user            User     @relation("MultiplayerGame", fields: [userId], references: [id], onDelete: Cascade)
   
   @@map("multiplayer_games")
+}
+
+// Quiz System Models
+model Quiz {
+  id            String   @id @default(cuid())
+  question      String
+  options       Json     // Array of 4 options
+  correctAnswer String
+  difficulty    Int      // 1-10 levels
+  category      String
+  points        Int
+  createdAt     DateTime @default(now())
+  
+  @@map("quizzes")
+}
+
+model QuizGenerationLog {
+  id              Int      @id @default(autoincrement())
+  date            DateTime @default(now())
+  totalGenerated  Int
+  categories      Json     // Array of categories generated
+  difficulties    Json     // Array of difficulties generated
+  success         Boolean  @default(true)
+  errorMessage    String?
+  createdAt       DateTime @default(now())
+  
+  @@map("quiz_generation_logs")
 }

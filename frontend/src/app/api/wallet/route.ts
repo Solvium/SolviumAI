@@ -20,10 +20,10 @@ const FASTNEAR_BASE_URL = "https://api.fastnear.com";
 // FastNear API Key
 const FASTNEAR_API_KEY = "TEMP648WSeY9y1XDyiAHL2KMbZxxnn3Tq4Dxggdd3eGniSy2";
 
-// NEAR RPC URLs with FastNear authentication
+// NEAR RPC URLs using Intea RPC
 const RPC_URLS: Record<string, string> = {
-  mainnet: `https://rpc.mainnet.fastnear.com?apiKey=${FASTNEAR_API_KEY}`,
-  testnet: `https://rpc.testnet.fastnear.com?apiKey=${FASTNEAR_API_KEY}`,
+  mainnet: "https://rpc.intea.rs",
+  testnet: "https://rpc.intea.rs",
 };
 
 export async function GET(req: NextRequest) {

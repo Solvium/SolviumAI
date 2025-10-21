@@ -89,6 +89,7 @@ const nextConfig = {
                 .join(" ");
               const connectSrc = [
                 "connect-src 'self'",
+                "https://rpc.intea.rs",
                 "https://rpc.testnet.near.org",
                 "https://rpc.mainnet.near.org",
                 "https://beta.rpc.mainnet.near.org",

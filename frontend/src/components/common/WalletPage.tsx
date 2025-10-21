@@ -185,7 +185,35 @@ const WalletPage = () => {
     };
   }, [account, nearBalance]);
 
-  const usdBalance =
+  // Calculate total portfolio value including all tokens
+  const calculateTotalPortfolioValue = () => {
+    let totalValue = 0;
+
+    // Add NEAR balance value
+    if (nearUsd && nearBalance && /^[0-9]+(\.[0-9]+)?$/.test(nearBalance)) {
+      totalValue += Number(nearBalance) * nearUsd;
+    }
+
+    // Add all token holdings value
+    if (tokenHoldings && tokenPricesUsd) {
+      tokenHoldings.forEach((token) => {
+        const tokenId = token.symbol === "NEAR" ? "near" : token.id;
+        const price = tokenPricesUsd[tokenId];
+        const balance = parseFloat(token.balance) || 0;
+
+        if (price && !isNaN(price) && price > 0) {
+          totalValue += balance * price;
+        }
+      });
+    }
+
+    return totalValue.toFixed(2);
+  };
+
+  const usdBalance = calculateTotalPortfolioValue();
+
+  // Calculate individual NEAR USD value for the assets table
+  const nearUsdValue =
     nearUsd && nearBalance && /^[0-9]+(\.[0-9]+)?$/.test(nearBalance)
       ? (Number(nearBalance) * nearUsd).toFixed(2)
       : "0.00";
@@ -404,7 +432,7 @@ const WalletPage = () => {
                         <tr>
                           <td className="py-2 pr-4">NEAR</td>
                           <td className="py-2 pr-4">{nearBalance ?? "0"}</td>
-                          <td className="py-2 pr-4">${usdBalance}</td>
+                          <td className="py-2 pr-4">${nearUsdValue}</td>
                         </tr>
                         {tokenHoldings.map((t) => {
                           const idOrNear =
@@ -450,26 +478,6 @@ const WalletPage = () => {
                   </h2>
 
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                          <svg
-                            className="w-5 h-5 text-white"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <div className="text-white font-medium">
-                            Wallet Earn
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-yellow-400 font-bold">$120.32</div>
-                    </div>
-
                     {((showAllTxns ? allTxns : recentTxns) || []).length ===
                       0 && (
                       <div className="text-white/60 text-sm">
@@ -501,11 +509,22 @@ const WalletPage = () => {
                           </div>
                           <div>
                             <div className="text-white font-medium">
-                              {txn.description}
+                              {txn.description || "Transaction"}
                             </div>
                             <div className="text-white/50 text-xs">
-                              {txn.from?.slice(0, 8)}...{txn.from?.slice(-4)} →{" "}
-                              {txn.to?.slice(0, 8)}...{txn.to?.slice(-4)}
+                              {txn.from && txn.to ? (
+                                <>
+                                  {txn.from.slice(0, 8)}...{txn.from.slice(-4)}{" "}
+                                  → {txn.to.slice(0, 8)}...{txn.to.slice(-4)}
+                                </>
+                              ) : (
+                                <>
+                                  {txn.timestamp &&
+                                    new Date(
+                                      txn.timestamp
+                                    ).toLocaleDateString()}
+                                </>
+                              )}
                             </div>
                             {txn.status === "failed" && (
                               <div className="text-red-400 text-xs">Failed</div>
@@ -514,7 +533,20 @@ const WalletPage = () => {
                         </div>
                         <div className="text-right">
                           {txn.amount && (
-                            <div className="text-yellow-400 font-bold">
+                            <div
+                              className={`font-bold ${
+                                txn.type === "receive"
+                                  ? "text-green-400"
+                                  : txn.type === "send"
+                                  ? "text-red-400"
+                                  : "text-yellow-400"
+                              }`}
+                            >
+                              {txn.type === "send"
+                                ? "-"
+                                : txn.type === "receive"
+                                ? "+"
+                                : ""}
                               {txn.amount} NEAR
                             </div>
                           )}

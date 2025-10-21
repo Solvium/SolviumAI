@@ -598,8 +598,8 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
   }
 
   if (step === "confirm") {
-    const fromMeta = getKnownTokenBySymbol(fromToken) || DEFAULT_TOKENS[0];
-    const toMeta = getKnownTokenBySymbol(toToken) || DEFAULT_TOKENS[0];
+    const fromMeta = resolveToken(fromToken);
+    const toMeta = resolveToken(toToken);
     const amountNum = Number(amount || 0) || 0;
     const basisQuote = quoteOut ?? liveQuote;
     const minReceiveNum = basisQuote
@@ -678,17 +678,11 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="text-white/70 text-sm">From token</div>
-                  <div className="text-white text-sm">
-                    {fromMeta.symbol}{" "}
-                    {fromMeta.address ? `(${fromMeta.address})` : "(native)"}
-                  </div>
+                  <div className="text-white text-sm">{fromMeta.symbol}</div>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-white/70 text-sm">To token</div>
-                  <div className="text-white text-sm">
-                    {toMeta.symbol}{" "}
-                    {toMeta.address ? `(${toMeta.address})` : "(native)"}
-                  </div>
+                  <div className="text-white text-sm">{toMeta.symbol}</div>
                 </div>
               </div>
 

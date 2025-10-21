@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
 
     if (won && userId) {
       const currentUser = await prisma.user.findUnique({
-        where: { id: userId },
+        where: { id: parseInt(userId) },
       });
       totalGamesWon = (currentUser?.gamesWon || 0) + 1;
 
@@ -105,42 +105,26 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Save game result to appropriate table based on game type
+    // Save game result to the unified Game table
     let gameResult;
     try {
-      switch (gameType) {
-        case "wordle":
-          gameResult = await prisma.wordleGame.create({
-            data: {
-              userId: userId,
-              dailyId: gameId || `daily_${Date.now()}`,
-              level: expectedLevel,
-              difficulty: difficulty || "easy",
-              won,
-              guesses: score || 0,
-              completionTime: completionTime || 0,
-              hintUsed: hintUsed || false,
-              rewards: rewards || 0,
-              targetWord: metadata?.targetWord || "",
-              playedAt: new Date(),
-            },
-          });
-          break;
-
-        // Future game types will be added here
-        // case "puzzle":
-        //   gameResult = await prisma.puzzleGame.create({...});
-        //   break;
-        // case "quiz":
-        //   gameResult = await prisma.quizGame.create({...});
-        //   break;
-
-        default:
-          return NextResponse.json(
-            { error: `Unsupported game type: ${gameType}` },
-            { status: 400 }
-          );
-      }
+      gameResult = await prisma.game.create({
+        data: {
+          userId: parseInt(userId),
+          gameType: gameType,
+          gameId: gameId || `daily_${Date.now()}`,
+          level: expectedLevel,
+          difficulty: String(difficulty || "easy"),
+          won,
+          score: score || 0,
+          completionTime: completionTime || 0,
+          hintUsed: hintUsed || false,
+          rewards: rewards || 0,
+          targetWord: metadata?.targetWord || metadata?.question || "",
+          metadata: metadata || {},
+          playedAt: new Date(),
+        },
+      });
 
       console.log(`✅ Game result saved to database:`, gameResult.id);
     } catch (error) {
@@ -155,9 +139,9 @@ export async function POST(req: NextRequest) {
     if (won && userId) {
       // Get user data before update
       const userBefore = await prisma.user.findUnique({
-        where: { id: userId },
+        where: { id: parseInt(userId) },
         include: {
-          wordleGames: {
+          games: {
             orderBy: { playedAt: "desc" },
             take: 5,
           },
@@ -183,7 +167,7 @@ export async function POST(req: NextRequest) {
 
       // Update user stats including level progression
       const updatedUser = await prisma.user.update({
-        where: { id: userId },
+        where: { id: parseInt(userId) },
         data: {
           totalSOLV: {
             increment: finalRewards,
@@ -207,7 +191,7 @@ export async function POST(req: NextRequest) {
           difficulty: expectedDifficulty,
         },
         include: {
-          wordleGames: {
+          games: {
             orderBy: { playedAt: "desc" },
             take: 5,
           },
@@ -221,7 +205,7 @@ export async function POST(req: NextRequest) {
       await prisma.weeklyScore.upsert({
         where: {
           userId_weekNumber_year: {
-            userId: userId,
+            userId: parseInt(userId),
             weekNumber: currentWeek,
             year: currentYear,
           },
@@ -232,7 +216,7 @@ export async function POST(req: NextRequest) {
           },
         },
         create: {
-          userId: userId,
+          userId: parseInt(userId),
           weekNumber: currentWeek,
           year: currentYear,
           points: finalRewards,
@@ -250,7 +234,7 @@ export async function POST(req: NextRequest) {
         const userMultiplier = 1; // TODO: Get from user data or contract
 
         await prisma.user.update({
-          where: { id: userId },
+          where: { id: parseInt(userId) },
           data: {
             totalSOLV: {
               increment: firstGameBonus * userMultiplier,
@@ -272,7 +256,7 @@ export async function POST(req: NextRequest) {
       // Log activity for game completion
       await prisma.userActivity.create({
         data: {
-          userId: userId,
+          userId: parseInt(userId),
           activity_type: `${gameType.toUpperCase()}_WIN`,
           points_earned: 5, // 5 XP for winning
           metadata: {
@@ -329,7 +313,7 @@ export async function POST(req: NextRequest) {
     } else if (userId) {
       // Log user data for lost games too
       const userData = await prisma.user.findUnique({
-        where: { id: userId },
+        where: { id: parseInt(userId) },
         select: {
           username: true,
           totalSOLV: true,
@@ -351,7 +335,7 @@ export async function POST(req: NextRequest) {
         const userMultiplier = 1; // TODO: Get from user data or contract
 
         await prisma.user.update({
-          where: { id: userId },
+          where: { id: parseInt(userId) },
           data: {
             totalSOLV: {
               increment: firstGameBonus * userMultiplier,
@@ -377,7 +361,7 @@ export async function POST(req: NextRequest) {
       const lossSolv = gameType === "wordle" ? 2 : 0;
       if (lossSolv > 0) {
         await prisma.user.update({
-          where: { id: userId },
+          where: { id: parseInt(userId) },
           data: {
             totalSOLV: { increment: lossSolv },
             totalPoints: { increment: lossSolv },
@@ -391,7 +375,7 @@ export async function POST(req: NextRequest) {
         await prisma.weeklyScore.upsert({
           where: {
             userId_weekNumber_year: {
-              userId: userId,
+              userId: parseInt(userId),
               weekNumber: currentWeek,
               year: currentYear,
             },
@@ -400,7 +384,7 @@ export async function POST(req: NextRequest) {
             points: { increment: lossSolv },
           },
           create: {
-            userId: userId,
+            userId: parseInt(userId),
             weekNumber: currentWeek,
             year: currentYear,
             points: lossSolv,
@@ -411,7 +395,7 @@ export async function POST(req: NextRequest) {
       // Log activity for game loss
       await prisma.userActivity.create({
         data: {
-          userId: userId,
+          userId: parseInt(userId),
           activity_type: `${gameType.toUpperCase()}_LOSS`,
           points_earned: lossSolv, // small consolation SOLV
           metadata: {

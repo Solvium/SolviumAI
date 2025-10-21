@@ -36,34 +36,60 @@ export async function GET(req: NextRequest) {
     }
 
     // Get game-specific stats based on game type
-    let gameStats = {};
+    let gameStats: any = {};
 
-    if (gameType === "wordle" || !gameType) {
-      // Get Wordle-specific stats
-      const wordleStats = await prisma.wordleGame.findMany({
-        where: { userId: parseInt(userId) },
-        orderBy: { playedAt: "desc" },
-        take: 10,
-      });
+    // Build where clause for specific game type or all games
+    const gameWhere =
+      gameType && gameType !== "all"
+        ? { userId: parseInt(userId), gameType: gameType }
+        : { userId: parseInt(userId) };
 
-      const wordleSummary = await prisma.wordleGame.groupBy({
-        by: ["won", "difficulty"],
-        where: { userId: parseInt(userId) },
-        _count: { won: true },
-        _sum: { rewards: true },
-        _avg: { completionTime: true, guesses: true },
-      });
+    // Get game stats
+    const gameStatsData = await prisma.game.findMany({
+      where: gameWhere,
+      orderBy: { playedAt: "desc" },
+      take: 10,
+    });
 
-      gameStats = {
-        wordle: {
-          recentGames: wordleStats,
-          summary: wordleSummary,
-          totalGames: wordleStats.length,
-          winRate:
-            wordleStats.filter((g) => g.won).length /
-            Math.max(wordleStats.length, 1),
-        },
+    const gameSummary = await prisma.game.groupBy({
+      by: ["won", "difficulty", "gameType"],
+      where: gameWhere,
+      _count: { won: true },
+      _sum: { rewards: true },
+      _avg: { completionTime: true, score: true },
+    });
+
+    // Group by game type
+    const statsByType: any = {};
+    gameStatsData.forEach((game) => {
+      if (!statsByType[game.gameType]) {
+        statsByType[game.gameType] = [];
+      }
+      statsByType[game.gameType].push(game);
+    });
+
+    // Calculate stats for each game type
+    Object.keys(statsByType).forEach((type) => {
+      const games = statsByType[type];
+      const wonGames = games.filter((g: any) => g.won);
+
+      gameStats[type] = {
+        recentGames: games,
+        totalGames: games.length,
+        winRate: wonGames.length / Math.max(games.length, 1),
+        totalRewards: games.reduce(
+          (sum: any, g: any) => sum + (g.rewards || 0),
+          0
+        ),
+        avgCompletionTime:
+          games.reduce((sum: any, g: any) => sum + (g.completionTime || 0), 0) /
+          games.length,
       };
+    });
+
+    // If no specific game type requested, return all stats
+    if (!gameType || gameType === "all") {
+      gameStats = statsByType;
     }
 
     // Get recent activities
@@ -162,4 +188,3 @@ Date.prototype.getWeek = function () {
     )
   );
 };
-
