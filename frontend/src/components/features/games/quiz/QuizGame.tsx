@@ -289,6 +289,11 @@ const QuizGame: React.FC<QuizGameProps> = ({
                   <option value="geography">Geography</option>
                   <option value="sports">Sports</option>
                   <option value="entertainment">Entertainment</option>
+                  <option value="technology">Technology</option>
+                  <option value="literature">Literature</option>
+                  <option value="art">Art</option>
+                  <option value="music">Music</option>
+                  <option value="general">General</option>
                 </select>
               </div>
             </div>
