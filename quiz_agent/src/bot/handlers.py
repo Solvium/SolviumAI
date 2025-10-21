@@ -1006,6 +1006,54 @@ async def duration_choice(update, context):
     )  # confirm_prompt will need redis_client too
 
 
+async def show_quiz_type_selection(update, context):
+    """Show Step 4: Quiz Type selection (Free or Paid)"""
+    user_id = update.effective_user.id
+    redis_client = RedisClient()
+
+    # Get current quiz details for display
+    topic = await redis_client.get_user_data_key(user_id, "topic")
+    num_questions = await redis_client.get_user_data_key(user_id, "num_questions")
+    context_text = await redis_client.get_user_data_key(user_id, "context_text")
+    duration_seconds = await redis_client.get_user_data_key(user_id, "duration_seconds")
+
+    progress_text = f"✅ Topic: {topic}\n"
+    if context_text:
+        progress_text += f"📝 Notes: {context_text[:50]}{'...' if len(context_text) > 50 else ''}\n"
+    else:
+        progress_text += f"📝 Notes: None\n"
+    progress_text += f"❓ Questions: {num_questions}\n"
+
+    if duration_seconds:
+        progress_text += f"⏱ Duration: {duration_seconds//60} minutes\n"
+    else:
+        progress_text += f"⏱ Duration: No limit\n"
+
+    progress_text += f"💰 Step 4 of 4: Quiz Type"
+
+    buttons = [
+        [
+            InlineKeyboardButton("🆓 Free Quiz", callback_data="quiz_type_free"),
+        ],
+        [
+            InlineKeyboardButton("💰 Paid Quiz", callback_data="quiz_type_paid"),
+        ],
+    ]
+
+    if update.callback_query:
+        msg = await update.callback_query.message.reply_text(
+            progress_text, reply_markup=InlineKeyboardMarkup(buttons)
+        )
+    else:
+        msg = await update.message.reply_text(
+            progress_text, reply_markup=InlineKeyboardMarkup(buttons)
+        )
+    
+    await store_message_for_cleanup(user_id, msg.message_id)
+    await redis_client.close()
+    return QUIZ_TYPE_CHOICE
+
+
 async def duration_input(update, context):
     user_id = update.effective_user.id
     redis_client = RedisClient()
@@ -1062,11 +1110,10 @@ async def duration_input(update, context):
             user_id, "duration_seconds"
         )
         logger.info(
-            f"duration_input: Parsed successfully, proceeding to confirm_prompt for user {user_id}. duration_seconds: {duration_seconds_val}"
+            f"duration_input: Parsed successfully, proceeding to quiz type selection for user {user_id}. duration_seconds: {duration_seconds_val}"
         )
-        return await confirm_prompt(
-            update, context
-        )  # confirm_prompt will need redis_client too
+        await redis_client.close()
+        return await show_quiz_type_selection(update, context)
     else:
         # If parsing failed either way
         await update.message.reply_text(
@@ -4745,10 +4792,9 @@ async def private_message_handler(update: Update, context: CallbackContext):
                 user_id, "duration_seconds", secs
             )  # Use static method
             logger.info(
-                f"Successfully parsed duration '{message_text}' to {secs} seconds for user {user_id}. Proceeding to confirm_prompt."
+                f"Successfully parsed duration '{message_text}' to {secs} seconds for user {user_id}. Proceeding to quiz type selection."
             )
-            await confirm_prompt(update, context)
-            return
+            return await show_quiz_type_selection(update, context)
         else:
             logger.warning(
                 f"Could not parse duration input '{message_text}' from user {user_id} using primary regex. Replying with error."

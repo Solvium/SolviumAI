@@ -1905,7 +1905,7 @@ async def announce_quiz_end(application: "Application", quiz_id: str):
                     # Either has a valid type with details
                     (
                         quiz.reward_schedule.get("type")
-                        in ["wta_amount", "top3_details", "custom_details"]
+                        in ["wta_amount", "top3_details", "top5_details", "top10_details", "custom_details"]
                         and quiz.reward_schedule.get("details_text")
                     )
                     # Or has direct rank-based rewards (like {1: 2, 2: 1})
