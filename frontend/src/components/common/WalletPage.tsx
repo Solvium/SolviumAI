@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { getAccountInfo, formatNearAmount } from "@/lib/nearblocks";
 import { getAccountFull, formatYoctoToNear } from "@/lib/fastnear";
 import { getNearUsd } from "@/lib/prices";
+import { utils } from "near-api-js";
 // import { getAccountTxnsFastnear } from "@/lib/fastnearExplorer";
 import Image from "next/image";
 import SendFlow from "@/components/features/wallet/SendFlow";
@@ -18,8 +19,15 @@ import { useWalletPortfolioContext } from "@/contexts/WalletPortfolioContext";
 type ActiveFlow = "send" | "add" | "swap" | null;
 
 const WalletPage = () => {
-  const { isConnected, isLoading, error, accountId, autoConnect, account } =
-    usePrivateKeyWallet();
+  const {
+    isConnected,
+    isLoading,
+    error,
+    accountId,
+    autoConnect,
+    account,
+    unwrapNear,
+  } = usePrivateKeyWallet();
   const [nearBalance, setNearBalance] = useState<string | null>(null);
   const [recentTxns, setRecentTxns] = useState<any[] | null>(null);
   const [allTxns, setAllTxns] = useState<any[] | null>(null);
@@ -120,6 +128,20 @@ const WalletPage = () => {
     }));
     setTokenHoldings(mapped);
   }, [portfolio]);
+
+  // Auto-unwrap wrapped NEAR when received
+  useEffect(() => {
+    if (!portfolio?.tokens || !unwrapNear) return;
+
+    const wrappedNearToken = portfolio.tokens.find(
+      (t) => t.symbol === "WNEAR" || t.id === "wrap.near"
+    );
+
+    if (wrappedNearToken && parseFloat(wrappedNearToken.balance) > 0) {
+      // Auto-unwrap wrapped NEAR
+      handleUnwrapNear(wrappedNearToken.balance);
+    }
+  }, [portfolio?.tokens, unwrapNear]);
 
   // Fetch USD prices for all token holdings
   useEffect(() => {
@@ -225,6 +247,24 @@ const WalletPage = () => {
 
   const handleCloseSuccess = () => {
     setShowSuccess(false);
+  };
+
+  const handleUnwrapNear = async (balance: string) => {
+    try {
+      // Use NEAR API utils to properly convert to yoctoNEAR
+      const amountYocto = utils.format.parseNearAmount(balance);
+      if (!amountYocto) {
+        throw new Error("Invalid amount format");
+      }
+
+      await unwrapNear(amountYocto);
+
+      // Portfolio will automatically refresh when the transaction completes
+      setShowSuccess(true);
+    } catch (error) {
+      console.error("Failed to unwrap NEAR:", error);
+      // You could add a toast notification here
+    }
   };
 
   if (!isConnected) {
@@ -446,11 +486,27 @@ const WalletPage = () => {
                             Number.isFinite(balNum) && price
                               ? balNum * price
                               : 0;
+                          const isWrappedNear =
+                            t.symbol === "WNEAR" || t.id === "wrap.near";
                           return (
                             <tr key={t.id}>
                               <td className="py-2 pr-4">{t.symbol}</td>
                               <td className="py-2 pr-4">{t.balance}</td>
-                              <td className="py-2 pr-4">${usd.toFixed(4)}</td>
+                              <td className="py-2 pr-4">
+                                <div className="flex items-center justify-between">
+                                  <span>${usd.toFixed(4)}</span>
+                                  {isWrappedNear && balNum > 0 && (
+                                    <button
+                                      onClick={() =>
+                                        handleUnwrapNear(t.balance)
+                                      }
+                                      className="ml-2 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
+                                    >
+                                      Unwrap
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
                             </tr>
                           );
                         })}

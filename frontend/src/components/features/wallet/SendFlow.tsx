@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
+import { useWalletPortfolioContext } from "@/contexts/WalletPortfolioContext";
 import { ArrowLeft, QrCode, Search, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAccountInventory } from "@/lib/nearblocks";
@@ -30,6 +31,7 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     checkTokenRegistrationFor,
     registerTokenFor,
   } = usePrivateKeyWallet();
+  const { nearBalance } = useWalletPortfolioContext();
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -71,6 +73,16 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     name: "NEAR",
     kind: "native",
   });
+
+  // Update selectedToken with NEAR balance when available
+  useEffect(() => {
+    if (selectedToken.kind === "native" && nearBalance) {
+      setSelectedToken((prev) => ({
+        ...prev,
+        balance: nearBalance,
+      }));
+    }
+  }, [nearBalance, selectedToken.kind]);
   const [availableTokens, setAvailableTokens] = useState<Token[]>([
     { symbol: "NEAR", name: "NEAR", kind: "native" },
   ]);
@@ -92,6 +104,14 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     const frac = padded.slice(i).replace(/0+$/, "");
     const out = frac ? `${whole}.${frac}` : whole;
     return negative ? `-${out}` : out;
+  };
+
+  // Helper to truncate long addresses
+  const truncateAddress = (address: string, maxLength: number = 20): string => {
+    if (!address || address.length <= maxLength) return address;
+    const start = address.slice(0, Math.floor(maxLength / 2));
+    const end = address.slice(-Math.floor(maxLength / 2));
+    return `${start}...${end}`;
   };
 
   // Load token inventory for selector
@@ -156,7 +176,12 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
           decimals: k.decimals,
         }));
         const tokens: Token[] = [
-          { symbol: "NEAR", name: "NEAR", kind: "native" },
+          {
+            symbol: "NEAR",
+            name: "NEAR",
+            kind: "native",
+            balance: nearBalance || "0",
+          },
           ...known,
           ...uniqMap.values(),
         ];
@@ -166,7 +191,7 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
         setAvailableTokens([{ symbol: "NEAR", name: "NEAR", kind: "native" }]);
       }
     })();
-  }, [accountId]);
+  }, [accountId, nearBalance]);
 
   // Address book (localStorage)
   type Contact = { name: string; address: string; avatar?: string };
@@ -223,6 +248,12 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     // Accept only digits and one optional decimal point, up to 24 fractional places
     if (/^\d*(?:\.\d{0,24})?$/.test(value)) {
       setAmount(value);
+    }
+  };
+
+  const handleMaxClick = () => {
+    if (selectedToken.balance !== undefined) {
+      setAmount(String(selectedToken.balance));
     }
   };
 
@@ -451,7 +482,10 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                     className="text-white text-4xl font-light min-w-[200px] text-center bg-transparent outline-none focus:border-cyan-500"
                   />
                 </div>
-                <button className="px-6 py-2 bg-[#0075EA] text-white rounded-full text-sm font-medium hover:bg-cyan-600 transition-colors">
+                <button
+                  onClick={handleMaxClick}
+                  className="px-6 py-2 bg-[#0075EA] text-white rounded-full text-sm font-medium hover:bg-cyan-600 transition-colors"
+                >
                   Max
                 </button>
               </div>
@@ -476,7 +510,7 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                       <div className="text-white/50 text-xs">
                         {selectedToken.kind === "native"
                           ? "Native"
-                          : selectedToken.address}
+                          : truncateAddress(selectedToken.address || "")}
                       </div>
                     </div>
                   </div>
@@ -524,7 +558,9 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                                     {t.name}
                                   </div>
                                   <div className="text-white/50 text-xs">
-                                    {t.kind === "native" ? "Native" : t.address}
+                                    {t.kind === "native"
+                                      ? "Native"
+                                      : truncateAddress(t.address || "")}
                                   </div>
                                 </div>
                               </div>
@@ -803,7 +839,9 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     const tokenLabel =
       selectedToken.kind === "native"
         ? "NEAR"
-        : `${selectedToken.symbol} (${selectedToken.address})`;
+        : `${selectedToken.symbol} (${truncateAddress(
+            selectedToken.address || ""
+          )})`;
     const fiatValue =
       selectedToken.kind === "native" && nearPriceUsd
         ? (Number(normalized || 0) * nearPriceUsd).toFixed(2)

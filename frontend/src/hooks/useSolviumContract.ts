@@ -152,8 +152,29 @@ export const useSolviumContract = () => {
 
   const depositToGame = useCallback(
     async (amount: string) => {
-      const amountYocto = (Number.parseFloat(amount) * 1e24).toString();
-      return handleContractCall("depositToGame", {}, amountYocto);
+      try {
+        // Validate and parse the amount
+        const numAmount = Number.parseFloat(amount);
+        if (isNaN(numAmount) || numAmount <= 0) {
+          throw new Error("Invalid amount: must be a positive number");
+        }
+
+        // Convert to yoctoNEAR (1 NEAR = 10^24 yoctoNEAR)
+        // Use BigInt for precise calculation to avoid floating point issues
+        const amountInYocto = BigInt(Math.floor(numAmount * 1e24));
+        const amountYocto = amountInYocto.toString();
+
+        console.log(`Depositing ${amount} NEAR (${amountYocto} yoctoNEAR)`);
+
+        return handleContractCall("depositToGame", {}, amountYocto);
+      } catch (error) {
+        console.error("Error converting amount to yoctoNEAR:", error);
+        throw new Error(
+          `Invalid amount format: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`
+        );
+      }
     },
     [handleContractCall]
   );
