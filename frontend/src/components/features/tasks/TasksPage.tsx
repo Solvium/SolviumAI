@@ -891,7 +891,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                 <span className="text-lg">💰</span>
               </div>
               <h3 className="text-lg font-bold">
-                Deposit NEAR for Multipliers
+                Deposit NEAR for Power Ups
               </h3>
             </div>
             <Info className="w-5 h-5 text-gray-400" />
