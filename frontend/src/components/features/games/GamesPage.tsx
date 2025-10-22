@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import WordleGame from "./wordle/WordleGame"
 import QuizGame from "./quiz/QuizGame"
 import { PicturePuzzle } from "./puzzle/Game"
+import NumGeniusGame from "./numgenius/NumGeniusGame"
 import { ChevronLeft } from "lucide-react"
 import Image from "next/image"
 
@@ -31,14 +32,14 @@ const GamesPage = () => {
       image: "/assets/games/puzzle-button.svg",
     },
     {
-      id: "puzzle",
-      title: "PUZZLE",
-      component: <PicturePuzzle />,
+      id: "numgenius",
+      title: "NUM-GENIUS",
+      component: <NumGeniusGame />,
       image: "/assets/games/num-genius.svg",
     },
     {
-      id: "puzzle",
-      title: "PUZZLE",
+      id: "crossword",
+      title: "CROSSWORD",
       component: <PicturePuzzle />,
       image: "/assets/games/cross-word.svg",
     },
