@@ -35,10 +35,10 @@ class Config:
         ).lower()
         == "true"
     )
-    
+
     # Mini-App API Secret (for secure API access from mini-app)
     MINI_APP_API_SECRET = os.getenv("MINI_APP_API_SECRET", "")
-    
+
     # Gemini API for quiz generation
     GOOGLE_API_KEY = os.getenv("GOOGLE_GEMINI_API_KEY")
 

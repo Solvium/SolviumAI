@@ -7,18 +7,18 @@ POST /wallet/get-or-create
     - Unified endpoint for mini-app to get existing user or create new user with wallet
     - Requires X-API-Secret header for authentication
     - Returns user info, wallet details, and points in single call
-    
+
     Request Body:
         {
             "telegram_user_id": 123456789,
             "username": "john_doe",        # optional
-            "first_name": "John",          # optional  
+            "first_name": "John",          # optional
             "last_name": "Doe"             # optional
         }
-    
+
     Request Headers:
         X-API-Secret: <your-secret-from-env>
-    
+
     Response:
         {
             "success": true,
@@ -31,7 +31,7 @@ POST /wallet/get-or-create
             },
             "message": "..."
         }
-        
+
     Setup:
         1. Add to .env file: MINI_APP_API_SECRET=your-secret-key-here
         2. Mini-app sends same secret in X-API-Secret header
@@ -64,7 +64,7 @@ class WalletCheckRequest(BaseModel):
 
 class GetOrCreateUserRequest(BaseModel):
     """Request model for get-or-create user endpoint"""
-    
+
     telegram_user_id: int
     username: Optional[str] = None
     first_name: Optional[str] = None
@@ -94,21 +94,21 @@ def verify_api_secret(x_api_secret: str = Header(None)) -> bool:
     if not Config.MINI_APP_API_SECRET:
         if Config.is_production():
             # Fail secure in production - never allow unsecured access
-            logger.error("MINI_APP_API_SECRET not configured in production - rejecting request!")
+            logger.error(
+                "MINI_APP_API_SECRET not configured in production - rejecting request!"
+            )
             raise HTTPException(
-                status_code=500,
-                detail="API authentication not configured"
+                status_code=500, detail="API authentication not configured"
             )
         else:
             # Only allow in development for easier testing
-            logger.warning("MINI_APP_API_SECRET not configured - API is unsecured (development mode only)!")
+            logger.warning(
+                "MINI_APP_API_SECRET not configured - API is unsecured (development mode only)!"
+            )
             return True
-    
+
     if x_api_secret != Config.MINI_APP_API_SECRET:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid API secret"
-        )
+        raise HTTPException(status_code=401, detail="Invalid API secret")
     return True
 
 
@@ -121,27 +121,27 @@ async def get_or_create_user_wallet(
     """
     Get existing user and wallet, or create new user with wallet if doesn't exist.
     This endpoint is designed for mini-app integration.
-    
+
     Security: Requires X-API-Secret header matching MINI_APP_API_SECRET env var.
-    
+
     Args:
         request: User information from mini-app
         db_service: Database service instance
         _: API secret verification dependency (raises 401 if invalid)
-        
+
     Returns:
         JSONResponse with user info, wallet details, and points
     """
     try:
         telegram_user_id = request.telegram_user_id
         logger.info(f"Get-or-create request for user {telegram_user_id}")
-        
+
         # Check if user exists
         session = SessionLocal()
         try:
             user = session.query(User).filter(User.id == str(telegram_user_id)).first()
             user_exists = user is not None
-            
+
             # Create user if doesn't exist
             if not user:
                 logger.info(f"Creating new user {telegram_user_id}")
@@ -165,21 +165,21 @@ async def get_or_create_user_wallet(
                     user.last_name = request.last_name
                 session.commit()
                 logger.info(f"User {telegram_user_id} found and updated")
-            
+
             # Extract user data before closing session
             user_data = {
                 "username": user.username,
                 "first_name": user.first_name,
                 "last_name": user.last_name,
             }
-            
+
         finally:
             session.close()
-        
+
         # Check if user has a wallet
         has_wallet = await db_service.has_wallet(telegram_user_id)
         wallet_info = None
-        
+
         if has_wallet:
             # Get existing wallet
             logger.info(f"User {telegram_user_id} has existing wallet")
@@ -200,20 +200,24 @@ async def get_or_create_user_wallet(
                     user_id=telegram_user_id,
                     user_name=request.username,
                 )
-                
+
                 wallet_info = {
                     "account_id": new_wallet.get("account_id"),
                     "public_key": new_wallet.get("public_key"),
                     "network": new_wallet.get("network", "testnet"),
                     "created_at": "just created",
                 }
-                logger.info(f"Wallet created for user {telegram_user_id}: {wallet_info['account_id']}")
-                
+                logger.info(
+                    f"Wallet created for user {telegram_user_id}: {wallet_info['account_id']}"
+                )
+
             except Exception as wallet_error:
-                logger.error(f"Error creating wallet for user {telegram_user_id}: {wallet_error}")
+                logger.error(
+                    f"Error creating wallet for user {telegram_user_id}: {wallet_error}"
+                )
                 # Continue without wallet - return user info anyway
                 wallet_info = None
-        
+
         # Build response
         response_data = {
             "success": True,
@@ -225,19 +229,25 @@ async def get_or_create_user_wallet(
                 "last_name": user_data["last_name"],
             },
             "wallet": wallet_info,
-            "message": "User and wallet retrieved successfully" if user_exists and has_wallet 
-                      else "New user and wallet created successfully" if not user_exists
-                      else "User retrieved, wallet created successfully"
+            "message": (
+                "User and wallet retrieved successfully"
+                if user_exists and has_wallet
+                else (
+                    "New user and wallet created successfully"
+                    if not user_exists
+                    else "User retrieved, wallet created successfully"
+                )
+            ),
         }
-        
+
         return JSONResponse(content=response_data, status_code=200)
-        
+
     except Exception as e:
-        logger.error(f"Error in get-or-create endpoint for user {request.telegram_user_id}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}"
+        logger.error(
+            f"Error in get-or-create endpoint for user {request.telegram_user_id}: {e}",
+            exc_info=True,
         )
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.post("/check", response_model=WalletCheckResponse)
