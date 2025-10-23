@@ -269,20 +269,8 @@ async function fetchTokenMetadataResilient(
         reference_hash: null,
       };
     }
-    if (
-      lowered === "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.factory.bridge.near"
-    ) {
-      return {
-        id,
-        symbol: "USDC",
-        name: "USD Coin",
-        decimals: 6,
-        spec: "ft-1.0.0",
-        icon: null,
-        reference: null,
-        reference_hash: null,
-      };
-    }
+    // REMOVED: Old bridged USDC token fallback - this was causing issues
+    // Only using native usdc.near now
     throw e;
   }
 }

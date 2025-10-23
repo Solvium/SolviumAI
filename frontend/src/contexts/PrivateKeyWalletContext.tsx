@@ -285,45 +285,84 @@ export const PrivateKeyWalletProvider = ({
     refreshSolviumWallet,
     signAndSendTransaction: async (receiverId, actions) => {
       if (!account) throw new Error("NEAR account not initialized");
-      const first = actions?.[0];
-      if (!first || first.type !== "FunctionCall") {
-        throw new Error("Unsupported action");
+
+      if (!actions || actions.length === 0) {
+        throw new Error("No actions provided");
       }
-      return (account as any).functionCall({
-        contractId: receiverId,
-        methodName: first.params.methodName,
-        args: first.params.args || {},
-        gas: first.params.gas,
-        attachedDeposit: first.params.deposit,
-      });
+
+      // Handle multiple actions by creating a transaction with all actions
+      if (actions.length === 1) {
+        const action = actions[0];
+        if (action.type !== "FunctionCall") {
+          throw new Error("Unsupported action type");
+        }
+        console.log(
+          `Executing single action: ${action.params.methodName} on ${receiverId}`
+        );
+        return (account as any).functionCall({
+          contractId: receiverId,
+          methodName: action.params.methodName,
+          args: action.params.args || {},
+          gas: action.params.gas,
+          attachedDeposit: action.params.deposit,
+        });
+      } else {
+        // Handle multiple actions using batch transactions
+        console.log(`Executing ${actions.length} actions on ${receiverId}`);
+        const transaction = (account as any).createTransaction({
+          receiverId: receiverId,
+          actions: actions.map((action: any) => ({
+            type: "FunctionCall",
+            params: {
+              methodName: action.params.methodName,
+              args: action.params.args || {},
+              gas: action.params.gas,
+              attachedDeposit: action.params.deposit,
+            },
+          })),
+        });
+        return await transaction.signAndSend();
+      }
     },
     checkTokenRegistration: async (tokenId: string) => {
       if (!account) throw new Error("NEAR account not initialized");
       try {
+        console.log(`Checking storage registration for token: ${tokenId}`);
         const result = await account.viewFunction({
           contractId: tokenId,
           methodName: "storage_balance_of",
           args: { account_id: account.accountId },
         });
-        return result !== null;
+        const isRegistered = result !== null && result !== undefined;
+        console.log(
+          `Storage registration status for ${tokenId}:`,
+          isRegistered,
+          result
+        );
+        return isRegistered;
       } catch (error) {
-        console.error("Error checking token registration:", error);
+        console.error(
+          `Error checking token registration for ${tokenId}:`,
+          error
+        );
         return false;
       }
     },
     registerToken: async (tokenId: string) => {
       if (!account) throw new Error("NEAR account not initialized");
       try {
+        console.log(`Registering storage for token: ${tokenId}`);
         const result = await account.functionCall({
           contractId: tokenId,
           methodName: "storage_deposit",
           args: {},
           attachedDeposit: BigInt("1250000000000000000000"), // 0.00125 NEAR
         });
+        console.log(`Storage registration result for ${tokenId}:`, result);
         return result !== null;
       } catch (error) {
-        console.error("Error registering token:", error);
-        return false;
+        console.error(`Error registering token ${tokenId}:`, error);
+        throw error; // Re-throw to allow proper error handling
       }
     },
     checkTokenRegistrationFor: async (
@@ -347,16 +386,26 @@ export const PrivateKeyWalletProvider = ({
     registerTokenFor: async (tokenId: string, accountToRegister: string) => {
       if (!account) throw new Error("NEAR account not initialized");
       try {
+        console.log(
+          `Registering storage for account ${accountToRegister} on token: ${tokenId}`
+        );
         const result = await account.functionCall({
           contractId: tokenId,
           methodName: "storage_deposit",
           args: { account_id: accountToRegister, registration_only: true },
           attachedDeposit: BigInt("1250000000000000000000"),
         });
+        console.log(
+          `Storage registration result for ${accountToRegister} on ${tokenId}:`,
+          result
+        );
         return result !== null;
       } catch (error) {
-        console.error("Error registering token for recipient:", error);
-        return false;
+        console.error(
+          `Error registering token for account ${accountToRegister} on ${tokenId}:`,
+          error
+        );
+        throw error; // Re-throw to allow proper error handling
       }
     },
     sendFungibleToken: async (

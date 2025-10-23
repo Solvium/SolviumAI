@@ -157,13 +157,8 @@ const WalletPage = () => {
         if (uniqueIds.length === 0) return;
         const entries = await Promise.all(
           uniqueIds.map(async (id) => {
-            // Stablecoins
-            if (
-              id.toLowerCase() ===
-                "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.factory.bridge.near" ||
-              id.toLowerCase() ===
-                "dac17f958d2ee523a2206206994597c13d831ec7.factory.bridge.near"
-            ) {
+            // Native stablecoins (usdc.near, usdt.near) are safe to hardcode as $1
+            if (id === "usdc.near" || id === "usdt.near") {
               return [id, 1] as const;
             }
             const res = await fetch(
@@ -474,42 +469,59 @@ const WalletPage = () => {
                           <td className="py-2 pr-4">{nearBalance ?? "0"}</td>
                           <td className="py-2 pr-4">${nearUsdValue}</td>
                         </tr>
-                        {tokenHoldings.map((t) => {
-                          const idOrNear =
-                            t.symbol === "NEAR" ? "wrap.near" : t.id;
-                          const price =
-                            t.symbol === "NEAR" && nearUsd
-                              ? nearUsd
-                              : tokenPricesUsd[idOrNear] || 0;
-                          const balNum = Number(t.balance || 0);
-                          const usd =
-                            Number.isFinite(balNum) && price
-                              ? balNum * price
-                              : 0;
-                          const isWrappedNear =
-                            t.symbol === "WNEAR" || t.id === "wrap.near";
-                          return (
-                            <tr key={t.id}>
-                              <td className="py-2 pr-4">{t.symbol}</td>
-                              <td className="py-2 pr-4">{t.balance}</td>
-                              <td className="py-2 pr-4">
-                                <div className="flex items-center justify-between">
-                                  <span>${usd.toFixed(4)}</span>
-                                  {isWrappedNear && balNum > 0 && (
-                                    <button
-                                      onClick={() =>
-                                        handleUnwrapNear(t.balance)
-                                      }
-                                      className="ml-2 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
-                                    >
-                                      Unwrap
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                        {tokenHoldings
+                          .filter((t) => {
+                            // Hide tokens with zero balance
+                            const balance = parseFloat(t.balance || "0");
+                            if (balance <= 0) return false;
+
+                            // Hide any bridged tokens (.e tokens or factory.bridge.near)
+                            const tokenId = t.id || "";
+                            if (
+                              tokenId.includes(".e") ||
+                              tokenId.includes("factory.bridge.near")
+                            ) {
+                              return false;
+                            }
+
+                            return true;
+                          })
+                          .map((t) => {
+                            const idOrNear =
+                              t.symbol === "NEAR" ? "wrap.near" : t.id;
+                            const price =
+                              t.symbol === "NEAR" && nearUsd
+                                ? nearUsd
+                                : tokenPricesUsd[idOrNear] || 0;
+                            const balNum = Number(t.balance || 0);
+                            const usd =
+                              Number.isFinite(balNum) && price
+                                ? balNum * price
+                                : 0;
+                            const isWrappedNear =
+                              t.symbol === "WNEAR" || t.id === "wrap.near";
+                            return (
+                              <tr key={t.id}>
+                                <td className="py-2 pr-4">{t.symbol}</td>
+                                <td className="py-2 pr-4">{t.balance}</td>
+                                <td className="py-2 pr-4">
+                                  <div className="flex items-center justify-between">
+                                    <span>${usd.toFixed(4)}</span>
+                                    {isWrappedNear && balNum > 0 && (
+                                      <button
+                                        onClick={() =>
+                                          handleUnwrapNear(t.balance)
+                                        }
+                                        className="ml-2 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
+                                      >
+                                        Unwrap
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
                       </tbody>
                     </table>
                   </div>

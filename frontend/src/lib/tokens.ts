@@ -16,17 +16,15 @@ export function getWNEARAddress(): string {
   return env === "testnet" ? "wrap.testnet" : "wrap.near";
 }
 
-// Mainnet NEP-141 addresses (Rainbow bridged ERC-20s)
-// USDC: a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.factory.bridge.near
-// USDT: dac17f958d2ee523a2206206994597c13d831ec7.factory.bridge.near
-const USDC_ID =
+// Native NEAR stablecoin addresses (NOT bridged tokens)
+const USDC_NATIVE_ID =
   (process.env.NEXT_PUBLIC_REF_ENV || process.env.NEAR_ENV) === "testnet"
     ? "usdc.fakes.testnet"
-    : "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.factory.bridge.near";
-const USDT_ID =
+    : "usdc.near";
+const USDT_NATIVE_ID =
   (process.env.NEXT_PUBLIC_REF_ENV || process.env.NEAR_ENV) === "testnet"
     ? "usdt.fakes.testnet"
-    : "dac17f958d2ee523a2206206994597c13d831ec7.factory.bridge.near";
+    : "usdt.near";
 
 export const DEFAULT_TOKENS: KnownToken[] = [
   { symbol: "NEAR", name: "NEAR", kind: "native" },
@@ -39,16 +37,16 @@ export const DEFAULT_TOKENS: KnownToken[] = [
   },
   {
     symbol: "USDC",
-    name: "USD Coin",
+    name: "USD Coin (Native)",
     kind: "ft",
-    address: USDC_ID,
+    address: USDC_NATIVE_ID,
     decimals: 6,
   },
   {
     symbol: "USDT",
-    name: "Tether USD",
+    name: "Tether USD (Native)",
     kind: "ft",
-    address: USDT_ID,
+    address: USDT_NATIVE_ID,
     decimals: 6,
   },
 ];
