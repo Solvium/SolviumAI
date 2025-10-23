@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { ArrowLeft, Copy } from "lucide-react";
+import { ArrowLeft, Copy, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toRawAmount } from "@/lib/nearIntents";
 // Quotes are now retrieved from server-side Ref SDK via /api/ref-quote
@@ -71,6 +71,24 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
   const [liveQuote, setLiveQuote] = useState<string | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
 
+  // Custom token input state - separate for From and To tokens
+  const [showFromCustomTokenInput, setShowFromCustomTokenInput] =
+    useState(false);
+  const [fromCustomTokenAddress, setFromCustomTokenAddress] = useState("");
+  const [fromCustomTokenLoading, setFromCustomTokenLoading] = useState(false);
+  const [fromCustomTokenError, setFromCustomTokenError] = useState<
+    string | null
+  >(null);
+  const [fromCustomTokenData, setFromCustomTokenData] = useState<any>(null);
+
+  const [showToCustomTokenInput, setShowToCustomTokenInput] = useState(false);
+  const [toCustomTokenAddress, setToCustomTokenAddress] = useState("");
+  const [toCustomTokenLoading, setToCustomTokenLoading] = useState(false);
+  const [toCustomTokenError, setToCustomTokenError] = useState<string | null>(
+    null
+  );
+  const [toCustomTokenData, setToCustomTokenData] = useState<any>(null);
+
   // Simple USD price map for display
   const [pricesUsd, setPricesUsd] = useState<Record<string, number>>({});
   // prices are fetched later once `selectable` is computed
@@ -95,6 +113,65 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
       setAmount(bal.toString());
     }
   }, [fromToken, getFromTokenBalance]);
+
+  // Fetch custom token data from DexScreener - separate functions for From and To
+  const fetchFromCustomToken = useCallback(async (address: string) => {
+    if (!address.trim()) return;
+
+    setFromCustomTokenLoading(true);
+    setFromCustomTokenError(null);
+
+    try {
+      const response = await fetch(
+        `/api/token-info?address=${encodeURIComponent(address.trim())}`
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to fetch token data");
+      }
+
+      setFromCustomTokenData(data);
+      console.log("From custom token data:", data);
+    } catch (error) {
+      console.error("Error fetching from custom token:", error);
+      setFromCustomTokenError(
+        error instanceof Error ? error.message : "Failed to fetch token data"
+      );
+      setFromCustomTokenData(null);
+    } finally {
+      setFromCustomTokenLoading(false);
+    }
+  }, []);
+
+  const fetchToCustomToken = useCallback(async (address: string) => {
+    if (!address.trim()) return;
+
+    setToCustomTokenLoading(true);
+    setToCustomTokenError(null);
+
+    try {
+      const response = await fetch(
+        `/api/token-info?address=${encodeURIComponent(address.trim())}`
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to fetch token data");
+      }
+
+      setToCustomTokenData(data);
+      console.log("To custom token data:", data);
+    } catch (error) {
+      console.error("Error fetching to custom token:", error);
+      setToCustomTokenError(
+        error instanceof Error ? error.message : "Failed to fetch token data"
+      );
+      setToCustomTokenData(null);
+    } finally {
+      setToCustomTokenLoading(false);
+    }
+  }, []);
 
   // Convert raw integer token amount to human string
   const fromRawAmount = useCallback((raw: string, decimals: number) => {
@@ -148,8 +225,32 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
         mergedBySymbol.set(tk.symbol, tk);
       }
     }
+
+    // Add custom tokens if available
+    if (fromCustomTokenData?.token) {
+      const customToken = {
+        symbol: fromCustomTokenData.token.symbol,
+        name: fromCustomTokenData.token.name,
+        kind: "ft" as const,
+        address: fromCustomTokenData.token.address,
+        decimals: fromCustomTokenData.token.decimals || 18,
+      };
+      mergedBySymbol.set(customToken.symbol, customToken);
+    }
+
+    if (toCustomTokenData?.token) {
+      const customToken = {
+        symbol: toCustomTokenData.token.symbol,
+        name: toCustomTokenData.token.name,
+        kind: "ft" as const,
+        address: toCustomTokenData.token.address,
+        decimals: toCustomTokenData.token.decimals || 18,
+      };
+      mergedBySymbol.set(customToken.symbol, customToken);
+    }
+
     return Array.from(mergedBySymbol.values());
-  }, [walletTokens]);
+  }, [walletTokens, fromCustomTokenData, toCustomTokenData]);
 
   // Fetch token prices after selectable is ready
   useEffect(() => {
@@ -360,6 +461,32 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
         "⚠️ WARNING: Bridged tokens detected! These have liquidity issues and may cause fund loss. Please use native NEAR tokens (usdc.near, usdt.near) only."
       );
       return;
+    }
+
+    // Validate custom token liquidity if using custom tokens
+    if (
+      fromCustomTokenData &&
+      tokenInId === fromCustomTokenData.token.address
+    ) {
+      if (fromCustomTokenData.liquidity.usd < 1000) {
+        setError(
+          `⚠️ WARNING: From token has insufficient liquidity ($${fromCustomTokenData.liquidity.usd.toFixed(
+            2
+          )}). Minimum $1000 required for safe trading.`
+        );
+        return;
+      }
+    }
+
+    if (toCustomTokenData && tokenOutId === toCustomTokenData.token.address) {
+      if (toCustomTokenData.liquidity.usd < 1000) {
+        setError(
+          `⚠️ WARNING: To token has insufficient liquidity ($${toCustomTokenData.liquidity.usd.toFixed(
+            2
+          )}). Minimum $1000 required for safe trading.`
+        );
+        return;
+      }
     }
 
     // Validate slippage settings
@@ -623,7 +750,77 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
               >
                 <div className="bg-[#0a0e27] rounded-3xl p-8 space-y-8">
                   <div className="space-y-2">
-                    <div className="text-white/70 text-sm">From token</div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-white/70 text-sm">From token</div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowFromCustomTokenInput(!showFromCustomTokenInput)
+                        }
+                        className="flex items-center gap-1 text-cyan-400 text-xs hover:text-cyan-300 transition-colors"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Add Custom Token
+                      </button>
+                    </div>
+
+                    {showFromCustomTokenInput && (
+                      <div className="space-y-2 p-3 bg-[#0f1535] rounded-xl border border-white/10">
+                        <div className="text-white/70 text-xs">
+                          From Token Contract Address
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={fromCustomTokenAddress}
+                            onChange={(e) =>
+                              setFromCustomTokenAddress(e.target.value)
+                            }
+                            placeholder="e.g., token.near"
+                            className="flex-1 bg-[#1a1f3a] text-white/90 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-cyan-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              fetchFromCustomToken(fromCustomTokenAddress)
+                            }
+                            disabled={
+                              !fromCustomTokenAddress.trim() ||
+                              fromCustomTokenLoading
+                            }
+                            className="px-3 py-2 bg-cyan-600 text-white rounded-lg text-sm hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                          >
+                            {fromCustomTokenLoading ? (
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            ) : (
+                              <Search className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+
+                        {fromCustomTokenError && (
+                          <div className="text-red-400 text-xs">
+                            {fromCustomTokenError}
+                          </div>
+                        )}
+
+                        {fromCustomTokenData && (
+                          <div className="p-2 bg-green-900/20 border border-green-500/30 rounded-lg">
+                            <div className="text-green-400 text-xs font-medium">
+                              ✓ {fromCustomTokenData.token.symbol} -{" "}
+                              {fromCustomTokenData.token.name}
+                            </div>
+                            <div className="text-white/60 text-xs mt-1">
+                              Liquidity: $
+                              {fromCustomTokenData.liquidity.usd.toFixed(2)} |
+                              Price: $
+                              {fromCustomTokenData.token.priceUsd.toFixed(6)}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <select
                       value={fromToken}
                       onChange={(e) => setFromToken(e.target.value)}
@@ -667,7 +864,77 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                   </div>
 
                   <div className="space-y-2">
-                    <div className="text-white/70 text-sm">To token</div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-white/70 text-sm">To token</div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowToCustomTokenInput(!showToCustomTokenInput)
+                        }
+                        className="flex items-center gap-1 text-cyan-400 text-xs hover:text-cyan-300 transition-colors"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Add Custom Token
+                      </button>
+                    </div>
+
+                    {showToCustomTokenInput && (
+                      <div className="space-y-2 p-3 bg-[#0f1535] rounded-xl border border-white/10">
+                        <div className="text-white/70 text-xs">
+                          To Token Contract Address
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={toCustomTokenAddress}
+                            onChange={(e) =>
+                              setToCustomTokenAddress(e.target.value)
+                            }
+                            placeholder="e.g., token.near"
+                            className="flex-1 bg-[#1a1f3a] text-white/90 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-cyan-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              fetchToCustomToken(toCustomTokenAddress)
+                            }
+                            disabled={
+                              !toCustomTokenAddress.trim() ||
+                              toCustomTokenLoading
+                            }
+                            className="px-3 py-2 bg-cyan-600 text-white rounded-lg text-sm hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                          >
+                            {toCustomTokenLoading ? (
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            ) : (
+                              <Search className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+
+                        {toCustomTokenError && (
+                          <div className="text-red-400 text-xs">
+                            {toCustomTokenError}
+                          </div>
+                        )}
+
+                        {toCustomTokenData && (
+                          <div className="p-2 bg-green-900/20 border border-green-500/30 rounded-lg">
+                            <div className="text-green-400 text-xs font-medium">
+                              ✓ {toCustomTokenData.token.symbol} -{" "}
+                              {toCustomTokenData.token.name}
+                            </div>
+                            <div className="text-white/60 text-xs mt-1">
+                              Liquidity: $
+                              {toCustomTokenData.liquidity.usd.toFixed(2)} |
+                              Price: $
+                              {toCustomTokenData.token.priceUsd.toFixed(6)}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <select
                       value={toToken}
                       onChange={(e) => setToToken(e.target.value)}
