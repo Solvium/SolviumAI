@@ -155,6 +155,22 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
               rawAmount: raw ? String(raw) : undefined,
               decimals,
             };
+          })
+          .filter((t) => {
+            // Hide tokens with zero balance
+            const balance = parseFloat(t.balance || "0");
+            if (balance <= 0) return false;
+
+            // Hide any bridged tokens (.e tokens or factory.bridge.near)
+            const tokenId = t.address || "";
+            if (
+              tokenId.includes(".e") ||
+              tokenId.includes("factory.bridge.near")
+            ) {
+              return false;
+            }
+
+            return true;
           });
 
         // Deduplicate by address+symbol

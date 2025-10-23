@@ -63,8 +63,8 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
   const { tokens: walletTokens, nearBalance } = useWalletPortfolioContext();
   const [step, setStep] = useState<SwapStep>("swap");
   const [fromToken, setFromToken] = useState("NEAR");
-  const [toToken, setToToken] = useState("USDC");
-  const [slippageBps, setSlippageBps] = useState(50); // 0.50%
+  const [toToken, setToToken] = useState("USDC"); // Native USDC - safe default
+  const [slippageBps, setSlippageBps] = useState(200); // 2.00% - More protective default
   const [amount, setAmount] = useState("0");
   const [submitting, setSubmitting] = useState(false);
   const [quoteOut, setQuoteOut] = useState<string | null>(null);
@@ -115,6 +115,22 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     const walletKnown = Array.isArray(walletTokens)
       ? walletTokens
           .filter((t) => !!t?.id && !!t?.symbol)
+          .filter((t) => {
+            // Hide tokens with zero balance
+            const balance = parseFloat(t.balance || "0");
+            if (balance <= 0) return false;
+
+            // Hide any bridged tokens (.e tokens or factory.bridge.near)
+            const tokenId = t.id || "";
+            if (
+              tokenId.includes(".e") ||
+              tokenId.includes("factory.bridge.near")
+            ) {
+              return false;
+            }
+
+            return true;
+          })
           .map((t) => ({
             symbol: String(t.symbol).toUpperCase(),
             name: String(t.symbol).toUpperCase(),
@@ -142,6 +158,7 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
         if (!Array.isArray(selectable) || selectable.length === 0) return;
         const entries = await Promise.all(
           selectable.map(async (t) => {
+            // Native stablecoins (usdc.near, usdt.near) are safe to hardcode as $1
             if (t.symbol === "USDC" || t.symbol === "USDT") {
               return [t.symbol, 1] as const;
             }
@@ -296,6 +313,8 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     unwrapNear,
     registerToken,
     registerTokenFor,
+    checkTokenRegistration,
+    checkTokenRegistrationFor,
     signAndSendTransaction,
   } = usePrivateKeyWallet();
 
@@ -318,6 +337,42 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
 
     if (!tokenInId || !tokenOutId || tokenInId === tokenOutId) {
       setError("Select two different tokens");
+      return;
+    }
+
+    // WARNING: Check for problematic bridged tokens that have liquidity issues
+    const problematicBridgedTokens = [
+      "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.factory.bridge.near", // Old bridged USDC
+      "dac17f958d2ee523a2206206994597c13d831ec7.factory.bridge.near", // Old bridged USDT
+    ];
+
+    // Also check for any .e tokens (bridged versions)
+    const isBridgedToken = (tokenId: string) => {
+      return (
+        problematicBridgedTokens.includes(tokenId) ||
+        tokenId.includes(".e") ||
+        tokenId.includes("factory.bridge.near")
+      );
+    };
+
+    if (isBridgedToken(tokenInId) || isBridgedToken(tokenOutId)) {
+      setError(
+        "⚠️ WARNING: Bridged tokens detected! These have liquidity issues and may cause fund loss. Please use native NEAR tokens (usdc.near, usdt.near) only."
+      );
+      return;
+    }
+
+    // Validate slippage settings
+    if (slippageBps < 10) {
+      setError(
+        "⚠️ Slippage too low! Minimum 0.1% required to prevent transaction failures."
+      );
+      return;
+    }
+    if (slippageBps > 1000) {
+      setError(
+        "⚠️ Slippage too high! Maximum 10% allowed to prevent excessive losses."
+      );
       return;
     }
 
@@ -358,53 +413,162 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
       const { txs } = await res.json();
 
       // Ensure storage and wrapping before sending
-      try {
-        // Register output token for user (so we can receive it)
-        if (tokenOutId !== wnearAddr) {
-          await registerToken(tokenOutId);
+      // Register output token for user (so we can receive it)
+      if (tokenOutId !== wnearAddr) {
+        try {
+          const isRegistered = await checkTokenRegistration(tokenOutId);
+          if (!isRegistered) {
+            console.log(`Registering storage for output token: ${tokenOutId}`);
+            const registrationResult = await registerToken(tokenOutId);
+            if (!registrationResult) {
+              throw new Error(
+                `Failed to register storage for output token: ${tokenOutId}`
+              );
+            }
+            // Verify registration was successful
+            const isNowRegistered = await checkTokenRegistration(tokenOutId);
+            if (!isNowRegistered) {
+              throw new Error(
+                `Storage registration verification failed for output token: ${tokenOutId}`
+              );
+            }
+            console.log(
+              `Successfully registered storage for output token: ${tokenOutId}`
+            );
+          }
+        } catch (error) {
+          console.error("Output token storage registration failed:", error);
+          throw new Error(
+            `Failed to register storage for output token: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`
+          );
         }
-      } catch {}
+      }
+
+      // Register receiver (Ref contract) on input token contract
       try {
-        // Register receiver (Ref contract) on input token contract
         const firstFc = txs?.[0]?.functionCalls?.[0];
         const refReceiver: string | undefined = firstFc?.args?.receiver_id;
-        if (refReceiver) {
-          await registerTokenFor(tokenInId, refReceiver);
+        if (refReceiver && tokenInId !== wnearAddr) {
+          console.log(
+            `Checking storage registration for Ref contract on input token: ${tokenInId}`
+          );
+          const isRefRegistered = await checkTokenRegistrationFor(
+            tokenInId,
+            refReceiver
+          );
+          if (!isRefRegistered) {
+            console.log(
+              `Registering storage for Ref contract on input token: ${tokenInId}`
+            );
+            const refRegistrationResult = await registerTokenFor(
+              tokenInId,
+              refReceiver
+            );
+            if (!refRegistrationResult) {
+              throw new Error(
+                `Failed to register storage for Ref contract on input token: ${tokenInId}`
+              );
+            }
+            console.log(
+              `Successfully registered storage for Ref contract on input token: ${tokenInId}`
+            );
+          }
         }
-      } catch {}
-      try {
-        // Wrap NEAR to wNEAR if needed
-        if (isFromNear) {
+      } catch (error) {
+        console.error("Ref contract storage registration failed:", error);
+        throw new Error(
+          `Failed to register storage for Ref contract: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`
+        );
+      }
+      // Wrap NEAR to wNEAR if needed
+      if (isFromNear) {
+        try {
+          console.log("Wrapping NEAR to wNEAR...");
           const raw = toRawAmount(amount, 24);
-          await wrapNear(raw);
+          const wrapResult = await wrapNear(raw);
+          console.log("NEAR wrapping result:", wrapResult);
+        } catch (error) {
+          console.error("Failed to wrap NEAR:", error);
+          throw new Error(
+            `Failed to wrap NEAR: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`
+          );
         }
-      } catch {}
-      for (const tx of txs) {
-        const normalizeYocto = (v?: string) => {
-          if (!v) return "0";
-          return v.includes(".") ? toRawAmount(v, 24) : v;
-        };
-        const actions = Array.isArray(tx.functionCalls)
-          ? tx.functionCalls.map((fc: any) => ({
-              type: "FunctionCall",
-              params: {
-                methodName: fc.methodName,
-                args: fc.args,
-                gas: fc.gas || "180000000000000",
-                deposit: normalizeYocto(fc.amount || fc.deposit || "0"),
-              },
-            }))
-          : [];
-        await signAndSendTransaction(tx.receiverId, actions as any);
+      }
+
+      // Execute swap transactions with proper error handling
+      console.log(`Executing ${txs.length} swap transactions...`);
+      for (let i = 0; i < txs.length; i++) {
+        const tx = txs[i];
+        try {
+          console.log(
+            `Executing transaction ${i + 1}/${txs.length} to ${tx.receiverId}`
+          );
+
+          const normalizeYocto = (v?: string) => {
+            if (!v) return "0";
+            return v.includes(".") ? toRawAmount(v, 24) : v;
+          };
+
+          const actions = Array.isArray(tx.functionCalls)
+            ? tx.functionCalls.map((fc: any) => ({
+                type: "FunctionCall",
+                params: {
+                  methodName: fc.methodName,
+                  args: fc.args,
+                  gas: fc.gas || "300000000000000", // Increased gas limit
+                  deposit: normalizeYocto(fc.amount || fc.deposit || "0"),
+                },
+              }))
+            : [];
+
+          console.log(`Transaction ${i + 1} actions:`, actions);
+
+          // Add timeout to prevent hanging
+          const txPromise = signAndSendTransaction(
+            tx.receiverId,
+            actions as any
+          );
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Transaction timeout after 60 seconds")),
+              60000
+            )
+          );
+
+          const txResult = await Promise.race([txPromise, timeoutPromise]);
+          console.log(`Transaction ${i + 1} result:`, txResult);
+        } catch (error) {
+          console.error(`Transaction ${i + 1} failed:`, error);
+          throw new Error(
+            `Transaction ${i + 1} failed: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`
+          );
+        }
       }
 
       // Optionally unwrap if receiving NEAR
-      try {
-        if (isToNear) {
+      if (isToNear) {
+        try {
+          console.log("Unwrapping wNEAR to NEAR...");
           const raw = toRawAmount(String(quoteOut || liveQuote || "0"), 24);
-          await unwrapNear(raw);
+          const unwrapResult = await unwrapNear(raw);
+          console.log("NEAR unwrapping result:", unwrapResult);
+        } catch (error) {
+          console.error("Failed to unwrap wNEAR:", error);
+          throw new Error(
+            `Failed to unwrap wNEAR: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`
+          );
         }
-      } catch {}
+      }
 
       onSuccess();
     } catch (e: any) {

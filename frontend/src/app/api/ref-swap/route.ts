@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
             tokenInId,
             tokenOutId,
             amountInHuman,
-            slippageBps: typeof slippageBps === "number" ? slippageBps : 50,
+            slippageBps: typeof slippageBps === "number" ? slippageBps : 200, // 2% default - more protective
             accountId,
             referralId,
           })
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
             tokenInId,
             tokenOutId,
             amountInHuman,
-            slippageBps: typeof slippageBps === "number" ? slippageBps : 50,
+            slippageBps: typeof slippageBps === "number" ? slippageBps : 200, // 2% default - more protective
             accountId,
             referralId,
           });
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
             tokenInId,
             tokenOutId,
             amountInHuman,
-            slippageBps: typeof slippageBps === "number" ? slippageBps : 50,
+            slippageBps: typeof slippageBps === "number" ? slippageBps : 200, // 2% default - more protective
             accountId,
             referralId,
           });
