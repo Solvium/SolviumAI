@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWalletInfo } from "@/lib/crypto";
+import { getOrCreateUserFromMiniApp } from "@/lib/miniAppApi";
 import {
   canMakeNearblocksRequest,
   getTimeUntilNextNearblocksRequest,
@@ -381,10 +382,56 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Handle mini app get-or-create
+    if (action === "mini-app-get-or-create") {
+      const telegramUserId = searchParams.get("telegram_user_id");
+      const username = searchParams.get("username");
+      const firstName = searchParams.get("first_name");
+
+      if (!telegramUserId || !username || !firstName) {
+        return NextResponse.json(
+          {
+            error: "Missing required parameters",
+            message: "telegram_user_id, username, and first_name are required",
+          },
+          { status: 400 }
+        );
+      }
+
+      try {
+        const response = await getOrCreateUserFromMiniApp({
+          telegram_user_id: parseInt(telegramUserId),
+          username,
+          first_name: firstName,
+        });
+
+        if (!response) {
+          return NextResponse.json(
+            {
+              error: "Failed to get or create user",
+              message: "Mini app API returned null response",
+            },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json(response);
+      } catch (error) {
+        console.error("Mini app API error:", error);
+        return NextResponse.json(
+          {
+            error: "Mini app API error",
+            message: error instanceof Error ? error.message : "Unknown error",
+          },
+          { status: 500 }
+        );
+      }
+    }
+
     return NextResponse.json(
       {
         error:
-          "Invalid action. Supported actions: check, price, nearblocks-info, nearblocks-txns, fastnear-full, fastnear-explorer-account, fastnear-explorer-txns, rate-limit-status",
+          "Invalid action. Supported actions: check, price, nearblocks-info, nearblocks-txns, fastnear-full, fastnear-explorer-account, fastnear-explorer-txns, rate-limit-status, mini-app-get-or-create",
       },
       { status: 400 }
     );
@@ -473,6 +520,51 @@ export async function POST(req: NextRequest) {
             upstream.headers.get("content-type") || "application/json",
         },
       });
+    }
+
+    // Handle mini app get-or-create (POST)
+    if (action === "mini-app-get-or-create") {
+      const body = await req.json();
+      const { telegram_user_id, username, first_name } = body;
+
+      if (!telegram_user_id || !username || !first_name) {
+        return NextResponse.json(
+          {
+            error: "Missing required parameters",
+            message: "telegram_user_id, username, and first_name are required",
+          },
+          { status: 400 }
+        );
+      }
+
+      try {
+        const response = await getOrCreateUserFromMiniApp({
+          telegram_user_id: parseInt(telegram_user_id),
+          username,
+          first_name,
+        });
+
+        if (!response) {
+          return NextResponse.json(
+            {
+              error: "Failed to get or create user",
+              message: "Mini app API returned null response",
+            },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json(response);
+      } catch (error) {
+        console.error("Mini app API error:", error);
+        return NextResponse.json(
+          {
+            error: "Mini app API error",
+            message: error instanceof Error ? error.message : "Unknown error",
+          },
+          { status: 500 }
+        );
+      }
     }
 
     // Handle wallet check (default behavior)

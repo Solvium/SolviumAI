@@ -1,6 +1,10 @@
 // Simplified crypto library - only keeping what's needed for the working wallet check route
 
-// Types for the SolviumAI API
+// Import existing types from miniAppApi
+import type {
+  MiniAppGetOrCreateRequest,
+  MiniAppGetOrCreateResponse,
+} from "./miniAppApi";
 export interface WalletCheckRequest {
   telegram_user_id: number;
 }
@@ -19,6 +23,16 @@ export interface WalletCheckResponse {
   wallet_info?: WalletInfo;
   error?: string;
 }
+
+// Import mini app API types and functions
+export type {
+  MiniAppUser,
+  MiniAppWallet,
+  MiniAppGetOrCreateResponse,
+  MiniAppGetOrCreateRequest,
+} from "./miniAppApi";
+
+import { getOrCreateUserFromMiniApp } from "./miniAppApi";
 
 export class SolviumAPIError extends Error {
   public status?: number;
@@ -118,6 +132,30 @@ export class SolviumWalletAPI {
       }
 
       throw new SolviumAPIError("Unknown error occurred while checking wallet");
+    }
+  }
+
+  /**
+   * Get or create user from mini app API
+   * @param request - The mini app request data
+   * @returns Promise<MiniAppGetOrCreateResponse>
+   */
+  async getOrCreateUserFromMiniApp(
+    request: MiniAppGetOrCreateRequest
+  ): Promise<MiniAppGetOrCreateResponse> {
+    try {
+      const response = await getOrCreateUserFromMiniApp(request);
+      if (!response) {
+        throw new SolviumAPIError("Failed to get or create user from mini app");
+      }
+      return response;
+    } catch (error) {
+      if (error instanceof SolviumAPIError) {
+        throw error;
+      }
+      throw new SolviumAPIError(
+        "Unknown error occurred while calling mini app API"
+      );
     }
   }
 
