@@ -1009,7 +1009,7 @@ const WordleGame: React.FC<WordleGameProps> = ({
   };
 
   return (
-    <div className="w-full min-h-screen bg-gradient-to-b from-[#0a0520] via-[#1a0f3e] to-[#0a0520] overflow-hidden">
+    <div className="w-full min-h-screen  bg-[url('/assets/background/num-genius-bg.svg')] bg-cover bg-center bg-no-repeat overflow-hidden">
       {/* Animated Background Orbs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-16 h-16 bg-pink-500/20 rounded-full blur-xl animate-pulse" />
