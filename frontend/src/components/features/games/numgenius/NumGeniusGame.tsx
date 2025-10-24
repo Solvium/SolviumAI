@@ -21,6 +21,10 @@ const NumGeniusGame: React.FC<NumGeniusGameProps> = ({ onClose }) => {
   const [availableNumbers, setAvailableNumbers] = useState<number[]>([]);
   const [selectedNumbers, setSelectedNumbers] = useState<(number | string)[]>([]);
   const [currentOperator, setCurrentOperator] = useState<string | null>(null);
+  const [showLevelCompleteModal, setShowLevelCompleteModal] = useState(false);
+  const [showTimeUpModal, setShowTimeUpModal] = useState(false);
+  const [earnedPoints, setEarnedPoints] = useState(0);
+  const [timeBonus, setTimeBonus] = useState(0);
 
   // Timer countdown
   useEffect(() => {
@@ -39,10 +43,7 @@ const NumGeniusGame: React.FC<NumGeniusGameProps> = ({ onClose }) => {
   }, [gameStarted, timer]);
 
   const handleTimeUp = () => {
-    toast.error("Time's up! Moving to next level...");
-    setTimeout(() => {
-      generateNewLevel();
-    }, 2000);
+    setShowTimeUpModal(true);
   };
 
   const generateNewLevel = () => {
@@ -150,19 +151,14 @@ const NumGeniusGame: React.FC<NumGeniusGameProps> = ({ onClose }) => {
     if (result === target) {
       // Correct answer
       const pointsEarned = Math.floor(timer / 2) + level * 5;
-      setCoins((prev) => prev + pointsEarned);
-      toast.success(`Correct! +${pointsEarned} coins`);
+      const bonus = parseFloat((timer / 60 * 1.5).toFixed(2));
       
-      // Move to next level
-      if (level < maxLevel) {
-        setTimeout(() => {
-          setLevel((prev) => prev + 1);
-          generateNewLevel();
-        }, 1500);
-      } else {
-        toast.success("Congratulations! You completed all levels!");
-        setGameStarted(false);
-      }
+      setEarnedPoints(pointsEarned);
+      setTimeBonus(bonus);
+      setCoins((prev) => prev + pointsEarned);
+      
+      // Show level complete modal
+      setShowLevelCompleteModal(true);
     } else {
       toast.error(`Wrong! Result is ${result}, target is ${target}`);
     }
@@ -179,10 +175,26 @@ const NumGeniusGame: React.FC<NumGeniusGameProps> = ({ onClose }) => {
     setCurrentOperator(null);
   };
 
+  const handleNextLevel = () => {
+    setShowLevelCompleteModal(false);
+    if (level < maxLevel) {
+      setLevel((prev) => prev + 1);
+      generateNewLevel();
+    } else {
+      toast.success("Congratulations! You completed all levels!");
+      setGameStarted(false);
+    }
+  };
+
+  const handleTryAgain = () => {
+    setShowTimeUpModal(false);
+    generateNewLevel();
+  };
+
   // Instructions screen
   if (!gameStarted) {
     return (
-      <div className="min-h-screen w-screen bg-gradient-to-b from-[#0a0520] via-[#1a0f3e] to-[#0a0520] relative overflow-x-hidden overflow-y-auto">
+      <div className="min-h-screen w-screen  bg-[url('/assets/background/num-genius-bg.svg')] bg-cover bg-center bg-no-repeat relative overflow-x-hidden overflow-y-auto">
         {/* Animated background particles - matching design */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {/* Left side particles */}
@@ -337,13 +349,9 @@ const NumGeniusGame: React.FC<NumGeniusGameProps> = ({ onClose }) => {
                     </ul>
                   </div>
                 </div>
-              </div>
-            </div>
-
-            {/* Start Playing button */}
             <button
               onClick={handleStartGame}
-              className="w-full bg-gradient-to-r from-[#0ea5e9] to-[#3b82f6] hover:from-[#0284c7] hover:to-[#2563eb] text-white py-3 md:py-4 lg:py-5 text-base md:text-lg lg:text-xl font-bold rounded-xl md:rounded-[20px] shadow-lg transform transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full bg-gradient-to-r from-[#0ea5e9] to-[#3b82f6] hover:from-[#0284c7] hover:to-[#2563eb] text-white py-3 md:py-4 lg:py-5 text-base md:text-lg lg:text-xl font-bold rounded-xl md:rounded-[20px] shadow-lg transform transition-all hover:scale-[1.02] active:scale-[0.98] mt-8"
               style={{
                 boxShadow: '0 8px 32px rgba(14, 165, 233, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)',
                 textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)'
@@ -351,6 +359,10 @@ const NumGeniusGame: React.FC<NumGeniusGameProps> = ({ onClose }) => {
             >
               Start Playing
             </button>
+              </div>
+            </div>
+
+            {/* Start Playing button */}
           </div>
         </div>
       </div>
@@ -359,7 +371,7 @@ const NumGeniusGame: React.FC<NumGeniusGameProps> = ({ onClose }) => {
 
   // Game screen
   return (
-    <div className="min-h-screen w-screen bg-gradient-to-b from-[#0a0520] via-[#1a0f3e] to-[#0a0520] relative overflow-x-hidden overflow-y-auto">
+    <div className="min-h-screen w-screen bg-[url('/assets/background/num-genius-bg.svg')] bg-cover bg-center bg-no-repeat relative overflow-x-hidden overflow-y-auto">
       {/* Animated background particles - matching design exactly */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* Left side particles */}
@@ -610,6 +622,193 @@ const NumGeniusGame: React.FC<NumGeniusGameProps> = ({ onClose }) => {
 </div>
 
       </div>
+
+      {/* Level Complete Modal */}
+      {showLevelCompleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="relative w-full max-w-[340px] md:max-w-[400px] animate-in fade-in zoom-in duration-300">
+            {/* Close button */}
+            <button
+              onClick={() => setShowLevelCompleteModal(false)}
+              className="absolute -top-2 -right-2 z-10 w-8 h-8 md:w-10 md:h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors"
+            >
+              <svg className="w-4 h-4 md:w-5 md:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* Modal content */}
+            <div 
+              className="relative rounded-[24px] md:rounded-[32px] p-[3px]"
+              style={{
+                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.4) 0%, rgba(147, 51, 234, 0.4) 100%)'
+              }}
+            >
+              <div className="bg-gradient-to-br from-[#1a1055] to-[#0f0838] rounded-[21px] md:rounded-[29px] px-4 py-6 md:px-6 md:py-8 text-center">
+                {/* Trophy Icon */}
+                <div className="flex justify-center mb-4 md:mb-6">
+                  {/* <div 
+                    className="w-20 h-20 md:w-28 md:h-28 rounded-full flex items-center justify-center"
+                    style={{
+                      background: 'linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%)',
+                      boxShadow: '0 0 30px rgba(6, 182, 212, 0.5), 0 0 60px rgba(14, 165, 233, 0.3)'
+                    }}
+                  >
+                    <svg className="w-12 h-12 md:w-16 md:h-16 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+                    </svg>
+                  </div> */}
+                  <div
+  className="w-20 h-20 md:w-28 md:h-28 rounded-full flex items-center justify-center"
+  // style={{
+  //   background: "linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%)",
+  //   boxShadow:
+  //     "0 0 30px rgba(6, 182, 212, 0.5), 0 0 60px rgba(14, 165, 233, 0.3)",
+  // }}
+>
+  <Image
+    src="/assets/icons/mdi-light_trophy.svg" // replace with your image path
+    alt="icon"
+    width={120} // adjust as needed
+    height={120}
+    className="md:w-16 md:h-16 w-16 h-16 object-contain"
+  />
+</div>
+                </div>
+
+                {/* Title */}
+                <h2 className="text-white text-2xl md:text-3xl font-bold mb-1 md:mb-2">
+                  Level Completed
+                </h2>
+
+                {/* Subtitle */}
+                <p className="text-gray-300 text-xs md:text-sm mb-5 md:mb-8">
+                  Silver Rank - Level {level}
+                </p>
+
+                {/* Points section */}
+                <div 
+                  className="relative rounded-[18px] md:rounded-[24px] p-[2px] mb-4 md:mb-6"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(147, 51, 234, 0.3) 100%)'
+                  }}
+                >
+                  <div className="bg-[#0a0520] rounded-[16px] md:rounded-[22px] px-4 py-3 md:px-6 md:py-5">
+                    {/* Point Earned */}
+                    <div className="flex items-center justify-between mb-3 md:mb-4">
+                      <span className="text-white text-sm md:text-lg font-semibold">Point Earned</span>
+                      <div className="flex items-center gap-1.5 md:gap-2">
+                        <div className="w-5 h-5 md:w-6 md:h-6 bg-yellow-400 rounded-full"></div>
+                        <span className="text-white text-lg md:text-xl font-bold">{earnedPoints}</span>
+                      </div>
+                    </div>
+
+                    {/* Time Bonus */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-white text-sm md:text-lg font-semibold">Time Bonus</span>
+                      <div className="flex items-center gap-1.5 md:gap-2">
+                        <div className="w-5 h-5 md:w-6 md:h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                          <svg className="w-3 h-3 md:w-4 md:h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <span className="text-white text-lg md:text-xl font-bold">x {timeBonus}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Next Level Button */}
+                <button
+                  onClick={handleNextLevel}
+                  className="w-full bg-[#0074E9] hover:bg-[#0074E9] text-white py-3 md:py-4 text-lg md:text-xl font-bold rounded-[16px] md:rounded-[20px] transition-all active:scale-95 flex items-center justify-center gap-2"
+                  // style={{
+                  //   boxShadow: '0 8px 32px rgba(14, 165, 233, 0.4)',
+                  //   textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)'
+                  // }}
+                >
+                  Next Level
+                  <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Time Up Modal */}
+      {showTimeUpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="relative w-full max-w-[340px] md:max-w-[400px] animate-in fade-in zoom-in duration-300">
+            {/* Close button */}
+            <button
+              onClick={() => setShowTimeUpModal(false)}
+              className="absolute -top-2 -right-2 z-10 w-8 h-8 md:w-10 md:h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors"
+            >
+              <svg className="w-4 h-4 md:w-5 md:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* Modal content */}
+            <div 
+              className="relative rounded-[24px] md:rounded-[32px] p-[3px]"
+              style={{
+                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.4) 0%, rgba(220, 38, 38, 0.4) 100%)'
+              }}
+            >
+              <div className="bg-gradient-to-br from-[#1a1055] to-[#0f0838] rounded-[21px] md:rounded-[29px] px-4 py-6 md:px-6 md:py-8 text-center">
+                {/* Clock Icon */}
+                <div className="flex justify-center mb-4 md:mb-6">
+                  <div 
+                    className="w-20 h-20 md:w-28 md:h-28 rounded-full flex items-center justify-center"
+                    style={{
+                      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                      boxShadow: '0 0 30px rgba(239, 68, 68, 0.5), 0 0 60px rgba(220, 38, 38, 0.3)'
+                    }}
+                  >
+                    <svg className="w-12 h-12 md:w-16 md:h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Title */}
+                <h2 
+                  className="text-3xl md:text-4xl font-bold mb-3 md:mb-4"
+                  style={{
+                    background: 'linear-gradient(135deg, #ef4444 0%, #f97316 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text'
+                  }}
+                >
+                  Time Up!
+                </h2>
+
+                {/* Subtitle */}
+                <p className="text-gray-300 text-sm md:text-base mb-6 md:mb-8">
+                  Better luck next time
+                </p>
+
+                {/* Try Again Button */}
+                <button
+                  onClick={handleTryAgain}
+                  className="w-full bg-[#0074E9] hover:bg-[#0074E9] text-white py-3 md:py-4 text-lg md:text-xl font-bold rounded-[16px] md:rounded-[20px] transition-all active:scale-95"
+                  // style={{
+                  //   boxShadow: '0 8px 32px rgba(14, 165, 233, 0.4)',
+                  //   textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)'
+                  // }}
+                >
+                  Try Again
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
