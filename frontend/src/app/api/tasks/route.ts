@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { DAILY_LOGIN_SOLV, FIRST_GAME_SOLV } from "@/config/taskConfig";
 import { JWTService } from "@/lib/auth/jwt";
+import { calculatePointsWithMultiplier } from "@/lib/services/PointMultiplierService";
 
 export async function GET(request: NextRequest) {
   try {
@@ -181,13 +182,18 @@ export async function POST(request: NextRequest) {
         // Use claimCount as streak counter for now
         const newStreak = isConsecutive ? (user.claimCount || 0) + 1 : 1;
 
+        // Apply multiplier to daily login bonus
+        const dailyLoginCalculation = await calculatePointsWithMultiplier(
+          DAILY_LOGIN_SOLV
+        );
+
         const updatedUser = await prisma.user.update({
           where: { id: parseInt(userId) }, // Convert string to number
           data: {
             lastClaim: today,
             claimCount: newStreak,
             totalSOLV: {
-              increment: DAILY_LOGIN_SOLV * (userMultipler || 1),
+              increment: dailyLoginCalculation.totalPoints,
             },
           },
         });
@@ -196,7 +202,10 @@ export async function POST(request: NextRequest) {
           success: true,
           message: "Daily login recorded",
           streak: newStreak,
-          solvEarned: DAILY_LOGIN_SOLV * (userMultipler || 1),
+          solvEarned: dailyLoginCalculation.totalPoints,
+          basePoints: dailyLoginCalculation.basePoints,
+          boostAmount: dailyLoginCalculation.boostAmount,
+          multiplier: dailyLoginCalculation.multiplier,
           lastLogin: lastLogin?.toISOString(),
           newLogin: today.toISOString(),
           nextClaimAt: nextMidnight.toISOString(),
@@ -250,11 +259,16 @@ export async function POST(request: NextRequest) {
 
         // If user has already played games, just award the bonus
         if (userForFirstGame.gamesPlayed > 0) {
+          // Apply multiplier to first game bonus
+          const firstGameCalculation = await calculatePointsWithMultiplier(
+            FIRST_GAME_SOLV
+          );
+
           const updated = await prisma.user.update({
             where: { id: parseInt(userId) },
             data: {
               totalSOLV: {
-                increment: FIRST_GAME_SOLV * (userMultipler || 1),
+                increment: firstGameCalculation.totalPoints,
               },
             },
           });
@@ -275,12 +289,20 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({
             success: true,
             message: "First game completion bonus awarded",
-            solvEarned: FIRST_GAME_SOLV * (userMultipler || 1),
+            solvEarned: firstGameCalculation.totalPoints,
+            basePoints: firstGameCalculation.basePoints,
+            boostAmount: firstGameCalculation.boostAmount,
+            multiplier: firstGameCalculation.multiplier,
             alreadyPlayed: true,
             alreadyClaimed: false,
           });
         } else {
           // If user hasn't played games yet, increment gamesPlayed and award bonus
+          // Apply multiplier to first game bonus
+          const firstGameCalculation = await calculatePointsWithMultiplier(
+            FIRST_GAME_SOLV
+          );
+
           const updated = await prisma.user.update({
             where: { id: parseInt(userId) },
             data: {
@@ -288,7 +310,7 @@ export async function POST(request: NextRequest) {
                 increment: 1,
               },
               totalSOLV: {
-                increment: FIRST_GAME_SOLV * (userMultipler || 1),
+                increment: firstGameCalculation.totalPoints,
               },
             },
           });
@@ -308,11 +330,69 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({
             success: true,
             message: "First game completion recorded",
-            solvEarned: FIRST_GAME_SOLV * (userMultipler || 1),
+            solvEarned: firstGameCalculation.totalPoints,
+            basePoints: firstGameCalculation.basePoints,
+            boostAmount: firstGameCalculation.boostAmount,
+            multiplier: firstGameCalculation.multiplier,
             alreadyPlayed: false,
             alreadyClaimed: false,
           });
         }
+
+      case "start_task":
+        // Mark task as started (in progress) without completing it
+        if (!username || !data) {
+          return NextResponse.json(
+            { error: "Invalid start task payload" },
+            { status: 400 }
+          );
+        }
+
+        // Find task by name
+        const startTask = await prisma.task.findFirst({
+          where: { name: data.name },
+        });
+        if (!startTask) {
+          return NextResponse.json(
+            { error: "Task not found" },
+            { status: 404 }
+          );
+        }
+
+        // Check if already completed
+        const existingCompleted = await prisma.userTask.findFirst({
+          where: {
+            userId: parseInt(userId),
+            taskId: startTask.id,
+            isCompleted: true,
+          },
+        });
+        if (existingCompleted) {
+          return NextResponse.json({ success: true, alreadyClaimed: true });
+        }
+
+        // Create or update user task as in progress (not completed)
+        await prisma.userTask.upsert({
+          where: {
+            userId_taskId: {
+              userId: parseInt(userId),
+              taskId: startTask.id,
+            },
+          },
+          update: {
+            isCompleted: false, // Keep as in progress
+          },
+          create: {
+            userId: parseInt(userId),
+            taskId: startTask.id,
+            isCompleted: false, // Mark as in progress
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          message: "Task started successfully",
+        });
 
       default:
         // Treat default as social/engagement tasks by name
@@ -348,8 +428,17 @@ export async function POST(request: NextRequest) {
         }
 
         // Mark completed and award SOLV equal to task.points
-        await prisma.userTask.create({
-          data: {
+        await prisma.userTask.upsert({
+          where: {
+            userId_taskId: {
+              userId: parseInt(userId),
+              taskId: socialTask.id,
+            },
+          },
+          update: {
+            isCompleted: true,
+          },
+          create: {
             userId: parseInt(userId),
             taskId: socialTask.id,
             isCompleted: true,

@@ -1,17 +1,20 @@
-"use client"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import WordleGame from "./wordle/WordleGame"
-import QuizGame from "./quiz/QuizGame"
-import { PicturePuzzle } from "./puzzle/Game"
-import NumGeniusGame from "./numgenius/NumGeniusGame"
-import CrosswordGame from "./crossword/CrosswordGame"
-import { ChevronLeft } from "lucide-react"
-import Image from "next/image"
+"use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import WordleGame from "./wordle/WordleGame";
+import QuizGame from "./quiz/QuizGame";
+import { PicturePuzzle } from "./puzzle/Game";
+import NumGeniusGame from "./numgenius/NumGeniusGame";
+import CrosswordGame from "./crossword/CrosswordGame";
+import { ChevronLeft } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useEnhancedNavigation } from "@/lib/navigationUtils";
 
 const GamesPage = () => {
-  const navigate = useRouter()
-  const [activeGame, setActiveGame] = useState<Element | any>(null)
+  const navigate = useRouter();
+  const { navigateToGame } = useEnhancedNavigation();
+  const [activeGame, setActiveGame] = useState<Element | any>(null);
 
   const games = [
     {
@@ -33,22 +36,26 @@ const GamesPage = () => {
       image: "/assets/games/puzzle-button.svg",
     },
     {
-      id: "numgenius",
-      title: "NUM-GENIUS",
+      id: "num-genius",
+      title: "NUM GENIUS",
       component: <NumGeniusGame />,
       image: "/assets/games/num-genius.svg",
     },
     {
-      id: "crossword",
+      id: "cross-word",
       title: "CROSSWORD",
       component: <CrosswordGame />,
       image: "/assets/games/cross-word.svg",
     },
-  ]
+  ];
 
   const handleGameSelect = (game: any) => {
-    setActiveGame(game.component)
-  }
+    setActiveGame(game.component);
+  };
+
+  const handleDirectGameNavigation = (gameId: string) => {
+    navigateToGame(gameId as any);
+  };
 
   return (
     <>
@@ -75,7 +82,10 @@ const GamesPage = () => {
           <div className="absolute top-5 md:right-8 right-4 z-20">
             <h1
               className="text-3xl md:text-4xl font-bold text-white tracking-[0.3em] drop-shadow-2xl"
-              style={{ fontFamily: "'Pixelify Sans', monospace", letterSpacing: "0.2em" }}
+              style={{
+                fontFamily: "'Pixelify Sans', monospace",
+                letterSpacing: "0.2em",
+              }}
             >
               SELECT GAME
             </h1>
@@ -84,13 +94,30 @@ const GamesPage = () => {
           <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 pt-24 pb-8">
             <div className="grid grid-cols-2 md:gap-6 gap-3 w-full max-w-md mb-8">
               {games.map((game) => (
-                <button
-                  key={game.id}
-                  onClick={() => handleGameSelect(game)}
-                  className="relative w-full h-24 transform transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none"
-                >
-                  <Image src={game.image || "/placeholder.svg"} alt={game.title} fill className="object-contain" />
-                </button>
+                <div key={game.id} className="relative group">
+                  <button
+                    onClick={() => handleGameSelect(game)}
+                    className="relative w-full h-24 transform transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none"
+                  >
+                    <Image
+                      src={game.image || "/placeholder.svg"}
+                      alt={game.title}
+                      fill
+                      className="object-contain"
+                    />
+                  </button>
+
+                  {/* Direct link option */}
+                  <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Link
+                      href={`/game/${game.id}`}
+                      className="block w-6 h-6 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                      title={`Open ${game.title} in new page`}
+                    >
+                      ↗
+                    </Link>
+                  </div>
+                </div>
               ))}
             </div>
 
@@ -104,7 +131,9 @@ const GamesPage = () => {
             </div>
 
             <div className="relative z-10 mt-auto">
-              <p className="text-white text-xl font-semibold drop-shadow-lg">Choose Your Adventure</p>
+              <p className="text-white text-xl font-semibold drop-shadow-lg">
+                Choose Your Adventure
+              </p>
             </div>
           </div>
         </div>
@@ -118,7 +147,7 @@ const GamesPage = () => {
         </div>
       )}
     </>
-  )
-}
+  );
+};
 
-export default GamesPage
+export default GamesPage;

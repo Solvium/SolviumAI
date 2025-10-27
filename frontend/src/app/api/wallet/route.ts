@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWalletInfo } from "@/lib/crypto";
+import { getOrCreateUserFromMiniApp } from "@/lib/miniAppApi";
+import { cookies } from "next/headers";
+import { JWTService } from "@/lib/auth/jwt";
 import {
   canMakeNearblocksRequest,
   getTimeUntilNextNearblocksRequest,
@@ -25,6 +28,53 @@ const RPC_URLS: Record<string, string> = {
   mainnet: "https://rpc.intea.rs",
   testnet: "https://rpc.intea.rs",
 };
+
+// Helper function to get authenticated user from session
+async function getAuthenticatedUser() {
+  const cookieStore = await cookies();
+  const accessToken = cookieStore.get("accessToken");
+  const legacyToken = cookieStore.get("auth_token");
+
+  // Try JWT token first, then fallback to legacy token
+  let userId: number | null = null;
+
+  if (accessToken) {
+    try {
+      const decoded = JWTService.verifyAccessToken(accessToken.value);
+      const uid = parseInt(decoded.userId);
+      userId = Number.isNaN(uid) ? null : uid;
+    } catch (e) {
+      userId = null;
+    }
+  }
+
+  // Fallback to legacy token if JWT fails
+  if (!userId && legacyToken) {
+    try {
+      const uid = parseInt(legacyToken.value);
+      userId = Number.isNaN(uid) ? null : uid;
+    } catch (e) {
+      userId = null;
+    }
+  }
+
+  if (!userId) {
+    return null;
+  }
+
+  // Get user data from database
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      chatId: true,
+      username: true,
+      name: true,
+    },
+  });
+
+  return user;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -381,10 +431,56 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Handle mini app get-or-create
+    if (action === "mini-app-get-or-create") {
+      const telegramUserId = searchParams.get("telegram_user_id");
+      const username = searchParams.get("username");
+      const firstName = searchParams.get("first_name");
+
+      if (!telegramUserId || !username || !firstName) {
+        return NextResponse.json(
+          {
+            error: "Missing required parameters",
+            message: "telegram_user_id, username, and first_name are required",
+          },
+          { status: 400 }
+        );
+      }
+
+      try {
+        const response = await getOrCreateUserFromMiniApp({
+          telegram_user_id: parseInt(telegramUserId),
+          username,
+          first_name: firstName,
+        });
+
+        if (!response) {
+          return NextResponse.json(
+            {
+              error: "Failed to get or create user",
+              message: "Mini app API returned null response",
+            },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json(response);
+      } catch (error) {
+        console.error("Mini app API error:", error);
+        return NextResponse.json(
+          {
+            error: "Mini app API error",
+            message: error instanceof Error ? error.message : "Unknown error",
+          },
+          { status: 500 }
+        );
+      }
+    }
+
     return NextResponse.json(
       {
         error:
-          "Invalid action. Supported actions: check, price, nearblocks-info, nearblocks-txns, fastnear-full, fastnear-explorer-account, fastnear-explorer-txns, rate-limit-status",
+          "Invalid action. Supported actions: check, price, nearblocks-info, nearblocks-txns, fastnear-full, fastnear-explorer-account, fastnear-explorer-txns, rate-limit-status, mini-app-get-or-create",
       },
       { status: 400 }
     );
@@ -475,19 +571,112 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Handle wallet check (default behavior)
-    const body = await req.json();
-    const { telegram_user_id, force_refresh } = body;
+    // Handle mini app get-or-create (POST) - Get user from authenticated session
+    if (action === "mini-app-get-or-create") {
+      const user = await getAuthenticatedUser();
 
-    // Validate input
-    if (!telegram_user_id || !Number.isInteger(telegram_user_id)) {
+      if (!user) {
+        return NextResponse.json(
+          {
+            error: "User not authenticated",
+            message: "User must be logged in to create wallet",
+          },
+          { status: 401 }
+        );
+      }
+
+      if (!user.chatId) {
+        return NextResponse.json(
+          {
+            error: "No Telegram ID found",
+            message: "User must have a Telegram ID to create wallet",
+          },
+          { status: 400 }
+        );
+      }
+
+      const telegram_user_id = parseInt(user.chatId);
+      if (isNaN(telegram_user_id)) {
+        return NextResponse.json(
+          {
+            error: "Invalid Telegram ID format",
+            message: "User's Telegram ID is not valid",
+          },
+          { status: 400 }
+        );
+      }
+
+      try {
+        const response = await getOrCreateUserFromMiniApp({
+          telegram_user_id: telegram_user_id,
+          username: user.username || `user_${telegram_user_id}`,
+          first_name: user.name ? user.name.split(" ")[0] : "User",
+        });
+
+        if (!response) {
+          return NextResponse.json(
+            {
+              error: "Failed to get or create user",
+              message: "Mini app API returned null response",
+            },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json(response);
+      } catch (error) {
+        console.error("Mini app API error:", error);
+        return NextResponse.json(
+          {
+            error: "Mini app API error",
+            message: error instanceof Error ? error.message : "Unknown error",
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    // Handle wallet check (default behavior) - Get user from authenticated session
+    const user = await getAuthenticatedUser();
+
+    if (!user) {
       return NextResponse.json(
         {
           has_wallet: false,
-          error: "Invalid telegram_user_id. Must be a number.",
+          error: "User not authenticated",
+        },
+        { status: 401 }
+      );
+    }
+
+    if (!user.chatId) {
+      return NextResponse.json(
+        {
+          has_wallet: false,
+          error: "No Telegram ID found for user",
         },
         { status: 400 }
       );
+    }
+
+    const telegram_user_id = parseInt(user.chatId);
+    if (isNaN(telegram_user_id)) {
+      return NextResponse.json(
+        {
+          has_wallet: false,
+          error: "Invalid Telegram ID format",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Parse optional force_refresh from body if provided
+    let force_refresh = false;
+    try {
+      const body = await req.json();
+      force_refresh = body.force_refresh || false;
+    } catch (e) {
+      // Body is optional, continue without it
     }
 
     // First try external wallet API via crypto client if configured

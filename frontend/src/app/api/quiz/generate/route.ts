@@ -49,17 +49,17 @@ export async function POST(req: NextRequest) {
     let totalGenerated = 0;
     const errors: string[] = [];
 
-    // Generate 5 batches of 20 quizzes each (100 total)
-    for (let batch = 1; batch <= 5; batch++) {
+    // Generate 10 batches of 50 quizzes each (500 total)
+    for (let batch = 1; batch <= 10; batch++) {
       try {
-        console.log(`📝 Generating batch ${batch}/5...`);
+        console.log(`📝 Generating batch ${batch}/10...`);
 
         const response = await openai.chat.completions.create({
           model: "gpt-3.5-turbo",
           messages: [
             {
               role: "system",
-              content: `Generate 20 multiple-choice quiz questions with the following requirements:
+              content: `Generate 50 multiple-choice quiz questions with the following requirements:
               - Categories: ${CATEGORIES.join(", ")}
               - Difficulties: 1-10 (1=easiest, 10=hardest)
               - Each question must have exactly 4 options (A, B, C, D)
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
             },
             {
               role: "user",
-              content: `Generate 20 quiz questions with varied categories and difficulties. Return as JSON array.`,
+              content: `Generate 50 quiz questions with varied categories and difficulties. Return as JSON array.`,
             },
           ],
           temperature: 0.7,

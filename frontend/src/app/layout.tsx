@@ -7,6 +7,7 @@ import { PrivateKeyWalletProvider } from "@/contexts/PrivateKeyWalletContext";
 import { GameConfigProvider } from "@/contexts/GameConfigContext";
 import { GameProvider } from "@/contexts/GameContext";
 import { WalletPortfolioProvider } from "@/contexts/WalletPortfolioContext";
+import TelegramProvider from "@/components/providers/TelegramProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,17 +24,19 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.className} max-w-[630px] mx-auto`}>
-        <SimpleWalletProvider>
-          <AuthProvider>
-            <PrivateKeyWalletProvider>
-              <WalletPortfolioProvider>
-                <GameConfigProvider>
-                  <GameProvider>{children}</GameProvider>
-                </GameConfigProvider>
-              </WalletPortfolioProvider>
-            </PrivateKeyWalletProvider>
-          </AuthProvider>
-        </SimpleWalletProvider>
+        <TelegramProvider>
+          <SimpleWalletProvider>
+            <AuthProvider>
+              <PrivateKeyWalletProvider>
+                <WalletPortfolioProvider>
+                  <GameConfigProvider>
+                    <GameProvider>{children}</GameProvider>
+                  </GameConfigProvider>
+                </WalletPortfolioProvider>
+              </PrivateKeyWalletProvider>
+            </AuthProvider>
+          </SimpleWalletProvider>
+        </TelegramProvider>
       </body>
     </html>
   );

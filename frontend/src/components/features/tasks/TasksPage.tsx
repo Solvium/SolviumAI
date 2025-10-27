@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type WebApp from "@twa-dev/sdk";
 import axios from "axios";
@@ -46,6 +46,8 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   } | null>(null);
   const [gamingLoadingId, setGamingLoadingId] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isRefetchingAfterDeposit, setIsRefetchingAfterDeposit] =
+    useState(false);
 
   const { user: userDetails, refreshUser, trackLogin } = useAuth();
   const {
@@ -53,6 +55,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
     isConnected,
     isLoading: contractLoading,
     getUserDepositSummary,
+    getAllUserDeposits,
     getSpinsAvailable,
     getMultiplierFactor,
   } = useSolviumContract();
@@ -71,6 +74,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
     fetchCurrentMultiplier,
     fetchUserDepositData,
     userDepositData,
+    refetchAllMultiplierData,
   } = useDepositMultiplier();
   const { toast } = useToast();
 
@@ -344,6 +348,39 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
     return () => clearInterval(interval);
   }, [isConnected, accountId, isRefreshing]);
 
+  // Comprehensive refetch function for all data after deposits
+  const refetchAllData = useCallback(async () => {
+    if (isRefreshing || isRefetchingAfterDeposit) {
+      return;
+    }
+
+    console.log("🔄 Refetching all data after deposit...");
+    setIsRefreshing(true);
+    setIsRefetchingAfterDeposit(true);
+
+    try {
+      await Promise.all([
+        refreshUser(),
+        fetchRealTimeData(),
+        refetchAllMultiplierData(),
+        fetchUserDepositData(accountId || ""),
+      ]);
+      console.log("✅ All data refetched successfully");
+    } catch (error) {
+      console.error("❌ Error refetching data:", error);
+    } finally {
+      setIsRefreshing(false);
+      setIsRefetchingAfterDeposit(false);
+    }
+  }, [
+    isRefreshing,
+    isRefetchingAfterDeposit,
+    refreshUser,
+    refetchAllMultiplierData,
+    fetchUserDepositData,
+    accountId,
+  ]);
+
   // Fetch real-time data from contract and wallet (with debounce and caching)
   const fetchRealTimeData = async () => {
     if (isRefreshing) {
@@ -374,16 +411,21 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
           setNearBalance(nearBalance);
         }
 
-        const [depositSummary, spins, multiplier] = await Promise.all([
-          getUserDepositSummary(accountId),
-          getSpinsAvailable(accountId),
-          getMultiplierFactor(accountId),
-        ]);
+        const [depositSummary, spins, multiplier, allUserDeposits] =
+          await Promise.all([
+            getUserDepositSummary(accountId),
+
+            getSpinsAvailable(accountId),
+            getMultiplierFactor(accountId),
+            getAllUserDeposits(accountId),
+          ]);
 
         console.log("🔍 Contract Data Fetch Results:");
         console.log("📊 Deposit Summary:", depositSummary);
         console.log("🎰 Spins Available:", spins);
         console.log("⚡ Contract Multiplier:", multiplier);
+
+        console.log("allUserDeposits", allUserDeposits);
 
         if (depositSummary.success) {
           console.log("✅ User Deposit Summary Data:", depositSummary.data);
@@ -401,6 +443,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
 
         if (spins.success) {
           setSpinsAvailable(spins.data || 0);
+          console.log("🎰 TasksPage - Contract spins available:", spins.data);
         }
 
         if (multiplier.success) {
@@ -484,18 +527,47 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
       task: data,
       userId: userDetails?.id,
     };
-    await engageTasks("completetasks", taskData, () =>
+    await engageTasks(data.name, taskData, () =>
       setLoading({ id: data.id, status: false })
     );
   };
 
   const ProcessLink = async (data: any) => {
     setLoading({ id: data.id, status: true });
-    await engageTasks("reg4tasks", data, () =>
-      setLoading({ id: data.id, status: false })
-    );
-    if (!data?.link) return;
-    data.link && window?.open(data.link);
+
+    // Just open the link, don't complete the task yet
+    if (data?.link) {
+      window?.open(data.link);
+    }
+
+    // Mark task as in progress (not completed)
+    try {
+      const response = await fetch("/api/tasks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: userDetails?.username,
+          type: "start_task",
+          data: data,
+          userMultipler: userDetails?.multiplier || 1,
+        }),
+      });
+
+      if (response.ok) {
+        await refreshTasks();
+        toast({
+          title: "Task Started!",
+          description: "Complete the action and come back to verify.",
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error("Error starting task:", error);
+    } finally {
+      setLoading({ id: data.id, status: false });
+    }
   };
 
   const Verify = async (data: any) => {
@@ -637,9 +709,18 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
 
         setNearAmount("");
 
-        // Refresh user data and real-time data
-        await refreshUser();
-        await fetchRealTimeData();
+        // Wait a moment for blockchain to process the transaction
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        // Show refetch notification
+        toast({
+          title: "Updating Data",
+          description: "Refreshing your account data...",
+          variant: "default",
+        });
+
+        // Refresh all data after successful deposit
+        await refetchAllData();
       } else {
         throw new Error(result.error || "Deposit failed");
       }
@@ -890,9 +971,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
               <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">
                 <span className="text-lg">💰</span>
               </div>
-              <h3 className="text-lg font-bold">
-                Deposit NEAR for Power Ups
-              </h3>
+              <h3 className="text-lg font-bold">Deposit NEAR for Power Ups</h3>
             </div>
             <Info className="w-5 h-5 text-gray-400" />
           </div>

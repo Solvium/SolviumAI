@@ -7,7 +7,9 @@ import {
   useMemo,
   useRef,
   useState,
+  useEffect,
 } from "react";
+import { getCurrentRoute, getUrlParams } from "@/lib/telegramRouting";
 
 export type AppPage =
   | "Home"
@@ -17,28 +19,54 @@ export type AppPage =
   | "Wheel"
   | "Game"
   | "Leaderboard"
-  | "Wallet";
+  | "Wallet"
+  | "GameWordle"
+  | "GameQuiz"
+  | "GamePuzzle"
+  | "GameNumGenius"
+  | "GameCrossWord";
 
 type NavigationContextValue = {
   currentPage: AppPage;
   navigate: (page: AppPage) => void;
   goBack: () => void;
   history: AppPage[];
+  navigateToGame: (gameId: string) => void;
 };
 
 const NavigationContext = createContext<NavigationContextValue | undefined>(
   undefined
 );
 
+// Helper function to get initial page from URL
+function getInitialPageFromUrl(): AppPage {
+  if (typeof window === "undefined") return "Home";
+
+  const urlParams = getUrlParams();
+  const route = urlParams.get("route") || window.location.pathname;
+
+  // Map routes to AppPage types
+  if (route.includes("/game/wordle")) return "GameWordle";
+  if (route.includes("/game/quiz")) return "GameQuiz";
+  if (route.includes("/game/puzzle")) return "GamePuzzle";
+  if (route.includes("/game/num-genius")) return "GameNumGenius";
+  if (route.includes("/game/cross-word")) return "GameCrossWord";
+  if (route.includes("/game")) return "Game";
+
+  return "Home";
+}
+
 export function NavigationProvider({
   children,
-  initialPage = "Home",
+  initialPage,
 }: {
   children: React.ReactNode;
   initialPage?: AppPage;
 }) {
-  const [currentPage, setCurrentPage] = useState<AppPage>(initialPage);
-  const historyRef = useRef<AppPage[]>([initialPage]);
+  const [currentPage, setCurrentPage] = useState<AppPage>(
+    () => initialPage || getInitialPageFromUrl()
+  );
+  const historyRef = useRef<AppPage[]>([currentPage]);
 
   const navigate = useCallback(
     (page: AppPage) => {
@@ -61,14 +89,31 @@ export function NavigationProvider({
     setCurrentPage(previous);
   }, []);
 
+  const navigateToGame = useCallback(
+    (gameId: string) => {
+      const gamePageMap: Record<string, AppPage> = {
+        wordle: "GameWordle",
+        quiz: "GameQuiz",
+        puzzle: "GamePuzzle",
+        "num-genius": "GameNumGenius",
+        "cross-word": "GameCrossWord",
+      };
+
+      const gamePage = gamePageMap[gameId] || "Game";
+      navigate(gamePage);
+    },
+    [navigate]
+  );
+
   const value = useMemo(
     () => ({
       currentPage,
       navigate,
       goBack,
       history: historyRef.current,
+      navigateToGame,
     }),
-    [currentPage, navigate, goBack]
+    [currentPage, navigate, goBack, navigateToGame]
   );
 
   return (
@@ -84,4 +129,3 @@ export function useNavigation() {
     throw new Error("useNavigation must be used within a NavigationProvider");
   return ctx;
 }
-

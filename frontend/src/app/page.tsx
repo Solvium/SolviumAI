@@ -8,6 +8,9 @@ import WalletPage from "@/components/common/WalletPage";
 import LoginModule from "@/components/features/auth/LoginModule";
 import { useAuth } from "@/contexts/AuthContext";
 import GamesPage from "@/components/features/games/GamesPage";
+import WordleGame from "@/components/features/games/wordle/WordleGame";
+import QuizGame from "@/components/features/games/quiz/QuizGame";
+import { PicturePuzzle } from "@/components/features/games/puzzle/Game";
 import { WheelOfFortune } from "@/components/features/wheel/Wheel";
 import HomePage from "@/components/layout/HomePage";
 import {
@@ -27,7 +30,7 @@ export const dynamic = "force-dynamic";
 
 function HomeShell() {
   const { currentPage, navigate } = useNavigation();
-  const [tg, setTg] = useState<typeof WebApp | null>(null);
+  const [tg, setTg] = useState<any>(null);
 
   const { user, isAuthenticated, isLoading, logout } = useAuth();
 
@@ -88,6 +91,11 @@ function HomeShell() {
               {currentPage === "Contest" && <Contest />}
               {currentPage === "Wheel" && <WheelOfFortune />}
               {currentPage === "Game" && <GamesPage />}
+              {currentPage === "GameWordle" && <WordleGame />}
+              {currentPage === "GameQuiz" && <QuizGame />}
+              {currentPage === "GamePuzzle" && <PicturePuzzle />}
+              {currentPage === "GameNumGenius" && <PicturePuzzle />}
+              {currentPage === "GameCrossWord" && <PicturePuzzle />}
               {currentPage === "Leaderboard" && <LeaderBoard />}
               {currentPage === "Wallet" && <WalletPage />}
             </div>
