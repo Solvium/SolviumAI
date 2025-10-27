@@ -34,6 +34,47 @@ const parseSpinsData = (spinsData: any): number => {
   return 0;
 };
 
+// Utility function to check if a deposit is still active (within 1 week)
+const isDepositActive = (startTime: string): boolean => {
+  const now = Date.now() * 1000000; // Convert to nanoseconds
+  const oneWeekInNanoseconds = 7 * 24 * 60 * 60 * 1000 * 1000000; // 1 week in nanoseconds
+  const depositAge = now - parseInt(startTime);
+  return depositAge <= oneWeekInNanoseconds;
+};
+
+// Utility function to filter active deposits and calculate totals
+const filterActiveDeposits = (deposits: any) => {
+  const activeDeposits: any[] = [];
+  let totalActiveDeposits = "0";
+  let totalActiveMultiplier = 0;
+
+  Object.values(deposits).forEach((deposit: any) => {
+    if (isDepositActive(deposit.startTime)) {
+      activeDeposits.push(deposit);
+      // Add to total deposits
+      totalActiveDeposits = (
+        BigInt(totalActiveDeposits) + BigInt(deposit.amount)
+      ).toString();
+      // Add to total multiplier (weighted by amount)
+      const depositMultiplier = parseFloat(deposit.multiplier) / 1e16;
+      const depositAmount = parseFloat(deposit.amount) / 1e24;
+      totalActiveMultiplier += depositMultiplier * depositAmount;
+    }
+  });
+
+  // Calculate weighted average multiplier
+  const totalAmount = parseFloat(totalActiveDeposits) / 1e24;
+  const averageMultiplier =
+    totalAmount > 0 ? totalActiveMultiplier / totalAmount : 0;
+
+  return {
+    activeDeposits,
+    totalActiveDeposits,
+    averageMultiplier,
+    totalAmount,
+  };
+};
+
 interface PreparedTransfer {
   id: string;
   amount: string;
@@ -247,6 +288,24 @@ export const useSolviumContract = () => {
     async (accountId?: string) => {
       const args = accountId ? { user: accountId } : {};
       const res = await handleViewCall("getAllUserDeposits", args);
+
+      // Filter out expired deposits (older than 1 week)
+      if (res.success && res.data) {
+        const { activeDeposits } = filterActiveDeposits(res.data);
+
+        // Convert array back to object format
+        const activeDepositsObj: any = {};
+        activeDeposits.forEach((deposit, index) => {
+          activeDepositsObj[index + 1] = deposit;
+        });
+
+        res.data = activeDepositsObj;
+        console.log(
+          "🔄 Filtered getAllUserDeposits - Active deposits:",
+          activeDeposits.length
+        );
+      }
+
       console.log("getAllUserDeposits", res);
       return res;
     },
@@ -294,7 +353,43 @@ export const useSolviumContract = () => {
       accountId?: string
     ): Promise<ContractCallResult & { data?: UserDepositSummary }> => {
       const args = accountId ? { user: accountId } : {};
-      return handleViewCall("getUserDepositSummary", args);
+      const result = await handleViewCall("getUserDepositSummary", args);
+
+      // Filter out expired deposits (older than 1 week) and recalculate totals
+      if (result.success && result.data && result.data.deposits) {
+        const {
+          activeDeposits,
+          totalActiveDeposits,
+          averageMultiplier,
+          totalAmount,
+        } = filterActiveDeposits(result.data.deposits);
+
+        // Update the result with filtered data
+        result.data = {
+          ...result.data,
+          deposits: activeDeposits.reduce((acc, deposit, index) => {
+            acc[index + 1] = deposit;
+            return acc;
+          }, {} as any),
+          totalDeposits: totalActiveDeposits,
+          multiplierFactor: averageMultiplier,
+          lastDepositId:
+            activeDeposits.length > 0
+              ? Math.max(...activeDeposits.map((d) => d.id))
+              : 0,
+        };
+
+        console.log(
+          "🔄 Filtered deposits - Active:",
+          activeDeposits.length,
+          "Total Amount:",
+          totalAmount,
+          "Avg Multiplier:",
+          averageMultiplier
+        );
+      }
+
+      return result;
     },
     [handleViewCall]
   );
