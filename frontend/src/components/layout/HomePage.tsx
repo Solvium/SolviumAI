@@ -122,7 +122,9 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
             <span
               className={`${montserrat.className} text-[#FDE92D] text-3xl sm:text-3xl md:text-3xl font-bold tracking-normal`}
             >
-              1,034,900,000
+              {user?.totalSOLV?.toLocaleString() ||
+                user?.totalPoints?.toLocaleString() ||
+                "0"}
             </span>
           </div>
 

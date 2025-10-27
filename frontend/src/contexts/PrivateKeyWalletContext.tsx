@@ -28,6 +28,7 @@ interface PrivateKeyWalletContextType {
     privateKey: string,
     accountId: string
   ) => Promise<void>;
+  createWallet: () => Promise<boolean>;
   disconnect: () => void;
   autoConnect: () => Promise<void>;
   refreshSolviumWallet: () => Promise<void>;
@@ -124,23 +125,59 @@ export const PrivateKeyWalletProvider = ({
     setError(null);
 
     try {
-      // Try primary route
-
+      // Try to get existing wallet first (no need to pass telegram_user_id - server gets it from session)
       let response = await fetch(`/api/wallet`, {
         method: "POST",
-        body: JSON.stringify({ telegram_user_id: Number(tgId) }),
+        body: JSON.stringify({}), // Empty body - server gets user from authenticated session
       });
 
-      if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        const errorMsg = `Failed to fetch wallet (${response.status}): ${
-          text || response.statusText
-        }`;
+      let walletData = null;
 
-        throw new Error(errorMsg);
+      if (response.ok) {
+        const result = await response.json();
+        walletData = result.wallet_info;
       }
 
-      const walletData = (await response.json()).wallet_info;
+      // If no wallet exists, create one using the mini-app API
+      if (!walletData?.private_key || !walletData?.account_id) {
+        console.log("No wallet found, creating new wallet for user...");
+
+        try {
+          const createWalletResponse = await fetch(
+            `/api/wallet?action=mini-app-get-or-create`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({}), // Empty body - server gets user from authenticated session
+            }
+          );
+
+          if (createWalletResponse.ok) {
+            const createResult = await createWalletResponse.json();
+            console.log("Wallet created successfully:", createResult);
+
+            // Now try to get the wallet again (no need to pass telegram_user_id - server gets it from session)
+            response = await fetch(`/api/wallet`, {
+              method: "POST",
+              body: JSON.stringify({}), // Empty body - server gets user from authenticated session
+            });
+
+            if (response.ok) {
+              const result = await response.json();
+              walletData = result.wallet_info;
+            }
+          } else {
+            console.error(
+              "Failed to create wallet:",
+              await createWalletResponse.text()
+            );
+          }
+        } catch (createError) {
+          console.error("Error creating wallet:", createError);
+        }
+      }
 
       // Map snake_case API response to camelCase fields used locally
       const mapped = walletData
@@ -154,7 +191,7 @@ export const PrivateKeyWalletProvider = ({
         : null;
 
       if (!mapped?.privateKey || !mapped?.accountId) {
-        const errorMsg = "Wallet not found for this user";
+        const errorMsg = "Unable to get or create wallet for this user";
 
         throw new Error(errorMsg);
       }
@@ -167,11 +204,13 @@ export const PrivateKeyWalletProvider = ({
       setAccount(nearAccount);
       setAccountId(mapped.accountId);
       setIsConnected(true);
+      console.log("Wallet connected successfully:", mapped.accountId);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to auto-connect wallet";
 
       setError(errorMessage);
+      console.error("Auto-connect error:", errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -202,6 +241,62 @@ export const PrivateKeyWalletProvider = ({
         err instanceof Error ? err.message : "Failed to connect wallet";
 
       setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const createWallet = async () => {
+    const tgIdRaw =
+      (user?.chatId as string) || ((user as any)?.telegramId as string);
+
+    if (!tgIdRaw) {
+      setError("No user ID available for wallet creation");
+      return false;
+    }
+
+    const tgId = String(parseInt(tgIdRaw, 10));
+    if (!tgId || tgId === "NaN") {
+      setError("Invalid Telegram ID");
+      return false;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      console.log("Creating new wallet for user...");
+
+      const createWalletResponse = await fetch(
+        `/api/wallet?action=mini-app-get-or-create`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}), // Empty body - server gets user from authenticated session
+        }
+      );
+
+      if (createWalletResponse.ok) {
+        const createResult = await createWalletResponse.json();
+        console.log("Wallet created successfully:", createResult);
+
+        // Try to connect to the newly created wallet
+        await autoConnect();
+        return true;
+      } else {
+        const errorText = await createWalletResponse.text();
+        console.error("Failed to create wallet:", errorText);
+        setError(`Failed to create wallet: ${errorText}`);
+        return false;
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to create wallet";
+      setError(errorMessage);
+      console.error("Wallet creation error:", errorMessage);
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -280,6 +375,7 @@ export const PrivateKeyWalletProvider = ({
     error,
     solviumWallet,
     connectWithPrivateKey,
+    createWallet,
     disconnect,
     autoConnect,
     refreshSolviumWallet,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type WebApp from "@twa-dev/sdk";
 import axios from "axios";
@@ -46,6 +46,8 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   } | null>(null);
   const [gamingLoadingId, setGamingLoadingId] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isRefetchingAfterDeposit, setIsRefetchingAfterDeposit] =
+    useState(false);
 
   const { user: userDetails, refreshUser, trackLogin } = useAuth();
   const {
@@ -53,6 +55,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
     isConnected,
     isLoading: contractLoading,
     getUserDepositSummary,
+    getAllUserDeposits,
     getSpinsAvailable,
     getMultiplierFactor,
   } = useSolviumContract();
@@ -71,6 +74,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
     fetchCurrentMultiplier,
     fetchUserDepositData,
     userDepositData,
+    refetchAllMultiplierData,
   } = useDepositMultiplier();
   const { toast } = useToast();
 
@@ -344,6 +348,39 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
     return () => clearInterval(interval);
   }, [isConnected, accountId, isRefreshing]);
 
+  // Comprehensive refetch function for all data after deposits
+  const refetchAllData = useCallback(async () => {
+    if (isRefreshing || isRefetchingAfterDeposit) {
+      return;
+    }
+
+    console.log("🔄 Refetching all data after deposit...");
+    setIsRefreshing(true);
+    setIsRefetchingAfterDeposit(true);
+
+    try {
+      await Promise.all([
+        refreshUser(),
+        fetchRealTimeData(),
+        refetchAllMultiplierData(),
+        fetchUserDepositData(accountId || ""),
+      ]);
+      console.log("✅ All data refetched successfully");
+    } catch (error) {
+      console.error("❌ Error refetching data:", error);
+    } finally {
+      setIsRefreshing(false);
+      setIsRefetchingAfterDeposit(false);
+    }
+  }, [
+    isRefreshing,
+    isRefetchingAfterDeposit,
+    refreshUser,
+    refetchAllMultiplierData,
+    fetchUserDepositData,
+    accountId,
+  ]);
+
   // Fetch real-time data from contract and wallet (with debounce and caching)
   const fetchRealTimeData = async () => {
     if (isRefreshing) {
@@ -374,16 +411,21 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
           setNearBalance(nearBalance);
         }
 
-        const [depositSummary, spins, multiplier] = await Promise.all([
-          getUserDepositSummary(accountId),
-          getSpinsAvailable(accountId),
-          getMultiplierFactor(accountId),
-        ]);
+        const [depositSummary, spins, multiplier, allUserDeposits] =
+          await Promise.all([
+            getUserDepositSummary(accountId),
+
+            getSpinsAvailable(accountId),
+            getMultiplierFactor(accountId),
+            getAllUserDeposits(accountId),
+          ]);
 
         console.log("🔍 Contract Data Fetch Results:");
         console.log("📊 Deposit Summary:", depositSummary);
         console.log("🎰 Spins Available:", spins);
         console.log("⚡ Contract Multiplier:", multiplier);
+
+        console.log("allUserDeposits", allUserDeposits);
 
         if (depositSummary.success) {
           console.log("✅ User Deposit Summary Data:", depositSummary.data);
@@ -401,6 +443,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
 
         if (spins.success) {
           setSpinsAvailable(spins.data || 0);
+          console.log("🎰 TasksPage - Contract spins available:", spins.data);
         }
 
         if (multiplier.success) {
@@ -484,18 +527,47 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
       task: data,
       userId: userDetails?.id,
     };
-    await engageTasks("completetasks", taskData, () =>
+    await engageTasks(data.name, taskData, () =>
       setLoading({ id: data.id, status: false })
     );
   };
 
   const ProcessLink = async (data: any) => {
     setLoading({ id: data.id, status: true });
-    await engageTasks("reg4tasks", data, () =>
-      setLoading({ id: data.id, status: false })
-    );
-    if (!data?.link) return;
-    data.link && window?.open(data.link);
+
+    // Just open the link, don't complete the task yet
+    if (data?.link) {
+      window?.open(data.link);
+    }
+
+    // Mark task as in progress (not completed)
+    try {
+      const response = await fetch("/api/tasks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: userDetails?.username,
+          type: "start_task",
+          data: data,
+          userMultipler: userDetails?.multiplier || 1,
+        }),
+      });
+
+      if (response.ok) {
+        await refreshTasks();
+        toast({
+          title: "Task Started!",
+          description: "Complete the action and come back to verify.",
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error("Error starting task:", error);
+    } finally {
+      setLoading({ id: data.id, status: false });
+    }
   };
 
   const Verify = async (data: any) => {
@@ -637,9 +709,18 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
 
         setNearAmount("");
 
-        // Refresh user data and real-time data
-        await refreshUser();
-        await fetchRealTimeData();
+        // Wait a moment for blockchain to process the transaction
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        // Show refetch notification
+        toast({
+          title: "Updating Data",
+          description: "Refreshing your account data...",
+          variant: "default",
+        });
+
+        // Refresh all data after successful deposit
+        await refetchAllData();
       } else {
         throw new Error(result.error || "Deposit failed");
       }
@@ -890,9 +971,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
               <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">
                 <span className="text-lg">💰</span>
               </div>
-              <h3 className="text-lg font-bold">
-                Deposit NEAR for Power Ups
-              </h3>
+              <h3 className="text-lg font-bold">Deposit NEAR for Power Ups</h3>
             </div>
             <Info className="w-5 h-5 text-gray-400" />
           </div>
@@ -998,120 +1077,8 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
           <p className="text-xs text-gray-400 text-center">
             Higher deposits unlock better point multipliers for all tasks
           </p>
-
-          {/* Multiplier Calculation Info */}
-          {isConnected && contractMultiplierFactor > 1 && (
-            <div className="mt-3 p-2 bg-gray-800/50 rounded-lg">
-              <p className="text-xs text-gray-300 text-center">
-                <span className="text-blue-400">Formula:</span> Base (1x) +
-                (Contract Factor × Deposit Tier)
-              </p>
-              <p className="text-xs text-gray-400 text-center mt-1">
-                Current Contract Factor:{" "}
-                <span className="text-purple-400">
-                  {contractMultiplierFactor}x
-                </span>
-              </p>
-            </div>
-          )}
-
-          {/* Contract Multiplier Factor Info */}
-          {isConnected && contractMultiplierFactor > 1 && (
-            <div className="mt-4 p-3 bg-blue-500/20 border border-blue-500/30 rounded-xl">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-xs">⚡</span>
-                </div>
-                <span className="text-sm font-medium text-blue-300">
-                  Contract Multiplier Factor
-                </span>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-400">
-                  {contractMultiplierFactor}x
-                </div>
-                <div className="text-xs text-blue-300">
-                  Base multiplier factor from contract
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
-
-      {/* Contract Data Display */}
-      {isConnected && (userDepositSummary || spinsAvailable > 0) && (
-        <div className="px-4 mb-6">
-          <div className="bg-[#1a1a3e] border-2 border-green-500/30 rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">
-                <span className="text-lg">📊</span>
-              </div>
-              <h3 className="text-lg font-bold">Contract Data</h3>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              {spinsAvailable > 0 && (
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-400">
-                    {spinsAvailable}
-                  </div>
-                  <div className="text-xs text-gray-400">Spins Available</div>
-                </div>
-              )}
-
-              {userDepositSummary && (
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-400">
-                    {(
-                      parseFloat(userDepositSummary.totalDeposits || "0") / 1e24
-                    ).toFixed(2)}
-                  </div>
-                  <div className="text-xs text-gray-400">Total Deposited</div>
-                </div>
-              )}
-
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-2">
-                  <div className="text-2xl font-bold text-purple-400">
-                    {currentMultiplier}x
-                    {multiplierChanged && (
-                      <span className="text-sm text-green-400 ml-1">↑</span>
-                    )}
-                  </div>
-                  <button
-                    onClick={fetchCurrentMultiplier}
-                    className="text-xs bg-purple-500/20 hover:bg-purple-500/30 px-2 py-1 rounded-full transition-colors"
-                    title="Refresh multiplier from contract"
-                  >
-                    🔄
-                  </button>
-                </div>
-                <div className="text-xs text-gray-400">Contract Multiplier</div>
-              </div>
-            </div>
-
-            {/* Rate Limit Status */}
-            {rateLimitInfo && (
-              <div className="mt-4 p-2 bg-yellow-500/20 border border-yellow-500/30 rounded-lg">
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-xs">⏱</span>
-                  </div>
-                  <span className="text-xs text-yellow-300">
-                    API Calls: {rateLimitInfo.remaining}/6 remaining
-                    {rateLimitInfo.resetIn > 0 && (
-                      <span className="ml-2">
-                        (resets in {rateLimitInfo.resetIn}s)
-                      </span>
-                    )}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       <div className="px-4 mb-6">
         <div className="flex items-center gap-2 mb-4">

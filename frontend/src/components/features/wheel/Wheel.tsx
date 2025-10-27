@@ -132,7 +132,8 @@ export const WheelOfFortune = () => {
     checkTokenRegistration: checkTokenRegistrationCallback,
     registerToken: registerTokenCallback,
   } = usePrivateKeyWallet();
-  const { getAllUserDeposits } = useSolviumContract();
+  const { getAllUserDeposits, getSpinsAvailable, getUserDepositSummary } =
+    useSolviumContract();
 
   const [mustSpin, setMustSpin] = useState(false);
   const [prizeNumber, setPrizeNumber] = useState(0);
@@ -145,6 +146,11 @@ export const WheelOfFortune = () => {
     winner: string;
     prizeNumber: number;
   } | null>(null);
+
+  // Contract-based spin tracking
+  const [contractSpinsAvailable, setContractSpinsAvailable] =
+    useState<number>(0);
+  const [isLoadingSpins, setIsLoadingSpins] = useState(false);
 
   const [spinningSound, setSpinningSound] = useState(new Audio());
   const [isClaimLoading, setIsClaimLoading] = useState(false);
@@ -209,18 +215,35 @@ export const WheelOfFortune = () => {
     return weights.length - 1;
   };
 
+  // Fetch spins from contract
+  const fetchContractSpins = async () => {
+    if (!nearAddress || !nearConnected) return;
+
+    setIsLoadingSpins(true);
+    try {
+      const spinsResult = await getSpinsAvailable(nearAddress);
+      if (spinsResult.success) {
+        setContractSpinsAvailable(spinsResult.data || 0);
+        console.log("🎰 Contract spins available:", spinsResult.data);
+      } else {
+        console.error("Failed to fetch spins:", spinsResult.error);
+        setContractSpinsAvailable(0);
+      }
+    } catch (error) {
+      console.error("Error fetching contract spins:", error);
+      setContractSpinsAvailable(0);
+    } finally {
+      setIsLoadingSpins(false);
+    }
+  };
+
   useEffect(() => {
     setSpinningSound(new Audio(location.origin + "/spin.mp3"));
-    setLastPlayed(Number(user?.lastSpinClaim));
-    const now = new Date(Date.now());
-    const cooldownEnd = new Date(
-      new Date(user?.lastSpinClaim ?? 0).getTime() + 24 * 60 * 60 * 1000
-    );
-    if (now < cooldownEnd) {
-      setCooldownTime(cooldownEnd);
+
+    // Fetch contract spins when wallet connects
+    if (nearConnected && nearAddress) {
+      fetchContractSpins();
     }
-    if ((user?.dailySpinCount ?? 0) <= 0) setHasPlayed(true);
-    else setHasPlayed(false);
 
     const unclaimedPrize = localStorage.getItem("unclaimedPrize");
     const lastClaimedTime = localStorage.getItem("lastClaimed");
@@ -232,7 +255,7 @@ export const WheelOfFortune = () => {
       setIsClaimed(false);
       setShowWin(true);
     }
-  }, [user]);
+  }, [nearConnected, nearAddress]); // Removed user dependency to fix warning
 
   const handleClaimRewardImproved = async ({
     rewardAmount,
@@ -420,6 +443,12 @@ export const WheelOfFortune = () => {
 
     if (isSpinning) return; // Prevent multiple spins
 
+    // Check if user has spins available from contract
+    if (contractSpinsAvailable <= 0) {
+      toast.error("No spins available! Purchase spins or deposit to get more.");
+      return;
+    }
+
     // Require user to have at least one deposit in the game (not storage deposit)
     try {
       let hasDeposits = false;
@@ -490,13 +519,16 @@ export const WheelOfFortune = () => {
     localStorage.setItem("lastPlayedTime", now.toString());
 
     // Stop spinning after animation completes
-    setTimeout(() => {
+    setTimeout(async () => {
       console.log("Animation complete - Setting winner to:", selectedPrize);
       setIsSpinning(false);
       setMustSpin(false);
       setWinner(selectedPrize); // Set the winner for claiming
       setHasPlayed(true); // Mark as played
       setShowWin(true);
+
+      // Refresh contract spins after spin completion
+      await fetchContractSpins();
 
       // Show prize notification
       toast.success(`🎉 You won ${selectedPrize} tokens!`, {
@@ -589,6 +621,8 @@ export const WheelOfFortune = () => {
         },
       ]);
       toast.success("Spin purchased with NEAR");
+      // Refresh contract spins after purchase
+      await fetchContractSpins();
     } catch (e) {
       toast.error("Failed to buy spin with NEAR");
       console.error(e);
@@ -618,6 +652,8 @@ export const WheelOfFortune = () => {
       toast.success(
         `Purchased ${spins} spin${spins > 1 ? "s" : ""} with points`
       );
+      // Refresh contract spins after purchase
+      await fetchContractSpins();
     } catch (e) {
       toast.error("Failed to buy spin with points");
       console.error(e);
@@ -707,14 +743,14 @@ export const WheelOfFortune = () => {
 
               {/* Prize Indicator Arrow */}
               <div className="absolute top-2 left-1/2 transform -translate-x-1/2 -translate-y-2 z-30">
-  <Image
-    src="/assets/wheel/indicator.svg"  // replace with your actual image path
-    alt="indicator"
-    width={48}   // adjust to fit
-    height={48}
-    className="object-contain"
-  />
-</div>
+                <Image
+                  src="/assets/wheel/indicator.svg" // replace with your actual image path
+                  alt="indicator"
+                  width={48} // adjust to fit
+                  height={48}
+                  className="object-contain"
+                />
+              </div>
 
               <div className="z-30 items-center">
                 <div className="text-center space-y-2">
@@ -734,14 +770,11 @@ export const WheelOfFortune = () => {
                     className={`${montserrat.className} text-white text-xs sm:text-[10px] font-normal leading-relaxed`}
                   >
                     <span className="font-bold">
-                      {new Date(cooldownTime) > new Date(Date.now())
-                        ? user?.dailySpinCount || 0
-                        : 1}
-                      /3
+                      {isLoadingSpins ? "..." : contractSpinsAvailable}
                     </span>
                     <span className="font-normal text-white/70">
                       {" "}
-                      Spins Left For Today
+                      Spins Available
                     </span>
                   </p>
                 </div>
@@ -754,17 +787,23 @@ export const WheelOfFortune = () => {
 
         {/* Spin Button */}
         <div className="mb-6 md:mt-6 mt-12 flex justify-center">
-          {hasPlayed && new Date(cooldownTime) > new Date(Date.now()) ? (
-            <CountdownTimer targetTime={cooldownTime} />
+          {contractSpinsAvailable <= 0 ? (
+            <div className="text-center">
+              <div className="text-white text-lg font-bold mb-2">
+                No Spins Available
+              </div>
+              <div className="text-white/70 text-sm">
+                Deposit NEAR or purchase spins with points
+              </div>
+            </div>
           ) : (
             <button
               onClick={handleSpinClick}
-              disabled={
-                (hasPlayed && new Date(cooldownTime) > new Date(Date.now())) ||
-                isSpinning
-              }
+              disabled={isSpinning || isLoadingSpins}
               className={`w-[287px] h-20  flex items-center justify-center text-white font-bold transition-all duration-300 ${
-                isSpinning ? "opacity-50 cursor-not-allowed" : "hover:scale-105"
+                isSpinning || isLoadingSpins
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:scale-105"
               }`}
               style={{
                 backgroundImage: "url('/assets/wheel/spin-wheel.svg')",
@@ -777,6 +816,12 @@ export const WheelOfFortune = () => {
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                   <span className="text-sm">Spinning...</span>
+                </div>
+              )}
+              {isLoadingSpins && (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm">Loading...</span>
                 </div>
               )}
             </button>
@@ -820,43 +865,42 @@ export const WheelOfFortune = () => {
           </div>
         )}
 
-        {(user?.dailySpinCount ?? 0) <= 0 &&
-          new Date(cooldownTime) > new Date(Date.now()) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              {/* <button
+        {contractSpinsAvailable <= 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+            {/* <button
                 onClick={handleBuySpinWithNear}
                 className="w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-lg font-black rounded-2xl hover:opacity-90 transition-all"
               >
                 Buy Spin (NEAR)
               </button> */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleBuySpinWithPoints("500")}
-                  className="w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl hover:opacity-90 transition-all"
-                >
-                  1 Spin (500)
-                </button>
-                <button
-                  onClick={() => handleBuySpinWithPoints("1000")}
-                  className="w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl hover:opacity-90 transition-all"
-                >
-                  2 Spins (1000)
-                </button>
-                <button
-                  onClick={() => handleBuySpinWithPoints("1500")}
-                  className="w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl hover:opacity-90 transition-all"
-                >
-                  3 Spins (1500)
-                </button>
-                <button
-                  onClick={() => handleBuySpinWithPoints("2000")}
-                  className="w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl hover:opacity-90 transition-all"
-                >
-                  4 Spins (2000)
-                </button>
-              </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => handleBuySpinWithPoints("500")}
+                className="w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl hover:opacity-90 transition-all"
+              >
+                1 Spin (500)
+              </button>
+              <button
+                onClick={() => handleBuySpinWithPoints("1000")}
+                className="w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl hover:opacity-90 transition-all"
+              >
+                2 Spins (1000)
+              </button>
+              <button
+                onClick={() => handleBuySpinWithPoints("1500")}
+                className="w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl hover:opacity-90 transition-all"
+              >
+                3 Spins (1500)
+              </button>
+              <button
+                onClick={() => handleBuySpinWithPoints("2000")}
+                className="w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl hover:opacity-90 transition-all"
+              >
+                4 Spins (2000)
+              </button>
             </div>
-          )}
+          </div>
+        )}
       </div>
 
       <WinPopup

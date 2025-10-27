@@ -29,8 +29,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (existingLog) {
-      console.log("✅ Quizzes already generated today");
+    // Check if we have enough quizzes in the pool first
+    const quizCount = await prisma.quiz.count();
+    console.log(`📊 Current quiz pool size: ${quizCount}`);
+
+    if (existingLog && quizCount >= 500) {
+      console.log("✅ Quizzes already generated today and pool is sufficient");
       return NextResponse.json({
         success: true,
         message: "Quizzes already generated today",
@@ -38,13 +42,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Check if we have enough quizzes in the pool
-    const quizCount = await prisma.quiz.count();
-    console.log(`📊 Current quiz pool size: ${quizCount}`);
-
-    if (quizCount < 50) {
+    // If we have an existing log but pool is low, still generate more
+    if (existingLog && quizCount < 500) {
       console.log(
-        "🔄 Not enough quizzes in pool, triggering async generation..."
+        "⚠️ Quizzes generated today but pool is low, generating more..."
+      );
+    }
+
+    // Always trigger daily quiz generation if we have less than 500 quizzes
+    // This ensures we always have enough fresh content for all-time filtering
+    if (quizCount < 500) {
+      console.log(
+        "🔄 Ensuring sufficient quiz pool, triggering daily generation..."
       );
 
       // Trigger quiz generation asynchronously (don't wait for it)
@@ -62,22 +71,22 @@ export async function POST(req: NextRequest) {
         .then(async (generateResponse) => {
           if (generateResponse.ok) {
             const generateResult = await generateResponse.json();
-            console.log("✅ Async quiz generation completed:", generateResult);
+            console.log("✅ Daily quiz generation completed:", generateResult);
           } else {
             console.error(
-              "❌ Async quiz generation failed:",
+              "❌ Daily quiz generation failed:",
               generateResponse.statusText
             );
           }
         })
         .catch((generateError) => {
-          console.error("❌ Async quiz generation error:", generateError);
+          console.error("❌ Daily quiz generation error:", generateError);
         });
 
       // Return immediately with available quizzes
       return NextResponse.json({
         success: true,
-        message: "Quiz generation started in background",
+        message: "Daily quiz generation started in background",
         totalAvailable: quizCount,
         generating: true,
       });

@@ -15,6 +15,25 @@ interface UserDepositSummary {
   spinsAvailable: number;
 }
 
+interface SpinsData {
+  regularSpin?: boolean;
+  extraSpins?: number;
+}
+
+// Utility function to parse spins data from contract
+const parseSpinsData = (spinsData: any): number => {
+  if (typeof spinsData === "number") {
+    return spinsData;
+  } else if (typeof spinsData === "object" && spinsData !== null) {
+    // Handle object format: {regularSpin: true, extraSpins: 1}
+    let totalSpins = 0;
+    if (spinsData.regularSpin) totalSpins += 1;
+    if (spinsData.extraSpins) totalSpins += spinsData.extraSpins;
+    return totalSpins;
+  }
+  return 0;
+};
+
 interface PreparedTransfer {
   id: string;
   amount: string;
@@ -226,8 +245,10 @@ export const useSolviumContract = () => {
 
   const getAllUserDeposits = useCallback(
     async (accountId?: string) => {
-      const args = accountId ? { accountId } : {};
-      return handleViewCall("getAllUserDeposits", args);
+      const args = accountId ? { user: accountId } : {};
+      const res = await handleViewCall("getAllUserDeposits", args);
+      console.log("getAllUserDeposits", res);
+      return res;
     },
     [handleViewCall]
   );
@@ -239,7 +260,9 @@ export const useSolviumContract = () => {
   const getMultiplierFactor = useCallback(
     async (accountId?: string) => {
       const args = accountId ? { accountId } : {};
-      return handleViewCall("getMultiplierFactor", args);
+      const res = handleViewCall("getMultiplierFactor", args);
+
+      return res;
     },
     [handleViewCall]
   );
@@ -247,7 +270,17 @@ export const useSolviumContract = () => {
   const getSpinsAvailable = useCallback(
     async (accountId?: string) => {
       const args = accountId ? { accountId } : {};
-      return handleViewCall("getSpinsAvailable", args);
+      const result = await handleViewCall("getSpinsAvailable", args);
+
+      // Parse the spins data to ensure consistent format
+      if (result.success && result.data !== undefined) {
+        return {
+          ...result,
+          data: parseSpinsData(result.data),
+        };
+      }
+
+      return result;
     },
     [handleViewCall]
   );
@@ -260,7 +293,7 @@ export const useSolviumContract = () => {
     async (
       accountId?: string
     ): Promise<ContractCallResult & { data?: UserDepositSummary }> => {
-      const args = accountId ? { accountId } : {};
+      const args = accountId ? { user: accountId } : {};
       return handleViewCall("getUserDepositSummary", args);
     },
     [handleViewCall]
@@ -313,5 +346,6 @@ export const useSolviumContract = () => {
     // Utility
     handleContractCall,
     handleViewCall,
+    parseSpinsData,
   };
 };

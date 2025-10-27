@@ -195,11 +195,31 @@ export const useDepositMultiplier = () => {
     }
   }, [isConnected, fetchCurrentMultiplier]);
 
+  // Comprehensive refetch function for all multiplier-related data
+  const refetchAllMultiplierData = useCallback(async () => {
+    if (!isConnected) {
+      console.log("⚠️ Cannot refetch multiplier data - wallet not connected");
+      return;
+    }
+
+    console.log("🔄 Refetching all multiplier data...");
+    try {
+      await Promise.all([
+        fetchCurrentMultiplier(),
+        // Add any other multiplier-related data fetching here
+      ]);
+      console.log("✅ All multiplier data refetched successfully");
+    } catch (error) {
+      console.error("❌ Error refetching multiplier data:", error);
+    }
+  }, [isConnected, fetchCurrentMultiplier]);
+
   return {
     ...state,
     fetchCurrentMultiplier,
     trackDepositMultiplier,
     fetchUserDepositData,
     userDepositData,
+    refetchAllMultiplierData,
   };
 };

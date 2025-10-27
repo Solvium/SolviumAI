@@ -25,6 +25,7 @@ const WalletPage = () => {
     error,
     accountId,
     autoConnect,
+    createWallet,
     account,
     unwrapNear,
   } = usePrivateKeyWallet();

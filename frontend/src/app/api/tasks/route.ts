@@ -314,6 +314,61 @@ export async function POST(request: NextRequest) {
           });
         }
 
+      case "start_task":
+        // Mark task as started (in progress) without completing it
+        if (!username || !data) {
+          return NextResponse.json(
+            { error: "Invalid start task payload" },
+            { status: 400 }
+          );
+        }
+
+        // Find task by name
+        const startTask = await prisma.task.findFirst({
+          where: { name: data.name },
+        });
+        if (!startTask) {
+          return NextResponse.json(
+            { error: "Task not found" },
+            { status: 404 }
+          );
+        }
+
+        // Check if already completed
+        const existingCompleted = await prisma.userTask.findFirst({
+          where: {
+            userId: parseInt(userId),
+            taskId: startTask.id,
+            isCompleted: true,
+          },
+        });
+        if (existingCompleted) {
+          return NextResponse.json({ success: true, alreadyClaimed: true });
+        }
+
+        // Create or update user task as in progress (not completed)
+        await prisma.userTask.upsert({
+          where: {
+            userId_taskId: {
+              userId: parseInt(userId),
+              taskId: startTask.id,
+            },
+          },
+          update: {
+            isCompleted: false, // Keep as in progress
+          },
+          create: {
+            userId: parseInt(userId),
+            taskId: startTask.id,
+            isCompleted: false, // Mark as in progress
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          message: "Task started successfully",
+        });
+
       default:
         // Treat default as social/engagement tasks by name
         // Validate task exists
@@ -348,8 +403,17 @@ export async function POST(request: NextRequest) {
         }
 
         // Mark completed and award SOLV equal to task.points
-        await prisma.userTask.create({
-          data: {
+        await prisma.userTask.upsert({
+          where: {
+            userId_taskId: {
+              userId: parseInt(userId),
+              taskId: socialTask.id,
+            },
+          },
+          update: {
+            isCompleted: true,
+          },
+          create: {
             userId: parseInt(userId),
             taskId: socialTask.id,
             isCompleted: true,
