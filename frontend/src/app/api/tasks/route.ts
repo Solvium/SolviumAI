@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { DAILY_LOGIN_SOLV, FIRST_GAME_SOLV } from "@/config/taskConfig";
 import { JWTService } from "@/lib/auth/jwt";
-import { calculatePointsWithMultiplier } from "@/lib/services/PointMultiplierService";
+import { calculatePointsWithMultiplier } from "@/lib/services/ServerMultiplierService";
 
 export async function GET(request: NextRequest) {
   try {

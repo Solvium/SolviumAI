@@ -1,3 +1,5 @@
+"use client";
+
 import { useDepositMultiplier } from "@/hooks/useDepositMultiplier";
 
 export interface PointCalculationResult {
