@@ -65,7 +65,9 @@ const filterActiveDeposits = (deposits: any) => {
   // Calculate weighted average multiplier
   const totalAmount = parseFloat(totalActiveDeposits) / 1e24;
   const averageMultiplier =
-    totalAmount > 0 ? totalActiveMultiplier / totalAmount : 0;
+    totalAmount > 0
+      ? Math.round((totalActiveMultiplier / totalAmount) * 10) / 10
+      : 0;
 
   return {
     activeDeposits,

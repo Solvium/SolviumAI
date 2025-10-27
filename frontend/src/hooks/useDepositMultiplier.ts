@@ -81,6 +81,7 @@ export const useDepositMultiplier = () => {
   const [userDepositData, setUserDepositData] =
     useState<NearDepositResponse | null>(null);
 
+  console.log("userDepositData", userDepositData);
   // Fetch user deposit data directly from contract
   const fetchUserDepositData = useCallback(async (accountId: string) => {
     try {

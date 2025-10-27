@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getISOWeekNumber, getCurrentYear } from "@/lib/utils/utils";
+import { calculatePointsWithMultiplier } from "@/lib/services/PointMultiplierService";
 import fs from "fs";
 import path from "path";
 
@@ -161,9 +162,13 @@ export async function POST(req: NextRequest) {
       const expectedDifficulty =
         expectedLevel <= 5 ? 1 : expectedLevel <= 10 ? 2 : 3;
 
-      // Calculate final rewards (subtract hint cost if hint was used)
-      const finalRewards =
+      // Calculate base rewards (subtract hint cost if hint was used)
+      const baseRewards =
         (rewards || 0) - (hintUsed && hintCost ? hintCost : 0);
+
+      // Apply multiplier to rewards
+      const pointCalculation = await calculatePointsWithMultiplier(baseRewards);
+      const finalRewards = pointCalculation.totalPoints;
 
       // Update user stats including level progression
       const updatedUser = await prisma.user.update({
@@ -231,25 +236,27 @@ export async function POST(req: NextRequest) {
 
         // Award first game completion bonus (50 SOLV with multiplier)
         const firstGameBonus = 50; // Base bonus
-        const userMultiplier = 1; // TODO: Get from user data or contract
+        const firstGameCalculation = await calculatePointsWithMultiplier(
+          firstGameBonus
+        );
 
         await prisma.user.update({
           where: { id: parseInt(userId) },
           data: {
             totalSOLV: {
-              increment: firstGameBonus * userMultiplier,
+              increment: firstGameCalculation.totalPoints,
             },
             totalPoints: {
-              increment: firstGameBonus * userMultiplier,
+              increment: firstGameCalculation.totalPoints,
             },
             weeklyPoints: {
-              increment: firstGameBonus * userMultiplier,
+              increment: firstGameCalculation.totalPoints,
             },
           },
         });
 
         console.log(
-          `🎁 First game bonus awarded: ${firstGameBonus * userMultiplier} SOLV`
+          `🎁 First game bonus awarded: ${firstGameCalculation.totalPoints} SOLV`
         );
       }
 
@@ -338,13 +345,13 @@ export async function POST(req: NextRequest) {
           where: { id: parseInt(userId) },
           data: {
             totalSOLV: {
-              increment: firstGameBonus * userMultiplier,
+              increment: firstGameCalculation.totalPoints,
             },
             totalPoints: {
-              increment: firstGameBonus * userMultiplier,
+              increment: firstGameCalculation.totalPoints,
             },
             weeklyPoints: {
-              increment: firstGameBonus * userMultiplier,
+              increment: firstGameCalculation.totalPoints,
             },
             gamesPlayed: {
               increment: 1,
@@ -353,7 +360,7 @@ export async function POST(req: NextRequest) {
         });
 
         console.log(
-          `🎁 First game bonus awarded: ${firstGameBonus * userMultiplier} SOLV`
+          `🎁 First game bonus awarded: ${firstGameCalculation.totalPoints} SOLV`
         );
       }
 

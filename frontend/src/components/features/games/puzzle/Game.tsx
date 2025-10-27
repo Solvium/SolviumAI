@@ -156,7 +156,7 @@ export const PicturePuzzle = () => {
   }
 
   return (
-    <div className="h-screen bg-gradient-to-b from-[#0A0146] via-[#1a0a3e] to-[#2d1b69] text-white relative overflow-hidden">
+    <div className="h-screen  bg-[url('/assets/background/num-genius-bg.svg')] bg-cover bg-center bg-no-repeat text-white relative overflow-hidden">
       <div
         className="absolute top-32 left-8 w-3 h-3 bg-pink-400 rounded-full animate-pulse"
         style={{ boxShadow: "0 0 10px rgba(244, 114, 182, 0.8)" }}
