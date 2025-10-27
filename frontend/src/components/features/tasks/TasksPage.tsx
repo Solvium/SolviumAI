@@ -775,7 +775,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
             Loading Tasks
           </h2>
           <p className="text-gray-400 text-sm">
-            Fetching your tasks and multiplier data...
+            Fetching your tasks and power-ups data...
           </p>
 
           {/* Loading dots animation */}
@@ -824,7 +824,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
         </div>
 
         <p className="text-center mt-12 text-sm text-gray-400">
-          Complete tasks to earn SOLV points and unlock multipliers
+          Complete tasks to earn SOLV points and unlock Power Ups
         </p>
       </div>
 
@@ -878,7 +878,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                 🔄
               </button>
             </div>
-            <div className="text-xs text-gray-400">My Multiplier</div>
+            <div className="text-xs text-gray-400">Power Ups</div>
           </div>
         </div>
       </div>
@@ -940,7 +940,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                     <span className="text-xs">⚡</span>
                   </div>
                   <span className="text-sm font-medium text-gray-300">
-                    Your Multiplier for {nearAmount} NEAR:
+                    Your Power ups for {nearAmount} NEAR:
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -969,7 +969,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                 ⚡
               </div>
               <span className="text-sm font-medium text-gray-300">
-                Multiplier Tiers
+                Power Ups Tiers
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -1023,7 +1023,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                   <span className="text-white text-xs">⚡</span>
                 </div>
                 <span className="text-sm font-medium text-blue-300">
-                  Contract Multiplier Factor
+                  Contract Power Ups Factor
                 </span>
               </div>
               <div className="text-center">
@@ -1031,7 +1031,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                   {contractMultiplierFactor}x
                 </div>
                 <div className="text-xs text-blue-300">
-                  Base multiplier factor from contract
+                  Base Power Ups factor from contract
                 </div>
               </div>
             </div>
@@ -1087,7 +1087,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                     🔄
                   </button>
                 </div>
-                <div className="text-xs text-gray-400">Contract Multiplier</div>
+                <div className="text-xs text-gray-400">Contract Power Ups</div>
               </div>
             </div>
 
@@ -1216,7 +1216,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
         </div>
 
         <p className="text-xs text-center text-gray-400 mt-4">
-          Earn more with higher NEAR deposits • Multipliers apply to all SOLV
+          Earn more with higher NEAR deposits • Power Ups apply to all SOLV
           rewards
         </p>
       </div>
