@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getISOWeekNumber, getCurrentYear } from "@/lib/utils/utils";
-import { calculatePointsWithMultiplier } from "@/lib/services/PointMultiplierService";
+import { calculatePointsWithMultiplier } from "@/lib/services/ServerMultiplierService";
 import fs from "fs";
 import path from "path";
 
@@ -339,7 +339,9 @@ export async function POST(req: NextRequest) {
 
         // Award first game completion bonus (50 SOLV with multiplier)
         const firstGameBonus = 50; // Base bonus
-        const userMultiplier = 1; // TODO: Get from user data or contract
+        const firstGameCalculation = await calculatePointsWithMultiplier(
+          firstGameBonus
+        );
 
         await prisma.user.update({
           where: { id: parseInt(userId) },
