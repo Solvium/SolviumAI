@@ -62,6 +62,8 @@ const WordleGame: React.FC<WordleGameProps> = ({
   const [gameOver, setGameOver] = useState(false);
   const [gameWon, setGameWon] = useState(false);
   const [hintUsed, setHintUsed] = useState(false);
+  // Fixed outcome snapshot for modal rendering
+  const [modalOutcome, setModalOutcome] = useState<"win" | "loss" | null>(null);
   // User balance is now managed by the unified game context
 
   // Fetch user's current SOLV balance from database
@@ -93,6 +95,16 @@ const WordleGame: React.FC<WordleGameProps> = ({
   // Use level from config
   const level = config.wordle.level;
   const difficulty = config.wordle.difficulty;
+  // Store server-calculated points
+  const [pointCalculation, setPointCalculation] = useState<{
+    basePoints: number;
+    multiplier: number;
+    boostedPoints: number;
+    boostAmount: number;
+    totalPoints: number;
+  } | null>(null);
+  // Loading state while saving and waiting for API
+  const [isSavingResult, setIsSavingResult] = useState(false);
 
   // Timer and progress tracking
   const [gameStartTime, setGameStartTime] = useState<number>(0);
@@ -407,6 +419,10 @@ const WordleGame: React.FC<WordleGameProps> = ({
         if (allExact) {
           setGameWon(true);
           setGameOver(true);
+          setModalOutcome("win");
+          // Open modal immediately and show loader until API returns
+          setPointCalculation(null);
+          setIsSavingResult(true);
           setShowGameOverModal(true);
 
           // Use tracked elapsed time
@@ -482,6 +498,11 @@ const WordleGame: React.FC<WordleGameProps> = ({
                 console.log("✅ Game completion saved to database");
                 console.log("📊 API Response:", result);
 
+                // Capture server-calculated point calculation
+                if (result?.pointCalculation) {
+                  setPointCalculation(result.pointCalculation);
+                }
+
                 // Update user balance
                 if (result.userUpdate?.newBalance !== undefined) {
                   setUserBalance(result.userUpdate.newBalance);
@@ -501,9 +522,6 @@ const WordleGame: React.FC<WordleGameProps> = ({
                     result.userUpdate?.rewardsEarned || rewards.totalSOLV
                   } SOLV! 🎉`
                 );
-
-                // Refresh user profile to show updated XP and stats
-                await fetchUserProfile();
               } else {
                 console.error("❌ Failed to save game completion to database");
                 const errorData = await response.json();
@@ -517,9 +535,16 @@ const WordleGame: React.FC<WordleGameProps> = ({
             .catch((error) => {
               console.error("❌ Error saving game completion:", error);
               toast.error("Failed to complete game. Please try again.");
+            })
+            .finally(() => {
+              setIsSavingResult(false);
             });
         } else if (newGuesses.length >= maxGuesses) {
           setGameOver(true);
+          setModalOutcome("loss");
+          // Open modal immediately and show loader during save
+          setPointCalculation(null);
+          setIsSavingResult(true);
           setShowGameOverModal(true);
           toast.error("Game over!");
 
@@ -557,16 +582,22 @@ const WordleGame: React.FC<WordleGameProps> = ({
                 }
                 if (result.userUpdate?.rewardsEarned) {
                   toast.success(
-                    `Thanks for playing! +${result.userUpdate.rewardsEarned} SOLV`
+                    `You earned ${result.userUpdate?.rewardsEarned} SOLV`
                   );
                 }
-                await fetchUserProfile();
+                // Capture server-calculated point calculation
+                if (result?.pointCalculation) {
+                  setPointCalculation(result.pointCalculation);
+                }
               } else {
                 console.error("❌ Failed to save game loss to database");
               }
             })
             .catch((error) => {
               console.error("❌ Error saving game loss:", error);
+            })
+            .finally(() => {
+              setIsSavingResult(false);
             });
         }
       }
@@ -905,6 +936,8 @@ const WordleGame: React.FC<WordleGameProps> = ({
   const GameOverModal = () => {
     if (!showGameOverModal) return null;
 
+    const isWin = modalOutcome === "win";
+
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
         <div className="relative bg-[#0A0146] from-slate-800 to-slate-900 rounded-2xl shadow-2xl border border-slate-600/50 w-96 max-h-[80vh] overflow-y-auto flex flex-col">
@@ -916,73 +949,86 @@ const WordleGame: React.FC<WordleGameProps> = ({
           </button>
 
           <div className="flex flex-col items-center pt-8 pb-6">
-            <div className="text-6xl mb-4">{gameWon ? "🎉" : "😢"}</div>
+            <div className="text-6xl mb-4">{isWin ? "🎉" : "😢"}</div>
             <h3 className="text-2xl font-bold text-white">
-              {gameWon ? "You Won!" : "Game Over"}
+              {isWin ? "You Won!" : "Game Over"}
             </h3>
             <p className="text-slate-300 text-center mt-2">
-              {gameWon
+              {isWin
                 ? `You guessed the word in ${guesses.length} tries.`
                 : `The word was: ${targetWord}`}
             </p>
           </div>
 
           <div className="flex-1 px-6 pb-6">
-            {gameWon ? (
-              <div className="space-y-4">
-                {(() => {
-                  const rewards = calculateRewards(
-                    guesses.length,
-                    hintUsed,
-                    timeRemaining
-                  );
-                  return (
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="bg-yellow-500/20 rounded-lg p-4 text-center border border-yellow-400/30">
-                        <Trophy className="w-6 h-6 mx-auto mb-2 text-yellow-400" />
-                        <span className="text-sm text-white block font-medium">
-                          +{rewards.totalSOLV} SOLV
-                        </span>
-                      </div>
-                      <div className="bg-yellow-500/20 rounded-lg p-4 text-center border border-yellow-400/30">
-                        <Coins className="w-6 h-6 mx-auto mb-2 text-yellow-400" />
-                        <span className="text-sm text-white block font-medium">
-                          +{rewards.totalSOLV} SOLV
-                        </span>
-                      </div>
-                      {/* Badge removed per requirements */}
-                    </div>
-                  );
-                })()}
-
-                <div className="bg-slate-700/50 rounded-lg p-3 text-center">
-                  <p className="text-slate-300 text-xs">
-                    Level {level} ({getDifficultyLabel(level)}) •{" "}
-                    {guesses.length}/{maxGuesses} guesses
-                  </p>
-                </div>
-
-                {hintUsed && (
-                  <div className="bg-slate-700/50 rounded-lg p-3 text-center">
-                    <p className="text-slate-300 text-sm">
-                      <Sparkles className="inline-block w-4 h-4 mr-1" />
-                      Hint used: -5 SOLV bonus
-                    </p>
-                  </div>
-                )}
+            {/* Loading animation while waiting for API */}
+            {isSavingResult && (
+              <div className="flex flex-col items-center justify-center py-6">
+                <div className="h-10 w-10 border-4 border-slate-500 border-t-transparent rounded-full animate-spin mb-3" />
+                <p className="text-slate-300 text-sm">Calculating rewards...</p>
               </div>
-            ) : (
-              <div className="text-center space-y-4">
-                <p className="text-slate-300">Better luck next time!</p>
-                <div className="bg-slate-700/50 rounded-lg p-3 inline-block">
-                  <Coins className="w-4 h-4 inline-block mr-1 text-yellow-400" />
-                  <span className="text-white text-sm">
-                    +5 SOLV for playing
+            )}
+            {/* Points Summary from server */}
+            {!isSavingResult && pointCalculation && (
+              <div className="mt-2 mb-4 rounded-xl border border-slate-600/50 bg-slate-800/30 p-4 text-white">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-slate-300">Base Points</span>
+                  <span className="font-semibold">
+                    {pointCalculation.basePoints}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-slate-300">Multiplier</span>
+                  <span className="font-semibold">
+                    x {pointCalculation.multiplier}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-slate-300">Boost</span>
+                  <span className="font-semibold">
+                    +{pointCalculation.boostAmount}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-300">Total Points</span>
+                  <span className="font-bold text-green-400">
+                    +{pointCalculation.totalPoints}
                   </span>
                 </div>
               </div>
             )}
+            {/* Legacy fallback content if no calculation returned */}
+            {!isSavingResult &&
+              !pointCalculation &&
+              modalOutcome === "loss" && (
+                <div className="text-center space-y-4">
+                  <p className="text-slate-300">Better luck next time!</p>
+                  <div className="bg-slate-700/50 rounded-lg p-3 inline-block">
+                    <Coins className="w-4 h-4 inline-block mr-1 text-yellow-400" />
+                    <span className="text-white text-sm">
+                      +5 SOLV for playing
+                    </span>
+                  </div>
+                </div>
+              )}
+            <div className="space-y-4">
+              <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+                <p className="text-slate-300 text-xs">
+                  Level {level} ({getDifficultyLabel(level)}) • {guesses.length}
+                  /{maxGuesses} guesses
+                </p>
+              </div>
 
+              {hintUsed && (
+                <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+                  <p className="text-slate-300 text-sm">
+                    <Sparkles className="inline-block w-4 h-4 mr-1" />
+                    Hint used: -5 SOLV bonus
+                  </p>
+                </div>
+              )}
+            </div>
+            )
             <div className="space-y-3 mt-6">
               <Button
                 onClick={() => {

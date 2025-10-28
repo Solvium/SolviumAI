@@ -7,6 +7,16 @@ const TEST_PRIVATE_KEY =
   "ed25519:67GAt1YMsVXFwudpTca9qKme7RZUAKZ5FhY4PaVuBbVPMU2kMHiUXrXkdAXJn4rxiyFn8JDNCdBmeDWwNqJvYDSR";
 const TEST_ACCOUNT_ID = "ajemark0.testnet";
 
+// Logging helper for RPC usage
+const logRpcUsage = (context: string) => {
+  console.log(
+    `[useNearWallet] ${context} - Using Intea RPC via proxy: /api/wallet?action=near-rpc`
+  );
+  console.log(
+    `[useNearWallet] ${context} - Timestamp: ${new Date().toISOString()}`
+  );
+};
+
 export interface WalletState {
   isConnected: boolean;
   accountId: string;
@@ -71,13 +81,44 @@ export const useNearWallet = () => {
         const keyPair = KeyPair.fromString(keyToUse as any);
         await keyStore.setKey("testnet", accountToUse, keyPair);
 
-        const nearConnection = await connect({
-          networkId: "testnet",
-          keyStore,
-          nodeUrl: "/api/wallet?action=near-rpc",
-        });
+        logRpcUsage("Connecting wallet");
 
-        const account = await nearConnection.account(accountToUse);
+        // Add retry logic for rate limiting
+        let nearConnection;
+        let retryCount = 0;
+        const maxRetries = 3;
+
+        while (retryCount < maxRetries) {
+          try {
+            nearConnection = await connect({
+              networkId: "testnet",
+              keyStore,
+              nodeUrl: "/api/wallet?action=near-rpc",
+            });
+            break; // Success, exit retry loop
+          } catch (error: any) {
+            if (
+              error.message?.includes("429") ||
+              error.message?.includes("Rate limit")
+            ) {
+              retryCount++;
+              console.log(
+                `[useNearWallet] Rate limit hit, retry ${retryCount}/${maxRetries} in ${
+                  retryCount * 1000
+                }ms`
+              );
+              if (retryCount < maxRetries) {
+                await new Promise((resolve) =>
+                  setTimeout(resolve, retryCount * 1000)
+                );
+                continue;
+              }
+            }
+            throw error; // Re-throw if not a rate limit error or max retries reached
+          }
+        }
+
+        const account = await nearConnection!.account(accountToUse);
 
         // Get balance
         const balance = await account.getAccountBalance();
@@ -161,6 +202,7 @@ export const useNearWallet = () => {
         const keyPair = KeyPair.fromString(keyToUse as any);
         await keyStore.setKey("testnet", accountToUse, keyPair);
 
+        logRpcUsage("Making deposit");
         const nearConnection = await connect({
           networkId: "testnet",
           keyStore,
@@ -257,6 +299,7 @@ export const useNearWallet = () => {
         const keyPair = KeyPair.fromString(keyToUse as any);
         await keyStore.setKey("testnet", accountToUse, keyPair);
 
+        logRpcUsage("Fetching deposits");
         const nearConnection = await connect({
           networkId: "testnet",
           keyStore,
@@ -311,6 +354,7 @@ export const useNearWallet = () => {
         const keyPair = KeyPair.fromString(keyToUse as any);
         await keyStore.setKey("testnet", accountToUse, keyPair);
 
+        logRpcUsage("Getting balance");
         const nearConnection = await connect({
           networkId: "testnet",
           keyStore,
@@ -350,6 +394,7 @@ export const useNearWallet = () => {
         const keyPair = KeyPair.fromString(keyToUse as any);
         await keyStore.setKey("testnet", accountToUse, keyPair);
 
+        logRpcUsage("Transferring tokens");
         const nearConnection = await connect({
           networkId: "testnet",
           keyStore,

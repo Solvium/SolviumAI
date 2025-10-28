@@ -8,6 +8,7 @@ import { GameConfigProvider } from "@/contexts/GameConfigContext";
 import { GameProvider } from "@/contexts/GameContext";
 import { WalletPortfolioProvider } from "@/contexts/WalletPortfolioContext";
 import TelegramProvider from "@/components/providers/TelegramProvider";
+import { RefSDKInitializer } from "@/components/providers/RefSDKProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -24,19 +25,21 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.className} max-w-[630px] mx-auto`}>
-        <TelegramProvider>
-          <SimpleWalletProvider>
-            <AuthProvider>
-              <PrivateKeyWalletProvider>
-                <WalletPortfolioProvider>
-                  <GameConfigProvider>
-                    <GameProvider>{children}</GameProvider>
-                  </GameConfigProvider>
-                </WalletPortfolioProvider>
-              </PrivateKeyWalletProvider>
-            </AuthProvider>
-          </SimpleWalletProvider>
-        </TelegramProvider>
+        <RefSDKInitializer>
+          <TelegramProvider>
+            <SimpleWalletProvider>
+              <AuthProvider>
+                <PrivateKeyWalletProvider>
+                  <WalletPortfolioProvider>
+                    <GameConfigProvider>
+                      <GameProvider>{children}</GameProvider>
+                    </GameConfigProvider>
+                  </WalletPortfolioProvider>
+                </PrivateKeyWalletProvider>
+              </AuthProvider>
+            </SimpleWalletProvider>
+          </TelegramProvider>
+        </RefSDKInitializer>
       </body>
     </html>
   );

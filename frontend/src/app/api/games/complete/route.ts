@@ -83,65 +83,19 @@ export async function POST(req: NextRequest) {
     let totalGamesWon = 0;
 
     if (won && userId) {
-      const currentUser = await prisma.user.findUnique({
-        where: { id: parseInt(userId) },
-      });
-      totalGamesWon = (currentUser?.gamesWon || 0) + 1;
-
-      // Calculate new experience points after this game
-      const newExperiencePoints = (currentUser?.experience_points || 0) + 5;
-
-      // Get level configurations to calculate proper level
-      const levelConfigs = await prisma.levelConfig.findMany({
-        orderBy: { level: "asc" },
-      });
-
-      // Find the correct level based on experience points
-      expectedLevel = 1;
-      for (let i = levelConfigs.length - 1; i >= 0; i--) {
-        if (newExperiencePoints >= levelConfigs[i].points_required) {
-          expectedLevel = levelConfigs[i].level;
-          break;
-        }
-      }
-    }
-
-    // Save game result to the unified Game table
-    let gameResult;
-    try {
-      gameResult = await prisma.game.create({
-        data: {
-          userId: parseInt(userId),
-          gameType: gameType,
-          gameId: gameId || `daily_${Date.now()}`,
-          level: expectedLevel,
-          difficulty: String(difficulty || "easy"),
-          won,
-          score: score || 0,
-          completionTime: completionTime || 0,
-          hintUsed: hintUsed || false,
-          rewards: rewards || 0,
-          targetWord: metadata?.targetWord || metadata?.question || "",
-          metadata: metadata || {},
-          playedAt: new Date(),
-        },
-      });
-
-      console.log(`✅ Game result saved to database:`, gameResult.id);
-    } catch (error) {
-      console.error("Error saving game result:", error);
-      return NextResponse.json(
-        { error: "Failed to save game result" },
-        { status: 500 }
-      );
-    }
-
-    // Update user stats if game was won
-    if (won && userId) {
       // Get user data before update
       const userBefore = await prisma.user.findUnique({
         where: { id: parseInt(userId) },
-        include: {
+        select: {
+          id: true,
+          username: true,
+          chatId: true,
+          totalSOLV: true,
+          gamesPlayed: true,
+          gamesWon: true,
+          level: true,
+          difficulty: true,
+          wallet: true,
           games: {
             orderBy: { playedAt: "desc" },
             take: 5,
@@ -149,9 +103,40 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // Try to resolve NEAR accountId for multiplier (server-only)
+      let resolvedAccountId: string | undefined = undefined;
+      try {
+        const walletJson = (userBefore?.wallet || {}) as any;
+        resolvedAccountId =
+          walletJson?.account_id || walletJson?.accountId || walletJson?.near;
+      } catch {}
+
+      // Fallback: try wallet cache via telegram chatId
+      if (!resolvedAccountId && userBefore?.chatId) {
+        try {
+          const chatNumeric = parseInt(userBefore.chatId);
+          if (!Number.isNaN(chatNumeric)) {
+            const walletCache = await prisma.walletCache.findUnique({
+              where: { telegramUserId: chatNumeric },
+            });
+            resolvedAccountId = walletCache?.accountId || undefined;
+            console.log("🔎 WalletCache lookup:", {
+              chatId: userBefore.chatId,
+              found: Boolean(walletCache),
+              accountId: walletCache?.accountId || null,
+            });
+          }
+        } catch (e) {
+          console.log("⚠️ WalletCache lookup failed:", e);
+        }
+      }
+
       console.log("👤 User Data BEFORE Update:", {
         id: userBefore?.id,
         username: userBefore?.username,
+        chatId: userBefore?.chatId,
+        walletPreview: userBefore?.wallet ? "present" : "absent",
+        resolvedAccountId,
         totalSOLV: userBefore?.totalSOLV,
         gamesPlayed: userBefore?.gamesPlayed,
         gamesWon: userBefore?.gamesWon,
@@ -167,8 +152,19 @@ export async function POST(req: NextRequest) {
         (rewards || 0) - (hintUsed && hintCost ? hintCost : 0);
 
       // Apply multiplier to rewards
-      const pointCalculation = await calculatePointsWithMultiplier(baseRewards);
+      const candidateAccountId = resolvedAccountId;
+      console.log("🏁 Rewards BEFORE multiplier:", {
+        baseRewards,
+        hintUsed,
+        hintCost,
+        candidateAccountId,
+      });
+      const pointCalculation = await calculatePointsWithMultiplier(
+        baseRewards,
+        candidateAccountId
+      );
       const finalRewards = pointCalculation.totalPoints;
+      console.log("✅ Rewards AFTER multiplier:", pointCalculation);
 
       // Update user stats including level progression
       const updatedUser = await prisma.user.update({
@@ -306,8 +302,15 @@ export async function POST(req: NextRequest) {
         success: true,
         message: "Game completed successfully",
         gameResult: {
-          id: gameResult.id,
+          id: gameId || null,
           gameType: gameType,
+        },
+        pointCalculation: {
+          basePoints: baseRewards,
+          multiplier: pointCalculation.multiplier,
+          boostedPoints: pointCalculation.boostedPoints,
+          boostAmount: pointCalculation.boostAmount,
+          totalPoints: pointCalculation.totalPoints,
         },
         userUpdate: {
           levelUp: expectedLevel > (userBefore?.level || 1),
@@ -425,8 +428,15 @@ export async function POST(req: NextRequest) {
         success: true,
         message: "Game completed (lost)",
         gameResult: {
-          id: gameResult.id,
+          id: gameId || null,
           gameType: gameType,
+        },
+        pointCalculation: {
+          basePoints: lossSolv,
+          multiplier: 1,
+          boostedPoints: lossSolv,
+          boostAmount: 0,
+          totalPoints: lossSolv,
         },
         userUpdate: {
           levelUp: false,
@@ -442,8 +452,15 @@ export async function POST(req: NextRequest) {
       success: true,
       message: "Game completed (no user data)",
       gameResult: {
-        id: gameResult.id,
+        id: gameId || null,
         gameType: gameType,
+      },
+      pointCalculation: {
+        basePoints: 0,
+        multiplier: 1,
+        boostedPoints: 0,
+        boostAmount: 0,
+        totalPoints: 0,
       },
     });
   } catch (error) {

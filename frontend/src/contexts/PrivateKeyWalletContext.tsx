@@ -95,6 +95,42 @@ export const PrivateKeyWalletProvider = ({
 
   const { user } = useAuth();
 
+  // Auto-sync connected NEAR accountId to backend once per accountId
+  useEffect(() => {
+    const syncIfNeeded = async () => {
+      if (!accountId) return;
+      if (!user?.id) return; // require authenticated user
+      const flagKey = `wallet_synced:${accountId}`;
+      if (typeof window !== "undefined" && localStorage.getItem(flagKey)) {
+        return; // already synced
+      }
+      try {
+        console.log(
+          "[WalletSync] Attempting to sync wallet accountId:",
+          accountId
+        );
+        const res = await fetch("/api/user/wallet-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accountId }),
+        });
+        if (res.ok) {
+          if (typeof window !== "undefined") {
+            localStorage.setItem(flagKey, "1");
+            localStorage.setItem("near_account_id", accountId);
+          }
+          console.log("[WalletSync] Wallet synced successfully");
+        } else {
+          const txt = await res.text();
+          console.warn("[WalletSync] Sync failed:", res.status, txt);
+        }
+      } catch (e) {
+        console.warn("[WalletSync] Sync error:", e);
+      }
+    };
+    syncIfNeeded();
+  }, [accountId, user?.id]);
+
   // Auto-connect when user data is available
   useEffect(() => {
     if (!isConnected) {
@@ -386,39 +422,35 @@ export const PrivateKeyWalletProvider = ({
         throw new Error("No actions provided");
       }
 
-      // Handle multiple actions by creating a transaction with all actions
-      if (actions.length === 1) {
-        const action = actions[0];
+      console.log(`Executing ${actions.length} action(s) on ${receiverId}`);
+
+      // Execute each FunctionCall action sequentially using account.functionCall
+      // Return the result of the last action
+      let lastResult: any = null;
+      for (const action of actions) {
         if (action.type !== "FunctionCall") {
           throw new Error("Unsupported action type");
         }
-        console.log(
-          `Executing single action: ${action.params.methodName} on ${receiverId}`
-        );
-        return (account as any).functionCall({
+        const methodName = action.params.methodName;
+        const args = action.params.args || {};
+        // Normalize gas/deposit to BigInt-compatible strings
+        const gasStr = action.params.gas || "300000000000000";
+        const depositStr = action.params.deposit || "0";
+
+        // Convert to BigInt; accept numeric-like strings
+        const gas = BigInt(gasStr);
+        const attachedDeposit = BigInt(depositStr);
+
+        lastResult = await (account as any).functionCall({
           contractId: receiverId,
-          methodName: action.params.methodName,
-          args: action.params.args || {},
-          gas: action.params.gas,
-          attachedDeposit: action.params.deposit,
+          methodName,
+          args,
+          gas,
+          attachedDeposit,
         });
-      } else {
-        // Handle multiple actions using batch transactions
-        console.log(`Executing ${actions.length} actions on ${receiverId}`);
-        const transaction = (account as any).createTransaction({
-          receiverId: receiverId,
-          actions: actions.map((action: any) => ({
-            type: "FunctionCall",
-            params: {
-              methodName: action.params.methodName,
-              args: action.params.args || {},
-              gas: action.params.gas,
-              attachedDeposit: action.params.deposit,
-            },
-          })),
-        });
-        return await transaction.signAndSend();
       }
+
+      return lastResult;
     },
     checkTokenRegistration: async (tokenId: string) => {
       if (!account) throw new Error("NEAR account not initialized");

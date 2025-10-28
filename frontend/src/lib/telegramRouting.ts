@@ -171,14 +171,29 @@ export function getUrlParams(): URLSearchParams {
 
   // Telegram Mini Apps can receive start_param from the bot
   if (tg?.initDataUnsafe?.start_param) {
-    // Parse start_param as URL parameters
-    const startParams = new URLSearchParams(tg.initDataUnsafe.start_param);
-    // Merge with existing URL params
-    startParams.forEach((value, key) => {
-      if (!urlParams.has(key)) {
-        urlParams.set(key, value);
-      }
-    });
+    const rawStartParam = tg.initDataUnsafe.start_param;
+
+    // Support compact formats like "game-wordle" or "game_wordle"
+    // Also support just the game id like "wordle"
+    const compactMatch = rawStartParam.match(/^game[-_]([a-z0-9-]+)$/i);
+    if (compactMatch && compactMatch[1]) {
+      const gameId = compactMatch[1].toLowerCase();
+      // Normalize underscores to dashes for consistency with our routes
+      const normalizedGameId = gameId.replace(/_/g, "-");
+      urlParams.set("route", `/game/${normalizedGameId}`);
+    } else if (/^[a-z0-9-]+$/i.test(rawStartParam)) {
+      // Plain game id provided (e.g., "wordle")
+      const normalizedGameId = rawStartParam.toLowerCase().replace(/_/g, "-");
+      urlParams.set("route", `/game/${normalizedGameId}`);
+    } else {
+      // Fallback: try to parse as URL parameters (e.g., "route=/game/wordle")
+      const startParams = new URLSearchParams(rawStartParam);
+      startParams.forEach((value, key) => {
+        if (!urlParams.has(key)) {
+          urlParams.set(key, value);
+        }
+      });
+    }
   }
 
   return urlParams;
@@ -280,6 +295,7 @@ export function generateGameShareLink(
   botUsername: string
 ): string {
   const baseUrl = `https://t.me/${botUsername}`;
-  const startParam = `route=/game/${gameId}`;
-  return `${baseUrl}?startapp=${encodeURIComponent(startParam)}`;
+  // Use compact Telegram startapp format (e.g., startapp=game-wordle)
+  const compact = `game-${gameId}`;
+  return `${baseUrl}?startapp=${encodeURIComponent(compact)}`;
 }

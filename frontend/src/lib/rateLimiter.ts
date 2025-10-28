@@ -54,33 +54,33 @@ class RateLimiter {
 }
 
 // Global rate limiter instances
-export const nearblocksRateLimiter = new RateLimiter(6, 60 * 1000); // 6 calls per minute
+export const nearblocksRateLimiter = new RateLimiter(10, 60 * 1000); // 10 calls per minute (increased from 6)
 export const rpcRateLimiter = new RateLimiter(3, 60 * 1000); // 3 calls per minute (more conservative)
 
-// Helper function to check if we can make a Nearblocks request
+// Helper function to check if we can make a Nearblocks request - DISABLED
 export function canMakeNearblocksRequest(): boolean {
-  return nearblocksRateLimiter.canMakeRequest("nearblocks-api");
+  return true; // Always allow
 }
 
-// Helper function to get time until next request is allowed
+// Helper function to get time until next request is allowed - DISABLED
 export function getTimeUntilNextNearblocksRequest(): number {
-  return nearblocksRateLimiter.getTimeUntilReset("nearblocks-api");
+  return 0; // No wait time
 }
 
-// Helper function to get remaining requests in current window
+// Helper function to get remaining requests in current window - DISABLED
 export function getRemainingNearblocksRequests(): number {
-  return nearblocksRateLimiter.getRemainingRequests("nearblocks-api");
+  return 999; // Always show as available
 }
 
-// RPC Rate Limiting Functions
+// RPC Rate Limiting Functions - DISABLED
 export function canMakeRpcRequest(): boolean {
-  return rpcRateLimiter.canMakeRequest("near-rpc");
+  return true; // Always allow
 }
 
 export function getTimeUntilNextRpcRequest(): number {
-  return rpcRateLimiter.getTimeUntilReset("near-rpc");
+  return 0; // No wait time
 }
 
 export function getRemainingRpcRequests(): number {
-  return rpcRateLimiter.getRemainingRequests("near-rpc");
+  return 999; // Always show as available
 }

@@ -8,9 +8,6 @@ import {
   canMakeNearblocksRequest,
   getTimeUntilNextNearblocksRequest,
   getRemainingNearblocksRequests,
-  canMakeRpcRequest,
-  getTimeUntilNextRpcRequest,
-  getRemainingRpcRequests,
 } from "@/lib/rateLimiter";
 
 // Price API base
@@ -20,14 +17,19 @@ const DEXSCREENER_TOKEN_BASE = "https://api.dexscreener.com/latest/dex/tokens";
 const NEARBLOCKS_BASE_URL = "https://api.nearblocks.io";
 const FASTNEAR_BASE_URL = "https://api.fastnear.com";
 
-// FastNear API Key
-const FASTNEAR_API_KEY = "TEMP648WSeY9y1XDyiAHL2KMbZxxnn3Tq4Dxggdd3eGniSy2";
+// Intea RPC API Key
+const INTEA_API_KEY =
+  process.env.INTEA_API_KEY ||
+  "TEMP648WSeY9y1XDyiAHL2KMbZxxnn3Tq4Dxggdd3eGniSy2";
 
-// NEAR RPC URLs using Intea RPC
+// NEAR RPC URLs using Intea RPC only
 const RPC_URLS: Record<string, string> = {
   mainnet: "https://rpc.intea.rs",
   testnet: "https://rpc.intea.rs",
 };
+
+// Request counter for debugging
+let requestCount = 0;
 
 // Helper function to get authenticated user from session
 async function getAuthenticatedUser() {
@@ -172,32 +174,17 @@ export async function GET(req: NextRequest) {
 
     // Handle nearblocks account info
     if (action === "nearblocks-info" && account) {
-      // Check rate limit
-      if (!canMakeNearblocksRequest()) {
-        const timeUntilReset = getTimeUntilNextNearblocksRequest();
-        const remaining = getRemainingNearblocksRequests();
-        console.log(
-          `[nearblocks-info] Rate limited. Remaining: ${remaining}, Reset in: ${Math.ceil(
-            timeUntilReset / 1000
-          )}s`
-        );
-
-        return NextResponse.json(
-          {
-            error: "Rate limit exceeded",
-            message: `Too many requests. Try again in ${Math.ceil(
-              timeUntilReset / 1000
-            )} seconds.`,
-            remaining,
-            resetIn: Math.ceil(timeUntilReset / 1000),
-          },
-          { status: 429 }
-        );
-      }
+      // Rate limiting disabled - always allow requests
 
       const headers: Record<string, string> = { Accept: "application/json" };
       const apiKey = "FBF3C110E7A844FA84ADC1DA823C6484"; // Provided API key
       if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+
+      console.log(
+        `[nearblocks-info] Making request to NearBlocks API for account: ${account}`
+      );
+      console.log(`[nearblocks-info] Using API key: ${apiKey ? "Yes" : "No"}`);
+      console.log(`[nearblocks-info] Headers:`, headers);
 
       const upstream = await fetch(
         `${NEARBLOCKS_BASE_URL}/v1/account/${encodeURIComponent(account)}`,
@@ -207,8 +194,10 @@ export async function GET(req: NextRequest) {
           cache: "no-store",
         }
       );
+
       const bodyText = await upstream.text();
       const remaining = getRemainingNearblocksRequests();
+
       console.log(
         "[nearblocks-info] account=",
         account,
@@ -219,6 +208,17 @@ export async function GET(req: NextRequest) {
         "remaining=",
         remaining
       );
+
+      // Log response headers for debugging
+      console.log(
+        `[nearblocks-info] Response headers:`,
+        Object.fromEntries(upstream.headers.entries())
+      );
+
+      // If 429, log the response body
+      if (upstream.status === 429) {
+        console.error(`[nearblocks-info] 429 Response body:`, bodyText);
+      }
       return new Response(bodyText, {
         status: upstream.status,
         headers: {
@@ -243,28 +243,7 @@ export async function GET(req: NextRequest) {
 
     // Handle nearblocks account transactions
     if (action === "nearblocks-txns" && account) {
-      // Check rate limit
-      if (!canMakeNearblocksRequest()) {
-        const timeUntilReset = getTimeUntilNextNearblocksRequest();
-        const remaining = getRemainingNearblocksRequests();
-        console.log(
-          `[nearblocks-txns] Rate limited. Remaining: ${remaining}, Reset in: ${Math.ceil(
-            timeUntilReset / 1000
-          )}s`
-        );
-
-        return NextResponse.json(
-          {
-            error: "Rate limit exceeded",
-            message: `Too many requests. Try again in ${Math.ceil(
-              timeUntilReset / 1000
-            )} seconds.`,
-            remaining,
-            resetIn: Math.ceil(timeUntilReset / 1000),
-          },
-          { status: 429 }
-        );
-      }
+      // Rate limiting disabled - always allow requests
 
       const headers: Record<string, string> = { Accept: "application/json" };
       const apiKey = "FBF3C110E7A844FA84ADC1DA823C6484"; // Provided API key
@@ -315,22 +294,7 @@ export async function GET(req: NextRequest) {
 
     // Handle nearblocks account inventory (tokens/NFTs)
     if (action === "nearblocks-inventory" && account) {
-      // Rate limit shared with Nearblocks requests
-      if (!canMakeNearblocksRequest()) {
-        const timeUntilReset = getTimeUntilNextNearblocksRequest();
-        const remaining = getRemainingNearblocksRequests();
-        return NextResponse.json(
-          {
-            error: "Rate limit exceeded",
-            message: `Too many requests. Try again in ${Math.ceil(
-              timeUntilReset / 1000
-            )} seconds.`,
-            remaining,
-            resetIn: Math.ceil(timeUntilReset / 1000),
-          },
-          { status: 429 }
-        );
-      }
+      // Rate limiting disabled - always allow requests
 
       const headers: Record<string, string> = { Accept: "application/json" };
       const apiKey =
@@ -500,31 +464,109 @@ export async function POST(req: NextRequest) {
 
     // Handle near-rpc proxy
     if (action === "near-rpc") {
-      // Local RPC rate limiting removed per FastNear usage
-
       const network =
         searchParams.get("network") ||
         process.env.NEXT_PUBLIC_NEAR_NETWORK_ID ||
         "mainnet";
       const target = RPC_URLS[network.toLowerCase()] || RPC_URLS.mainnet;
 
+      // Increment request counter
+      requestCount++;
+
+      // Log RPC usage
+      console.log(
+        `[RPC] Request #${requestCount} - Using Intea RPC endpoint: ${target} for network: ${network}`
+      );
+      console.log(`[RPC] API Key configured: ${INTEA_API_KEY ? "Yes" : "No"}`);
+      console.log(
+        `[RPC] API Key length: ${INTEA_API_KEY ? INTEA_API_KEY.length : 0}`
+      );
+      console.log(
+        `[RPC] API Key prefix: ${
+          INTEA_API_KEY ? INTEA_API_KEY.substring(0, 8) + "..." : "None"
+        }`
+      );
+
       const body = await req.text();
 
+      // Parse and log the RPC method being called
       try {
-        const upstream = await fetch(target, {
+        const rpcRequest = JSON.parse(body);
+        console.log(`[RPC] Method: ${rpcRequest.method || "unknown"}`);
+        console.log(`[RPC] Request ID: ${rpcRequest.id || "unknown"}`);
+        if (rpcRequest.params) {
+          console.log(
+            `[RPC] Params:`,
+            JSON.stringify(rpcRequest.params, null, 2)
+          );
+        }
+      } catch (e) {
+        console.log(
+          `[RPC] Could not parse request body:`,
+          body.substring(0, 200)
+        );
+      }
+
+      try {
+        // Try with Bearer token first
+        console.log(`[RPC] Trying with Bearer token authentication`);
+
+        let upstream = await fetch(target, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
-            Authorization: `Bearer ${FASTNEAR_API_KEY}`,
+            Authorization: `Bearer ${INTEA_API_KEY}`,
           },
           body,
           cache: "no-store",
         });
 
-        // Local RPC rate limiting removed; no remaining counter
+        // If 401/403, try without authentication
+        if (upstream.status === 401 || upstream.status === 403) {
+          console.log(
+            `[RPC] Bearer token failed (${upstream.status}), trying without authentication`
+          );
+          upstream = await fetch(target, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body,
+            cache: "no-store",
+          });
+        }
 
-        return new Response(await upstream.text(), {
+        console.log(`[RPC] Response status: ${upstream.status} from ${target}`);
+
+        // Handle rate limiting specifically
+        if (upstream.status === 429) {
+          console.error(`[RPC] Rate limit exceeded (429) for ${target}`);
+          console.error(
+            `[RPC] Response headers:`,
+            Object.fromEntries(upstream.headers.entries())
+          );
+
+          // Log the response body to see what the RPC provider says
+          const responseText = await upstream.text();
+          console.error(`[RPC] 429 Response body:`, responseText);
+
+          return NextResponse.json(
+            {
+              error: "Rate limit exceeded",
+              message:
+                "Too many requests to RPC endpoint. Please try again later.",
+              status: 429,
+            },
+            { status: 429 }
+          );
+        }
+
+        const responseText = await upstream.text();
+        console.log(`[RPC] Response length: ${responseText.length} characters`);
+
+        return new Response(responseText, {
           status: upstream.status,
           headers: {
             "Content-Type":
@@ -532,7 +574,7 @@ export async function POST(req: NextRequest) {
           },
         });
       } catch (error) {
-        console.error("RPC proxy error:", error);
+        console.error(`[RPC] Proxy error for ${target}:`, error);
         return NextResponse.json(
           { error: "RPC proxy failed" },
           { status: 502 }

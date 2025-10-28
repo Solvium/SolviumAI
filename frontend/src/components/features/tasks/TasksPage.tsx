@@ -158,17 +158,21 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
     );
   }, [currentMultiplier]);
 
-  // Calculate multiplier for the typed amount using contract multiplier
-  const calculateMultiplierForAmount = (amount: string) => {
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) return 1;
-
-    // Calculate multiplier: contract multiplier * deposit amount
-    // This works for any amount, including decimals
-    return currentMultiplier * numAmount; // contract multiplier * deposit amount
+  // Calculate multiplier based on total active deposits and active contract multiplier
+  const calculateMultiplierForAmount = (_amount: string) => {
+    try {
+      const totalDepositsYocto = userDepositSummary?.totalDeposits;
+      if (!totalDepositsYocto) return 1;
+      const totalActiveNear = parseFloat(totalDepositsYocto) / 1e24;
+      if (!isFinite(totalActiveNear) || totalActiveNear <= 0) return 1;
+      const effective = currentMultiplier * totalActiveNear;
+      return effective > 0 ? effective : 1;
+    } catch {
+      return 1;
+    }
   };
 
-  // Get the calculated multiplier for the current input
+  // Get the calculated multiplier using active totals
   const calculatedMultiplier = calculateMultiplierForAmount(nearAmount);
 
   const fetchTasks = async () => {

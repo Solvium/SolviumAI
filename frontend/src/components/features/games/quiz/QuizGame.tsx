@@ -125,7 +125,11 @@ const QuizGame: React.FC<QuizGameProps> = ({
 
         // Use the validation result directly
         if (result.isCorrect) {
-          const earned = result.points || quizState.currentQuiz?.points || 10;
+          const base = result.points || quizState.currentQuiz?.points || 10;
+          const multiplier = Number(user?.multiplier || 1);
+          const earned = Math.round(
+            base * (isFinite(multiplier) ? multiplier : 1)
+          );
           setPointsEarned(earned);
           setScore((prev) => prev + earned);
           setUserCoins((prev) => prev + earned);
