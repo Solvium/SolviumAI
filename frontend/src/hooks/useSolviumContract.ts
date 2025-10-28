@@ -366,7 +366,25 @@ export const useSolviumContract = () => {
           totalAmount,
         } = filterActiveDeposits(result.data.deposits);
 
-        // Update the result with filtered data
+        // Fetch active contract multiplier factor for this account (if available)
+        let contractMultiplierFactor = 1;
+        try {
+          const multiplierRes = await handleViewCall(
+            "getMultiplierFactor",
+            accountId ? { accountId } : {}
+          );
+          if (multiplierRes.success && multiplierRes.data) {
+            contractMultiplierFactor = Number(multiplierRes.data) || 1;
+          }
+        } catch {
+          // default to 1 if fetch fails
+          contractMultiplierFactor = 1;
+        }
+
+        // Effective multiplier = total active deposits (NEAR) * contract multiplier factor
+        const effectiveMultiplier = totalAmount * contractMultiplierFactor;
+
+        // Update the result with filtered data and effective multiplier
         result.data = {
           ...result.data,
           deposits: activeDeposits.reduce((acc, deposit, index) => {
@@ -374,7 +392,7 @@ export const useSolviumContract = () => {
             return acc;
           }, {} as any),
           totalDeposits: totalActiveDeposits,
-          multiplierFactor: averageMultiplier,
+          multiplierFactor: effectiveMultiplier,
           lastDepositId:
             activeDeposits.length > 0
               ? Math.max(...activeDeposits.map((d) => d.id))
@@ -386,8 +404,10 @@ export const useSolviumContract = () => {
           activeDeposits.length,
           "Total Amount:",
           totalAmount,
-          "Avg Multiplier:",
-          averageMultiplier
+          "Contract Multiplier:",
+          contractMultiplierFactor,
+          "Effective Multiplier:",
+          effectiveMultiplier
         );
       }
 

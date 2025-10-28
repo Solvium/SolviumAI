@@ -123,7 +123,13 @@ const CountdownTimer = ({ targetTime }: { targetTime: Date }) => {
 };
 
 export const WheelOfFortune = () => {
-  const { user, logActivity, claimPoints } = useAuth();
+  const {
+    user,
+    logActivity,
+    claimPoints,
+    updateUserProfile,
+    fetchUserProfile,
+  } = useAuth() as any;
   const {
     isConnected: nearConnected,
     accountId: nearAddress,
@@ -147,6 +153,9 @@ export const WheelOfFortune = () => {
     prizeNumber: number;
   } | null>(null);
 
+  // Lock spin button immediately on click to prevent double-submits
+  const [isSpinLocked, setIsSpinLocked] = useState(false);
+
   // Contract-based spin tracking
   const [contractSpinsAvailable, setContractSpinsAvailable] =
     useState<number>(0);
@@ -163,47 +172,56 @@ export const WheelOfFortune = () => {
   // Control showing the reward modal (allow closing)
   const [showWin, setShowWin] = useState(true);
 
+  // Keep track of the wheel's absolute rotation angle so it doesn't snap back
+  const [wheelAngle, setWheelAngle] = useState(0);
+
+  // Loading states for initial render
+  const [isWheelImageLoaded, setIsWheelImageLoaded] = useState(false);
+  const [hasFetchedSpinsOnce, setHasFetchedSpinsOnce] = useState(
+    () => !nearConnected
+  );
+
+  // Wheel data - 8 segments, clockwise from the top to match visual
   const data = [
-    {
-      option: "30",
-      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
-    },
-    {
-      option: "70",
-      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
-    },
     {
       option: "100",
       style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
-    },
+    }, // top
     {
-      option: "200",
+      option: "30",
       style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
-    },
-    {
-      option: "300",
-      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
-    },
+    }, // top-left
     {
       option: "400",
       style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
-    },
+    }, // left
     {
       option: "500",
       style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
-    },
+    }, // bottom-left
     {
-      option: "1000",
+      option: "200",
       style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
-    },
+    }, // bottom
+
     {
       option: "2000",
       style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
-    },
+    }, // bottom-right
+
+    {
+      option: "1000",
+      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
+    }, // right
+    {
+      option: "200",
+      style: { fontSize: 18, fontWeight: "900", color: "#FFFFFF" },
+    }, // top-right
   ];
 
-  // Weighted probabilities for 9 slices (higher prizes are rarer)
-  const prizeWeights = [24, 20, 18, 14, 9, 6, 4, 3, 2]; // corresponds to data indices
+  // Weighted probabilities for 8 slices (higher prizes are rarer)
+  // Index order corresponds to the data array above
+  const prizeWeights = [16, 14, 10, 4, 12, 8, 6, 30];
 
   const pickWeightedIndex = (weights: number[]) => {
     const total = weights.reduce((a, b) => a + b, 0);
@@ -234,6 +252,7 @@ export const WheelOfFortune = () => {
       setContractSpinsAvailable(0);
     } finally {
       setIsLoadingSpins(false);
+      setHasFetchedSpinsOnce(true);
     }
   };
 
@@ -242,7 +261,10 @@ export const WheelOfFortune = () => {
 
     // Fetch contract spins when wallet connects
     if (nearConnected && nearAddress) {
+      setHasFetchedSpinsOnce(false);
       fetchContractSpins();
+    } else {
+      setHasFetchedSpinsOnce(true);
     }
 
     const unclaimedPrize = localStorage.getItem("unclaimedPrize");
@@ -321,69 +343,39 @@ export const WheelOfFortune = () => {
         console.log("Storage deposit found:", storageBalance);
       }
 
-      // Check if user has deposits in the main contract
-      console.log("Checking deposits in main contract...");
-      if (!nearAccount) {
-        throw new Error("NEAR account not available");
-      }
-
+      // Check deposits using the same summary used on Tasks page
+      console.log("Checking deposits via getUserDepositSummary...");
       let hasDeposits = false;
       try {
-        const depositsResult = await nearAccount.viewFunction({
-          contractId: CONTRACTID!,
-          methodName: "getUserDepositSummary",
-          args: { accountId: nearAddress },
-        });
-        console.log("Deposits result:", depositsResult);
-        hasDeposits =
-          Array.isArray(depositsResult) && depositsResult.length > 0;
-        console.log("Deposits found:", depositsResult);
-      } catch (error) {
-        console.log("Error checking deposits, trying alternative method...");
-        try {
-          const depositsResult = await nearAccount.viewFunction({
-            contractId: CONTRACTID!,
-            methodName: "getUserDepositSummary",
-            args: { account_id: nearAddress },
-          });
-          hasDeposits =
-            Array.isArray(depositsResult) && depositsResult.length > 0;
-          console.log("Deposits found (alternative):", depositsResult);
-        } catch (altError) {
-          console.log("No deposits found, will make a small deposit");
+        const summaryRes = await getUserDepositSummary(nearAddress);
+        if (summaryRes?.success && summaryRes.data) {
+          const total = String(summaryRes.data.totalDeposits || "0");
+          try {
+            hasDeposits = BigInt(total) > 0n;
+          } catch {
+            hasDeposits = Number(total) > 0;
+          }
+        } else {
           hasDeposits = false;
         }
+        console.log("Deposit summary:", summaryRes);
+      } catch (e) {
+        console.log("Failed to fetch deposit summary:", e);
+        hasDeposits = false;
       }
 
       if (!hasDeposits) {
         console.log(
-          "No deposits found in main contract, making small deposit..."
+          "No deposits found in main contract. Informing user to deposit before claim."
         );
-        toast.info("Making small deposit to enable claiming...", {
-          autoClose: 2000,
-        });
-
-        // Make a small deposit to the main contract (0.01 NEAR)
-        const depositTx = await signAndSendTransaction(CONTRACTID!, [
-          {
-            type: "FunctionCall",
-            params: {
-              methodName: "depositToGame",
-              args: {},
-              gas: "300000000000000",
-              deposit: "300000000000000000000000", // 0.01 NEAR
-            },
-          },
-        ]);
-
-        await depositTx;
-        console.log("Main contract deposit completed");
-        toast.success("Deposit completed! You can now claim rewards.", {
-          autoClose: 3000,
-        });
-      } else {
-        console.log("Deposits found in main contract");
+        toast.error(
+          "No active game deposit found. Please deposit to the game before claiming.",
+          { autoClose: 3000 }
+        );
+        onError?.(new Error("No active game deposit"));
+        return;
       }
+      console.log("Deposits found in main contract");
 
       console.log("Proceeding with claim after all deposits...");
 
@@ -436,16 +428,29 @@ export const WheelOfFortune = () => {
   const handleSpinClick = async () => {
     const now = Date.now();
 
+    if (isSpinLocked) return;
+    setIsSpinLocked(true);
+
     if (!nearConnected) {
       toast.error("Please connect your NEAR wallet to continue!");
+      setIsSpinLocked(false);
       return;
     }
 
     if (isSpinning) return; // Prevent multiple spins
 
+    // Block spinning if there is an unclaimed prize
+    if ((wonPrize && !isClaimed) || (unclaimed && !isClaimed)) {
+      toast.info("Please claim your current reward before spinning again.");
+      setShowWin(true);
+      setIsSpinLocked(false);
+      return;
+    }
+
     // Check if user has spins available from contract
     if (contractSpinsAvailable <= 0) {
       toast.error("No spins available! Purchase spins or deposit to get more.");
+      setIsSpinLocked(false);
       return;
     }
 
@@ -456,9 +461,16 @@ export const WheelOfFortune = () => {
         try {
           const res = await getAllUserDeposits(nearAddress);
           console.log("getAllUserDeposits (hook) raw:", res);
-          const list = (res as any)?.data;
-          if (Array.isArray(list) && list.length > 0) hasDeposits = true;
-        } catch {}
+          if (res.success && res.data) {
+            // Check if there are any deposits in the object
+            const depositKeys = Object.keys(res.data);
+            hasDeposits = depositKeys.length > 0;
+            console.log("Deposit keys found:", depositKeys.length);
+          }
+        } catch (error) {
+          console.error("Error checking deposits via hook:", error);
+        }
+
         if (!hasDeposits && nearAccount) {
           try {
             const alt = await nearAccount.viewFunction({
@@ -467,17 +479,25 @@ export const WheelOfFortune = () => {
               args: { accountId: nearAddress },
             });
             console.log("getAllUserDeposits (direct view) raw:", alt);
-            if (Array.isArray(alt) && alt.length > 0) hasDeposits = true;
-          } catch {}
+            if (alt && typeof alt === "object") {
+              const depositKeys = Object.keys(alt);
+              hasDeposits = depositKeys.length > 0;
+            }
+          } catch (error) {
+            console.error("Error checking deposits via direct view:", error);
+          }
         }
       }
 
       if (!hasDeposits) {
         toast.info("No game deposit found. Please deposit to play the wheel.");
+        setIsSpinLocked(false);
         return;
       }
-    } catch {
+    } catch (error) {
+      console.error("Error verifying game deposit:", error);
       toast.error("Unable to verify game deposit. Please try again later.");
+      setIsSpinLocked(false);
       return;
     }
 
@@ -511,9 +531,27 @@ export const WheelOfFortune = () => {
 
     setPrizeNumber(newPrizeNumber);
     setWonPrize(selectedPrize);
+
+    // Resolve selected prize to wheel angle and animate to that angle
+    const totalSlices = data.length; // 8
+    const segmentAngle = 360 / totalSlices; // 45° per slice
+    const current = ((wheelAngle % 360) + 360) % 360; // normalize 0..359
+    const targetBase = newPrizeNumber * segmentAngle; // pointer at top
+    let delta = targetBase - current;
+    if (delta < 0) delta += 360; // move forward to next target
+    const extraSpins = 1440; // 4 full rotations for animation
+    const targetAngle = wheelAngle + extraSpins + delta;
+
+    // Set spinning state first, then update angle to trigger animation
     setIsSpinning(true);
-    setMustSpin(true);
+    // Once spinning, the button will remain disabled via isSpinning
+    setIsSpinLocked(false);
     spinningSound.play();
+
+    // Use requestAnimationFrame to ensure the spinning state is set before angle update
+    requestAnimationFrame(() => {
+      setWheelAngle(targetAngle);
+    });
     setLastPlayed(now);
     setCooldownTime(new Date(now + 24 * 60 * 60 * 1000));
     localStorage.setItem("lastPlayedTime", now.toString());
@@ -526,6 +564,13 @@ export const WheelOfFortune = () => {
       setWinner(selectedPrize); // Set the winner for claiming
       setHasPlayed(true); // Mark as played
       setShowWin(true);
+
+      // Persist unclaimed prize until claim completes
+      const prizeObj = { winner: selectedPrize, prizeNumber: newPrizeNumber };
+      setUnclaimed(prizeObj);
+      try {
+        localStorage.setItem("unclaimedPrize", JSON.stringify(prizeObj));
+      } catch {}
 
       // Refresh contract spins after spin completion
       await fetchContractSpins();
@@ -583,8 +628,11 @@ export const WheelOfFortune = () => {
           setIsClaimed(true);
           localStorage.setItem("lastClaimed", Date.now().toString());
           localStorage.removeItem("unclaimedPrize");
-          setIsClaimLoading(false);
+          setWonPrize(null);
           setUnclaimed(null);
+          setIsClaimLoading(false);
+          // Refresh spins after successful claim
+          void fetchContractSpins();
         },
         onError: (error) => {
           console.error("Claim failed:", error);
@@ -606,7 +654,9 @@ export const WheelOfFortune = () => {
         toast.error("Connect wallet first");
         return;
       }
-      await signAndSendTransaction(CONTRACTID!, [
+
+      console.log("Purchasing spin with NEAR...");
+      const result = await signAndSendTransaction(CONTRACTID!, [
         {
           type: "FunctionCall",
           params: {
@@ -620,12 +670,17 @@ export const WheelOfFortune = () => {
           },
         },
       ]);
+
+      console.log("Spin purchase transaction result:", result);
       toast.success("Spin purchased with NEAR");
+
       // Refresh contract spins after purchase
       await fetchContractSpins();
     } catch (e) {
-      toast.error("Failed to buy spin with NEAR");
-      console.error(e);
+      console.error("Failed to buy spin with NEAR:", e);
+      const errorMessage =
+        e instanceof Error ? e.message : "Unknown error occurred";
+      toast.error(`Failed to buy spin with NEAR: ${errorMessage}`);
     }
   };
 
@@ -636,8 +691,30 @@ export const WheelOfFortune = () => {
         return;
       }
 
-      console.log("count", count);
-      await signAndSendTransaction(CONTRACTID!, [
+      console.log("Purchasing spin with points, count:", count);
+      const pointsCost = Number(count);
+      const balanceKey =
+        user && typeof (user as any).totalSOLV === "number"
+          ? "totalSOLV"
+          : "totalPoints";
+      const currentPoints = Number((user as any)?.[balanceKey] ?? 0);
+      if (!Number.isFinite(pointsCost) || pointsCost <= 0) {
+        toast.error("Invalid points amount");
+        return;
+      }
+      if (currentPoints < pointsCost) {
+        toast.error("Insufficient points");
+        return;
+      }
+      // Optimistic deduction
+      try {
+        await (updateUserProfile as any)?.({
+          [balanceKey]: currentPoints - pointsCost,
+        });
+      } catch (e) {
+        console.warn("Optimistic profile update failed:", e);
+      }
+      const result = await signAndSendTransaction(CONTRACTID!, [
         {
           type: "FunctionCall",
           params: {
@@ -648,15 +725,35 @@ export const WheelOfFortune = () => {
           },
         },
       ]);
+
+      console.log("Points spin purchase transaction result:", result);
       const spins = Math.max(1, Math.floor(Number(count) / 500));
       toast.success(
         `Purchased ${spins} spin${spins > 1 ? "s" : ""} with points`
       );
+
       // Refresh contract spins after purchase
       await fetchContractSpins();
+      await (fetchUserProfile as any)?.();
     } catch (e) {
-      toast.error("Failed to buy spin with points");
-      console.error(e);
+      console.error("Failed to buy spin with points:", e);
+      const errorMessage =
+        e instanceof Error ? e.message : "Unknown error occurred";
+      // Refund optimistic deduction
+      try {
+        const pointsCost = Number(count);
+        const balanceKey =
+          user && typeof (user as any).totalSOLV === "number"
+            ? "totalSOLV"
+            : "totalPoints";
+        const currentServer = Number((user as any)?.[balanceKey] ?? 0);
+        await (updateUserProfile as any)?.({
+          [balanceKey]: currentServer + pointsCost,
+        });
+      } catch (refundErr) {
+        console.warn("Failed to refund optimistic points:", refundErr);
+      }
+      toast.error(`Failed to buy spin with points: ${errorMessage}`);
     }
   };
 
@@ -729,14 +826,14 @@ export const WheelOfFortune = () => {
                   alt="Spin Wheel"
                   width={383}
                   height={377}
-                  className={`transition-transform duration-[4s] ease-out ${
-                    isSpinning ? "animate-wheel-spin" : ""
-                  }`}
+                  className=""
                   style={{
-                    transform: mustSpin
-                      ? `rotate(${prizeNumber * 40 + 1800}deg)` // 9 slices → 40° per slice
-                      : "rotate(0deg)",
+                    transform: `rotate(${wheelAngle}deg)`,
+                    transition: isSpinning
+                      ? "transform 4s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+                      : "none",
                   }}
+                  onLoad={() => setIsWheelImageLoaded(true)}
                   priority
                 />
               </div>
@@ -799,9 +896,19 @@ export const WheelOfFortune = () => {
           ) : (
             <button
               onClick={handleSpinClick}
-              disabled={isSpinning || isLoadingSpins}
+              disabled={
+                isSpinning ||
+                isLoadingSpins ||
+                isSpinLocked ||
+                (!!wonPrize && !isClaimed) ||
+                (!!unclaimed && !isClaimed)
+              }
               className={`w-[287px] h-20  flex items-center justify-center text-white font-bold transition-all duration-300 ${
-                isSpinning || isLoadingSpins
+                isSpinning ||
+                isLoadingSpins ||
+                isSpinLocked ||
+                (!!wonPrize && !isClaimed) ||
+                (!!unclaimed && !isClaimed)
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:scale-105"
               }`}
@@ -902,6 +1009,16 @@ export const WheelOfFortune = () => {
           </div>
         )}
       </div>
+
+      {/* Initial loading overlay */}
+      {(!isWheelImageLoaded || !hasFetchedSpinsOnce) && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+            <span className="text-white font-semibold">Loading wheel...</span>
+          </div>
+        </div>
+      )}
 
       <WinPopup
         isVisible={Boolean((winner || unclaimed) && !isClaimed && showWin)}

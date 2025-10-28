@@ -1,6 +1,8 @@
 import { useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGameConfig } from "@/contexts/GameConfigContext";
+import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
+import { toast } from "sonner";
 
 interface GameState {
   isLoading: boolean;
@@ -23,6 +25,7 @@ interface GameActions {
 export const useGame = (gameType: string) => {
   const { user, fetchUserProfile } = useAuth();
   const { config } = useGameConfig();
+  const { accountId: nearAccountId } = usePrivateKeyWallet();
 
   const [gameState, setGameState] = useState<GameState>({
     isLoading: false,
@@ -167,6 +170,11 @@ export const useGame = (gameType: string) => {
             completionTime: Math.round(completionTime / 1000), // Convert to seconds
             hintUsed: gameData.hintUsed || false,
             rewards: totalRewards,
+            nearAccountId:
+              nearAccountId ||
+              (typeof window !== "undefined"
+                ? localStorage.getItem("near_account_id") || undefined
+                : undefined),
             metadata: {
               ...gameData,
               completionTimeMs: completionTime,
@@ -180,6 +188,20 @@ export const useGame = (gameType: string) => {
         }
 
         const result = await response.json();
+
+        // Display total points and boost (from server-calculated pointCalculation)
+        try {
+          const pc = result?.pointCalculation;
+          const finalRewards = Number(
+            pc?.totalPoints ?? result?.userUpdate?.rewardsEarned ?? 0
+          );
+          const baseRewards = Number(pc?.basePoints ?? totalRewards);
+          const boost = Number(pc?.boostAmount ?? finalRewards - baseRewards);
+          if (Number.isFinite(finalRewards) && finalRewards > 0) {
+            const boostLabel = boost > 0 ? ` (+${boost} boost)` : "";
+            toast.success(`+${finalRewards} points${boostLabel}`);
+          }
+        } catch {}
 
         // Refresh user profile to get updated stats
         await fetchUserProfile();
@@ -201,6 +223,7 @@ export const useGame = (gameType: string) => {
       gameState.startTime,
       config,
       fetchUserProfile,
+      nearAccountId,
     ]
   );
 

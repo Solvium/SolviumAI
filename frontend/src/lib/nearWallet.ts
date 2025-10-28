@@ -6,8 +6,10 @@ const FILE_NAME = "nearWallet.ts";
 const BLOCKCHAIN_NET =
   (process.env.NEXT_PUBLIC_NEAR_NETWORK_ID as string) || "mainnet";
 
-// FastNear API Key
-const FASTNEAR_API_KEY = "TEMP648WSeY9y1XDyiAHL2KMbZxxnn3Tq4Dxggdd3eGniSy2";
+// Intea RPC API Key
+const INTEA_API_KEY =
+  process.env.INTEA_API_KEY ||
+  "TEMP648WSeY9y1XDyiAHL2KMbZxxnn3Tq4Dxggdd3eGniSy2";
 
 function getNetworkUrls(networkId: string) {
   if (networkId === "testnet") {
@@ -81,6 +83,14 @@ export const initializeNearWithPrivateKey = async (
   accountId: string
 ) => {
   try {
+    console.log(
+      `[NEAR Wallet] Initializing connection for account: ${accountId}`
+    );
+    console.log(`[NEAR Wallet] Using network: ${BLOCKCHAIN_NET}`);
+    console.log(
+      `[NEAR Wallet] Intea API Key configured: ${INTEA_API_KEY ? "Yes" : "No"}`
+    );
+
     const keyStore = new PrivateKeyStore(privateKey, accountId);
 
     // Route RPC via local proxy to avoid CSP
@@ -88,6 +98,10 @@ export const initializeNearWithPrivateKey = async (
     const proxiedRpc = `/api/wallet?action=near-rpc&network=${encodeURIComponent(
       BLOCKCHAIN_NET
     )}`;
+
+    console.log(`[NEAR Wallet] RPC Proxy URL: ${proxiedRpc}`);
+    console.log(`[NEAR Wallet] Direct RPC URL: ${urls.nodeUrl}`);
+
     const near = await connect({
       networkId: BLOCKCHAIN_NET,
       keyStore,
@@ -98,12 +112,17 @@ export const initializeNearWithPrivateKey = async (
 
     const account = new Account(near.connection, accountId);
 
+    console.log(
+      `[NEAR Wallet] Successfully connected to account: ${accountId}`
+    );
+
     return {
       near,
       account,
       accountId,
     };
   } catch (error) {
+    console.error(`[NEAR Wallet] Failed to initialize connection:`, error);
     throw error;
   }
 };
@@ -176,6 +195,11 @@ export const verifyAccountExists = async (
   accountId: string
 ): Promise<boolean> => {
   try {
+    console.log(
+      `[Account Verification] Checking if account exists: ${accountId}`
+    );
+    console.log(`[Account Verification] Using Intea RPC via proxy`);
+
     const response = await fetch("/api/wallet?action=near-rpc", {
       method: "POST",
       headers: {
@@ -193,7 +217,12 @@ export const verifyAccountExists = async (
       }),
     });
 
+    console.log(`[Account Verification] Response status: ${response.status}`);
+
     if (!response.ok) {
+      console.log(
+        `[Account Verification] Account ${accountId} does not exist (HTTP ${response.status})`
+      );
       return false;
     }
 
@@ -201,9 +230,16 @@ export const verifyAccountExists = async (
 
     // If the account exists, we'll get account info
     // If it doesn't exist, we'll get an error
-    return !data.error && data.result;
+    const exists = !data.error && data.result;
+    console.log(
+      `[Account Verification] Account ${accountId} exists: ${exists}`
+    );
+    return exists;
   } catch (error) {
-    console.error("Error verifying account:", error);
+    console.error(
+      `[Account Verification] Error verifying account ${accountId}:`,
+      error
+    );
     return false;
   }
 };

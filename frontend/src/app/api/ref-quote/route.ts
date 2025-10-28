@@ -34,14 +34,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Force FastNear node URL if provided
-    const preferNode = REF_NODE_URL;
+    // Force Intea RPC for all Ref Finance operations
+    const preferNode = REF_NODE_URL || "https://rpc.intea.rs";
     let cfg;
-    if (preferNode) {
-      cfg = await initRefEnvWithNodeUrl(preferNode);
-    } else {
-      cfg = await ensureRefEnv();
-    }
+
+    console.log(`[ref-quote] Forcing RPC URL: ${preferNode}`);
+    cfg = await initRefEnvWithNodeUrl(preferNode);
 
     // Basic structured logging for debugging live quotes
     console.log(
@@ -52,8 +50,16 @@ export async function POST(req: NextRequest) {
         amountInHuman,
         env: cfg?.networkId,
         nodeUrl: cfg?.nodeUrl,
+        usingInteaRPC: cfg?.nodeUrl?.includes("intea.rs"),
       })
     );
+
+    // Check for invalid token IDs
+    if (tokenOutId === "usdc.near") {
+      console.warn(
+        `[ref-quote] WARNING: usdc.near doesn't exist on mainnet. Consider using usdc.tether-token.near instead.`
+      );
+    }
 
     let expectedOut: string | undefined;
     let swapTodos: any;
@@ -75,10 +81,14 @@ export async function POST(req: NextRequest) {
         process.env.FASTNEAR_API_KEY ||
         process.env.NEXT_PUBLIC_FASTNEAR_API_KEY ||
         "";
+      // Force Intea RPC as fallback
       const fallbacks = ["https://rpc.intea.rs"];
       let lastErr = e;
+      console.log(`[ref-quote] Primary failed, trying Intea RPC fallback`);
+
       for (const url of fallbacks) {
         try {
+          console.log(`[ref-quote] Trying fallback RPC: ${url}`);
           await initRefEnvWithNodeUrl(url);
           const res = await refQuoteSimpleNoInit(
             tokenInId,
@@ -87,8 +97,13 @@ export async function POST(req: NextRequest) {
           );
           expectedOut = res.expectedOut;
           swapTodos = res.swapTodos;
+          console.log(`[ref-quote] Success with fallback RPC: ${url}`);
           break;
         } catch (err) {
+          console.log(
+            `[ref-quote] Fallback RPC ${url} failed:`,
+            err instanceof Error ? err.message : String(err)
+          );
           lastErr = err;
         }
       }
