@@ -24,13 +24,15 @@ import RankIcon from "@/components/common/icons/RankIcon";
 import WalletIcon from "@/components/common/icons/WalletIcon";
 import SpinIcon from "@/components/common/icons/SpinIcon";
 import TasksPage from "@/components/features/tasks/TasksPage";
+import { getUrlParams } from "@/lib/telegramRouting";
 
 // Force dynamic rendering since this page uses client-side features
 export const dynamic = "force-dynamic";
 
 function HomeShell() {
-  const { currentPage, navigate } = useNavigation();
+  const { currentPage, navigate, navigateToGame } = useNavigation();
   const [tg, setTg] = useState<any>(null);
+  const [hasCheckedInitialRoute, setHasCheckedInitialRoute] = useState(false);
 
   const { user, isAuthenticated, isLoading, logout } = useAuth();
 
@@ -52,6 +54,28 @@ function HomeShell() {
       count++;
     }, 10000);
   }, []);
+
+  // Handle initial route from Telegram start_param
+  useEffect(() => {
+    if (hasCheckedInitialRoute || !isAuthenticated) return;
+
+    const urlParams = getUrlParams();
+    const route = urlParams.get("route");
+
+    if (route) {
+      console.log("Initial route detected:", route);
+
+      // Extract game ID from route (e.g., "/game/quiz" -> "quiz")
+      const gameIdMatch = route.match(/^\/game\/([a-z0-9-]+)$/i);
+      if (gameIdMatch && gameIdMatch[1]) {
+        const gameId = gameIdMatch[1];
+        console.log("Navigating to game:", gameId);
+        navigateToGame(gameId);
+      }
+    }
+
+    setHasCheckedInitialRoute(true);
+  }, [isAuthenticated, hasCheckedInitialRoute, navigateToGame]);
 
   const handlePageChange = (page: string) => navigate(page as any);
 
