@@ -139,24 +139,6 @@ export const PrivateKeyWalletProvider = ({
   }, [user?.chatId, (user as any)?.telegramId]);
 
   const autoConnect = async () => {
-    const tgIdRaw =
-      (user?.chatId as string) || ((user as any)?.telegramId as string);
-
-    if (!tgIdRaw) {
-      return;
-    }
-
-    console.log("tgIdRaw", tgIdRaw);
-    // Coerce to number string for API that expects numeric id
-    const tgId = String(parseInt(tgIdRaw, 10));
-
-    if (!tgId || tgId === "NaN") {
-      const errorMsg = "Invalid Telegram ID";
-
-      setError(errorMsg);
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
 

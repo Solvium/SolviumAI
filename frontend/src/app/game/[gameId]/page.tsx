@@ -34,11 +34,17 @@ export default function GamePage() {
       return;
     }
 
-    // Check if game exists
+    // Check if game exists and is enabled
     if (
       !isValidGameId(gameId) ||
       !gameComponents[gameId as keyof typeof gameComponents]
     ) {
+      router.push("/");
+      return;
+    }
+
+    const info = getGameInfo(gameId);
+    if (!info?.enabled) {
       router.push("/");
       return;
     }

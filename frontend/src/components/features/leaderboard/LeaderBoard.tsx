@@ -20,11 +20,18 @@ const LeaderBoard = () => {
           throw new Error("Failed to fetch leaderboard");
         }
         const data = await response.json();
+        if (!data?.success) {
+          throw new Error(data?.error || "Leaderboard API error");
+        }
+        const toNum = (v: any) => {
+          const n = Number(v);
+          return Number.isFinite(n) ? n : 0;
+        };
         const sorted = Array.isArray(data.leaderboard)
           ? [...data.leaderboard].sort((a: any, b: any) => {
-              const aPts = (a.totalSOLV ?? a.totalPoints ?? 0) as number;
-              const bPts = (b.totalSOLV ?? b.totalPoints ?? 0) as number;
-              return bPts - aPts;
+              const aSolv = toNum(a.totalSOLV);
+              const bSolv = toNum(b.totalSOLV);
+              return bSolv - aSolv; // always sort by SOLV only
             })
           : [];
         setLeader(sorted);
@@ -110,7 +117,7 @@ const LeaderBoard = () => {
             >
               {second.name}
             </p>
-            <p className="text-gray-400 text-xs">level {second.level}</p>
+            <p className="text-gray-400 text-xs">level {second.level ?? 1}</p>
           </div>
         )}
 
@@ -139,7 +146,7 @@ const LeaderBoard = () => {
             >
               {first.name}
             </p>
-            <p className="text-gray-400 text-sm">level {first.level}</p>
+            <p className="text-gray-400 text-sm">level {first.level ?? 1}</p>
           </div>
         )}
 
@@ -173,7 +180,7 @@ const LeaderBoard = () => {
             >
               {third.name}
             </p>
-            <p className="text-gray-400 text-xs">level {third.level}</p>
+            <p className="text-gray-400 text-xs">level {third.level ?? 1}</p>
           </div>
         )}
       </div>
@@ -212,7 +219,10 @@ const LeaderBoard = () => {
             </span>
           )}
 
-          <span className="font-semibold md:text-lg text-sm" style={{ color: textColor }}>
+          <span
+            className="font-semibold md:text-lg text-sm"
+            style={{ color: textColor }}
+          >
             {position}
           </span>
 
@@ -244,7 +254,10 @@ const LeaderBoard = () => {
           </span>
         </div>
 
-        <span className="font-semibold md:text-lg text-xs" style={{ color: textColor }}>
+        <span
+          className="font-semibold md:text-lg text-xs"
+          style={{ color: textColor }}
+        >
           {userData.totalSOLV || userData.totalPoints || 0} SOLV
         </span>
       </div>
@@ -255,7 +268,9 @@ const LeaderBoard = () => {
     <div className="flex items-center px-6 py-4 rounded-full mb-3 mx-4 bg-[#0F0F20]">
       <div className="flex items-center gap-3 flex-1">
         <ChevronUp className="md:w-5 md:h-5 w-3 h-3 text-green-500" />
-        <span className="font-semibold md:text-lg text-sm text-white">{userPosition}</span>
+        <span className="font-semibold md:text-lg text-sm text-white">
+          {userPosition}
+        </span>
 
         <div className="md:w-12 md:h-12 w-10 h-10 rounded-full overflow-hidden border-2 border-white">
           {user?.avatar_url || user?.avatar ? (
@@ -333,8 +348,10 @@ const LeaderBoard = () => {
   return (
     <div className="w-full h-screen bg-[#040022] text-white overflow-y-auto">
       {/* Fixed Header with Background */}
-      <div className="sticky top-0 z-30 bg-gradient-to-b from-[#040022] via-[#040022] to-[#040022]/95 backdrop-blur-sm px-4 pt-6 pb-1
-      ">
+      <div
+        className="sticky top-0 z-30 bg-gradient-to-b from-[#040022] via-[#040022] to-[#040022]/95 backdrop-blur-sm px-4 pt-6 pb-1
+      "
+      >
         <div className="relative min-h-[40px] md:min-h-[50px]">
           <div className="absolute top-0 left-0 z-20">
             {/* <button
@@ -345,12 +362,17 @@ const LeaderBoard = () => {
             </button> */}
           </div>
 
-          <div className="absolute top-0 md:right-4 
+          <div
+            className="absolute top-0 md:right-4 
           left-16
-           z-20">
+           z-20"
+          >
             <h1
               className="text-2xl md:text-4xl font-bold text-white tracking-[0.3em] drop-shadow-2xl whitespace-nowrap"
-              style={{ fontFamily: "'Pixelify Sans', monospace", letterSpacing: "0.1em" }}
+              style={{
+                fontFamily: "'Pixelify Sans', monospace",
+                letterSpacing: "0.1em",
+              }}
             >
               LEADER BOARD
             </h1>
@@ -358,34 +380,32 @@ const LeaderBoard = () => {
         </div>
       </div>
 
-      <div className="relative mt-4"> 
+      <div className="relative mt-4">
+        <TopThreePodium />
 
+        <div className="mt-8 pb-24">
+          {leaderboardData.map((userData, index) => (
+            <RankingCard
+              key={`${userData.username}-${index}`}
+              userData={userData}
+              position={index + 1}
+            />
+          ))}
 
-      <TopThreePodium />
+          {userPosition > 10 && (
+            <div className="mt-6">
+              <UserRankingCard />
+            </div>
+          )}
 
-      <div className="mt-8 pb-24">
-        {leaderboardData.map((userData, index) => (
-          <RankingCard
-            key={`${userData.username}-${index}`}
-            userData={userData}
-            position={index + 1}
-          />
-        ))}
-
-        {userPosition > 10 && (
-          <div className="mt-6">
-            <UserRankingCard />
+          <div className="flex justify-center mt-8">
+            <button className="text-white font-semibold flex items-center gap-2 hover:text-gray-300 transition-colors">
+              View All
+              <ChevronLeft className="w-4 h-4 rotate-180" />
+            </button>
           </div>
-        )}
-
-        <div className="flex justify-center mt-8">
-          <button className="text-white font-semibold flex items-center gap-2 hover:text-gray-300 transition-colors">
-            View All
-            <ChevronLeft className="w-4 h-4 rotate-180" />
-          </button>
         </div>
       </div>
-</div>
     </div>
   );
 };
