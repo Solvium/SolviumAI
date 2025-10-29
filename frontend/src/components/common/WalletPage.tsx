@@ -2,21 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
-import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ChevronLeft, ArrowUp, Plus, DollarSign, RefreshCw, Sparkles, MessageCircle } from "lucide-react";
 import { getAccountInfo, formatNearAmount } from "@/lib/nearblocks";
 import { getAccountFull, formatYoctoToNear } from "@/lib/fastnear";
 import { getNearUsd } from "@/lib/prices";
 import { utils } from "near-api-js";
-// import { getAccountTxnsFastnear } from "@/lib/fastnearExplorer";
-import Image from "next/image";
 import SendFlow from "@/components/features/wallet/SendFlow";
 import AddFlow from "@/components/features/wallet/AddFlow";
 import SwapFlow from "@/components/features/wallet/SwapFlow";
 import SuccessModal from "@/components/features/wallet/SuccessModal";
+import AIChatAgent from "@/components/features/wallet/AIChatAgent";
 import { useWalletPortfolioContext } from "@/contexts/WalletPortfolioContext";
 
-type ActiveFlow = "send" | "add" | "swap" | null;
+type ActiveFlow = "send" | "add" | "swap" | "transaction" | null;
 
 const WalletPage = () => {
   const {
@@ -37,6 +35,7 @@ const WalletPage = () => {
   const [nearUsd, setNearUsd] = useState<number | null>(null);
   const [activeFlow, setActiveFlow] = useState<ActiveFlow>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const lastWalletFetchAtRef = useRef<number>(0);
   const [tokenHoldings, setTokenHoldings] = useState<
     { id: string; symbol: string; balance: string; decimals?: number }[]
@@ -265,18 +264,18 @@ const WalletPage = () => {
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#0a0b2e] flex items-center justify-center p-4">
         <div className="text-center space-y-4">
           <div className="text-white text-lg">Connecting wallet...</div>
           {error && (
             <div className="text-red-400 text-sm">
               {error}
-              <Button
+              <button
                 onClick={() => autoConnect()}
-                className="mt-4 bg-blue-600 hover:bg-blue-700"
+                className="mt-4 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-white"
               >
                 Retry
-              </Button>
+              </button>
             </div>
           )}
         </div>
@@ -286,370 +285,327 @@ const WalletPage = () => {
 
   return (
     <>
-      <div className="h-screen bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] pb-24 relative overflow-y-auto">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-20 left-10 w-2 h-2 bg-pink-500 rounded-full animate-pulse" />
-          <div className="absolute top-40 right-20 w-3 h-3 bg-purple-500 rounded-full animate-pulse delay-100" />
-          <div className="absolute bottom-40 left-20 w-2 h-2 bg-blue-500 rounded-full animate-pulse delay-200" />
+      <div className="min-h-screen bg-[#0a0b2e] relative flex flex-col">
+        {/* Fixed Header */}
+        <div className="sticky top-0 z-50 bg-[#0a0b2e] border-b border-white/5">
+          <div className="px-4 py-4">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => window.history.back()}
+                className="text-white/80 hover:text-white flex items-center gap-1 text-sm"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span className="text-xs">Back</span>
+              </button>
+              <h1
+                className="text-lg font-bold text-white tracking-[0.2em]"
+                style={{
+                  fontFamily: "'Press Start 2P', monospace",
+                  textShadow: "0 0 15px rgba(99, 102, 241, 0.5)",
+                }}
+              >
+                WALLET
+              </h1>
+              <div className="w-12" />
+            </div>
+          </div>
         </div>
 
-        <div
-          className={`relative z-10 px-4 pt-6 space-y-6 ${
-            activeFlow ? "pointer-events-none select-none blur-[1px]" : ""
-          }`}
-          aria-hidden={activeFlow ? "true" : undefined}
-        >
-          <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              className="text-white hover:bg-white/10 p-2"
-              onClick={() => window.history.back()}
-            >
-              <ArrowLeft className="w-5 h-5 mr-2" />
-              Back
-            </Button>
-            <h1
-              className="text-3xl font-bold text-white tracking-wider"
-              style={{
-                fontFamily: "monospace",
-                letterSpacing: "0.2em",
-                textShadow: "0 0 10px rgba(255,255,255,0.5)",
-              }}
-            >
-              WALLET
-            </h1>
-            <div className="w-20" />
-          </div>
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-4 pt-4 pb-24">
 
-          <div className="relative">
-            <div
-              className="rounded-3xl p-[2px]"
-              style={{
-                background:
-                  "linear-gradient(135deg, #00d4ff 0%, #9d4edd 50%, #7b2cbf 100%)",
-              }}
-            >
-              <div className="bg-[#0f1535] rounded-3xl p-6 relative overflow-hidden">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-2">
-                    <div className="text-white/70 text-sm">Total balance</div>
-                    <div className="text-5xl font-bold text-white">
-                      ${usdBalance}
+            {/* Balance Card */}
+            <div className="relative mb-4">
+              <div
+                className="rounded-2xl p-[2px]"
+                style={{
+                  background:
+                    "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #6366f1 100%)",
+                }}
+              >
+                <div className="bg-[#1a1d3f] rounded-2xl px-4  relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <div className="text-white/70 text-sm font-medium">
+                        Total balance
+                      </div>
+                      <div className="text-4xl font-bold text-white tracking-tight">
+                        ${usdBalance}
+                      </div>
+                    </div>
+                    <div className="relative w-36 h-36 -mr-16">
+                      <img
+                        src="/assets/wallet/mascot-robot.svg"
+                        alt="Robot Mascot"
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          // Fallback to inline SVG if image not found
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
                     </div>
                   </div>
-                  <div className="relative w-24 h-24">
-                    <Image
-                      src="/assets/wallet/mascot-robot.svg"
-                      alt="Mascot"
-                      width={96}
-                      height={96}
-                      className="object-contain"
-                    />
-                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center justify-center gap-8 py-4">
-            <button
-              onClick={() => setActiveFlow("send")}
-              className="flex flex-col items-center gap-2 group"
-            >
-              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                <svg
-                  className="w-6 h-6 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 10l7-7m0 0l7 7m-7-7v18"
-                  />
-                </svg>
-              </div>
-              <span className="text-white text-sm font-medium">Send</span>
-            </button>
-
-            <button
-              onClick={() => setActiveFlow("add")}
-              className="flex flex-col items-center gap-2 group"
-            >
-              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                <svg
-                  className="w-6 h-6 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-              </div>
-              <span className="text-white text-sm font-medium">Add</span>
-            </button>
-
-            <button
-              onClick={() => setActiveFlow("swap")}
-              className="flex flex-col items-center gap-2 group"
-            >
-              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                <svg
-                  className="w-6 h-6 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                  />
-                </svg>
-              </div>
-              <span className="text-white text-sm font-medium">Swap</span>
-            </button>
-          </div>
-
-          {/* Tabs */}
-          <div className="mt-8 flex items-center gap-4">
-            <button
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                activeTab === "assets"
-                  ? "bg-blue-600 text-white"
-                  : "bg-white/10 text-white/70"
-              }`}
-              onClick={() => setActiveTab("assets")}
-            >
-              Assets
-            </button>
-            <button
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                activeTab === "txns"
-                  ? "bg-blue-600 text-white"
-                  : "bg-white/10 text-white/70"
-              }`}
-              onClick={() => setActiveTab("txns")}
-            >
-              Transactions
-            </button>
-          </div>
-
-          {/* Assets tab (default) */}
-          {activeTab === "assets" && (
-            <div className="mt-6">
-              <div
-                className="rounded-3xl p-[2px]"
-                style={{
-                  background:
-                    "linear-gradient(135deg, #00d4ff 0%, #9d4edd 50%, #7b2cbf 100%)",
-                }}
+            {/* Action Buttons */}
+            <div className="flex items-center justify-center gap-4 mb-5">
+              <button
+                onClick={() => setActiveFlow("send")}
+                className="flex flex-col items-center gap-1.5 group"
               >
-                <div className="bg-[#0f1535] rounded-3xl p-6 space-y-4">
-                  <h2 className="text-xl font-bold text-white mb-2">Assets</h2>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-left text-white text-sm">
-                      <thead className="text-white/70">
-                        <tr>
-                          <th className="py-2 pr-4">Token</th>
-                          <th className="py-2 pr-4">Balance</th>
-                          <th className="py-2 pr-4">Value (USD)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td className="py-2 pr-4">NEAR</td>
-                          <td className="py-2 pr-4">{nearBalance ?? "0"}</td>
-                          <td className="py-2 pr-4">${nearUsdValue}</td>
-                        </tr>
-                        {tokenHoldings
-                          .filter((t) => {
-                            // Hide tokens with zero balance
-                            const balance = parseFloat(t.balance || "0");
-                            if (balance <= 0) return false;
-
-                            // Hide any bridged tokens (.e tokens or factory.bridge.near)
-                            const tokenId = t.id || "";
-                            if (
-                              tokenId.includes(".e") ||
-                              tokenId.includes("factory.bridge.near")
-                            ) {
-                              return false;
-                            }
-
-                            return true;
-                          })
-                          .map((t) => {
-                            const idOrNear =
-                              t.symbol === "NEAR" ? "wrap.near" : t.id;
-                            const price =
-                              t.symbol === "NEAR" && nearUsd
-                                ? nearUsd
-                                : tokenPricesUsd[idOrNear] || 0;
-                            const balNum = Number(t.balance || 0);
-                            const usd =
-                              Number.isFinite(balNum) && price
-                                ? balNum * price
-                                : 0;
-                            const isWrappedNear =
-                              t.symbol === "WNEAR" || t.id === "wrap.near";
-                            return (
-                              <tr key={t.id}>
-                                <td className="py-2 pr-4">{t.symbol}</td>
-                                <td className="py-2 pr-4">{t.balance}</td>
-                                <td className="py-2 pr-4">
-                                  <div className="flex items-center justify-between">
-                                    <span>${usd.toFixed(4)}</span>
-                                    {isWrappedNear && balNum > 0 && (
-                                      <button
-                                        onClick={() =>
-                                          handleUnwrapNear(t.balance)
-                                        }
-                                        className="ml-2 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
-                                      >
-                                        Unwrap
-                                      </button>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                  <ArrowUp className="w-4 h-4 text-white" />
                 </div>
-              </div>
-            </div>
-          )}
+                <span className="text-white text-[10px] font-medium">Send</span>
+              </button>
 
-          {/* Transactions tab */}
-          {activeTab === "txns" && (
-            <div className="mt-6">
+              <button
+                onClick={() => setActiveFlow("add")}
+                className="flex flex-col items-center gap-1.5 group"
+              >
+                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                  <Plus className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-white text-[10px] font-medium">Add</span>
+              </button>
+
+              <button
+                onClick={() => setActiveFlow("transaction")}
+                className="flex flex-col items-center gap-1.5 group"
+              >
+                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                  <DollarSign className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-white text-[10px] font-medium">Transaction</span>
+              </button>
+
+              <button
+                onClick={() => setActiveFlow("swap")}
+                className="flex flex-col items-center gap-1.5 group"
+              >
+                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                  <RefreshCw className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-white text-[10px] font-medium">Swap</span>
+              </button>
+            </div>
+
+            {/* Token List */}
+            <div className="space-y-2.5">
+              {/* NEAR Token */}
               <div
-                className="rounded-3xl p-[2px]"
+                className="rounded-xl p-[2px]"
                 style={{
                   background:
-                    "linear-gradient(135deg, #00d4ff 0%, #9d4edd 50%, #7b2cbf 100%)",
+                    "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #6366f1 100%)",
                 }}
               >
-                <div className="bg-[#0f1535] rounded-3xl p-6 space-y-4">
-                  <h2 className="text-xl font-bold text-white mb-4">
-                    Transactions
-                  </h2>
-
-                  <div className="space-y-3">
-                    {((showAllTxns ? allTxns : recentTxns) || []).length ===
-                      0 && (
-                      <div className="text-white/60 text-sm">
-                        No transactions found.
+                <div className="bg-[#1a1d3f] rounded-xl px-3 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center">
+                      <svg
+                        width="20"
+                        height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M12 2L2 7L12 12L22 7L12 2Z"
+                        fill="white"
+                        stroke="white"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M2 17L12 22L22 17"
+                        stroke="white"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M2 12L12 17L22 12"
+                        stroke="white"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    </div>
+                    <div>
+                      <div className="text-white font-semibold text-xs">
+                        Token Name
                       </div>
-                    )}
-                    {(showAllTxns ? allTxns : recentTxns)?.map((txn, idx) => (
-                      <div
-                        key={`${txn.id || "noid"}-${txn.timestamp || idx}`}
-                        className="flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              txn.type === "receive"
-                                ? "bg-gradient-to-br from-green-400 to-green-600"
-                                : txn.type === "send"
-                                ? "bg-gradient-to-br from-red-400 to-red-600"
-                                : "bg-gradient-to-br from-blue-400 to-purple-500"
-                            }`}
-                          >
-                            <span className="text-white text-xs font-bold">
-                              {txn.type === "receive"
-                                ? "↗"
-                                : txn.type === "send"
-                                ? "↘"
-                                : "⚡"}
+                      <div className="text-white/50 text-[10px]">
+                        {nearBalance || "0.0000"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-white font-bold text-sm">
+                      ${nearUsdValue}
+                    </div>
+                    <div className="text-green-400 text-[10px] flex items-center justify-end gap-0.5">
+                      <svg
+                        width="10"
+                        height="10"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M6 9L6 3M6 3L3 6M6 3L9 6"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      </svg>
+                      +4.3%
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Other Tokens */}
+              {tokenHoldings
+                .filter((t) => {
+                  const balance = parseFloat(t.balance || "0");
+                  if (balance <= 0) return false;
+                  const tokenId = t.id || "";
+                  if (
+                    tokenId.includes(".e") ||
+                    tokenId.includes("factory.bridge.near")
+                  ) {
+                    return false;
+                  }
+                  return true;
+                })
+                .slice(0, 3)
+                .map((t) => {
+                  const idOrNear = t.symbol === "NEAR" ? "wrap.near" : t.id;
+                  const price =
+                    t.symbol === "NEAR" && nearUsd
+                      ? nearUsd
+                      : tokenPricesUsd[idOrNear] || 0;
+                  const balNum = Number(t.balance || 0);
+                  const usd =
+                    Number.isFinite(balNum) && price ? balNum * price : 0;
+                  return (
+                    <div
+                      key={t.id}
+                      className="rounded-xl p-[2px]"
+                      style={{
+                        background:
+                          "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #6366f1 100%)",
+                      }}
+                    >
+                      <div className="bg-[#1a1d3f] rounded-xl px-3 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center">
+                            <span className="text-white font-bold text-xs">
+                              {t.symbol.slice(0, 2)}
                             </span>
                           </div>
                           <div>
-                            <div className="text-white font-medium">
-                              {txn.description || "Transaction"}
+                            <div className="text-white font-semibold text-xs">
+                              Token Name
                             </div>
-                            <div className="text-white/50 text-xs">
-                              {txn.from && txn.to ? (
-                                <>
-                                  {txn.from.slice(0, 8)}...{txn.from.slice(-4)}{" "}
-                                  → {txn.to.slice(0, 8)}...{txn.to.slice(-4)}
-                                </>
-                              ) : (
-                                <>
-                                  {txn.timestamp &&
-                                    new Date(
-                                      txn.timestamp
-                                    ).toLocaleDateString()}
-                                </>
-                              )}
+                            <div className="text-white/50 text-[10px]">
+                              {t.balance}
                             </div>
-                            {txn.status === "failed" && (
-                              <div className="text-red-400 text-xs">Failed</div>
-                            )}
                           </div>
                         </div>
                         <div className="text-right">
-                          {txn.amount && (
-                            <div
-                              className={`font-bold ${
-                                txn.type === "receive"
-                                  ? "text-green-400"
-                                  : txn.type === "send"
-                                  ? "text-red-400"
-                                  : "text-yellow-400"
-                              }`}
+                          <div className="text-white font-bold text-sm">
+                            ${usd.toFixed(2)}
+                          </div>
+                          <div className="text-green-400 text-[10px] flex items-center justify-end gap-0.5">
+                            <svg
+                              width="10"
+                              height="10"
+                              viewBox="0 0 12 12"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
                             >
-                              {txn.type === "send"
-                                ? "-"
-                                : txn.type === "receive"
-                                ? "+"
-                                : ""}
-                              {txn.amount} NEAR
-                            </div>
-                          )}
-                          {txn.fee && txn.fee !== "0" && (
-                            <div className="text-white/50 text-xs">
-                              Fee: {txn.fee} NEAR
-                            </div>
-                          )}
+                              <path
+                                d="M6 9L6 3M6 3L3 6M6 3L9 6"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                            +4.3%
+                          </div>
                         </div>
                       </div>
-                    ))}
-
-                    {/* See More/Less Button */}
-                    {allTxns && allTxns.length > 5 && (
-                      <div className="flex justify-center mt-4">
-                        <button
-                          onClick={() => setShowAllTxns(!showAllTxns)}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-                        >
-                          {showAllTxns
-                            ? "Show Less"
-                            : `See More (${allTxns.length - 5} more)`}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              {/* Close outer mt-6 wrapper */}
+                    </div>
+                  );
+                })}
             </div>
-          )}
+
+            {/* AI Insights Section */}
+            <div className="mt-5 rounded-xl border border-white/10 bg-[#1a1d3f]/50 px-3 py-3 text-center">
+              <div className="flex items-center justify-center mb-1.5">
+                {/* <Sparkles className="w-4 h-4 text-blue-400" /> */}
+              </div>
+              <div className="text-white/60 text-[8px] font-medium mb-0.5">
+                AI Insights Available
+              </div>
+              <div className="text-white/40 text-[8px]">
+                Tap the AI assistant for personalized portfolio recommendations
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
+      {/* Floating AI Chat Button */}
+      <button
+        onClick={() => setIsChatOpen(true)}
+        className="fixed bottom-32 right-1 group"
+        style={{ zIndex: 9999 }}
+      >
+        <div className="relative">
+          {/* Notification Badge */}
+          {/* <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-blue-500 rounded-full border-2 border-[#0a0b2e] flex items-center justify-center z-10">
+            <span className="text-white text-[9px] font-bold">1</span>
+          </div> */}
+
+          {/* Main Button */}
+          <div className="w-24 h-24 rounded-full  items-center justify-center shadow-2xl group-hover:scale-110 transition-transform overflow-hidden">
+            <img
+              src="/ai/AI-Assistant.svg"
+              alt="AI Assistant"
+              className="w-full h-full object-cover"
+            />
+          </div>
+
+          {/* Online Indicator */}
+          {/* <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-[#0a0b2e]"></div> */}
+        </div>
+
+        {/* Tooltip */}
+        <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <div className="bg-white rounded-lg px-2.5 py-1.5 shadow-lg whitespace-nowrap">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              <span className="text-xs font-medium text-gray-900">
+                Hi! How can I help you?
+              </span>
+            </div>
+            <div className="absolute bottom-0 right-3 transform translate-y-1/2 rotate-45 w-1.5 h-1.5 bg-white"></div>
+          </div>
+        </div>
+      </button>
+
+      {/* Modals */}
       {activeFlow === "send" && (
         <SendFlow
           onClose={() => setActiveFlow(null)}
@@ -666,6 +622,9 @@ const WalletPage = () => {
         />
       )}
       {showSuccess && <SuccessModal onClose={handleCloseSuccess} />}
+
+      {/* AI Chat Agent */}
+      <AIChatAgent isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
     </>
   );
 };
