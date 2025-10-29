@@ -181,7 +181,9 @@ export const WheelOfFortune = () => {
     () => !nearConnected
   );
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [purchasingKey, setPurchasingKey] = useState<string | null>(null);
   const [showClaimedMessage, setShowClaimedMessage] = useState(false);
+  const hasUnclaimedPrize = (!!wonPrize || !!unclaimed) && !isClaimed;
 
   // Wheel data - 8 segments, clockwise from the top to match visual
   const data = [
@@ -660,6 +662,7 @@ export const WheelOfFortune = () => {
   const handleBuySpinWithNear = async () => {
     try {
       setIsPurchasing(true);
+      setPurchasingKey("near");
       if (!nearConnected) {
         toast.error("Connect wallet first");
         return;
@@ -693,12 +696,14 @@ export const WheelOfFortune = () => {
       toast.error(`Failed to buy spin with NEAR: ${errorMessage}`);
     } finally {
       setIsPurchasing(false);
+      setPurchasingKey(null);
     }
   };
 
   const handleBuySpinWithPoints = async (count: string) => {
     try {
       setIsPurchasing(true);
+      setPurchasingKey(`points-${count}`);
       if (!nearConnected) {
         toast.error("Connect wallet first");
         return;
@@ -769,6 +774,7 @@ export const WheelOfFortune = () => {
       toast.error(`Failed to buy spin with points: ${errorMessage}`);
     } finally {
       setIsPurchasing(false);
+      setPurchasingKey(null);
     }
   };
 
@@ -921,51 +927,47 @@ export const WheelOfFortune = () => {
               </div>
             </div>
           ) : (
-            <button
-              onClick={handleSpinClick}
-              disabled={
-                isSpinning ||
-                isLoadingSpins ||
-                isPurchasing ||
-                isSpinLocked ||
-                (!!wonPrize && !isClaimed) ||
-                (!!unclaimed && !isClaimed)
-              }
-              className={`w-[287px] h-20  flex items-center justify-center text-white font-bold transition-all duration-300 ${
-                isSpinning ||
-                isLoadingSpins ||
-                isSpinLocked ||
-                (!!wonPrize && !isClaimed) ||
-                (!!unclaimed && !isClaimed)
-                  ? "opacity-50 cursor-not-allowed"
-                  : "hover:scale-105"
-              }`}
-              style={{
-                backgroundImage: "url('/assets/wheel/spin-wheel.svg')",
-                backgroundSize: "contain",
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "center",
-              }}
-            >
-              {isSpinning && (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-sm">Spinning...</span>
-                </div>
-              )}
-              {isLoadingSpins && (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-sm">Loading...</span>
-                </div>
-              )}
-              {isPurchasing && (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-sm">Processing...</span>
-                </div>
-              )}
-            </button>
+            <>
+              <button
+                onClick={handleSpinClick}
+                disabled={
+                  isSpinning ||
+                  isLoadingSpins ||
+                  isPurchasing ||
+                  isSpinLocked ||
+                  hasUnclaimedPrize
+                }
+                className={`w-[287px] h-20  flex items-center justify-center text-white font-bold transition-all duration-300 ${
+                  isSpinning ||
+                  isLoadingSpins ||
+                  isPurchasing ||
+                  isSpinLocked ||
+                  hasUnclaimedPrize
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:scale-105"
+                }`}
+                style={{
+                  backgroundImage: "url('/assets/wheel/spin-wheel.svg')",
+                  backgroundSize: "contain",
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "center",
+                }}
+              >
+                {isSpinning && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-sm">Spinning...</span>
+                  </div>
+                )}
+                {isLoadingSpins && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-sm">Loading...</span>
+                  </div>
+                )}
+                {/* Purchase processing spinner intentionally not shown here */}
+              </button>
+            </>
           )}
         </div>
 
@@ -1014,7 +1016,7 @@ export const WheelOfFortune = () => {
                     : "hover:opacity-90"
                 }`}
               >
-                {isPurchasing ? (
+                {isPurchasing && purchasingKey === "points-500" ? (
                   <span className="inline-flex items-center gap-2">
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     Processing...
@@ -1032,7 +1034,7 @@ export const WheelOfFortune = () => {
                     : "hover:opacity-90"
                 }`}
               >
-                {isPurchasing ? (
+                {isPurchasing && purchasingKey === "points-1000" ? (
                   <span className="inline-flex items-center gap-2">
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     Processing...
@@ -1050,7 +1052,7 @@ export const WheelOfFortune = () => {
                     : "hover:opacity-90"
                 }`}
               >
-                {isPurchasing ? (
+                {isPurchasing && purchasingKey === "points-1500" ? (
                   <span className="inline-flex items-center gap-2">
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     Processing...
