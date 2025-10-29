@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useQuiz } from "@/hooks/useQuiz";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDepositMultiplier } from "@/hooks/useDepositMultiplier";
 
 interface QuizGameProps {
   onEarnCoins?: (amount: number) => void;
@@ -18,8 +19,9 @@ const QuizGame: React.FC<QuizGameProps> = ({
   onClose,
 }) => {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { gameState, quizState, actions } = useQuiz();
+  const { currentMultiplier, fetchCurrentMultiplier } = useDepositMultiplier();
 
   // Local state for UI
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -42,6 +44,21 @@ const QuizGame: React.FC<QuizGameProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Don't auto-start the game - let user choose settings first
+
+  // Fetch current multiplier on component mount
+  useEffect(() => {
+    const fetchMultiplier = async () => {
+      try {
+        await fetchCurrentMultiplier();
+        // Also refresh user data to ensure we have the latest multiplier
+        await refreshUser();
+      } catch (error) {
+        console.error("Failed to fetch current multiplier:", error);
+      }
+    };
+
+    fetchMultiplier();
+  }, [fetchCurrentMultiplier, refreshUser]);
 
   // Timer effect - count down locally
   useEffect(() => {
@@ -126,9 +143,13 @@ const QuizGame: React.FC<QuizGameProps> = ({
         // Use the validation result directly
         if (result.isCorrect) {
           const base = result.points || quizState.currentQuiz?.points || 10;
-          const multiplier = Number(user?.multiplier || 1);
+          // Use the most up-to-date multiplier from either currentMultiplier or user.multiplier
+          const multiplier = Number(currentMultiplier || user?.multiplier || 1);
           const earned = Math.round(
             base * (isFinite(multiplier) ? multiplier : 1)
+          );
+          console.log(
+            `Quiz multiplier calculation: base=${base}, multiplier=${multiplier}, earned=${earned}`
           );
           setPointsEarned(earned);
           setScore((prev) => prev + earned);

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    // Get top users by total points, ordered by totalPoints descending
+    // Get top users ranked by totalSOLV only
     const leaderboard = await prisma.user.findMany({
       select: {
         id: true,
@@ -18,11 +18,29 @@ export async function GET() {
         avatar_url: true,
         createdAt: true,
       },
-      orderBy: {
-        totalPoints: "desc",
-      },
+      orderBy: [{ totalSOLV: "desc" }],
       take: 50, // Limit to top 50 users
     });
+
+    // Load level configs once to compute levels consistently with Profile
+    const levelConfigs = await prisma.levelConfig.findMany({
+      orderBy: { level: "asc" },
+    });
+
+    const computeLevelFromXP = (
+      experiencePoints: number | null | undefined
+    ) => {
+      const xp = typeof experiencePoints === "number" ? experiencePoints : 0;
+      if (levelConfigs.length === 0) return 1;
+      let currentLevel = 1;
+      for (let i = levelConfigs.length - 1; i >= 0; i--) {
+        if (xp >= (levelConfigs[i].points_required as number)) {
+          currentLevel = levelConfigs[i].level as number;
+          break;
+        }
+      }
+      return currentLevel;
+    };
 
     // Transform the data to match the expected format
     const formattedLeaderboard = leaderboard.map((user, index) => ({
@@ -31,7 +49,8 @@ export async function GET() {
       name: user.username, // Use username as name for now
       totalPoints: user.totalPoints,
       totalSOLV: user.totalSOLV,
-      level: user.level,
+      // Derive level from experience points to match Profile display
+      level: computeLevelFromXP(user.experience_points),
       gamesWon: user.gamesWon,
       gamesPlayed: user.gamesPlayed,
       weeklyPoints: user.weeklyPoints,

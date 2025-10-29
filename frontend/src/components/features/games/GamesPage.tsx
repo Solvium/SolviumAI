@@ -10,6 +10,8 @@ import { ChevronLeft } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEnhancedNavigation } from "@/lib/navigationUtils";
+import { getAllGames } from "@/lib/gameUtils";
+import { toast } from "react-toastify";
 
 const GamesPage = () => {
   const navigate = useRouter();
@@ -93,32 +95,51 @@ const GamesPage = () => {
 
           <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 pt-24 pb-8">
             <div className="grid grid-cols-2 md:gap-6 gap-3 w-full max-w-md mb-8">
-              {games.map((game) => (
-                <div key={game.id} className="relative group">
-                  <button
-                    onClick={() => handleGameSelect(game)}
-                    className="relative w-full h-24 transform transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none"
-                  >
-                    <Image
-                      src={game.image || "/placeholder.svg"}
-                      alt={game.title}
-                      fill
-                      className="object-contain"
-                    />
-                  </button>
-
-                  {/* Direct link option */}
-                  <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Link
-                      href={`/game/${game.id}`}
-                      className="block w-6 h-6 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                      title={`Open ${game.title} in new page`}
+              {games.map((game) => {
+                const all = getAllGames();
+                const meta = all.find((g) => g.id === game.id);
+                const isEnabled = !!meta?.enabled;
+                return (
+                  <div key={game.id} className="relative group">
+                    <button
+                      onClick={() =>
+                        isEnabled
+                          ? handleGameSelect(game)
+                          : toast.info("COMING SOON")
+                      }
+                      aria-disabled={!isEnabled}
+                      className={`relative w-full h-24 transform transition-all duration-200 focus:outline-none hover:scale-105 active:scale-95`}
                     >
-                      ↗
-                    </Link>
+                      <Image
+                        src={game.image || "/placeholder.svg"}
+                        alt={game.title}
+                        fill
+                        className="object-contain"
+                      />
+                      {!isEnabled && (
+                        <div className="absolute top-1 right-1">
+                          <span className="px-2 py-[2px] text-[9px] md:text-[10px] font-bold rounded-full bg-yellow-400 text-black shadow-md">
+                            COMING SOON
+                          </span>
+                        </div>
+                      )}
+                    </button>
+
+                    {/* Direct link option */}
+                    <div className="absolute top-1 right-1 transition-opacity">
+                      {isEnabled ? (
+                        <Link
+                          href={`/game/${game.id}`}
+                          className="block w-6 h-6 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                          title={`Open ${game.title} in new page`}
+                        >
+                          ↗
+                        </Link>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="absolute md:top-[70%] top-[62%] md:-right-4 -right-12 w-48 h-48 md:w-56 md:h-56">
