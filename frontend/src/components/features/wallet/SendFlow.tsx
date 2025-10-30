@@ -643,9 +643,9 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     );
   }
 
-  // Render recipient screen with token modal overlay
-  if (step === "selectRecipient" || step === "selectToken") {
-    const showTokenModal = step === "selectToken";
+  // Render token selection modal
+  if (step === "selectToken") {
+    const showTokenModal = true;
     
     return (
       <>
