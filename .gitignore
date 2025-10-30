@@ -1,40 +1,18 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-.yarn/install-state.gz
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-/hello-ngrok/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# local env files
 .env
-ind.*
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-certificates
+.github/prompts/*
+old_code.py
+migrations/
+src/scripts/*
+scripts/*
+dev-requirements.txt
+docker-entrypoint.sh
+fix_quiz_deposit_addresses.py
+mental_maze.db
+test_precision_fix.py
+product_anticheat.readme.md
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
