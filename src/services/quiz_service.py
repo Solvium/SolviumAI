@@ -2782,58 +2782,54 @@ Good luck with your next quiz!"""
                 f"Session Answer Q{q_idx}: correct={is_correct}, answer='{answer[:50]}...'"
             )
 
-        # Save individual answers in the correct format for reward distribution
+        # OPTIMIZED: Bulk save all answers with single query and single commit
         saved_answers = 0
-        failed_saves = []
+        start_time = time.time()
 
         # Log the session state before starting saves
         logger.info(
-            f"Starting to save {len(results['answers'])} answers for user {user_id}"
+            f"Starting optimized bulk save of {len(results['answers'])} answers for user {user_id}"
         )
         logger.info(f"Session state - quiz_id: {quiz.id}, username: {username}")
 
-        for question_index, answer_data in results["answers"].items():
-            try:
-                # Ensure question_index is consistently handled as integer
+        try:
+            # OPTIMIZATION 1: Fetch ALL existing answers for this user/quiz in ONE query
+            existing_answers = (
+                session.query(QuizAnswer)
+                .filter(
+                    QuizAnswer.user_id == user_id,
+                    QuizAnswer.quiz_id == quiz.id,
+                )
+                .all()
+            )
+
+            # Create a mapping for fast lookup: question_index -> existing_answer
+            existing_answers_map = {
+                answer.question_index: answer for answer in existing_answers
+            }
+            logger.info(f"Found {len(existing_answers_map)} existing answers in database")
+
+            # OPTIMIZATION 2: Prepare bulk operations in memory
+            answers_to_update = []
+            answers_to_insert = []
+
+            for question_index, answer_data in results["answers"].items():
                 question_idx = int(question_index)
                 user_answer = answer_data.get("answer", "No answer")
                 is_correct = answer_data.get("correct", False)
                 answered_at = answer_data.get("answered_at", datetime.utcnow())
 
-                logger.info(
-                    f"Processing answer for question {question_idx}: correct={is_correct}, answer='{user_answer[:50]}...'"
-                )
-
-                # Check if answer already exists for this user/quiz/question
-                existing_answer = (
-                    session.query(QuizAnswer)
-                    .filter(
-                        QuizAnswer.user_id == user_id,
-                        QuizAnswer.quiz_id == quiz.id,
-                        QuizAnswer.question_index == question_idx,
-                    )
-                    .first()
-                )
-
-                if existing_answer:
-                    logger.info(
-                        f"Found existing answer for question {question_idx}: id={existing_answer.id}, answer='{existing_answer.answer[:50]}...'"
-                    )
-                else:
-                    logger.info(f"No existing answer found for question {question_idx}")
-
-                if existing_answer:
-                    # Update existing answer (including empty "started" records)
+                if question_idx in existing_answers_map:
+                    # Update existing answer
+                    existing_answer = existing_answers_map[question_idx]
                     existing_answer.answer = user_answer
                     existing_answer.is_correct = "True" if is_correct else "False"
                     existing_answer.answered_at = answered_at
                     existing_answer.username = username
-                    logger.info(
-                        f"Updated existing answer for user {user_id}, quiz {quiz.id}, question {question_idx}"
-                    )
+                    answers_to_update.append(question_idx)
                 else:
-                    # Create new quiz answer record
-                    quiz_answer = QuizAnswer(
+                    # Prepare new answer for bulk insert
+                    new_answer = QuizAnswer(
                         user_id=user_id,
                         quiz_id=quiz.id,
                         username=username,
@@ -2842,83 +2838,56 @@ Good luck with your next quiz!"""
                         answered_at=answered_at,
                         question_index=question_idx,
                     )
-                    session.add(quiz_answer)
-                    logger.info(
-                        f"Created new answer for user {user_id}, quiz {quiz.id}, question {question_idx}"
-                    )
+                    session.add(new_answer)
+                    answers_to_insert.append(question_idx)
 
-                # Commit each answer individually to prevent partial rollbacks
-                session.commit()
-                saved_answers += 1
-                logger.info(
-                    f"Successfully committed answer for question {question_idx}"
-                )
+            # OPTIMIZATION 3: Single commit for all operations
+            session.commit()
+            saved_answers = len(results['answers'])
 
-            except Exception as answer_error:
-                logger.error(
-                    f"Failed to save answer for question {question_index}: {str(answer_error)}"
-                )
-                logger.error(f"Error type: {type(answer_error)}")
-                logger.error(f"Error details: {repr(answer_error)}")
+            elapsed_time = time.time() - start_time
+            logger.info(
+                f"✅ Bulk save completed in {elapsed_time:.3f}s: "
+                f"Updated {len(answers_to_update)} answers, "
+                f"Inserted {len(answers_to_insert)} new answers. "
+                f"Total: {saved_answers}/{len(results['answers'])}"
+            )
 
-                # Log additional database error information if available
-                if hasattr(answer_error, "orig"):
-                    logger.error(f"Database error: {answer_error.orig}")
-                if hasattr(answer_error, "params"):
-                    logger.error(f"Error params: {answer_error.params}")
+        except Exception as bulk_error:
+            logger.error(
+                f"❌ Bulk save failed for user {user_id}: {str(bulk_error)}"
+            )
+            logger.error(f"Error type: {type(bulk_error)}")
+            logger.error(f"Error details: {repr(bulk_error)}")
 
-                failed_saves.append(question_index)
-                session.rollback()
+            if hasattr(bulk_error, "orig"):
+                logger.error(f"Database error: {bulk_error.orig}")
 
-                # Try to re-establish session state for next iteration
-                try:
-                    # Clear any pending changes to ensure clean state
-                    session.expunge_all()
-                    # Re-add the quiz object to the session
-                    session.add(quiz)
-                except Exception as refresh_error:
-                    logger.error(
-                        f"Failed to clean session after rollback: {str(refresh_error)}"
-                    )
+            session.rollback()
 
-        logger.info(
-            f"Initial save completed: {saved_answers}/{len(results['answers'])} answers for user {user_id}"
-        )
-
-        # Retry failed saves with a different approach
-        if failed_saves:
-            logger.warning(f"Retrying {len(failed_saves)} failed saves: {failed_saves}")
-            for question_index in failed_saves:
+            # FALLBACK: Try individual saves only on bulk failure
+            logger.warning(f"⚠️ Attempting fallback to individual saves...")
+            saved_answers = 0
+            for question_index, answer_data in results["answers"].items():
                 try:
                     question_idx = int(question_index)
-                    answer_data = results["answers"][question_index]
                     user_answer = answer_data.get("answer", "No answer")
                     is_correct = answer_data.get("correct", False)
                     answered_at = answer_data.get("answered_at", datetime.utcnow())
 
-                    # Check if answer already exists before trying to create
-                    existing_answer = (
-                        session.query(QuizAnswer)
-                        .filter(
-                            QuizAnswer.user_id == user_id,
-                            QuizAnswer.quiz_id == quiz.id,
-                            QuizAnswer.question_index == question_idx,
-                        )
-                        .first()
-                    )
+                    existing = session.query(QuizAnswer).filter(
+                        QuizAnswer.user_id == user_id,
+                        QuizAnswer.quiz_id == quiz.id,
+                        QuizAnswer.question_index == question_idx,
+                    ).first()
 
-                    if existing_answer:
-                        # Update existing answer
-                        existing_answer.answer = user_answer
-                        existing_answer.is_correct = "True" if is_correct else "False"
-                        existing_answer.answered_at = answered_at
-                        existing_answer.username = username
-                        logger.info(
-                            f"Retry: Updated existing answer for question {question_idx}"
-                        )
+                    if existing:
+                        existing.answer = user_answer
+                        existing.is_correct = "True" if is_correct else "False"
+                        existing.answered_at = answered_at
+                        existing.username = username
                     else:
-                        # Create new answer
-                        quiz_answer = QuizAnswer(
+                        session.add(QuizAnswer(
                             user_id=user_id,
                             quiz_id=quiz.id,
                             username=username,
@@ -2926,34 +2895,15 @@ Good luck with your next quiz!"""
                             is_correct="True" if is_correct else "False",
                             answered_at=answered_at,
                             question_index=question_idx,
-                        )
-                        session.add(quiz_answer)
-                        logger.info(
-                            f"Retry: Creating new answer for question {question_idx}"
-                        )
+                        ))
 
                     session.commit()
                     saved_answers += 1
-                    logger.info(f"Retry successful for question {question_idx}")
-
-                    # Refresh session after successful commit
-                    session.refresh(quiz)
-
-                except Exception as retry_error:
-                    logger.error(
-                        f"Retry failed for question {question_index}: {str(retry_error)}"
-                    )
-                    logger.error(f"Retry error type: {type(retry_error)}")
-                    logger.error(f"Retry error details: {repr(retry_error)}")
-
-                    # Log additional database error information if available
-                    if hasattr(retry_error, "orig"):
-                        logger.error(f"Retry database error: {retry_error.orig}")
-                    if hasattr(retry_error, "params"):
-                        logger.error(f"Retry error params: {retry_error.params}")
-
+                except Exception as fallback_error:
+                    logger.error(f"Fallback save failed for question {question_idx}: {fallback_error}")
                     session.rollback()
 
+        # No need for separate retry logic - built into bulk operation with fallback
         logger.info(
             f"Final save result: {saved_answers}/{len(results['answers'])} answers for user {user_id} in quiz {quiz.id}"
         )
