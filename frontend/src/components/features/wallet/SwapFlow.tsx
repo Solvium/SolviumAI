@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { ArrowLeft, Copy, Plus, Search } from "lucide-react";
+import { ArrowLeft, Copy, Plus, Search, ArrowDownUp, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toRawAmount } from "@/lib/nearIntents";
 // Quotes are now retrieved from server-side Ref SDK via /api/ref-quote
@@ -19,7 +19,7 @@ interface SwapFlowProps {
   onSuccess: () => void;
 }
 
-type SwapStep = "select" | "swap" | "confirm";
+type SwapStep = "swap" | "confirm" | "selectFromToken" | "selectToToken" | "confirmed";
 
 const tokens = [
   {
@@ -65,7 +65,7 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
   const [fromToken, setFromToken] = useState("NEAR");
   const [toToken, setToToken] = useState("USDC"); // Native USDC - safe default
   const [slippageBps, setSlippageBps] = useState(200); // 2.00% - More protective default
-  const [amount, setAmount] = useState("0");
+  const [amount, setAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [quoteOut, setQuoteOut] = useState<string | null>(null);
   const [liveQuote, setLiveQuote] = useState<string | null>(null);
@@ -304,8 +304,9 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
 
   // Real-time quote fetching (server-side Ref SDK)
   const fetchLiveQuote = useCallback(async () => {
-    console.log("fetchLiveQuote called with:", { amount, fromToken, toToken });
+    console.log("🔄 fetchLiveQuote called with:", { amount, fromToken, toToken });
     if (!amount || Number(amount) <= 0) {
+      console.log("❌ No amount or invalid amount");
       setLiveQuote(null);
       return;
     }
@@ -321,9 +322,11 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
       const tokenOutId = isToNear ? wnearAddr : toMeta.address || "";
 
       if (!tokenInId || !tokenOutId || tokenInId === tokenOutId) {
+        console.log("❌ Invalid token IDs:", { tokenInId, tokenOutId });
         setLiveQuote(null);
         return;
       }
+      console.log("✅ Fetching quote for:", { tokenInId, tokenOutId, amount });
       // Abort any previous in-flight request
       try {
         inFlightController?.abort();
@@ -344,12 +347,17 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
       });
       if (!res.ok) throw new Error("quote_failed");
       const data = await res.json();
+      console.log("📊 Quote response:", data);
       // Ignore stale responses if a newer request completed after this one
       if (requestId === lastRequestIdRef.current) {
-        setLiveQuote(String(data?.expectedOut || "0"));
+        const quote = String(data?.expectedOut || "0");
+        console.log("✅ Setting live quote:", quote);
+        setLiveQuote(quote);
+      } else {
+        console.log("⏭️ Ignoring stale response");
       }
     } catch (e) {
-      console.warn("Live quote failed:", e);
+      console.error("❌ Live quote failed:", e);
       setLiveQuote(null);
     } finally {
       setQuoteLoading(false);
@@ -358,12 +366,19 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
 
   // Debounced quote fetching
   useEffect(() => {
+    console.log("⏱️ Debounce effect triggered for:", { amount, fromToken, toToken });
     const timer = setTimeout(() => {
       fetchLiveQuote();
     }, 500); // 500ms delay
 
     return () => clearTimeout(timer);
-  }, [fetchLiveQuote]);
+  }, [amount, fromToken, toToken, fetchLiveQuote]);
+  
+  // Reset quote when tokens change
+  useEffect(() => {
+    console.log("🔄 Tokens changed, resetting quote");
+    setLiveQuote(null);
+  }, [fromToken, toToken]);
 
   // Ensure confirm screen has a backend quote ready for min receive display
   useEffect(() => {
@@ -697,7 +712,10 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
         }
       }
 
-      onSuccess();
+      setStep("confirmed");
+      setTimeout(() => {
+        onSuccess();
+      }, 2000);
     } catch (e: any) {
       console.error("Swap failed", e);
       const msg = typeof e?.message === "string" ? e.message : String(e);
@@ -713,315 +731,228 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
 
   // selectable already built above
 
-  if (step === "swap") {
+  // Token selection modal (reused for both from and to)
+  if (step === "selectFromToken" || step === "selectToToken") {
+    const isFromToken = step === "selectFromToken";
     return (
-      <div className="fixed inset-0 bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] z-50 overflow-y-auto pb-20">
-        <div className="max-w-md mx-auto min-h-screen pb-6">
-          <div className="px-4 pt-6">
-            <div className="flex items-center justify-between mb-8">
-              <Button
-                variant="ghost"
-                className="text-white hover:bg-white/10 p-2"
-                onClick={onClose}
-              >
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Back
-              </Button>
-              <h1
-                className="text-3xl font-bold text-white tracking-wider"
-                style={{
-                  fontFamily: "monospace",
-                  letterSpacing: "0.2em",
-                  textShadow: "0 0 10px rgba(255,255,255,0.5)",
-                }}
-              >
-                SWAP
-              </h1>
-              <div className="w-20" />
+      <>
+        {/* Background */}
+        <div 
+          className="fixed inset-0 bg-[#0a0b2e] z-50 flex flex-col cursor-pointer"
+          onClick={() => setStep("swap")}
+        >
+          <div className="px-4 py-4 border-b border-white/5 flex items-center gap-3">
+            <button onClick={onClose} className="text-white flex items-center gap-1">
+              <ArrowLeft className="w-5 h-5" />
+              <span className="text-sm">Back</span>
+            </button>
+            <h1
+              className="text-xl font-bold text-white tracking-[0.2em] flex-1 text-center"
+              style={{
+                fontFamily: "'Press Start 2P', monospace",
+                textShadow: "0 0 15px rgba(99, 102, 241, 0.5)",
+              }}
+            >
+              SWAP
+            </h1>
+            <div className="w-16"></div>
+          </div>
+        </div>
+
+        {/* Token Selection Modal */}
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 pb-20">
+          <div 
+            className="bg-[#0a0b2e] w-[95%] max-w-md mx-auto rounded-t-2xl flex flex-col max-h-[60vh] mb-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-full h-1 bg-white/10 rounded-t-2xl overflow-hidden">
+              <div className="h-full w-1/3 bg-white"></div>
             </div>
 
-            <div className="space-y-6 mt-12">
-              <div
-                className="rounded-3xl p-[2px]"
-                style={{
-                  background:
-                    "linear-gradient(135deg, #00d4ff 0%, #9d4edd 100%)",
-                }}
-              >
-                <div className="bg-[#0a0e27] rounded-3xl p-8 space-y-8">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="text-white/70 text-sm">From token</div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setShowFromCustomTokenInput(!showFromCustomTokenInput)
-                        }
-                        className="flex items-center gap-1 text-cyan-400 text-xs hover:text-cyan-300 transition-colors"
-                      >
-                        <Plus className="w-3 h-3" />
-                        Add Custom Token
-                      </button>
-                    </div>
-
-                    {showFromCustomTokenInput && (
-                      <div className="space-y-2 p-3 bg-[#0f1535] rounded-xl border border-white/10">
-                        <div className="text-white/70 text-xs">
-                          From Token Contract Address
-                        </div>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={fromCustomTokenAddress}
-                            onChange={(e) =>
-                              setFromCustomTokenAddress(e.target.value)
-                            }
-                            placeholder="e.g., token.near"
-                            className="flex-1 bg-[#1a1f3a] text-white/90 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-cyan-500"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              fetchFromCustomToken(fromCustomTokenAddress)
-                            }
-                            disabled={
-                              !fromCustomTokenAddress.trim() ||
-                              fromCustomTokenLoading
-                            }
-                            className="px-3 py-2 bg-cyan-600 text-white rounded-lg text-sm hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                          >
-                            {fromCustomTokenLoading ? (
-                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            ) : (
-                              <Search className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
-
-                        {fromCustomTokenError && (
-                          <div className="text-red-400 text-xs">
-                            {fromCustomTokenError}
-                          </div>
-                        )}
-
-                        {fromCustomTokenData && (
-                          <div className="p-2 bg-green-900/20 border border-green-500/30 rounded-lg">
-                            <div className="text-green-400 text-xs font-medium">
-                              ✓ {fromCustomTokenData.token.symbol} -{" "}
-                              {fromCustomTokenData.token.name}
-                            </div>
-                            <div className="text-white/60 text-xs mt-1">
-                              Liquidity: $
-                              {fromCustomTokenData.liquidity.usd.toFixed(2)} |
-                              Price: $
-                              {fromCustomTokenData.token.priceUsd.toFixed(6)}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <select
-                      value={fromToken}
-                      onChange={(e) => setFromToken(e.target.value)}
-                      className="w-full bg-[#1a1f3a] text-white/90 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-cyan-500"
-                    >
-                      {selectable.map((t) => {
-                        const p = pricesUsd[t.symbol];
-                        const priceText = p ? ` - $${p.toFixed(2)}` : "";
-                        return (
-                          <option key={t.symbol} value={t.symbol}>
-                            {t.symbol} - {t.name}
-                            {priceText}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-
-                  <div className="flex items-center justify-center">
-                    <button
-                      className="w-12 h-12 bg-[#1a1f3a] rounded-full flex items-center justify-center hover:bg-[#252a4a] transition-colors"
-                      onClick={() => {
-                        setFromToken(toToken);
-                        setToToken(fromToken);
-                      }}
-                    >
-                      <svg
-                        className="w-6 h-6 text-cyan-500"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="text-white/70 text-sm">To token</div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setShowToCustomTokenInput(!showToCustomTokenInput)
-                        }
-                        className="flex items-center gap-1 text-cyan-400 text-xs hover:text-cyan-300 transition-colors"
-                      >
-                        <Plus className="w-3 h-3" />
-                        Add Custom Token
-                      </button>
-                    </div>
-
-                    {showToCustomTokenInput && (
-                      <div className="space-y-2 p-3 bg-[#0f1535] rounded-xl border border-white/10">
-                        <div className="text-white/70 text-xs">
-                          To Token Contract Address
-                        </div>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={toCustomTokenAddress}
-                            onChange={(e) =>
-                              setToCustomTokenAddress(e.target.value)
-                            }
-                            placeholder="e.g., token.near"
-                            className="flex-1 bg-[#1a1f3a] text-white/90 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-cyan-500"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              fetchToCustomToken(toCustomTokenAddress)
-                            }
-                            disabled={
-                              !toCustomTokenAddress.trim() ||
-                              toCustomTokenLoading
-                            }
-                            className="px-3 py-2 bg-cyan-600 text-white rounded-lg text-sm hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                          >
-                            {toCustomTokenLoading ? (
-                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            ) : (
-                              <Search className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
-
-                        {toCustomTokenError && (
-                          <div className="text-red-400 text-xs">
-                            {toCustomTokenError}
-                          </div>
-                        )}
-
-                        {toCustomTokenData && (
-                          <div className="p-2 bg-green-900/20 border border-green-500/30 rounded-lg">
-                            <div className="text-green-400 text-xs font-medium">
-                              ✓ {toCustomTokenData.token.symbol} -{" "}
-                              {toCustomTokenData.token.name}
-                            </div>
-                            <div className="text-white/60 text-xs mt-1">
-                              Liquidity: $
-                              {toCustomTokenData.liquidity.usd.toFixed(2)} |
-                              Price: $
-                              {toCustomTokenData.token.priceUsd.toFixed(6)}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <select
-                      value={toToken}
-                      onChange={(e) => setToToken(e.target.value)}
-                      className="w-full bg-[#1a1f3a] text-white/90 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-cyan-500"
-                    >
-                      {selectable
-                        .filter((t) => t.symbol !== fromToken)
-                        .map((t) => {
-                          const p = pricesUsd[t.symbol];
-                          const priceText = p ? ` - $${p.toFixed(2)}` : "";
-                          return (
-                            <option key={t.symbol} value={t.symbol}>
-                              {t.symbol} - {t.name}
-                              {priceText}
-                            </option>
-                          );
-                        })}
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="text-white/70 text-sm">Amount</div>
-                      <div className="text-white/60 text-xs">
-                        Bal: {getFromTokenBalance()} {fromToken}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full bg-[#1a1f3a] text-white/90 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-cyan-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleMax}
-                        className="px-4 py-3 bg-[#1a1f3a] text-cyan-400 rounded-xl border border-white/10 hover:bg-[#252a4a]"
-                      >
-                        MAX
-                      </button>
-                    </div>
-                    {liveQuote && Number(amount) > 0 && (
-                      <div className="text-cyan-400 text-sm">
-                        Estimated: {liveQuote} {toToken}
-                        {(() => {
-                          const p = pricesUsd[toToken];
-                          if (!p) return null;
-                          const usd = Number(liveQuote) * p;
-                          if (!isFinite(usd)) return null;
-                          return (
-                            <span className="text-white/60 ml-2">
-                              (~${usd.toFixed(2)})
-                            </span>
-                          );
-                        })()}
-                        {quoteLoading && <span className="ml-2">⏳</span>}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="text-white/70 text-sm">Slippage (%)</div>
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      value={(slippageBps / 100).toString()}
-                      onChange={(e) => {
-                        const v = Math.max(0, Number(e.target.value || 0));
-                        setSlippageBps(Math.round(v * 100));
-                      }}
-                      className="w-full bg-[#1a1f3a] text-white/90 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-cyan-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
+            <div className="px-3 py-2.5 border-b border-white/5 flex items-center justify-between">
+              <h2 className="text-white text-sm font-medium">Select Token</h2>
               <button
-                onClick={() => setStep("confirm")}
-                className="w-full py-4 bg-[#0075EA] text-white rounded-full text-lg font-bold hover:bg-cyan-600 transition-colors"
+                onClick={() => setStep("swap")}
+                className="text-white/60 hover:text-white transition-colors"
               >
-                SWAP
+                <X className="w-4 h-4" />
               </button>
             </div>
+
+            <div className="flex-1 overflow-y-auto">
+              <div className="px-3 pt-2.5 pb-3 space-y-2.5">
+                <div>
+                  <div className="text-white text-[10px] mb-1.5">Search</div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search token"
+                      className="w-full bg-[#1a1d3f] text-white/60 rounded-lg px-3 py-1.5 pr-9 outline-none text-xs border border-white/10"
+                    />
+                    <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/50 w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  {selectable.map((t) => {
+                    const balance = t.symbol === "NEAR" ? nearBalance : 
+                      (walletTokens || []).find(wt => wt.symbol === t.symbol)?.balance || "0";
+                    const numericBal = parseFloat(balance || "0");
+                    const price = pricesUsd[t.symbol] || 0;
+                    const usdValue = (numericBal * price).toFixed(2);
+                    
+                    return (
+                      <button
+                        key={t.symbol}
+                        onClick={() => {
+                          if (isFromToken) {
+                            setFromToken(t.symbol);
+                          } else {
+                            setToToken(t.symbol);
+                          }
+                          setStep("swap");
+                        }}
+                        className="w-full flex items-center justify-between p-2 hover:bg-white/5 rounded-lg transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center">
+                            <span className="text-white font-bold text-[10px]">
+                              {t.symbol.slice(0, 2)}
+                            </span>
+                          </div>
+                          <div className="text-left">
+                            <div className="text-white font-semibold text-xs">
+                              {t.symbol}
+                            </div>
+                            <div className="text-white/50 text-[9px]">
+                              {t.name}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-white font-bold text-[10px]">
+                            {numericBal.toFixed(4)}
+                          </div>
+                          <div className="text-white/50 text-[9px]">
+                            (${usdValue})
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (step === "swap") {
+    const fromMeta = resolveToken(fromToken);
+    const toMeta = resolveToken(toToken);
+    const fromBalance = getFromTokenBalance();
+    const toBalance = toToken === "NEAR" ? nearBalance : 
+      (walletTokens || []).find(wt => wt.symbol === toToken)?.balance || "0";
+    
+    return (
+      <div className="fixed inset-0 bg-[#0a0b2e] z-50 flex flex-col">
+        {/* Header */}
+        <div className="px-4 py-4 flex items-center gap-3">
+          <button onClick={onClose} className="text-white flex items-center gap-1">
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-sm">Back</span>
+          </button>
+          <h1
+            className="text-xl font-bold text-white tracking-[0.2em] flex-1 text-center"
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              textShadow: "0 0 15px rgba(99, 102, 241, 0.5)",
+            }}
+          >
+            SWAP
+          </h1>
+          <div className="w-16"></div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-4 pt-6 pb-28">
+          <div className="relative max-w-md mx-auto">
+            {/* You Pay Container */}
+            <div className="bg-[#1a1d3f]/40 rounded-2xl p-4 mb-3">
+              <div className="text-white text-xs mb-2 font-medium">You Pay</div>
+              <div className="flex items-center justify-between mb-1.5">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.0"
+                  className="text-white text-2xl font-light bg-transparent outline-none w-20"
+                />
+                <button
+                  onClick={() => setStep("selectFromToken")}
+                  className="flex items-center gap-1.5"
+                >
+                  <div className="w-5 h-5 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full"></div>
+                  <span className="text-white font-medium text-sm">{fromToken}</span>
+                  <svg className="w-3.5 h-3.5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+              <div className="text-white/60 text-xs">
+                Balance: {parseFloat(fromBalance).toFixed(2)} {fromToken}
+              </div>
+            </div>
+
+            {/* Swap Button - Positioned between containers */}
+            <div className="flex justify-center -my-6 relative z-10">
+              <button
+                onClick={() => {
+                  const temp = fromToken;
+                  setFromToken(toToken);
+                  setToToken(temp);
+                }}
+                className="w-12 h-12 bg-[#1a1d3f] border-2 border-white/20 rounded-full flex items-center justify-center hover:border-white/40 transition-colors"
+              >
+                <ArrowDownUp className="w-6 h-6 text-white" />
+              </button>
+            </div>
+
+            {/* You Receive Container */}
+            <div className="bg-[#1a1d3f]/40 rounded-2xl p-4 mt-3">
+              <div className="text-white text-xs mb-2 font-medium">You Receive</div>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="text-white text-2xl font-light">
+                  {liveQuote && Number(amount) > 0 ? parseFloat(liveQuote).toFixed(1) : "0.0"}
+                  {quoteLoading && <span className="text-xs ml-2">...</span>}
+                </div>
+                <button
+                  onClick={() => setStep("selectToToken")}
+                  className="flex items-center gap-1.5"
+                >
+                  <div className="w-5 h-5 bg-gradient-to-br from-pink-400 to-red-500 rounded-full"></div>
+                  <span className="text-white font-medium text-sm">{toToken}</span>
+                  <svg className="w-3.5 h-3.5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+              <div className="text-white/60 text-xs">
+                Balance: {parseFloat(toBalance || "0").toFixed(2)} {toToken}
+              </div>
+            </div>
+
+            {/* Swap Button */}
+            <button
+              onClick={() => setStep("confirm")}
+              disabled={!amount || Number(amount) <= 0 || !liveQuote}
+              className="w-full py-3.5 bg-[#0ea5e9] text-white rounded-2xl text-base font-bold hover:bg-[#0284c7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed tracking-wider shadow-lg shadow-blue-500/20 mt-6"
+            >
+              SWAP
+            </button>
           </div>
         </div>
       </div>
@@ -1036,114 +967,160 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     const minReceiveNum = basisQuote
       ? Number(basisQuote) * (1 - (slippageBps || 0) / 10000)
       : Math.max(0, amountNum * (1 - (slippageBps || 0) / 10000));
-    const verifierLabel = "Rhea Router";
+    const fromPrice = pricesUsd[fromToken] || 0;
+    const toPrice = pricesUsd[toToken] || 0;
+    const fromUsd = (amountNum * fromPrice).toFixed(5);
+    const toUsd = (minReceiveNum * toPrice).toFixed(2);
+    
     return (
-      <div className="fixed inset-0 bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] z-50 overflow-y-auto">
-        <div className="max-w-md mx-auto min-h-screen pb-6">
-          <div className="px-4 pt-6">
-            <div className="flex items-center justify-between mb-8">
-              <Button
-                variant="ghost"
-                className="text-white hover:bg-white/10 p-2"
-                onClick={() => setStep("swap")}
-              >
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Back
-              </Button>
-              <h1
-                className="text-3xl font-bold text-white tracking-wider"
-                style={{
-                  fontFamily: "monospace",
-                  letterSpacing: "0.2em",
-                  textShadow: "0 0 10px rgba(255,255,255,0.5)",
-                }}
-              >
-                SWAP
-              </h1>
-              <div className="w-20" />
+      <div className="fixed inset-0 bg-[#0a0b2e] z-50 flex flex-col">
+        {/* Header */}
+        <div className="px-3 py-3 border-b border-white/5">
+          <div className="text-white text-sm font-medium text-center">Swap Transaction</div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-3 py-4 pb-24 space-y-4">
+          {/* Swap Visual */}
+          <div className="flex items-center justify-between">
+            {/* From Token */}
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-xs">{fromToken.slice(0, 2)}</span>
+              </div>
+              <div className="text-center">
+                <div className="text-white font-semibold text-xs">{amountNum.toFixed(4)} {fromToken.toLowerCase()}</div>
+                <div className="text-white/50 text-[10px]">${fromUsd}</div>
+              </div>
             </div>
 
-            <div className="space-y-6">
-              <div className="text-white text-lg mb-4">Swap Transaction</div>
-
-              <div className="bg-[#0a0e27] rounded-2xl p-6 space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="text-white/70">From</div>
-                  <div className="text-white font-semibold">
-                    {amount || "0"} {fromToken}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-center">
-                  <div className="w-10 h-10 bg-[#1a1f3a] rounded-full flex items-center justify-center">
-                    <svg
-                      className="w-5 h-5 text-[#0075EA]"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                      />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="text-white/70">To (min receive)</div>
-                  <div className="text-white font-semibold">
-                    {minReceiveNum.toString()} {toToken}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="text-white/70">Router</div>
-                  <div className="text-white/60 text-sm font-mono truncate max-w-[55%] text-right">
-                    {verifierLabel}
-                  </div>
+            {/* Swap Icon */}
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="w-8 h-8 bg-[#1a1d3f] rounded-full flex items-center justify-center">
+                <ArrowDownUp className="w-4 h-4 text-[#0075EA]" />
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3.5 h-3.5 bg-gradient-to-br from-purple-400 to-purple-600 rounded-sm flex items-center justify-center">
+                  <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/>
+                  </svg>
                 </div>
               </div>
+            </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-white/70 text-sm">From token</div>
-                  <div className="text-white text-sm">{fromMeta.symbol}</div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="text-white/70 text-sm">To token</div>
-                  <div className="text-white text-sm">{toMeta.symbol}</div>
-                </div>
+            {/* To Token */}
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-red-500 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-xs">{toToken.slice(0, 2)}</span>
               </div>
-
-              <div className="border-t border-white/10 pt-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="text-white/70 text-sm">Network fees</div>
-                  <div className="text-white text-sm">
-                    Gas + 1 yocto on transfers
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="text-white font-medium">You send</div>
-                  <div className="text-white font-bold">
-                    {amount || "0"} {fromToken}
-                  </div>
-                </div>
+              <div className="text-center">
+                <div className="text-white font-semibold text-xs">{minReceiveNum.toFixed(4)} {toToken}</div>
+                <div className="text-white/50 text-[10px]">${toUsd}</div>
               </div>
+            </div>
+          </div>
 
-              <button
-                onClick={handleSwap}
-                className="w-full py-4 bg-[#0075EA] text-white rounded-full text-lg font-bold hover:bg-cyan-600 transition-colors"
-              >
-                {submitting ? "SWAPPING..." : "CONFIRM"}
+          {/* Transaction Details */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between py-1.5">
+              <div className="text-white/60 text-xs">From:</div>
+              <div className="text-white/80 text-[10px] font-mono truncate max-w-[55%]">
+                {accountId}
+              </div>
+              <button className="text-[#0075EA]">
+                <Copy className="w-3.5 h-3.5" />
               </button>
-              {error && (
-                <div className="text-red-400 text-sm text-center mt-2">
-                  {error}
-                </div>
-              )}
             </div>
+            <div className="flex items-center justify-between py-1.5">
+              <div className="text-white/60 text-xs">To:</div>
+              <div className="text-white/80 text-[10px] font-mono truncate max-w-[55%]">
+                {accountId}
+              </div>
+              <button className="text-[#0075EA]">
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-white/10 pt-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="text-white/60 text-xs">Network fees</div>
+              <div className="text-white text-xs">0.004BTC</div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-white/60 text-xs">Total</div>
+              <div className="text-white font-bold text-xs">0.1320BTC</div>
+            </div>
+          </div>
+
+          {/* Warning */}
+          <div className="flex items-start gap-2 p-2.5 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <div className="w-4 h-4 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg className="w-2.5 h-2.5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"/>
+              </svg>
+            </div>
+            <div className="text-blue-300 text-[10px]">Please double check recipient address</div>
+          </div>
+
+          {/* Confirm Button */}
+          <button
+            onClick={handleSwap}
+            disabled={submitting}
+            className="w-full py-3 bg-[#0075EA] text-white rounded-2xl text-sm font-bold hover:bg-cyan-600 transition-colors disabled:opacity-50"
+          >
+            {submitting ? "SWAPPING..." : "CONFIRM"}
+          </button>
+        </div>
+
+        {/* Error Modal */}
+        {error && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">
+            <div className="bg-[#1a1d3f] rounded-2xl p-6 w-[90%] max-w-sm overflow-hidden">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                  <X className="w-6 h-6 text-red-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-white font-semibold text-base mb-1 break-words">Transaction Error</h3>
+                  <p className="text-white/70 text-sm break-words">{error}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="w-full py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Confirmed Modal
+  if (step === "confirmed") {
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4">
+        <div className="bg-[#1a1d3f] rounded-2xl p-6 w-[90%] max-w-sm relative">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <div className="text-center space-y-4">
+            <h2 className="text-white text-xl font-semibold">Transaction Confirmed</h2>
+            <div className="w-20 h-20 mx-auto rounded-full border-4 border-[#0075EA] flex items-center justify-center">
+              <Check className="w-10 h-10 text-[#0075EA]" />
+            </div>
+            <button
+              onClick={onClose}
+              className="w-full py-3 bg-[#0075EA] hover:bg-cyan-600 text-white rounded-2xl text-sm font-medium transition-colors"
+            >
+              Done
+            </button>
           </div>
         </div>
       </div>

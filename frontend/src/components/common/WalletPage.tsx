@@ -37,6 +37,13 @@ const WalletPage = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const lastWalletFetchAtRef = useRef<number>(0);
+  
+  // AI Agent draggable state
+  const [aiPosition, setAiPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0, elementX: 0, elementY: 0 });
+  const hasDraggedRef = useRef(false);
+  const aiButtonRef = useRef<HTMLButtonElement>(null);
   const [tokenHoldings, setTokenHoldings] = useState<
     { id: string; symbol: string; balance: string; decimals?: number }[]
   >([]);
@@ -261,6 +268,72 @@ const WalletPage = () => {
       // You could add a toast notification here
     }
   };
+
+  // AI Agent drag handlers
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    
+    let currentX = aiPosition?.x || 0;
+    let currentY = aiPosition?.y || 0;
+    
+    // If position hasn't been set yet, get the actual position from the DOM
+    if (!aiPosition && aiButtonRef.current) {
+      const rect = aiButtonRef.current.getBoundingClientRect();
+      currentX = rect.left;
+      currentY = rect.top;
+    }
+    
+    dragStartRef.current = {
+      x: clientX,
+      y: clientY,
+      elementX: currentX,
+      elementY: currentY,
+    };
+    
+    hasDraggedRef.current = false;
+    setIsDragging(true);
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleDragMove = (e: MouseEvent | TouchEvent) => {
+      e.preventDefault();
+      const clientX = 'touches' in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
+      const clientY = 'touches' in e ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
+      
+      const deltaX = clientX - dragStartRef.current.x;
+      const deltaY = clientY - dragStartRef.current.y;
+      
+      // Mark as dragged if moved more than 5 pixels
+      if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+        hasDraggedRef.current = true;
+      }
+      
+      setAiPosition({
+        x: dragStartRef.current.elementX + deltaX,
+        y: dragStartRef.current.elementY + deltaY,
+      });
+    };
+
+    const handleDragEnd = () => {
+      setIsDragging(false);
+    };
+
+    window.addEventListener('mousemove', handleDragMove);
+    window.addEventListener('mouseup', handleDragEnd);
+    window.addEventListener('touchmove', handleDragMove, { passive: false });
+    window.addEventListener('touchend', handleDragEnd);
+    
+    return () => {
+      window.removeEventListener('mousemove', handleDragMove);
+      window.removeEventListener('mouseup', handleDragEnd);
+      window.removeEventListener('touchmove', handleDragMove);
+      window.removeEventListener('touchend', handleDragEnd);
+    };
+  }, [isDragging]);
 
   if (!isConnected) {
     return (
@@ -566,12 +639,27 @@ const WalletPage = () => {
         </div>
       </div>
 
-      {/* Floating AI Chat Button */}
-      <button
-        onClick={() => setIsChatOpen(true)}
-        className="fixed bottom-32 right-1 group"
-        style={{ zIndex: 9999 }}
-      >
+      {/* Floating AI Chat Button - Only show on main wallet page */}
+      {!activeFlow && (
+        <button
+          ref={aiButtonRef}
+          onClick={(e) => {
+            if (!hasDraggedRef.current) {
+              setIsChatOpen(!isChatOpen);
+            }
+          }}
+          onMouseDown={handleDragStart}
+          onTouchStart={handleDragStart}
+          className="fixed group cursor-move select-none"
+          style={{ 
+            zIndex: 9999,
+            left: aiPosition ? `${aiPosition.x}px` : 'auto',
+            top: aiPosition ? `${aiPosition.y}px` : 'auto',
+            right: !aiPosition ? '4px' : 'auto',
+            bottom: !aiPosition ? '128px' : 'auto',
+            transition: isDragging ? 'none' : 'all 0.3s ease',
+          }}
+        >
         <div className="relative">
           {/* Notification Badge */}
           {/* <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-blue-500 rounded-full border-2 border-[#0a0b2e] flex items-center justify-center z-10">
@@ -579,11 +667,12 @@ const WalletPage = () => {
           </div> */}
 
           {/* Main Button */}
-          <div className="w-24 h-24 rounded-full  items-center justify-center shadow-2xl group-hover:scale-110 transition-transform overflow-hidden">
+          <div className={`w-24 h-24 rounded-full items-center justify-center shadow-2xl ${!isDragging && 'group-hover:scale-110'} transition-transform overflow-hidden`}>
             <img
               src="/ai/AI-Assistant.svg"
               alt="AI Assistant"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover pointer-events-none"
+              draggable={false}
             />
           </div>
 
@@ -592,18 +681,21 @@ const WalletPage = () => {
         </div>
 
         {/* Tooltip */}
-        <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-          <div className="bg-white rounded-lg px-2.5 py-1.5 shadow-lg whitespace-nowrap">
-            <div className="flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-              <span className="text-xs font-medium text-gray-900">
-                Hi! How can I help you?
-              </span>
+        {!isDragging && (
+          <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+            <div className="bg-white rounded-2xl px-2.5 py-1.5 shadow-lg whitespace-nowrap">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                <span className="text-xs font-medium text-gray-900">
+                  Hi! How can I help you?
+                </span>
+              </div>
+              <div className="absolute bottom-0 right-3 transform translate-y-1/2 rotate-45 w-1.5 h-1.5 bg-white"></div>
             </div>
-            <div className="absolute bottom-0 right-3 transform translate-y-1/2 rotate-45 w-1.5 h-1.5 bg-white"></div>
           </div>
-        </div>
-      </button>
+        )}
+        </button>
+      )}
 
       {/* Modals */}
       {activeFlow === "send" && (
