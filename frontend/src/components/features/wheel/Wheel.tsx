@@ -835,29 +835,29 @@ export const WheelOfFortune = () => {
                 alt="Mascot"
                 width={165}
                 height={193}
-                className="object-contain w-[165px] h-[193px]"
+                className="object-contain w-[120px] h-[140px] md:w-[165px] md:h-[193px]"
               />
             </div>
 
             {/* Spinning Wheel */}
             <div className="relative flex flex-col items-center justify-center">
-              <div className="relative z-20">
-                <Image
-                  src="/assets/wheel/spin-wheel-new.svg"
-                  alt="Spin Wheel"
-                  width={383}
-                  height={377}
-                  className=""
-                  style={{
-                    transform: `rotate(${wheelAngle}deg)`,
-                    transition: isSpinning
-                      ? "transform 4s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
-                      : "none",
-                  }}
-                  onLoad={() => setIsWheelImageLoaded(true)}
-                  priority
-                />
-              </div>
+             <div className="relative z-20 w-[250px] h-[250px] md:w-[383px] md:h-[377px]">
+  <Image
+    src="/assets/wheel/spin-wheel-new.svg"
+    alt="Spin Wheel"
+    fill
+    className="object-contain"
+    style={{
+      transform: `rotate(${wheelAngle}deg)`,
+      transition: isSpinning
+        ? "transform 4s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+        : "none",
+    }}
+    onLoad={() => setIsWheelImageLoaded(true)}
+    priority
+  />
+</div>
+
 
               {/* Prize Indicator Arrow */}
               <div className="absolute top-2 left-1/2 transform -translate-x-1/2 -translate-y-2 z-30">
@@ -916,13 +916,13 @@ export const WheelOfFortune = () => {
         {/* Mascot and Spins Left */}
 
         {/* Spin Button */}
-        <div className="mb-6 md:mt-6 mt-12 flex justify-center">
+        <div className="mb-2 md:mt-6 mt-6 flex justify-center">
           {contractSpinsAvailable <= 0 ? (
             <div className="text-center">
-              <div className="text-white text-lg font-bold mb-2">
-                No Spins Available
+              <div className="text-white text-lg font-bold mb-1">
+                {/* No Spins Available */}
               </div>
-              <div className="text-white/70 text-sm">
+              <div className="text-white/70 text-xs">
                 Purchase spins with points
               </div>
             </div>
@@ -999,69 +999,73 @@ export const WheelOfFortune = () => {
           </div>
         )}
         {contractSpinsAvailable <= 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-            {/* <button
-                onClick={handleBuySpinWithNear}
-                className="w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-lg font-black rounded-2xl hover:opacity-90 transition-all"
-              >
-                Buy Spin (NEAR)
-              </button> */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => handleBuySpinWithPoints("500")}
-                disabled={isPurchasing}
-                className={`w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl transition-all ${
-                  isPurchasing
-                    ? "opacity-60 cursor-not-allowed"
-                    : "hover:opacity-90"
-                }`}
-              >
-                {isPurchasing && purchasingKey === "points-500" ? (
-                  <span className="inline-flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Processing...
-                  </span>
-                ) : (
-                  "1 Spin (500)"
-                )}
-              </button>
-              <button
-                onClick={() => handleBuySpinWithPoints("1000")}
-                disabled={isPurchasing}
-                className={`w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl transition-all ${
-                  isPurchasing
-                    ? "opacity-60 cursor-not-allowed"
-                    : "hover:opacity-90"
-                }`}
-              >
-                {isPurchasing && purchasingKey === "points-1000" ? (
-                  <span className="inline-flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Processing...
-                  </span>
-                ) : (
-                  "2 Spins (1000)"
-                )}
-              </button>
-              <button
-                onClick={() => handleBuySpinWithPoints("1500")}
-                disabled={isPurchasing}
-                className={`w-full py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-black rounded-2xl transition-all ${
-                  isPurchasing
-                    ? "opacity-60 cursor-not-allowed"
-                    : "hover:opacity-90"
-                }`}
-              >
-                {isPurchasing && purchasingKey === "points-1500" ? (
-                  <span className="inline-flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Processing...
-                  </span>
-                ) : (
-                  "3 Spins (1500)"
-                )}
-              </button>
-            </div>
+          <div className="flex flex-col gap-2 max-w-md mx-auto mb-4 px-4">
+            <button
+              onClick={() => handleBuySpinWithPoints("200")}
+              disabled={isPurchasing}
+              className={`w-full py-2 bg-transparent border-2 border-blue-500 rounded-2xl transition-all ${
+                isPurchasing && purchasingKey === "points-200"
+                  ? "opacity-60 cursor-not-allowed"
+                  : "hover:bg-blue-500/10"
+              }`}
+            >
+              {isPurchasing && purchasingKey === "points-200" ? (
+                <span className="inline-flex items-center justify-center gap-2 text-white">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </span>
+              ) : (
+                <span className="text-xs font-bold">
+                  <span className="text-orange-500">1</span>
+                  <span className="text-white"> SPIN </span>
+                  <span className="text-orange-500">200 SOLV</span>
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => handleBuySpinWithPoints("300")}
+              disabled={isPurchasing}
+              className={`w-full py-2 px-2 bg-transparent border-2 border-blue-500 rounded-2xl transition-all ${
+                isPurchasing && purchasingKey === "points-300"
+                  ? "opacity-60 cursor-not-allowed"
+                  : "hover:bg-blue-500/10"
+              }`}
+            >
+              {isPurchasing && purchasingKey === "points-300" ? (
+                <span className="inline-flex items-center justify-center gap-2 text-white">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </span>
+              ) : (
+                <span className="text-xs font-bold">
+                  <span className="text-orange-500">2</span>
+                  <span className="text-white"> SPIN </span>
+                  <span className="text-orange-500">300 SOLV</span>
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => handleBuySpinWithPoints("400")}
+              disabled={isPurchasing}
+              className={`w-full py-2 bg-transparent border-2 border-blue-500 rounded-2xl transition-all ${
+                isPurchasing && purchasingKey === "points-400"
+                  ? "opacity-60 cursor-not-allowed"
+                  : "hover:bg-blue-500/10"
+              }`}
+            >
+              {isPurchasing && purchasingKey === "points-400" ? (
+                <span className="inline-flex items-center justify-center gap-2 text-white">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </span>
+              ) : (
+                <span className="text-xs font-bold">
+                  <span className="text-orange-500">3</span>
+                  <span className="text-white"> SPIN </span>
+                  <span className="text-orange-500">400 SOLV</span>
+                </span>
+              )}
+            </button>
           </div>
         )}
         {/* Additional UI elements */}

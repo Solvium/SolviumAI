@@ -1,7 +1,6 @@
 "use client";
 
-import { ArrowLeft, Info, Copy, Share, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ChevronLeft, Info, Copy, Share, Check, Search } from "lucide-react";
 import QRCode from "qrcode.react";
 import { useEffect, useState } from "react";
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
@@ -50,49 +49,54 @@ const AddFlow = ({ onClose, accountId }: AddFlowProps) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] z-50 overflow-y-auto pb-20">
-      <div className="max-w-md mx-auto min-h-screen pb-6">
-        <div className="px-4 pt-6">
-          <div className="flex items-center justify-between mb-8">
-            <Button
-              variant="ghost"
-              className="text-white hover:bg-white/10 p-2"
+    <div className="fixed inset-0 bg-[#0a0b2e] z-50 flex flex-col">
+      {/* Fixed Header */}
+      <div className="sticky top-0 z-50 bg-[#0a0b2e] border-b border-white/5">
+        <div className="px-4 py-3.5">
+          <div className="flex items-center justify-between">
+            <button
               onClick={onClose}
+              className="text-white/80 hover:text-white flex items-center gap-1 text-sm"
             >
-              <ArrowLeft className="w-5 h-5 mr-2" />
-              Back
-            </Button>
+              <ChevronLeft className="w-4 h-4" />
+              <span className="text-xs">Back</span>
+            </button>
             <h1
-              className="text-3xl font-bold text-white tracking-wider"
+              className="text-lg font-bold text-white tracking-[0.2em]"
               style={{
-                fontFamily: "monospace",
-                letterSpacing: "0.2em",
-                textShadow: "0 0 10px rgba(255,255,255,0.5)",
+                fontFamily: "'Press Start 2P', monospace",
+                textShadow: "0 0 15px rgba(99, 102, 241, 0.5)",
               }}
             >
               ADD
             </h1>
-            <div className="w-20" />
+            <div className="w-12" />
           </div>
+        </div>
+      </div>
 
-          <div className="space-y-6">
-            <div className="bg-[#1a1f3a] rounded-xl p-4 flex items-start gap-3">
-              <Info className="w-5 h-5 text-cyan-500 flex-shrink-0 mt-0.5" />
-              <p className="text-white/70 text-sm">
-                Share your wallet address or QR code to receive NEAR tokens.
-                Make sure to double-check the address before sending.
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-4 pt-4 pb-20">
+
+          <div className="space-y-4">
+            {/* Info Box */}
+            <div className="bg-[#1a1d3f]/50 rounded-xl p-3 flex items-start gap-2.5 border border-white/10">
+              <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+              <p className="text-white/60 text-xs leading-relaxed">
+                Lorem ipsum dolor sit amet, consectetur adipiscing elit ut aliquam, sit amet luctus
               </p>
             </div>
 
-            <div className="flex flex-col items-center justify-center py-8">
-              <div className="bg-white p-8 rounded-3xl shadow-2xl">
+            {/* QR Code */}
+            <div className="flex flex-col items-center justify-center py-5">
+              <div className="bg-white p-5 rounded-2xl shadow-2xl">
                 {(() => {
                   try {
-                    // Encode just the wallet address in the QR code
                     return (
                       <QRCode
                         value={address}
-                        size={200}
+                        size={170}
                         level="H"
                         includeMargin={true}
                         renderAs="svg"
@@ -101,66 +105,57 @@ const AddFlow = ({ onClose, accountId }: AddFlowProps) => {
                   } catch (error) {
                     console.error("QR code rendering error:", error);
                     return (
-                      <div className="w-[200px] h-[200px] flex items-center justify-center text-red-500">
+                      <div className="w-[170px] h-[170px] flex items-center justify-center text-red-500 text-xs">
                         QR Error
                       </div>
                     );
                   }
                 })()}
               </div>
-              <p className="text-white/50 text-sm mt-4 text-center">
-                Scan to send NEAR to this wallet
-              </p>
             </div>
 
+            {/* Address Input */}
             <div className="relative">
               <input
                 type="text"
                 value={address}
                 readOnly
-                className="w-full bg-[#1a1f3a] text-white rounded-xl px-4 py-3 pr-12 outline-none focus:ring-2 focus:ring-cyan-500"
+                className="w-full bg-[#1a1d3f] text-white/80 rounded-xl px-3.5 py-2.5 pr-11 outline-none text-xs border border-white/10"
               />
               <button
                 onClick={handleCopy}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-cyan-500 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-blue-400 transition-colors"
                 title="Copy address"
               >
                 {copied ? (
-                  <Check className="w-5 h-5 text-green-500" />
+                  <Check className="w-4 h-4 text-green-500" />
                 ) : (
-                  <Copy className="w-5 h-5" />
+                  <Search className="w-4 h-4" />
                 )}
               </button>
             </div>
-            {copied && (
-              <p className="text-green-500 text-sm text-center">
-                Address copied to clipboard!
-              </p>
-            )}
 
-            <div className="flex gap-4 mt-12">
+            {/* Action Buttons */}
+            <div className="flex gap-3 mt-6">
               <button
                 onClick={handleShare}
                 disabled={isSharing}
-                className="flex-1 py-4 border-2 border-white/20 text-white rounded-full text-lg font-medium hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-1 py-3 border-2 border-white/20 text-white rounded-xl text-sm font-semibold hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isSharing ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                    Sharing...
+                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                    <span>Sharing...</span>
                   </>
                 ) : (
-                  <>
-                    <Share className="w-5 h-5" />
-                    Share
-                  </>
+                  <span>Share</span>
                 )}
               </button>
               <button
                 onClick={onClose}
-                className="flex-1 py-4 bg-cyan-500 text-white rounded-full text-lg font-medium hover:bg-cyan-600 transition-colors"
+                className="flex-1 py-3 bg-blue-500 text-white rounded-xl text-sm font-semibold hover:bg-blue-600 transition-colors"
               >
-                Done
+                Confirm
               </button>
             </div>
           </div>

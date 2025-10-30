@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
 import { useWalletPortfolioContext } from "@/contexts/WalletPortfolioContext";
-import { ArrowLeft, QrCode, Search, CheckCircle, XCircle } from "lucide-react";
+import { ArrowLeft, QrCode, Search, CheckCircle, XCircle, Check, X, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAccountInventory } from "@/lib/nearblocks";
 import { DEFAULT_TOKENS } from "@/lib/tokens";
@@ -13,10 +13,10 @@ interface SendFlowProps {
   onSuccess: () => void;
 }
 
-type SendStep = "amount" | "recipient" | "confirm";
+type SendStep = "selectRecipient" | "selectToken" | "enterAmount" | "confirmed";
 
 const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
-  const [step, setStep] = useState<SendStep>("amount");
+  const [step, setStep] = useState<SendStep>("selectRecipient");
   const [amount, setAmount] = useState("");
   const [recipient, setRecipient] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -373,12 +373,10 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
   }, [scannerOpen]);
 
   const handleConfirm = async () => {
-    if (step === "amount") {
-      setStep("recipient");
-    } else if (step === "recipient") {
-      // Move to confirm step and refresh NEAR price just before showing
+    if (step === "selectRecipient") {
+      // Validate recipient before moving to token selection
       setError(null);
-      if (!amount || !recipient) return;
+      if (!recipient) return;
       if (recipientValid === false) {
         setError("Recipient account does not exist");
         return;
@@ -387,10 +385,12 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
         setError("Please wait for recipient verification");
         return;
       }
-      fetchNearPrice();
-      setStep("confirm");
-    } else if (step === "confirm") {
-      // Execute transfer from confirm step
+      setStep("selectToken");
+    } else if (step === "selectToken") {
+      // Token selected, move to amount entry
+      setStep("enterAmount");
+    } else if (step === "enterAmount") {
+      // Execute transfer from amount step
       setError(null);
       if (!amount || !recipient) return;
       const normalized = amount.trim();
@@ -449,7 +449,8 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
             })
           );
         } catch {}
-        onSuccess();
+        // Show confirmed modal
+        setStep("confirmed");
       } catch (e: any) {
         setError(e?.message || "Failed to send");
       } finally {
@@ -458,216 +459,10 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     }
   };
 
-  if (step === "amount") {
+  // Screen 1: Select Recipient (First Screen)
+  if (step === "selectRecipient") {
     return (
-      <div className="fixed inset-0 bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] z-50 overflow-y-auto pb-20">
-        <div className="max-w-md mx-auto min-h-screen pb-6">
-          <div className="px-4 pt-6">
-            <div className="flex items-center justify-between mb-8">
-              <Button
-                variant="ghost"
-                className="text-white hover:bg-white/10 p-2"
-                onClick={onClose}
-              >
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Back
-              </Button>
-              <h1
-                className="text-3xl font-bold text-white tracking-wider"
-                style={{
-                  fontFamily: "monospace",
-                  letterSpacing: "0.2em",
-                  textShadow: "0 0 10px rgba(255,255,255,0.5)",
-                }}
-              >
-                SEND
-              </h1>
-              <div className="w-20" />
-            </div>
-
-            <div className="space-y-6">
-              <div className="text-center space-y-4">
-                <div className="text-white/50 text-sm">Enter Amount</div>
-                <div className="flex items-center justify-center gap-2">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0.0"
-                    value={amount}
-                    onChange={(e) => handleAmountChange(e.target.value)}
-                    className="text-white text-4xl font-light min-w-[200px] text-center bg-transparent outline-none focus:border-cyan-500"
-                  />
-                </div>
-                <button
-                  onClick={handleMaxClick}
-                  className="px-6 py-2 bg-[#0075EA] text-white rounded-full text-sm font-medium hover:bg-cyan-600 transition-colors"
-                >
-                  Max
-                </button>
-              </div>
-
-              <div className="mt-8">
-                <div className="text-white/70 text-sm mb-3">Asset</div>
-                <button
-                  type="button"
-                  onClick={() => setTokenSelectorOpen(true)}
-                  className="w-full bg-[#1a1f3a] rounded-2xl p-4 flex items-center justify-between hover:bg-white/5 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
-                      <span className="text-white font-bold text-sm">
-                        {selectedToken.symbol.slice(0, 2)}
-                      </span>
-                    </div>
-                    <div className="text-left">
-                      <div className="text-white font-medium">
-                        {selectedToken.name}
-                      </div>
-                      <div className="text-white/50 text-xs">
-                        {selectedToken.kind === "native"
-                          ? "Native"
-                          : truncateAddress(selectedToken.address || "")}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-white/60 text-sm">Change</div>
-                </button>
-
-                {tokenSelectorOpen && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-                    <div className="bg-[#0f1535] w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-4">
-                      <div className="text-white font-semibold mb-3">
-                        Select asset
-                      </div>
-                      <div className="space-y-2 max-h-80 overflow-y-auto">
-                        {availableTokens.map((t) => {
-                          const numericBal =
-                            typeof t.balance === "string"
-                              ? parseFloat(t.balance)
-                              : (t.balance as number | undefined) ?? 0;
-                          const isDisabled =
-                            t.kind === "ft" &&
-                            (isNaN(numericBal) || numericBal <= 0);
-                          return (
-                            <button
-                              key={`${t.address || t.symbol}`}
-                              onClick={() => {
-                                if (isDisabled) return;
-                                setSelectedToken(t);
-                                setTokenSelectorOpen(false);
-                              }}
-                              disabled={isDisabled}
-                              className={`w-full flex items-center justify-between p-3 rounded-xl transition-colors ${
-                                isDisabled
-                                  ? "opacity-40 cursor-not-allowed"
-                                  : "hover:bg-white/5"
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
-                                  <span className="text-white font-bold text-sm">
-                                    {t.symbol.slice(0, 2)}
-                                  </span>
-                                </div>
-                                <div className="text-left">
-                                  <div className="text-white font-medium">
-                                    {t.name}
-                                  </div>
-                                  <div className="text-white/50 text-xs">
-                                    {t.kind === "native"
-                                      ? "Native"
-                                      : truncateAddress(t.address || "")}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                {t.balance !== undefined && (
-                                  <div className="text-white text-xs">
-                                    {String(t.balance)} {t.symbol}
-                                  </div>
-                                )}
-                                {selectedToken.symbol === t.symbol && (
-                                  <div className="text-cyan-400 text-xs">
-                                    Selected
-                                  </div>
-                                )}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="flex justify-end mt-3">
-                        <Button
-                          onClick={() => setTokenSelectorOpen(false)}
-                          className="bg-blue-600 hover:bg-blue-700"
-                        >
-                          Close
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-3 gap-4 mt-12">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                  <button
-                    key={num}
-                    onClick={() => handleNumberClick(num.toString())}
-                    className="h-16 text-white text-2xl font-light hover:bg-white/10 rounded-xl transition-colors"
-                  >
-                    {num}
-                  </button>
-                ))}
-                <button
-                  onClick={() => handleNumberClick(".")}
-                  className="h-16 text-white text-2xl font-light hover:bg-white/10 rounded-xl transition-colors"
-                >
-                  .
-                </button>
-                <button
-                  onClick={() => handleNumberClick("0")}
-                  className="h-16 text-white text-2xl font-light hover:bg-white/10 rounded-xl transition-colors"
-                >
-                  0
-                </button>
-                <button
-                  onClick={handleBackspace}
-                  className="h-16 text-white hover:bg-white/10 rounded-xl transition-colors flex items-center justify-center"
-                >
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M14 5l7 7m0 0l-7 7m7-7H3"
-                    />
-                  </svg>
-                </button>
-              </div>
-
-              <button
-                onClick={handleConfirm}
-                disabled={!amount}
-                className="w-full py-4 bg-[#0075EA] text-white rounded-full text-lg font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-8"
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (step === "recipient") {
-    return (
-      <div className="fixed inset-0 bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] z-50 overflow-y-auto">
+      <div className="fixed inset-0 bg-[#0a0b2e] z-50 flex flex-col">
         {scannerOpen && (
           <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
             <div className="relative w-full max-w-md bg-[#0f1535] rounded-2xl p-4">
@@ -695,29 +490,27 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
             </div>
           </div>
         )}
-        <div className="max-w-md mx-auto min-h-screen pb-6">
-          <div className="px-4 pt-6">
-            <div className="flex items-center justify-between mb-8">
-              <Button
-                variant="ghost"
-                className="text-white hover:bg-white/10 p-2"
-                onClick={() => setStep("amount")}
-              >
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Back
-              </Button>
-              <h1
-                className="text-3xl font-bold text-white tracking-wider"
-                style={{
-                  fontFamily: "monospace",
-                  letterSpacing: "0.2em",
-                  textShadow: "0 0 10px rgba(255,255,255,0.5)",
-                }}
-              >
-                SEND
-              </h1>
-              <div className="w-20" />
-            </div>
+        {/* Fixed Header */}
+        <div className="px-4 py-4 border-b border-white/5 flex items-center gap-3">
+          <button onClick={onClose} className="text-white flex items-center gap-1">
+            <ArrowLeft className="w-5 h-5" />
+            <span className="text-sm">Back</span>
+          </button>
+          <h1
+            className="text-xl font-bold text-white tracking-[0.2em] flex-1 text-center"
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              textShadow: "0 0 15px rgba(99, 102, 241, 0.5)",
+            }}
+          >
+            SEND
+          </h1>
+          <div className="w-16"></div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-4 pt-4 pb-24">
 
             <div className="space-y-6">
               <div>
@@ -850,88 +643,477 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     );
   }
 
-  if (step === "confirm") {
-    const normalized = amount.trim();
-    const tokenLabel =
-      selectedToken.kind === "native"
-        ? "NEAR"
-        : `${selectedToken.symbol} (${truncateAddress(
-            selectedToken.address || ""
-          )})`;
-    const fiatValue =
-      selectedToken.kind === "native" && nearPriceUsd
-        ? (Number(normalized || 0) * nearPriceUsd).toFixed(2)
-        : null;
-    const feeNote =
-      selectedToken.kind === "native"
-        ? "Network fee (gas)"
-        : "Gas + 1 yoctoNEAR";
+  // Render recipient screen with token modal overlay
+  if (step === "selectRecipient" || step === "selectToken") {
+    const showTokenModal = step === "selectToken";
+    
     return (
-      <div className="fixed inset-0 bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] z-50 overflow-y-auto">
-        <div className="max-w-md mx-auto min-h-screen pb-6">
-          <div className="px-4 pt-6">
-            <div className="flex items-center justify-between mb-8">
-              <Button
-                variant="ghost"
-                className="text-white hover:bg:white/10 p-2"
-                onClick={() => setStep("recipient")}
-              >
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Back
-              </Button>
-              <h1
-                className="text-3xl font-bold text-white tracking-wider"
-                style={{
-                  fontFamily: "monospace",
-                  letterSpacing: "0.2em",
-                  textShadow: "0 0 10px rgba(255,255,255,0.5)",
-                }}
-              >
-                CONFIRM
-              </h1>
-              <div className="w-20" />
-            </div>
-
-            <div className="space-y-6">
-              <div className="bg-[#0f1535] rounded-2xl p-4 space-y-3">
-                <div className="flex items-center justify-between text-white/80">
-                  <span>Recipient</span>
-                  <span className="text-white">{recipient.trim()}</span>
+      <>
+        {/* Recipient Screen (always rendered) */}
+        <div 
+          className={`fixed inset-0 bg-[#0a0b2e] z-50 flex flex-col ${showTokenModal ? 'cursor-pointer' : ''}`}
+          onClick={() => {
+            if (showTokenModal) {
+              setStep("selectRecipient");
+            }
+          }}
+        >
+          {scannerOpen && !showTokenModal && (
+            <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 pointer-events-auto">
+              <div className="relative w-full max-w-md bg-[#0f1535] rounded-2xl p-4">
+                <div className="text-white mb-2 font-medium">Scan QR Code</div>
+                <div className="relative rounded-lg overflow-hidden bg-black">
+                  <video
+                    ref={videoRef}
+                    className="w-full h-72 object-cover"
+                    playsInline
+                    muted
+                  />
+                  <div className="absolute inset-0 border-2 border-cyan-400/60 m-8 rounded-xl pointer-events-none" />
                 </div>
-                <div className="flex items-center justify-between text-white/80">
-                  <span>Token</span>
-                  <span className="text-white">{tokenLabel}</span>
-                </div>
-                <div className="flex items-center justify-between text-white/80">
-                  <span>Amount</span>
-                  <span className="text-white">{normalized}</span>
-                </div>
-                <div className="flex items-center justify-between text-white/80">
-                  <span>Estimated Fee</span>
-                  <span className="text-white">{feeNote}</span>
-                </div>
-                {selectedToken.kind === "native" && (
-                  <div className="flex items-center justify-between text-white/80">
-                    <span>Fiat (USD)</span>
-                    <span className="text-white">
-                      {priceLoading ? "..." : fiatValue ? `$${fiatValue}` : "-"}
-                    </span>
-                  </div>
+                {scannerError && (
+                  <div className="text-red-400 text-sm mt-2">{scannerError}</div>
                 )}
+                <div className="flex justify-end mt-3">
+                  <Button
+                    onClick={stopScanner}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Fixed Header */}
+          <div className="px-4 py-4 border-b border-white/5 flex items-center gap-3">
+            <button onClick={onClose} className="text-white flex items-center gap-1 pointer-events-auto">
+              <ArrowLeft className="w-5 h-5" />
+              <span className="text-sm">Back</span>
+            </button>
+            <h1
+              className="text-xl font-bold text-white tracking-[0.2em] flex-1 text-center"
+              style={{
+                fontFamily: "'Press Start 2P', monospace",
+                textShadow: "0 0 15px rgba(99, 102, 241, 0.5)",
+              }}
+            >
+              SEND
+            </h1>
+            <div className="w-16"></div>
+          </div>
+
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="px-4 pt-4 pb-24">
+              <div className="space-y-6">
+                <div>
+                  <div className="text-[#0075EA] text-sm mb-3">Send To</div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Enter recipient address"
+                      value={recipient}
+                      onChange={(e) => handleRecipientChange(e.target.value)}
+                      className={`w-full bg-[#1a1d3f] text-white/50 rounded-xl px-4 py-3 pr-12 outline-none focus:ring-2 pointer-events-auto ${
+                        recipientValid === true
+                          ? "focus:ring-green-500 border-green-500"
+                          : recipientValid === false
+                          ? "focus:ring-red-500 border-red-500"
+                          : "focus:ring-cyan-500"
+                      }`}
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-auto">
+                      {verifyingRecipient && (
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-cyan-500 border-t-transparent" />
+                      )}
+                      {recipientValid === true && !verifyingRecipient && (
+                        <div className="text-green-500">
+                          <CheckCircle className="w-5 h-5" />
+                        </div>
+                      )}
+                      {recipientValid === false && !verifyingRecipient && (
+                        <div className="text-red-500">
+                          <XCircle className="w-5 h-5" />
+                        </div>
+                      )}
+                      <button
+                        className="text-[#0075EA]"
+                        onClick={startScanner}
+                        title="Scan QR"
+                      >
+                        <QrCode className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                  {recipientValid === false && recipient.trim() && (
+                    <div className="text-red-500 text-sm mt-2">
+                      Account does not exist
+                    </div>
+                  )}
+                  {recipientValid === true && recipient.trim() && (
+                    <div className="text-green-500 text-sm mt-2">
+                      Account verified
+                    </div>
+                  )}
+                  <button
+                    className="text-[#0075EA] text-sm mt-2 flex items-center gap-1 disabled:opacity-40 pointer-events-auto"
+                    onClick={handleSaveContact}
+                    disabled={!recipient.trim() || verifyingRecipient}
+                  >
+                    <span className="text-lg">+</span> Add this to your address book
+                  </button>
+                </div>
+
+                <div>
+                  <div className="text-white text-sm mb-3">Address Book</div>
+                  <div className="relative mb-4">
+                    <input
+                      type="text"
+                      placeholder="Search recipient"
+                      value={contactSearch}
+                      onChange={(e) => setContactSearch(e.target.value)}
+                      className="w-full bg-[#1a1d3f] text-white/50 rounded-xl px-4 py-3 pr-12 outline-none focus:ring-2 focus:ring-cyan-500 pointer-events-auto"
+                    />
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 w-5 h-5" />
+                  </div>
+
+                  <div className="space-y-3">
+                    {contacts.length > 0 ? (
+                      contacts
+                        .filter((c) => {
+                          const q = contactSearch.trim().toLowerCase();
+                          if (!q) return true;
+                          return (
+                            c.name.toLowerCase().includes(q) ||
+                            c.address.toLowerCase().includes(q)
+                          );
+                        })
+                        .map((contact, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => handleRecipientChange(contact.address)}
+                            className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl transition-colors pointer-events-auto"
+                          >
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-orange-400 flex-shrink-0" />
+                            <div className="text-left">
+                              <div className="text-white font-medium">
+                                {contact.name}
+                              </div>
+                              <div className="text-white/50 text-sm">
+                                {contact.address}
+                              </div>
+                            </div>
+                          </button>
+                        ))
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="text-white/50 text-sm mb-2">
+                          No saved contacts
+                        </div>
+                        <div className="text-white/30 text-xs">
+                          Enter a wallet address manually or save contacts for
+                          quick access
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="text-red-400 text-sm mt-2">{error}</div>
+                )}
+                <button
+                  onClick={handleConfirm}
+                  disabled={!recipient || submitting || recipientValid === false}
+                  className="w-full py-4 bg-[#0075EA] text-white rounded-full text-lg font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-8 pointer-events-auto"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Token Selection Modal - Compact Bottom Sheet */}
+        {showTokenModal && (
+          <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 pb-20">
+            <div 
+              className="bg-[#0a0b2e] w-[95%] max-w-md mx-auto rounded-t-2xl flex flex-col max-h-[60vh] mb-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Progress Bar */}
+              <div className="w-full h-1 bg-white/10 rounded-t-2xl overflow-hidden">
+                <div className="h-full w-1/3 bg-white"></div>
               </div>
 
-              {error && (
-                <div className="text-red-400 text-sm mt-2">{error}</div>
-              )}
+              {/* Modal Header */}
+              <div className="px-3 py-2.5 border-b border-white/5 flex items-center justify-between">
+                <h2 className="text-white text-sm font-medium">Select Token</h2>
+                <button
+                  onClick={() => setStep("selectRecipient")}
+                  className="text-white/60 hover:text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="px-3 pt-2.5 pb-3 space-y-2.5">
+                  {/* Search Section */}
+                  <div>
+                    <div className="text-white text-[10px] mb-1.5">Search</div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search token"
+                        className="w-full bg-[#1a1d3f] text-white/60 rounded-lg px-3 py-1.5 pr-9 outline-none text-xs border border-white/10"
+                      />
+                      <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/50 w-3.5 h-3.5" />
+                    </div>
+                  </div>
+
+                  {/* Token List */}
+                  <div className="space-y-1">
+                    {availableTokens.map((t) => {
+                      const numericBal =
+                        typeof t.balance === "string"
+                          ? parseFloat(t.balance)
+                          : (t.balance as number | undefined) ?? 0;
+                      const usdValue = numericBal > 0 ? (numericBal * 29.56).toFixed(2) : "0.00";
+                      
+                      return (
+                        <button
+                          key={`${t.address || t.symbol}`}
+                          onClick={() => {
+                            setSelectedToken(t);
+                            setStep("enterAmount");
+                          }}
+                          className="w-full flex items-center justify-between p-2 hover:bg-white/5 rounded-lg transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center">
+                              <span className="text-white font-bold text-[10px]">
+                                {t.symbol.slice(0, 2)}
+                              </span>
+                            </div>
+                            <div className="text-left">
+                              <div className="text-white font-semibold text-xs">
+                                {t.symbol}
+                              </div>
+                              <div className="text-white/50 text-[9px]">
+                                {t.name}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-white font-bold text-[10px]">
+                              {numericBal.toFixed(7)}
+                            </div>
+                            <div className="text-white/50 text-[9px]">
+                              (${usdValue})
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // Screen 3: Enter Amount
+  if (step === "enterAmount") {
+    const numericBal =
+      typeof selectedToken.balance === "string"
+        ? parseFloat(selectedToken.balance)
+        : (selectedToken.balance as number | undefined) ?? 0;
+    const usdValue = numericBal > 0 ? (numericBal * 3000).toFixed(0) : "0";
+    
+    return (
+      <div className="fixed inset-0 bg-[#0a0b2e] z-50 flex flex-col">
+        {/* Progress Bar */}
+        <div className="w-full h-1 bg-white/10">
+          <div className="h-full w-full bg-white"></div>
+        </div>
+
+        {/* Fixed Header */}
+        <div className="px-3 py-3 border-b border-white/5 flex items-center gap-2">
+          <button onClick={() => setStep("selectToken")} className="text-white flex items-center gap-0.5">
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-xs">Back</span>
+          </button>
+          <h1
+            className="text-base font-bold text-white tracking-[0.2em] flex-1 text-center"
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              textShadow: "0 0 15px rgba(99, 102, 241, 0.5)",
+            }}
+          >
+            SEND
+          </h1>
+          <div className="w-12"></div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-3 sm:px-4 md:px-6 pt-3 pb-24 space-y-3 max-w-md mx-auto">
+            {/* Amount Input */}
+            <div className="text-center space-y-2">
+              <div className="text-white/60 text-xs sm:text-sm">Enter Amount</div>
+              <div className="flex items-center justify-center">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="|"
+                  value={amount}
+                  onChange={(e) => handleAmountChange(e.target.value)}
+                  className="text-white text-3xl sm:text-4xl md:text-5xl font-light w-full text-center bg-transparent outline-none"
+                />
+              </div>
               <button
-                onClick={handleConfirm}
-                disabled={submitting}
-                className="w-full py-4 bg-[#0075EA] text-white rounded-full text-lg font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+                onClick={handleMaxClick}
+                className="px-5 py-1.5 sm:px-6 sm:py-2 bg-blue-600 text-white rounded-full text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors"
               >
-                {submitting ? "Sending..." : "Send"}
+                Max
               </button>
             </div>
+
+            {/* Available Balance */}
+            <div>
+              <div className="text-white/60 text-xs sm:text-sm mb-2">Available Balance</div>
+              <div className="bg-[#1a1d3f] rounded-2xl p-3 sm:p-4 flex items-center justify-between">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center">
+                    <span className="text-white font-bold text-xs sm:text-sm">
+                      {selectedToken.symbol.slice(0, 2)}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-white font-semibold text-xs sm:text-sm">
+                      {selectedToken.symbol}
+                    </div>
+                    <div className="text-white/50 text-[10px] sm:text-xs">
+                      {selectedToken.name}
+                    </div>
+                  </div>
+                  <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 ml-1" />
+                </div>
+                <div className="text-right">
+                  <div className="text-white font-bold text-xs sm:text-sm">
+                    {numericBal.toFixed(6)}
+                  </div>
+                  <div className="text-white/50 text-[10px] sm:text-xs">
+                    (${usdValue})
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Number Pad */}
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-3 md:gap-4 mt-2">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                <button
+                  key={num}
+                  onClick={() => handleNumberClick(num.toString())}
+                  className="h-14 sm:h-16 md:h-18 text-white text-xl sm:text-2xl md:text-3xl font-light hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  {num}
+                </button>
+              ))}
+              <button
+                onClick={() => handleNumberClick(".")}
+                className="h-14 sm:h-16 md:h-18 text-white text-xl sm:text-2xl md:text-3xl font-light hover:bg-white/10 rounded-lg transition-colors"
+              >
+                .
+              </button>
+              <button
+                onClick={() => handleNumberClick("0")}
+                className="h-14 sm:h-16 md:h-18 text-white text-xl sm:text-2xl md:text-3xl font-light hover:bg-white/10 rounded-lg transition-colors"
+              >
+                0
+              </button>
+              <button
+                onClick={handleBackspace}
+                className="h-14 sm:h-16 md:h-18 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center justify-center"
+              >
+                <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+            </div>
+
+            {/* Confirm Button */}
+            <button
+              onClick={handleConfirm}
+              disabled={!amount || submitting}
+              className="w-full py-3 sm:py-4 bg-blue-500 text-white rounded-2xl text-sm sm:text-base font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-3"
+            >
+              {submitting ? "Sending..." : "Confirm"}
+            </button>
+          </div>
+        </div>
+
+        {/* Error Modal */}
+        {error && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">
+            <div className="bg-[#1a1d3f] rounded-2xl p-6 w-[90%] max-w-sm overflow-hidden">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                  <XCircle className="w-6 h-6 text-red-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-white font-semibold text-base mb-1 break-words">Transaction Error</h3>
+                  <p className="text-white/70 text-sm break-words">{error}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="w-full py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Screen 4: Transaction Confirmed Modal
+  if (step === "confirmed") {
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60">
+        <div className="bg-[#1a1d3f] rounded-2xl p-6 w-[90%] max-w-sm relative">
+          <button
+            onClick={onSuccess}
+            className="absolute top-4 right-4 text-white/60 hover:text-white"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          
+          <div className="text-center space-y-6">
+            <h2 className="text-white text-xl font-semibold">
+              Transaction Confirmed
+            </h2>
+            
+            <div className="flex items-center justify-center">
+              <div className="w-24 h-24 rounded-full border-4 border-blue-500 flex items-center justify-center">
+                <Check className="w-12 h-12 text-blue-500" />
+              </div>
+            </div>
+            
+            <button
+              onClick={onSuccess}
+              className="w-full py-3 bg-blue-500 text-white rounded-xl text-sm font-semibold hover:bg-blue-600 transition-colors"
+            >
+              Done
+            </button>
           </div>
         </div>
       </div>
