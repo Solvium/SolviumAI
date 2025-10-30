@@ -1,0 +1,187 @@
+import { NextRequest, NextResponse } from "next/server";
+import { jwtDecode } from "jwt-decode";
+import { prisma } from "@/lib/prisma";
+import { JWTService } from "@/lib/auth/jwt";
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { credential } = body;
+
+    if (!credential) {
+      return NextResponse.json(
+        { error: "Google credential is required" },
+        { status: 400 }
+      );
+    }
+
+    // Decode the JWT token from Google
+    let decoded: any;
+    try {
+      decoded = jwtDecode(credential);
+    } catch (error) {
+      console.error("Failed to decode Google token:", error);
+      return NextResponse.json(
+        { error: "Invalid Google token format" },
+        { status: 400 }
+      );
+    }
+
+    // Validate the token
+    if (!decoded.email || !decoded.sub) {
+      return NextResponse.json(
+        { error: "Invalid Google token - missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    // Debug logging for Google token data
+    console.log("Google token decoded data:", {
+      email: decoded.email,
+      picture: decoded.picture,
+      given_name: decoded.given_name,
+      family_name: decoded.family_name,
+    });
+
+    // Check if user already exists in database
+    let user = await prisma.user.findUnique({
+      where: { email: decoded.email },
+    });
+
+    if (!user) {
+      // Create new user in database
+      user = await prisma.user.create({
+        data: {
+          username: decoded.email.split("@")[0],
+          email: decoded.email,
+          name: `${decoded.given_name || ""} ${
+            decoded.family_name || ""
+          }`.trim(),
+          avatar_url: decoded.picture || null, // Google profile picture
+          referredBy: "", // Default empty value
+          level: 1,
+          difficulty: 1,
+          puzzleCount: 1,
+          referralCount: 0,
+          spinCount: 0,
+          dailySpinCount: 0,
+          claimCount: 0,
+          lastSpinClaim: new Date(),
+          totalPoints: 0,
+          isOfficial: false,
+          isMining: false,
+          isPremium: false,
+          lastClaim: new Date(),
+          weeklyPoints: 0,
+        },
+      });
+    } else {
+      // Update existing user's avatar with latest Google profile picture
+      if (decoded.picture) {
+        console.log("Updating existing user avatar:", {
+          userId: user.id,
+          currentAvatar: user.avatar_url,
+          newAvatar: decoded.picture,
+        });
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { avatar_url: decoded.picture },
+        });
+        console.log("User avatar updated successfully");
+      } else {
+        console.log("No picture in Google token for existing user");
+      }
+    }
+
+    // Parse wallet data if it exists
+    let walletData = null;
+    if (user.wallet) {
+      try {
+        walletData =
+          typeof user.wallet === "string"
+            ? JSON.parse(user.wallet)
+            : user.wallet;
+      } catch (error) {
+        console.error("Error parsing wallet data:", error);
+      }
+    }
+
+    // Create complete user data for response
+    const userData = {
+      id: user.id.toString(),
+      username: user.username,
+      email: user.email,
+      telegramId: undefined, // Not available for Google auth
+      googleId: decoded.sub,
+      firstName: decoded.given_name,
+      lastName: decoded.family_name,
+      avatar: decoded.picture,
+      totalPoints: user.totalPoints || 0,
+      multiplier: 1, // Default multiplier
+      level: user.level || 1,
+      difficulty: user.difficulty || 1,
+      puzzleCount: user.puzzleCount || 0,
+      referralCount: user.referralCount || 0,
+      spinCount: user.spinCount || 0,
+      dailySpinCount: user.dailySpinCount || 0,
+      claimCount: user.claimCount || 0,
+      isOfficial: user.isOfficial || false,
+      isMining: user.isMining || false,
+      isPremium: user.isPremium || false,
+      weeklyPoints: user.weeklyPoints || 0,
+      createdAt: new Date(), // Default since not in schema
+      lastLoginAt: new Date(),
+      lastSpinClaim: user.lastSpinClaim || undefined,
+      lastClaim: user.lastClaim || undefined,
+      chatId: user.chatId || undefined,
+      wallet: walletData, // Include parsed wallet data
+    };
+
+    // Issue JWT cookies
+    const accessToken = JWTService.generateAccessToken(userData as any);
+    const refreshToken = JWTService.generateRefreshToken(
+      userData.id,
+      "google_session"
+    );
+
+    const response = NextResponse.json({
+      success: true,
+      user: userData,
+      accessToken,
+      refreshToken,
+    });
+
+    response.cookies.set("accessToken", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
+      path: "/",
+      maxAge: 15 * 60,
+    });
+
+    response.cookies.set("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60,
+    });
+
+    // Also set legacy auth_token for backward compatibility
+    response.cookies.set("auth_token", userData.id, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+    });
+
+    return response;
+  } catch (error) {
+    console.error("Google auth error:", error);
+    return NextResponse.json(
+      { error: "Authentication failed - please try again" },
+      { status: 500 }
+    );
+  }
+}

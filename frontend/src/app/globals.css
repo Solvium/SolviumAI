@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ✅ Proper font-face definitions */
+@font-face {
+  font-family: "Digitalt";
+  src: url("/fonts/Digitalt.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Karla";
+  src: url("/fonts/Karla-Regular.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Karla";
+  src: url("/fonts/Karla-Bold.ttf") format("truetype");
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Inter_Regular";
+  src: url("/fonts/Inter-Regular.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+:root {
+  /* Updated to tropical Sonic Dash color scheme */
+  --foreground-rgb: 30, 58, 138;
+  --background-start-rgb: 0, 170, 255;
+  --background-end-rgb: 255, 127, 80;
+  --wheel-glow-color: rgba(255, 127, 80, 0.8);
+  --wheel-primary: #00aaff;
+  --wheel-secondary: #ff7f50;
+  --wheel-bg: #1e3a8a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 170, 255;
+    --background-end-rgb: 255, 127, 80;
+  }
+}
+
+/* ✅ Set default font to Karla (instead of Digitalt everywhere) */
+body {
+  font-family: "Karla", sans-serif;
+  color: rgb(var(--foreground-rgb));
+  background-color: #0a0146;
+  font-feature-settings: "ss01" 1, "ss02" 1, "ss03" 1;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  font-size: 11px;
+}
+
+* {
+  @apply border-border;
+  letter-spacing: 0.5px;
+}
+
+/* Typography classes for special display styles */
+.text-display {
+  font-family: "Digitalt", sans-serif; /* ✅ Use Digitalt only for display */
+  font-size: 2.5rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.text-title {
+  font-family: "Digitalt", sans-serif;
+  font-size: 2rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  font-weight: 700;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.text-subtitle {
+  font-size: 1.5rem;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  font-weight: 600;
+}
+
+.text-body {
+  font-size: 1rem;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+
+/* Wheel spinning animations */
+@keyframes wheelSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(1800deg);
+  }
+}
+
+@keyframes wheelSpinSlow {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-wheel-spin {
+  animation: wheelSpin 4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.animate-wheel-spin-slow {
+  animation: wheelSpinSlow 2s linear infinite;
+}
