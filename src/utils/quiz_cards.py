@@ -1,0 +1,430 @@
+"""
+Quiz Card Formatting Utilities
+Rich formatting for quiz announcements and displays
+"""
+
+from typing import List, Optional, Dict, Any
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from .telegram_helpers import sanitize_markdown
+
+
+def create_quiz_announcement_card(
+    topic: str,
+    num_questions: int,
+    duration_minutes: int,
+    reward_amount: float,
+    reward_structure: str,
+    quiz_id: str,
+    is_free: bool = False,
+    bot_username: str = None,
+    payment_method: str = "NEAR",
+    token_symbol: str = None,
+) -> tuple[str, str, InlineKeyboardMarkup]:
+    """
+    Create a rich announcement card for a new quiz with image
+
+    Returns:
+        tuple: (image_path, formatted_message, inline_keyboard)
+    """
+
+    # Create the card border and content
+    # Normalize reward structure text first (before sanitization)
+    if "Top 3 winners" in reward_structure or reward_structure == "top_3":
+        safe_reward_structure = "Top 3 Winners (50/30/20%)"
+    elif "top_5" in reward_structure or "Top 5" in reward_structure:
+        safe_reward_structure = "Top 5 Winners (40/25/15/12/8%)"
+    elif "top_10" in reward_structure or "Top 10" in reward_structure:
+        safe_reward_structure = "Top 10 Winners (30/20/10/...)"
+    elif (
+        "Winner-takes-all" in reward_structure or reward_structure == "winner_takes_all"
+    ):
+        safe_reward_structure = "Winner Takes All"
+    elif "Free Quiz" in reward_structure or reward_structure.lower() == "free":
+        safe_reward_structure = "Free Quiz"
+    else:
+        safe_reward_structure = reward_structure
+
+    # Only sanitize content that will be used in Markdown formatting
+    # Don't over-sanitize - let the telegram_helpers handle final sanitization
+    safe_topic = topic
+
+    # quiz_id should not be sanitized as it's used in callback data
+    safe_quiz_id = quiz_id
+
+    # bot_username should not be sanitized as it's used in URLs
+    safe_bot_username = bot_username
+
+    # Determine the correct currency symbol
+    if payment_method == "TOKEN" and token_symbol:
+        currency_display = f"{reward_amount} {token_symbol}"
+    else:
+        currency_display = f"{reward_amount} NEAR"
+
+    # Make the announcement more catchy and engaging
+    # Use simple, consistent Markdown formatting to avoid parsing errors
+    card = f"""🚀⚡ *{safe_topic.upper()} QUIZ BATTLE ROYALE!* ⚡🚀
+
+🧠 *{num_questions} Brain-Busting Questions*
+⏰ *{duration_minutes} Minutes to Dominate*
+💰 *{currency_display}* Prize Pool!
+🏆 *{safe_reward_structure}* Winner Takes All!
+
+🔥 Ready to prove you're the smartest in the room?
+💎 Test your knowledge, beat the clock, and climb the leaderboard!
+
+🎯 *Challenge Accepted? Let's GO!* 🎯"""
+
+    # Create interactive buttons
+    buttons = []
+
+    if bot_username:
+        # Use deep linking for seamless DM redirection
+        play_button = InlineKeyboardButton(
+            "🎮 Play Quiz",
+            url=f"https://t.me/{bot_username}?start=quiz_{quiz_id}",
+        )
+    else:
+        # Fallback to callback data if no bot username provided
+        play_button = InlineKeyboardButton(
+            "🎮 Play Quiz", callback_data=f"play_quiz:{quiz_id}"
+        )
+
+    leaderboard_button = InlineKeyboardButton(
+        "📊 Leaderboard", callback_data=f"leaderboard:{quiz_id}"
+    )
+
+    buttons.append([play_button, leaderboard_button])
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Return image path along with text and keyboard
+    # Use absolute path to ensure the file is found regardless of working directory
+    import os
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))  # utils directory
+        project_root = os.path.dirname(os.path.dirname(current_dir))  # project root
+        image_path = os.path.join(
+            project_root, "src", "assets", "templates", "Image_fx.jpg"
+        )
+
+        # Verify the file exists
+        if not os.path.exists(image_path):
+            logger.warning(f"Image file not found at {image_path}, using fallback")
+            # Fallback to relative path in case the absolute path calculation is wrong
+            image_path = "src/assets/templates/Image_fx.jpg"
+
+        return image_path, card.strip(), keyboard
+    except Exception as e:
+        logger.error(f"Error resolving image path: {e}")
+        # Fallback to relative path
+        image_path = "src/assets/templates/Image_fx.jpg"
+        return image_path, card.strip(), keyboard
+
+
+def create_question_display_card(
+    question_text: str,
+    options: List[str],
+    question_num: int,
+    total_questions: int,
+    time_remaining: int,
+    current_score: int,
+    quiz_id: str,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """
+    Create an interactive question display card
+
+    Returns:
+        tuple: (formatted_message, inline_keyboard)
+    """
+
+    # Sanitize question text and options
+    safe_question_text = sanitize_markdown(question_text)
+    safe_options = [sanitize_markdown(option) for option in options]
+
+    # Create question card
+    card = f"""
+🎯 **Question {question_num} of {total_questions}**
+⏱ **{time_remaining}s remaining** • 🏆 **{current_score} points**
+
+**{safe_question_text}**
+
+"""
+
+    # Add options with letter indicators
+    option_letters = ["A", "B", "C", "D"]
+    for i, option in enumerate(safe_options):
+        card += f"{option_letters[i]}) {option}\n"
+
+    card += "\n══════════════════════════════════════════"
+
+    # Create answer buttons
+    answer_buttons = []
+    for i, letter in enumerate(option_letters):
+        answer_buttons.append(
+            InlineKeyboardButton(
+                f"{letter}", callback_data=f"answer:{quiz_id}:{question_num}:{i}"
+            )
+        )
+
+    # Create action buttons
+    action_buttons = [
+        InlineKeyboardButton("💡 Hint", callback_data=f"hint:{quiz_id}:{question_num}"),
+        InlineKeyboardButton("⏭ Skip", callback_data=f"skip:{quiz_id}:{question_num}"),
+    ]
+
+    buttons = [answer_buttons, action_buttons]
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    return card.strip(), keyboard
+
+
+def create_leaderboard_card(
+    quiz_id: str,
+    leaderboard_data: List[Dict[str, Any]],
+    time_remaining: int,
+    total_participants: int,
+    auto_delete_seconds: int = None,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """
+    Create an enhanced leaderboard display with auto-delete countdown
+
+    Args:
+        quiz_id: Quiz identifier
+        leaderboard_data: List of participant data
+        time_remaining: Quiz time remaining in seconds
+        total_participants: Total number of participants
+        auto_delete_seconds: Seconds until auto-delete (optional)
+
+    Returns:
+        tuple: (formatted_message, inline_keyboard)
+    """
+
+    # Create leaderboard header
+    card = f"""
+🏆 **LEADERBOARD** 🏆
+══════════════════════════════════════════
+
+"""
+
+    # Add rankings
+    rank_emojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+
+    for i, player in enumerate(leaderboard_data[:10]):  # Top 10
+        rank_emoji = rank_emojis[i] if i < len(rank_emojis) else f"{i+1}️⃣"
+        username = player.get("username", "Anonymous")
+        score = player.get("score", 0)
+        correct_answers = player.get("correct_answers", 0)
+        total_questions = player.get("total_questions", 0)
+
+        # Sanitize username to prevent Markdown parsing issues
+        # Escape all MarkdownV2 special characters
+        safe_username = (
+            username.replace("*", "\\*")
+            .replace("_", "\\_")
+            .replace("`", "\\`")
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+            .replace("(", "\\(")
+            .replace(")", "\\)")
+            .replace("-", "\\-")
+            .replace(".", "\\.")
+            .replace("!", "\\!")
+            .replace("+", "\\+")
+            .replace("=", "\\=")
+            .replace("|", "\\|")
+            .replace("{", "\\{")
+            .replace("}", "\\}")
+        )
+
+        card += f"{rank_emoji} **{safe_username}** \\- {score} pts \\({correct_answers}/{total_questions}\\)\n"
+
+    # Add footer with auto-delete countdown if provided
+    footer = f"""
+══════════════════════════════════════════
+⏱ **{time_remaining}s remaining** • 👥 **{total_participants} players active**"""
+
+    if auto_delete_seconds is not None and auto_delete_seconds > 0:
+        minutes = auto_delete_seconds // 60
+        seconds = auto_delete_seconds % 60
+        if minutes > 0:
+            footer += f"\n🗑️ **Auto\\-delete in {minutes}m {seconds}s**"
+        else:
+            footer += f"\n🗑️ **Auto\\-delete in {seconds}s**"
+
+    card += footer
+
+    # Create action buttons
+    buttons = [
+        [
+            InlineKeyboardButton(
+                "🔄 Refresh", callback_data=f"refresh_leaderboard:{quiz_id}"
+            ),
+            InlineKeyboardButton("🎮 Join Quiz", callback_data=f"play_quiz:{quiz_id}"),
+        ]
+    ]
+
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    return card.strip(), keyboard
+
+
+def create_progress_card(
+    current_question: int,
+    total_questions: int,
+    time_remaining: int,
+    current_score: int,
+    rank: int,
+    total_participants: int,
+) -> str:
+    """
+    Create a progress tracking card
+
+    Returns:
+        str: formatted progress message
+    """
+
+    # Calculate progress percentage
+    progress_percentage = (current_question / total_questions) * 100
+
+    # Create progress bar
+    progress_bar_length = 20
+    filled_length = int((progress_percentage / 100) * progress_bar_length)
+    progress_bar = "█" * filled_length + "░" * (progress_bar_length - filled_length)
+
+    card = f"""
+📊 **YOUR PROGRESS**
+══════════════════════════════════════════
+
+🎯 Question: {current_question}/{total_questions}
+⏱ Time: {time_remaining}s remaining
+🏆 Score: {current_score} points
+📈 Rank: #{rank} of {total_participants}
+
+{progress_bar} {progress_percentage:.0f}%
+"""
+
+    return card.strip()
+
+
+def create_achievement_card(
+    achievement_type: str, achievement_name: str, description: str, points_earned: int
+) -> str:
+    """
+    Create an achievement celebration card
+
+    Returns:
+        str: formatted achievement message
+    """
+
+    achievement_emojis = {
+        "streak": "🔥",
+        "speed": "⚡",
+        "accuracy": "🎯",
+        "first": "🥇",
+        "perfect": "💎",
+    }
+
+    emoji = achievement_emojis.get(achievement_type, "🏆")
+
+    card = f"""
+{emoji} **ACHIEVEMENT UNLOCKED!** {emoji}
+══════════════════════════════════════════
+
+🏆 **{achievement_name}**
+📝 {description}
+💰 +{points_earned} bonus points!
+
+🎉 Congratulations!
+"""
+
+    return card.strip()
+
+
+def format_distribution_preview(
+    structure_type: str, total_amount: float, currency: str = "NEAR"
+) -> tuple[str, List[float]]:
+    """
+    Format distribution preview for Top 5 or Top 10 reward structures.
+
+    Args:
+        structure_type: "top_5" or "top_10"
+        total_amount: Total prize pool amount
+        currency: Currency symbol (e.g., "NEAR", "USDT", "TOKEN")
+
+    Returns:
+        tuple: (formatted message string, list of amounts for each position)
+    """
+    from utils.config import Config
+
+    # Get distribution percentages
+    if structure_type == "top_5":
+        distribution = Config.TOP_5_DISTRIBUTION
+        title = "🏆 Top 5 Winners Distribution"
+        emojis = ["🥇", "🥈", "🥉", "🏅", "🏅"]
+        places = ["1st Place", "2nd Place", "3rd Place", "4th Place", "5th Place"]
+    elif structure_type == "top_10":
+        distribution = Config.TOP_10_DISTRIBUTION
+        title = "🏆 Top 10 Winners Distribution"
+        emojis = ["🥇", "🥈", "🥉", "🏅", "🏅", "🏅", "🎖️", "🎖️", "🎖️", "🎖️"]
+        places = [
+            f"{i+1}{'st' if i==0 else 'nd' if i==1 else 'rd' if i==2 else 'th'} Place"
+            for i in range(10)
+        ]
+    else:
+        raise ValueError(f"Unknown structure_type: {structure_type}")
+
+    # Calculate amounts for each position
+    amounts = [round(total_amount * percentage, 6) for percentage in distribution]
+
+    # Build the formatted message
+    message = f"{title}\n"
+    message += "═" * 45 + "\n"
+    message += (
+        f"💰 <b>Total Prize Pool:</b> <code>{total_amount:.6g} {currency}</code>\n\n"
+    )
+
+    # Add each position's breakdown
+    for i, (emoji, place, percentage, amount) in enumerate(
+        zip(emojis, places, distribution, amounts)
+    ):
+        percent_display = (
+            f"{percentage * 100:.1f}%"
+            if percentage >= 0.01
+            else f"{percentage * 100:.2f}%"
+        )
+        message += f"{emoji} <b>{place}:</b> <code>{amount:.6g} {currency}</code> ({percent_display})\n"
+
+    message += "\n" + "─" * 45 + "\n"
+    message += "💡 <b>Winners determined by:</b>\n"
+    message += "   1️⃣ Most correct answers\n"
+    message += "   2️⃣ Fastest response time\n"
+
+    return message, amounts
+
+
+def get_compact_distribution_text(structure_type: str) -> str:
+    """
+    Get compact distribution text for quiz announcements.
+
+    Args:
+        structure_type: "top_5" or "top_10"
+
+    Returns:
+        Compact distribution string (e.g., "40/25/15/12/8%")
+    """
+    from utils.config import Config
+
+    if structure_type == "top_5":
+        distribution = Config.TOP_5_DISTRIBUTION
+        # Show top 5 percentages
+        return "/".join([f"{int(p * 100)}" for p in distribution]) + "%"
+    elif structure_type == "top_10":
+        distribution = Config.TOP_10_DISTRIBUTION
+        # Show top 3 percentages + "..."
+        top_3 = "/".join([f"{int(p * 100)}" for p in distribution[:3]])
+        return f"{top_3}/...%"
+    else:
+        return ""
