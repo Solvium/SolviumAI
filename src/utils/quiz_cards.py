@@ -106,17 +106,38 @@ def create_quiz_announcement_card(
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))  # utils directory
         project_root = os.path.dirname(os.path.dirname(current_dir))  # project root
-        image_path = os.path.join(
-            project_root, "src", "assets", "templates", "Image_fx.jpg"
-        )
 
-        # Verify the file exists
-        if not os.path.exists(image_path):
-            logger.warning(f"Image file not found at {image_path}, using fallback")
-            # Fallback to relative path in case the absolute path calculation is wrong
-            image_path = "src/assets/templates/Image_fx.jpg"
+        # Prefer any fx_*.jpg in templates (e.g., fx_2.jpg, fx_3.jpg, fx_4.jpg)
+        templates_dir = os.path.join(project_root, "src", "assets", "templates")
 
-        return image_path, card.strip(), keyboard
+        selected_image_path = None
+        try:
+            import glob
+            import random
+
+            # Collect all candidate images: fx_*.jpg plus Image_fx.jpg
+            candidates = sorted(glob.glob(os.path.join(templates_dir, "fx_*.jpg")))
+            image_fx_path = os.path.join(templates_dir, "Image_fx.jpg")
+            if os.path.exists(image_fx_path):
+                candidates.append(image_fx_path)
+
+            if candidates:
+                selected_image_path = random.choice(candidates)
+            else:
+                # Fallback to the legacy default image
+                selected_image_path = image_fx_path
+        except Exception as e_inner:
+            logger.warning(f"Error selecting random fx image: {e_inner}")
+            selected_image_path = os.path.join(templates_dir, "Image_fx.jpg")
+
+        # Verify the file exists; if not, fallback to a relative path
+        if not os.path.exists(selected_image_path):
+            logger.warning(
+                f"Image file not found at {selected_image_path}, using relative fallback"
+            )
+            selected_image_path = "src/assets/templates/Image_fx.jpg"
+
+        return selected_image_path, card.strip(), keyboard
     except Exception as e:
         logger.error(f"Error resolving image path: {e}")
         # Fallback to relative path
@@ -262,7 +283,7 @@ def create_leaderboard_card(
             InlineKeyboardButton(
                 "🔄 Refresh", callback_data=f"refresh_leaderboard:{quiz_id}"
             ),
-            InlineKeyboardButton("🎮 Join Quiz", callback_data=f"play_quiz:{quiz_id}"),
+            # InlineKeyboardButton("🎮 Join Quiz", callback_data=f"play_quiz:{quiz_id}"),
         ]
     ]
 
