@@ -17,35 +17,49 @@ logger = logging.getLogger(__name__)
 
 # Global message queue for rate limiting
 class MessageQueue:
-    def __init__(self):
+    def __init__(self, num_workers: int = 10):
         self.queue = asyncio.Queue()
         self.rate_limits = defaultdict(lambda: {"last_sent": 0, "message_count": 0})
+        self.rate_limit_lock = asyncio.Lock()  # Lock for thread-safe rate limit access
         self.max_messages_per_second = 20  # Conservative limit
         self.max_messages_per_minute = 1000  # Conservative limit
         self.running = False
-        self.worker_task = None
+        self.worker_tasks = []  # Changed from single task to list of tasks
+        self.num_workers = num_workers
+        self.processed_count = 0  # Track total processed messages
 
     async def start(self):
-        """Start the message queue worker"""
+        """Start multiple message queue workers for parallel processing"""
         if not self.running:
             self.running = True
-            self.worker_task = asyncio.create_task(self._worker())
-            logger.info("Message queue worker started")
+            # Launch multiple workers for parallel processing
+            for i in range(self.num_workers):
+                worker_task = asyncio.create_task(self._worker(worker_id=i))
+                self.worker_tasks.append(worker_task)
+            logger.info(f"Message queue started with {self.num_workers} workers")
 
     async def stop(self):
-        """Stop the message queue worker"""
+        """Stop all message queue workers"""
         if self.running:
             self.running = False
-            if self.worker_task:
-                self.worker_task.cancel()
-                try:
-                    await self.worker_task
-                except asyncio.CancelledError:
-                    pass
-            logger.info("Message queue worker stopped")
+            # Cancel all worker tasks
+            for task in self.worker_tasks:
+                if task and not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+            self.worker_tasks.clear()
+            logger.info(f"Message queue stopped. Total processed: {self.processed_count}")
 
-    async def _worker(self):
+    def get_queue_size(self) -> int:
+        """Get current queue size for monitoring"""
+        return self.queue.qsize()
+
+    async def _worker(self, worker_id: int):
         """Worker that processes queued messages with rate limiting"""
+        logger.info(f"Message queue worker {worker_id} started")
         while self.running:
             try:
                 # Get message from queue with timeout
@@ -62,41 +76,53 @@ class MessageQueue:
                 # Send message with retry logic
                 try:
                     await self._send_with_retry(bot, chat_id, text, **kwargs)
+                    self.processed_count += 1
                 except Exception as e:
-                    logger.error(f"Failed to send message to {chat_id}: {e}")
+                    logger.error(f"Worker {worker_id}: Failed to send message to {chat_id}: {e}")
 
                 # Mark task as done
                 self.queue.task_done()
 
+                # Log queue status periodically (every 100 messages)
+                if self.processed_count % 100 == 0:
+                    logger.info(f"Worker {worker_id}: Processed {self.processed_count} messages. Queue size: {self.get_queue_size()}")
+
             except Exception as e:
-                logger.error(f"Error in message queue worker: {e}")
+                logger.error(f"Worker {worker_id}: Error in message queue worker: {e}")
                 await asyncio.sleep(1)
 
     async def _check_rate_limits(self, chat_id: int):
-        """Check and enforce rate limits for a specific chat"""
-        now = time.time()
-        chat_limits = self.rate_limits[chat_id]
+        """Check and enforce rate limits for a specific chat (thread-safe)"""
+        # First, check if we need to sleep (read-only check)
+        sleep_time = 0
+        async with self.rate_limit_lock:
+            now = time.time()
+            chat_limits = self.rate_limits[chat_id]
 
-        # Reset counters if needed
-        if now - chat_limits["last_sent"] >= 60:  # Reset minute counter
-            chat_limits["message_count"] = 0
-
-        # Check per-second limit
-        time_since_last = now - chat_limits["last_sent"]
-        if time_since_last < 1.0 / self.max_messages_per_second:
-            sleep_time = (1.0 / self.max_messages_per_second) - time_since_last
-            await asyncio.sleep(sleep_time)
-
-        # Check per-minute limit
-        if chat_limits["message_count"] >= self.max_messages_per_minute:
-            sleep_time = 60 - (now - chat_limits["last_sent"])
-            if sleep_time > 0:
-                await asyncio.sleep(sleep_time)
+            # Reset counters if needed
+            if now - chat_limits["last_sent"] >= 60:  # Reset minute counter
                 chat_limits["message_count"] = 0
 
-        # Update counters
-        chat_limits["last_sent"] = time.time()
-        chat_limits["message_count"] += 1
+            # Check per-second limit
+            time_since_last = now - chat_limits["last_sent"]
+            if time_since_last < 1.0 / self.max_messages_per_second:
+                sleep_time = (1.0 / self.max_messages_per_second) - time_since_last
+
+            # Check per-minute limit
+            if chat_limits["message_count"] >= self.max_messages_per_minute:
+                minute_sleep_time = 60 - (now - chat_limits["last_sent"])
+                if minute_sleep_time > 0:
+                    sleep_time = max(sleep_time, minute_sleep_time)
+
+        # Sleep outside the lock to not block other workers
+        if sleep_time > 0:
+            await asyncio.sleep(sleep_time)
+
+        # Update counters after sleeping
+        async with self.rate_limit_lock:
+            chat_limits = self.rate_limits[chat_id]
+            chat_limits["last_sent"] = time.time()
+            chat_limits["message_count"] += 1
 
     async def _send_with_retry(self, bot, chat_id, text, **kwargs):
         """Send message with retry logic"""

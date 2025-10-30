@@ -98,6 +98,34 @@ async def get_bot_stats() -> JSONResponse:
         except Exception as e:
             stats["activity"] = {"error": f"Failed to get activity metrics: {str(e)}"}
 
+        # Add message queue monitoring
+        try:
+            from utils.telegram_helpers import message_queue
+
+            stats["message_queue"] = {
+                "queue_size": message_queue.get_queue_size(),
+                "num_workers": message_queue.num_workers,
+                "total_processed": message_queue.processed_count,
+                "running": message_queue.running,
+            }
+        except Exception as e:
+            stats["message_queue"] = {"error": f"Failed to get queue metrics: {str(e)}"}
+
+        # Add database connection pool monitoring
+        try:
+            from store.database import engine
+
+            pool_status = engine.pool.status()
+            stats["database_pool"] = {
+                "pool_size": engine.pool.size(),
+                "checked_out_connections": engine.pool.checkedout(),
+                "overflow_connections": engine.pool.overflow(),
+                "total_connections": engine.pool.size() + engine.pool.overflow(),
+                "status": pool_status,
+            }
+        except Exception as e:
+            stats["database_pool"] = {"error": f"Failed to get pool metrics: {str(e)}"}
+
         return JSONResponse(content=stats)
 
     except HTTPException:

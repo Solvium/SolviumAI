@@ -136,12 +136,16 @@ async def start_fastapi_mode():
         bot_start_task = asyncio.create_task(bot_instance.start())
 
         # Start FastAPI server with optimized settings
+        # Use configured workers for production, 1 for development (easier debugging)
+        num_workers = 1 if Config.is_development() else Config.FASTAPI_WORKERS
+        logger.info(f"🔧 Configuring FastAPI with {num_workers} worker(s)")
+
         config = uvicorn.Config(
             app=app,
             host=Config.FASTAPI_HOST,
             port=Config.FASTAPI_PORT,
             # reload=Config.is_development() and Config.FASTAPI_RELOAD,
-            workers=1,  # Use 1 worker for development, scale in production
+            workers=num_workers,  # Use configured workers for better concurrency
             loop="uvloop" if Config.is_development() else "asyncio",
             http="httptools" if Config.is_development() else "h11",
             access_log=Config.is_development(),

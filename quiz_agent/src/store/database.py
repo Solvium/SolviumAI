@@ -57,8 +57,8 @@ def create_db_engine():
         if "postgresql" in database_url:
             engine_args.update(
                 {
-                    "pool_size": 10,  # Increased from 5 for better concurrency
-                    "max_overflow": 20,  # Increased from 10 for handling spikes
+                    "pool_size": 30,  # Increased to handle 100+ concurrent users
+                    "max_overflow": 50,  # Allow up to 80 total connections for spike handling
                     "pool_timeout": 30,
                     "pool_recycle": 1800,  # Recycle connections after 30 minutes
                     "pool_pre_ping": True,  # Enable connection health checks
