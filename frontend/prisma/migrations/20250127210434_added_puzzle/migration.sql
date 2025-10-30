@@ -1,4 +1,0 @@
--- AlterTable
-ALTER TABLE "User" ALTER COLUMN "difficulty" SET DEFAULT 1,
-ALTER COLUMN "level" SET DEFAULT 1,
-ALTER COLUMN "puzzleCount" SET DEFAULT 1;
