@@ -26,7 +26,7 @@ class Config:
     FASTAPI_HOST = os.getenv("FASTAPI_HOST", "0.0.0.0")
     FASTAPI_PORT = int(os.getenv("FASTAPI_PORT", "8000"))
     FASTAPI_RELOAD = os.getenv("FASTAPI_RELOAD", "false").lower() == "true"
-    FASTAPI_WORKERS = int(os.getenv("FASTAPI_WORKERS", "1"))
+    FASTAPI_WORKERS = int(os.getenv("FASTAPI_WORKERS", "5"))
 
     # Use FastAPI for webhooks (default: True in production, False in development)
     USE_FASTAPI_WEBHOOK = (
@@ -35,6 +35,8 @@ class Config:
         ).lower()
         == "true"
     )
+
+
 
     # Mini-App API Secret (for secure API access from mini-app)
     MINI_APP_API_SECRET = os.getenv("MINI_APP_API_SECRET", "")
