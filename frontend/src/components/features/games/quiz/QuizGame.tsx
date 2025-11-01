@@ -8,6 +8,8 @@ import { useRouter } from "next/navigation";
 import { useQuiz } from "@/hooks/useQuiz";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDepositMultiplier } from "@/hooks/useDepositMultiplier";
+import { useSolviumContract } from "@/hooks/useSolviumContract";
+import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
 
 interface QuizGameProps {
   onEarnCoins?: (amount: number) => void;
@@ -22,6 +24,12 @@ const QuizGame: React.FC<QuizGameProps> = ({
   const { user, refreshUser } = useAuth();
   const { gameState, quizState, actions } = useQuiz();
   const { currentMultiplier, fetchCurrentMultiplier } = useDepositMultiplier();
+  const { getUserDepositSummary } = useSolviumContract();
+  const { accountId, isConnected } = usePrivateKeyWallet();
+
+  // State for effective user multiplier (totalNear * contractMul)
+  const [effectiveUserMultiplier, setEffectiveUserMultiplier] =
+    useState<number>(1);
 
   // Local state for UI
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -45,20 +53,51 @@ const QuizGame: React.FC<QuizGameProps> = ({
 
   // Don't auto-start the game - let user choose settings first
 
-  // Fetch current multiplier on component mount
+  // Fetch effective user multiplier (totalNear * contractMul) on component mount
   useEffect(() => {
-    const fetchMultiplier = async () => {
+    const fetchEffectiveMultiplier = async () => {
       try {
+        // Fetch contract multiplier (for tracking)
         await fetchCurrentMultiplier();
+
+        // Fetch effective user multiplier from deposit summary (totalNear * contractMul)
+        if (isConnected && accountId) {
+          const depositSummary = await getUserDepositSummary(accountId);
+          if (depositSummary.success && depositSummary.data?.multiplierFactor) {
+            // multiplierFactor is the effective multiplier = totalNear * contractMul
+            const effective = Number(depositSummary.data.multiplierFactor) || 1;
+            setEffectiveUserMultiplier(effective);
+            console.log(
+              "✅ Effective user multiplier (from deposit summary):",
+              effective
+            );
+          } else {
+            // Fallback to contract multiplier if no deposits
+            setEffectiveUserMultiplier(currentMultiplier || 1);
+          }
+        } else {
+          // If not connected, use contract multiplier or 1
+          setEffectiveUserMultiplier(currentMultiplier || 1);
+        }
+
         // Also refresh user data to ensure we have the latest multiplier
         await refreshUser();
       } catch (error) {
-        console.error("Failed to fetch current multiplier:", error);
+        console.error("Failed to fetch effective multiplier:", error);
+        // Fallback to contract multiplier
+        setEffectiveUserMultiplier(currentMultiplier || 1);
       }
     };
 
-    fetchMultiplier();
-  }, [fetchCurrentMultiplier, refreshUser]);
+    fetchEffectiveMultiplier();
+  }, [
+    fetchCurrentMultiplier,
+    refreshUser,
+    getUserDepositSummary,
+    accountId,
+    isConnected,
+    currentMultiplier,
+  ]);
 
   // Timer effect - count down locally
   useEffect(() => {
@@ -143,13 +182,19 @@ const QuizGame: React.FC<QuizGameProps> = ({
         // Use the validation result directly
         if (result.isCorrect) {
           const base = result.points || quizState.currentQuiz?.points || 10;
-          // Use the most up-to-date multiplier from either currentMultiplier or user.multiplier
-          const multiplier = Number(currentMultiplier || user?.multiplier || 1);
+          // Use the effective user multiplier (totalNear * contractMul) from deposit summary
+          // This is the correct multiplier that matches the server-side calculation
+          const multiplier = Number(
+            effectiveUserMultiplier ||
+              currentMultiplier ||
+              user?.multiplier ||
+              1
+          );
           const earned = Math.round(
             base * (isFinite(multiplier) ? multiplier : 1)
           );
           console.log(
-            `Quiz multiplier calculation: base=${base}, multiplier=${multiplier}, earned=${earned}`
+            `Quiz multiplier calculation: base=${base}, effectiveUserMultiplier=${effectiveUserMultiplier}, contractMultiplier=${currentMultiplier}, multiplier=${multiplier}, earned=${earned}`
           );
           setPointsEarned(earned);
           setScore((prev) => prev + earned);
@@ -414,16 +459,67 @@ const QuizGame: React.FC<QuizGameProps> = ({
             <h2 className="text-white text-2xl font-bold">
               {validationResult?.isCorrect ? "Correct!" : "Incorrect!"}
             </h2>
-            <p className="text-white text-lg">
-              {validationResult?.isCorrect
-                ? `+${pointsEarned} points earned!`
-                : "Better luck next time!"}
-            </p>
+
+            {validationResult?.isCorrect && pointsEarned > 0 && (
+              <div className="bg-blue-900/50 rounded-xl p-4 border border-blue-700/50 space-y-2">
+                <p className="text-white text-xl font-bold">
+                  +{pointsEarned} SOLV earned!
+                </p>
+
+                {/* Multiplier Breakdown */}
+                <div className="mt-3 pt-3 border-t border-blue-700/50 space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-blue-300">Base Points:</span>
+                    <span className="text-white font-semibold">
+                      {validationResult.points ||
+                        quizState.currentQuiz?.points ||
+                        0}
+                    </span>
+                  </div>
+
+                  {effectiveUserMultiplier > 1 && (
+                    <>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-blue-300">Your Multiplier:</span>
+                        <span className="text-yellow-400 font-semibold">
+                          {effectiveUserMultiplier.toFixed(1)}x
+                        </span>
+                      </div>
+
+                      {currentMultiplier > 1 &&
+                        effectiveUserMultiplier !== currentMultiplier && (
+                          <div className="flex items-center justify-between text-xs text-blue-400">
+                            <span>(Contract: {currentMultiplier}x)</span>
+                            <span className="text-gray-400">
+                              Active deposits boost applied
+                            </span>
+                          </div>
+                        )}
+
+                      <div className="flex items-center justify-between text-sm pt-1 mt-1 border-t border-blue-700/30">
+                        <span className="text-blue-300 font-medium">
+                          Total Earned:
+                        </span>
+                        <span className="text-green-400 font-bold text-base">
+                          {pointsEarned} SOLV
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!validationResult?.isCorrect && (
+              <p className="text-white text-lg">Better luck next time!</p>
+            )}
+
             <p className="text-gray-400 text-sm">
               {validationResult?.isCorrect
                 ? `Total Score: ${score}`
                 : `Points for this question: 0`}
             </p>
+
             <button
               onClick={handleNextQuestion}
               className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-bold text-base hover:scale-105 transition-transform mt-4"

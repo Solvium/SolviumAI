@@ -512,7 +512,7 @@ const WalletPage = () => {
                     </div>
                     <div>
                       <div className="text-white font-semibold text-xs">
-                        Token Name
+                        NEAR
                       </div>
                       <div className="text-white/50 text-[10px]">
                         {nearBalance || "0.0000"}
@@ -587,7 +587,7 @@ const WalletPage = () => {
                           </div>
                           <div>
                             <div className="text-white font-semibold text-xs">
-                              Token Name
+                              {t.symbol.length > 8 ? `${t.symbol.slice(0, 8)}...` : t.symbol}
                             </div>
                             <div className="text-white/50 text-[10px]">
                               {t.balance}

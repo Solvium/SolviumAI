@@ -701,6 +701,10 @@ export const WheelOfFortune = () => {
   };
 
   const handleBuySpinWithPoints = async (count: string) => {
+    let originalPoints: number | null = null;
+    let balanceKey: string | null = null;
+    const pointsCost = Number(count);
+
     try {
       setIsPurchasing(true);
       setPurchasingKey(`points-${count}`);
@@ -710,28 +714,38 @@ export const WheelOfFortune = () => {
       }
 
       console.log("Purchasing spin with points, count:", count);
-      const pointsCost = Number(count);
-      const balanceKey =
+      balanceKey =
         user && typeof (user as any).totalSOLV === "number"
           ? "totalSOLV"
           : "totalPoints";
-      const currentPoints = Number((user as any)?.[balanceKey] ?? 0);
+      originalPoints = Number((user as any)?.[balanceKey] ?? 0);
+
       if (!Number.isFinite(pointsCost) || pointsCost <= 0) {
         toast.error("Invalid points amount");
         return;
       }
-      if (currentPoints < pointsCost) {
+      if (originalPoints < pointsCost) {
         toast.error("Insufficient points");
         return;
       }
-      // Optimistic deduction
+
+      // Deduct points optimistically BEFORE transaction
       try {
         await (updateUserProfile as any)?.({
-          [balanceKey]: currentPoints - pointsCost,
+          [balanceKey]: originalPoints - pointsCost,
         });
+        console.log(
+          `Deducted ${pointsCost} points. New balance: ${
+            originalPoints - pointsCost
+          }`
+        );
       } catch (e) {
-        console.warn("Optimistic profile update failed:", e);
+        console.error("Optimistic profile update failed:", e);
+        toast.error("Failed to deduct points. Please try again.");
+        return;
       }
+
+      // Execute the purchase transaction
       const result = await signAndSendTransaction(CONTRACTID!, [
         {
           type: "FunctionCall",
@@ -750,27 +764,32 @@ export const WheelOfFortune = () => {
         `Purchased ${spins} spin${spins > 1 ? "s" : ""} with points`
       );
 
-      // Refresh contract spins after purchase
+      // Refresh contract spins after successful purchase
       await fetchContractSpins();
       await (fetchUserProfile as any)?.();
     } catch (e) {
       console.error("Failed to buy spin with points:", e);
       const errorMessage =
         e instanceof Error ? e.message : "Unknown error occurred";
-      // Refund optimistic deduction
-      try {
-        const pointsCost = Number(count);
-        const balanceKey =
-          user && typeof (user as any).totalSOLV === "number"
-            ? "totalSOLV"
-            : "totalPoints";
-        const currentServer = Number((user as any)?.[balanceKey] ?? 0);
-        await (updateUserProfile as any)?.({
-          [balanceKey]: currentServer + pointsCost,
-        });
-      } catch (refundErr) {
-        console.warn("Failed to refund optimistic points:", refundErr);
+
+      // Refund points if transaction failed
+      if (originalPoints !== null && balanceKey) {
+        try {
+          console.log(
+            `Refunding ${pointsCost} points. Restoring balance to: ${originalPoints}`
+          );
+          await (updateUserProfile as any)?.({
+            [balanceKey]: originalPoints,
+          });
+          console.log("Points refunded successfully");
+        } catch (refundErr) {
+          console.error("Failed to refund optimistic points:", refundErr);
+          toast.error(
+            "Transaction failed and points refund failed. Please contact support."
+          );
+        }
       }
+
       toast.error(`Failed to buy spin with points: ${errorMessage}`);
     } finally {
       setIsPurchasing(false);
@@ -841,23 +860,22 @@ export const WheelOfFortune = () => {
 
             {/* Spinning Wheel */}
             <div className="relative flex flex-col items-center justify-center">
-             <div className="relative z-20 w-[250px] h-[250px] md:w-[383px] md:h-[377px]">
-  <Image
-    src="/assets/wheel/spin-wheel-new.svg"
-    alt="Spin Wheel"
-    fill
-    className="object-contain"
-    style={{
-      transform: `rotate(${wheelAngle}deg)`,
-      transition: isSpinning
-        ? "transform 4s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
-        : "none",
-    }}
-    onLoad={() => setIsWheelImageLoaded(true)}
-    priority
-  />
-</div>
-
+              <div className="relative z-20 w-[250px] h-[250px] md:w-[383px] md:h-[377px]">
+                <Image
+                  src="/assets/wheel/spin-wheel-new.svg"
+                  alt="Spin Wheel"
+                  fill
+                  className="object-contain"
+                  style={{
+                    transform: `rotate(${wheelAngle}deg)`,
+                    transition: isSpinning
+                      ? "transform 4s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+                      : "none",
+                  }}
+                  onLoad={() => setIsWheelImageLoaded(true)}
+                  priority
+                />
+              </div>
 
               {/* Prize Indicator Arrow */}
               <div className="absolute top-2 left-1/2 transform -translate-x-1/2 -translate-y-2 z-30">
@@ -1001,15 +1019,15 @@ export const WheelOfFortune = () => {
         {contractSpinsAvailable <= 0 && (
           <div className="flex flex-col gap-2 max-w-md mx-auto mb-4 px-4">
             <button
-              onClick={() => handleBuySpinWithPoints("200")}
+              onClick={() => handleBuySpinWithPoints("500")}
               disabled={isPurchasing}
               className={`w-full py-2 bg-transparent border-2 border-blue-500 rounded-2xl transition-all ${
-                isPurchasing && purchasingKey === "points-200"
+                isPurchasing && purchasingKey === "points-500"
                   ? "opacity-60 cursor-not-allowed"
                   : "hover:bg-blue-500/10"
               }`}
             >
-              {isPurchasing && purchasingKey === "points-200" ? (
+              {isPurchasing && purchasingKey === "points-500" ? (
                 <span className="inline-flex items-center justify-center gap-2 text-white">
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   Processing...
@@ -1018,20 +1036,20 @@ export const WheelOfFortune = () => {
                 <span className="text-xs font-bold">
                   <span className="text-orange-500">1</span>
                   <span className="text-white"> SPIN </span>
-                  <span className="text-orange-500">200 SOLV</span>
+                  <span className="text-orange-500">500 SOLV</span>
                 </span>
               )}
             </button>
             <button
-              onClick={() => handleBuySpinWithPoints("300")}
+              onClick={() => handleBuySpinWithPoints("1000")}
               disabled={isPurchasing}
               className={`w-full py-2 px-2 bg-transparent border-2 border-blue-500 rounded-2xl transition-all ${
-                isPurchasing && purchasingKey === "points-300"
+                isPurchasing && purchasingKey === "points-1000"
                   ? "opacity-60 cursor-not-allowed"
                   : "hover:bg-blue-500/10"
               }`}
             >
-              {isPurchasing && purchasingKey === "points-300" ? (
+              {isPurchasing && purchasingKey === "points-1000" ? (
                 <span className="inline-flex items-center justify-center gap-2 text-white">
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   Processing...
@@ -1040,20 +1058,20 @@ export const WheelOfFortune = () => {
                 <span className="text-xs font-bold">
                   <span className="text-orange-500">2</span>
                   <span className="text-white"> SPIN </span>
-                  <span className="text-orange-500">300 SOLV</span>
+                  <span className="text-orange-500">1000 SOLV</span>
                 </span>
               )}
             </button>
             <button
-              onClick={() => handleBuySpinWithPoints("400")}
+              onClick={() => handleBuySpinWithPoints("1500")}
               disabled={isPurchasing}
               className={`w-full py-2 bg-transparent border-2 border-blue-500 rounded-2xl transition-all ${
-                isPurchasing && purchasingKey === "points-400"
+                isPurchasing && purchasingKey === "points-1500"
                   ? "opacity-60 cursor-not-allowed"
                   : "hover:bg-blue-500/10"
               }`}
             >
-              {isPurchasing && purchasingKey === "points-400" ? (
+              {isPurchasing && purchasingKey === "points-1500" ? (
                 <span className="inline-flex items-center justify-center gap-2 text-white">
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   Processing...
@@ -1062,7 +1080,7 @@ export const WheelOfFortune = () => {
                 <span className="text-xs font-bold">
                   <span className="text-orange-500">3</span>
                   <span className="text-white"> SPIN </span>
-                  <span className="text-orange-500">400 SOLV</span>
+                  <span className="text-orange-500">1500 SOLV</span>
                 </span>
               )}
             </button>

@@ -374,7 +374,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const refreshUser = useCallback(async () => {
     try {
-      const response = await axios.get("/api/auth/me");
+      // Force fresh fetch by adding cache-busting timestamp
+      const response = await axios.get(`/api/auth/me?t=${Date.now()}`, {
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      });
       if (response.data.authenticated) {
         const user = response.data.user;
 
@@ -419,7 +424,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   // New profile enhancement methods
   const fetchUserProfile = useCallback(async () => {
     try {
-      const response = await axios.get("/api/auth/me");
+      // Force fresh fetch by adding cache-busting timestamp
+      const response = await axios.get(`/api/auth/me?t=${Date.now()}`, {
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      });
       const userData = response.data.user;
 
       setState((prev) => ({

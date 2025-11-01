@@ -11,41 +11,68 @@ const LeaderBoard = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Fetch real leaderboard data
+  const fetchLeaderboard = async (showLoading = true) => {
+    try {
+      if (showLoading) setLoading(true);
+      setError(null);
+      
+      // Force fresh fetch by adding cache-busting timestamp
+      const response = await fetch(`/api/leaderboard?t=${Date.now()}`, {
+        cache: "no-store",
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch leaderboard");
+      }
+      const data = await response.json();
+      if (!data?.success) {
+        throw new Error(data?.error || "Leaderboard API error");
+      }
+      const toNum = (v: any) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      };
+      const sorted = Array.isArray(data.leaderboard)
+        ? [...data.leaderboard].sort((a: any, b: any) => {
+            const aSolv = toNum(a.totalSOLV);
+            const bSolv = toNum(b.totalSOLV);
+            return bSolv - aSolv; // always sort by SOLV only
+          })
+        : [];
+      setLeader(sorted);
+    } catch (err) {
+      console.error("Error fetching leaderboard:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to fetch leaderboard"
+      );
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  };
+
+  // Fetch on mount and set up auto-refresh
   useEffect(() => {
-    const fetchLeaderboard = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch("/api/leaderboard");
-        if (!response.ok) {
-          throw new Error("Failed to fetch leaderboard");
-        }
-        const data = await response.json();
-        if (!data?.success) {
-          throw new Error(data?.error || "Leaderboard API error");
-        }
-        const toNum = (v: any) => {
-          const n = Number(v);
-          return Number.isFinite(n) ? n : 0;
-        };
-        const sorted = Array.isArray(data.leaderboard)
-          ? [...data.leaderboard].sort((a: any, b: any) => {
-              const aSolv = toNum(a.totalSOLV);
-              const bSolv = toNum(b.totalSOLV);
-              return bSolv - aSolv; // always sort by SOLV only
-            })
-          : [];
-        setLeader(sorted);
-      } catch (err) {
-        console.error("Error fetching leaderboard:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to fetch leaderboard"
-        );
-      } finally {
-        setLoading(false);
+    // Fetch immediately on mount
+    fetchLeaderboard(true);
+
+    // Set up periodic refresh (every 30 seconds)
+    const interval = setInterval(() => {
+      fetchLeaderboard(false); // Don't show loading spinner on refresh
+    }, 30000);
+
+    // Refresh when page becomes visible (user switches back to tab)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchLeaderboard(false);
       }
     };
 
-    fetchLeaderboard();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   // Use real data if available, otherwise show empty state or error

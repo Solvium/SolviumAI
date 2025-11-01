@@ -822,10 +822,10 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                           </div>
                           <div className="text-left">
                             <div className="text-white font-semibold text-xs">
-                              {t.symbol}
+                              {t.symbol.length > 8 ? `${t.symbol.slice(0, 8)}...` : t.symbol}
                             </div>
                             <div className="text-white/50 text-[9px]">
-                              {t.name}
+                              {t.name.length > 12 ? `${t.name.slice(0, 12)}...` : t.name}
                             </div>
                           </div>
                         </div>
@@ -972,6 +972,25 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     const fromUsd = (amountNum * fromPrice).toFixed(5);
     const toUsd = (minReceiveNum * toPrice).toFixed(2);
     
+    // Calculate estimated gas fee
+    // NEAR gas fees: wrapping (~0.001), swap (~0.002-0.004), unwrapping (~0.001), storage (~0.001)
+    const isFromNear = fromMeta.symbol === "NEAR";
+    const isToNear = toMeta.symbol === "NEAR";
+    let estimatedGasFee = 0.004; // Base swap gas fee
+    
+    if (isFromNear) {
+      estimatedGasFee += 0.001; // Wrapping fee
+    }
+    if (isToNear) {
+      estimatedGasFee += 0.001; // Unwrapping fee
+    }
+    // Add potential storage registration (0.001 per token if not registered)
+    estimatedGasFee += 0.002; // Buffer for storage registration if needed
+    
+    const gasFeeNear = estimatedGasFee.toFixed(4);
+    const nearPrice = pricesUsd["NEAR"] || 0;
+    const gasFeeUsd = nearPrice > 0 ? (estimatedGasFee * nearPrice).toFixed(4) : "~";
+    
     return (
       <div className="fixed inset-0 bg-[#0a0b2e] z-50 flex flex-col">
         {/* Header */}
@@ -1027,16 +1046,14 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
               <div className="text-white/80 text-[10px] font-mono truncate max-w-[55%]">
                 {accountId}
               </div>
-              <button className="text-[#0075EA]">
-                <Copy className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <div className="flex items-center justify-between py-1.5">
-              <div className="text-white/60 text-xs">To:</div>
-              <div className="text-white/80 text-[10px] font-mono truncate max-w-[55%]">
-                {accountId}
-              </div>
-              <button className="text-[#0075EA]">
+              <button 
+                className="text-[#0075EA]"
+                onClick={async () => {
+                  if (accountId) {
+                    await navigator.clipboard.writeText(accountId);
+                  }
+                }}
+              >
                 <Copy className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -1044,12 +1061,10 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
 
           <div className="border-t border-white/10 pt-3 space-y-2">
             <div className="flex items-center justify-between">
-              <div className="text-white/60 text-xs">Network fees</div>
-              <div className="text-white text-xs">0.004BTC</div>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="text-white/60 text-xs">Total</div>
-              <div className="text-white font-bold text-xs">0.1320BTC</div>
+              <div className="text-white/60 text-xs">Estimated gas fee</div>
+              <div className="text-white text-xs">
+                {gasFeeNear} NEAR {nearPrice > 0 && `(~$${gasFeeUsd})`}
+              </div>
             </div>
           </div>
 

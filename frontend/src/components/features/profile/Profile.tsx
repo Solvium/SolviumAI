@@ -35,7 +35,10 @@ const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
           className="flex items-center md:gap-2 gap-1 text-white hover:text-blue-300 transition-colors"
         >
           {/* Back arrow icon */}
-          <IoChevronBackSharp className="md:w-5 md:h-5 w-3 h-3 text-current" aria-hidden />
+          <IoChevronBackSharp
+            className="md:w-5 md:h-5 w-3 h-3 text-current"
+            aria-hidden
+          />
           <span className="md:text-lg text-xs font-medium">Back</span>
         </button>
         <button
@@ -58,7 +61,7 @@ const UserProfile = ({ tg }: { tg: typeof WebApp | null }) => {
         <StatsSection userDetails={userDetails} />
 
         {/* Farming Section */}
-        <FarmingSection />
+        <FarmingSection userDetails={userDetails} />
 
         {/* Invite Section */}
         <InviteSection userDetails={userDetails} />
@@ -270,41 +273,264 @@ const StatsSection = ({ userDetails }: { userDetails: any }) => {
   );
 };
 
-const FarmingSection = () => {
+const FarmingSection = ({ userDetails }: { userDetails: any }) => {
   const [isMining, setIsMining] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [accumulatedSOLV, setAccumulatedSOLV] = useState<number>(0);
+  const [progress, setProgress] = useState<number>(0);
   const { toast } = useToast();
+  const { fetchUserProfile } = useAuth();
+  const [isStarting, setIsStarting] = useState(false);
+  const [isClaiming, setIsClaiming] = useState(false);
 
-  const handleStartMining = () => {
-    setIsMining(true);
-    toast({
-      title: "Mining Started!",
-      description: "Your farming session has begun",
-      variant: "default",
-    });
-    
-    // You can add actual mining logic here
-    // For example, start a timer, connect to backend, etc.
+  // Constants
+  const MAX_SOLV = 63;
+  const MINING_DURATION_MS = 5 * 60 * 60 * 1000; // 5 hours
+  const SOLV_PER_SECOND = MAX_SOLV / (MINING_DURATION_MS / 1000); // 63 / 18000 = 0.0035 SOLV per second
+
+  // Initialize mining state from userDetails
+  useEffect(() => {
+    if (userDetails?.isMining) {
+      setIsMining(true);
+    } else {
+      setIsMining(false);
+      setTimeRemaining(null);
+      setAccumulatedSOLV(0);
+      setProgress(0);
+    }
+  }, [userDetails?.isMining]);
+
+  // Calculate accumulated SOLV and time remaining based on lastClaim
+  useEffect(() => {
+    if (!userDetails?.lastClaim || !userDetails?.isMining) {
+      return;
+    }
+
+    const updateMiningStatus = () => {
+      if (!userDetails.isMining) {
+        setIsMining(false);
+        setTimeRemaining(null);
+        setAccumulatedSOLV(0);
+        setProgress(0);
+        return;
+      }
+
+      const miningStartTime = new Date(userDetails.lastClaim);
+      const currentTime = new Date();
+      const timeElapsedMs = currentTime.getTime() - miningStartTime.getTime();
+      const timeElapsedSeconds = timeElapsedMs / 1000;
+
+      // Calculate accumulated SOLV (up to max of 63)
+      const accumulated = Math.min(
+        timeElapsedSeconds * SOLV_PER_SECOND,
+        MAX_SOLV
+      );
+      setAccumulatedSOLV(accumulated);
+
+      // Calculate progress percentage
+      const progressPercent = (accumulated / MAX_SOLV) * 100;
+      setProgress(progressPercent);
+
+      // Calculate time remaining
+      const remaining = MINING_DURATION_MS - timeElapsedMs;
+
+      if (remaining <= 0) {
+        setTimeRemaining(0);
+      } else {
+        setTimeRemaining(remaining);
+      }
+    };
+
+    updateMiningStatus();
+    const interval = setInterval(updateMiningStatus, 1000); // Update every second
+
+    return () => clearInterval(interval);
+  }, [userDetails?.isMining, userDetails?.lastClaim]);
+
+  const handleStartMining = async () => {
+    if (isStarting) return;
+
+    setIsStarting(true);
+    try {
+      const response = await fetch("/api/claim", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: userDetails?.username,
+          type: "start farming",
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setIsMining(true);
+        toast({
+          title: "Mining Started!",
+          description:
+            "Your farming session has begun. Come back in 5 hours to claim!",
+          variant: "default",
+        });
+        await fetchUserProfile();
+      } else {
+        const error = await response.json();
+        toast({
+          title: "Failed to Start Mining",
+          description: error.error || "Please try again",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error starting mining:", error);
+      toast({
+        title: "Error",
+        description: "Failed to start mining. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const handleClaimReward = async () => {
+    if (
+      isClaiming ||
+      accumulatedSOLV <= 0 ||
+      (timeRemaining !== null && timeRemaining > 0)
+    )
+      return;
+
+    setIsClaiming(true);
+    try {
+      // Only allow claiming after 5 hours, send full 63 SOLV
+      const response = await fetch("/api/claim", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: userDetails?.username,
+          type: `farm claim--${MAX_SOLV}`,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const multiplierText =
+          data.multiplier > 1
+            ? ` (${data.multiplier}x multiplier applied!)`
+            : "";
+        toast({
+          title: "Reward Claimed!",
+          description: `You earned ${
+            data.pointsAwarded || MAX_SOLV
+          } SOLV!${multiplierText}`,
+          variant: "default",
+        });
+        setIsMining(false);
+        setTimeRemaining(null);
+        setAccumulatedSOLV(0);
+        setProgress(0);
+        await fetchUserProfile();
+      } else {
+        const error = await response.json();
+        toast({
+          title: "Failed to Claim",
+          description: error.error || "Please try again",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error claiming reward:", error);
+      toast({
+        title: "Error",
+        description: "Failed to claim reward. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
+  const formatTime = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${hours.toString().padStart(2, "0")}:${minutes
+      .toString()
+      .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   };
 
   return (
     <div className="bg-blue-800/50 rounded-2xl md:p-6 p-3 border border-blue-600/30">
-      <div className="flex items-center justify-between">
-        <h3 className="text-white font-bold md:text-xl text-sm">
-          Farming
-        </h3>
-        
-        <button
-          onClick={handleStartMining}
-          disabled={isMining}
-          className="bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 
-                     disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed
-                     text-yellow-900 font-bold md:py-3 py-2 md:px-6 px-4 rounded-full 
-                     transition-all duration-200 shadow-lg hover:shadow-xl
-                     transform hover:scale-105 active:scale-95
-                     md:text-base text-xs"
-        >
-          {isMining ? "Mining..." : "Start Mining"}
-        </button>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-white font-bold md:text-xl text-sm">Farming</h3>
+
+          {!isMining && (
+            <button
+              onClick={handleStartMining}
+              disabled={isStarting}
+              className="bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 
+                         disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed
+                         text-yellow-900 font-bold md:py-3 py-2 md:px-6 px-4 rounded-full 
+                         transition-all duration-200 shadow-lg hover:shadow-xl
+                         transform hover:scale-105 active:scale-95
+                         md:text-base text-xs"
+            >
+              {isStarting ? "Starting..." : "Start Mining"}
+            </button>
+          )}
+        </div>
+
+        {isMining && (
+          <div className="space-y-3">
+            {/* Accumulated SOLV */}
+            <div className="bg-blue-900/50 rounded-xl p-4 border border-blue-700/50">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-blue-300 text-xs">Mining Progress</div>
+                <div className="text-blue-300 text-xs">
+                  {progress.toFixed(1)}%
+                </div>
+              </div>
+              <div className="text-white font-bold text-2xl mb-2">
+                {accumulatedSOLV.toFixed(4)} / {MAX_SOLV} SOLV
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full bg-blue-800/50 rounded-full h-3 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-yellow-400 to-yellow-500 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Claim button - only available after 5 hours */}
+            {accumulatedSOLV > 0 && (
+              <button
+                onClick={handleClaimReward}
+                disabled={
+                  isClaiming || (timeRemaining !== null && timeRemaining > 0)
+                }
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 
+                           disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed
+                           text-white font-bold md:py-3 py-2 md:px-6 px-4 rounded-full 
+                           transition-all duration-200 shadow-lg hover:shadow-xl
+                           transform hover:scale-105 active:scale-95
+                           md:text-base text-xs"
+              >
+                {isClaiming
+                  ? "Claiming..."
+                  : timeRemaining !== null && timeRemaining > 0
+                  ? `Claim after ${formatTime(timeRemaining)}`
+                  : `Claim ${MAX_SOLV} SOLV`}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -312,22 +538,29 @@ const FarmingSection = () => {
 
 const InviteSection = ({ userDetails }: any) => {
   const [copyState, setCopyState] = useState("Copy");
-  const [link, setLink] = useState("");
   const { toast } = useToast();
 
-  useEffect(() => {
-    setLink(location.href);
-  }, []);
+  // Generate Telegram bot referral link
+  const referralLink = userDetails?.username
+    ? `t.me/solviumquizbot?ref=${userDetails.username}`
+    : "";
 
   const handleCopy = async () => {
-    const textToCopy = `${link}?ref=${userDetails?.username}`;
+    if (!referralLink) {
+      toast({
+        title: "Error",
+        description: "Username not found. Cannot generate referral link.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
-      await navigator.clipboard.writeText(textToCopy);
-      setCopyState("Copied");
+      await navigator.clipboard.writeText(referralLink);
+      setCopyState("Copied!");
       toast({
         title: "Copied!",
-        description: "Invite link copied to clipboard",
+        description: "Referral link copied to clipboard",
         variant: "default",
       });
       setTimeout(() => setCopyState("Copy"), 2000);
@@ -335,7 +568,7 @@ const InviteSection = ({ userDetails }: any) => {
       console.error("Failed to copy: ", err);
       toast({
         title: "Copy Failed",
-        description: "Failed to copy to clipboard",
+        description: "Failed to copy to clipboard. Please try again.",
         variant: "destructive",
       });
     }
@@ -343,13 +576,28 @@ const InviteSection = ({ userDetails }: any) => {
 
   return (
     <div className="bg-blue-800/50 rounded-2xl md:p-6 p-3 border border-blue-600/30">
-      <h3 className="text-white font-bold text-center flex justify-center  w-full mb-4">
+      <h3 className="text-white font-bold text-center flex justify-center w-full mb-4 md:text-lg text-sm">
         Invite friends and earn rewards
       </h3>
 
+      {/* Display the referral link */}
+      {referralLink && (
+        <div className="mb-4 p-3 bg-blue-900/50 rounded-xl border border-blue-700/50">
+          <div className="text-blue-300 text-xs mb-2">Your referral link:</div>
+          <div className="text-white font-mono text-xs md:text-sm break-all select-all">
+            {referralLink}
+          </div>
+        </div>
+      )}
+
       <button
         onClick={handleCopy}
-        className="w-fit bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-yellow-900 font-bold md:py-3 py-1 md:px-6 px-3 rounded-full transition-all duration-200 flex items-center justify-center gap-2 mx-auto"
+        disabled={!referralLink}
+        className="w-full bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 
+                   disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed
+                   text-yellow-900 font-bold md:py-3 py-2 md:px-6 px-4 rounded-full 
+                   transition-all duration-200 flex items-center justify-center gap-2 mx-auto
+                   transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
       >
         <span>{copyState}</span>
         <Copy className="w-4 h-4" />

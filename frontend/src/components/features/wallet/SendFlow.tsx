@@ -901,10 +901,10 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                             </div>
                             <div className="text-left">
                               <div className="text-white font-semibold text-xs">
-                                {t.symbol}
+                                {t.symbol.length > 8 ? `${t.symbol.slice(0, 8)}...` : t.symbol}
                               </div>
                               <div className="text-white/50 text-[9px]">
-                                {t.name}
+                                {t.name.length > 12 ? `${t.name.slice(0, 12)}...` : t.name}
                               </div>
                             </div>
                           </div>
@@ -998,10 +998,10 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                   </div>
                   <div>
                     <div className="text-white font-semibold text-xs sm:text-sm">
-                      {selectedToken.symbol}
+                      {selectedToken.symbol.length > 8 ? `${selectedToken.symbol.slice(0, 8)}...` : selectedToken.symbol}
                     </div>
                     <div className="text-white/50 text-[10px] sm:text-xs">
-                      {selectedToken.name}
+                      {selectedToken.name.length > 12 ? `${selectedToken.name.slice(0, 12)}...` : selectedToken.name}
                     </div>
                   </div>
                   <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 ml-1" />

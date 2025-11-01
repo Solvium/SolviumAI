@@ -149,6 +149,13 @@ export async function POST(request: NextRequest) {
         // Update user's last login date and streak
         const user = await prisma.user.findUnique({
           where: { id: parseInt(userId) }, // Convert string to number
+          select: {
+            id: true,
+            lastClaim: true,
+            claimCount: true,
+            wallet: true,
+            chatId: true,
+          },
         });
 
         if (!user) {
@@ -156,6 +163,29 @@ export async function POST(request: NextRequest) {
             { error: "User not found" },
             { status: 404 }
           );
+        }
+
+        // Resolve accountId for multiplier calculation
+        let resolvedAccountId: string | undefined = undefined;
+        try {
+          const walletJson = (user.wallet || {}) as any;
+          resolvedAccountId =
+            walletJson?.account_id || walletJson?.accountId || walletJson?.near;
+        } catch {}
+
+        // Fallback: try wallet cache via telegram chatId
+        if (!resolvedAccountId && user.chatId) {
+          try {
+            const chatNumeric = parseInt(user.chatId);
+            if (!Number.isNaN(chatNumeric)) {
+              const walletCache = await prisma.walletCache.findUnique({
+                where: { telegramUserId: chatNumeric },
+              });
+              resolvedAccountId = walletCache?.accountId || undefined;
+            }
+          } catch (e) {
+            console.log("WalletCache lookup failed:", e);
+          }
         }
 
         // Calculate streak (using existing fields)
@@ -182,9 +212,10 @@ export async function POST(request: NextRequest) {
         // Use claimCount as streak counter for now
         const newStreak = isConsecutive ? (user.claimCount || 0) + 1 : 1;
 
-        // Apply multiplier to daily login bonus
+        // Apply multiplier to daily login bonus using accountId
         const dailyLoginCalculation = await calculatePointsWithMultiplier(
-          DAILY_LOGIN_SOLV
+          DAILY_LOGIN_SOLV,
+          resolvedAccountId
         );
 
         const updatedUser = await prisma.user.update({
@@ -193,6 +224,12 @@ export async function POST(request: NextRequest) {
             lastClaim: today,
             claimCount: newStreak,
             totalSOLV: {
+              increment: dailyLoginCalculation.totalPoints,
+            },
+            totalPoints: {
+              increment: dailyLoginCalculation.totalPoints,
+            },
+            weeklyPoints: {
               increment: dailyLoginCalculation.totalPoints,
             },
           },
@@ -247,7 +284,12 @@ export async function POST(request: NextRequest) {
         // Check if user has already played games
         const userForFirstGame = await prisma.user.findUnique({
           where: { id: parseInt(userId) },
-          select: { gamesPlayed: true, totalSOLV: true },
+          select: { 
+            gamesPlayed: true, 
+            totalSOLV: true,
+            wallet: true,
+            chatId: true,
+          },
         });
 
         if (!userForFirstGame) {
@@ -257,17 +299,47 @@ export async function POST(request: NextRequest) {
           );
         }
 
+        // Resolve accountId for multiplier calculation
+        let firstGameAccountId: string | undefined = undefined;
+        try {
+          const walletJson = (userForFirstGame.wallet || {}) as any;
+          firstGameAccountId =
+            walletJson?.account_id || walletJson?.accountId || walletJson?.near;
+        } catch {}
+
+        // Fallback: try wallet cache via telegram chatId
+        if (!firstGameAccountId && userForFirstGame.chatId) {
+          try {
+            const chatNumeric = parseInt(userForFirstGame.chatId);
+            if (!Number.isNaN(chatNumeric)) {
+              const walletCache = await prisma.walletCache.findUnique({
+                where: { telegramUserId: chatNumeric },
+              });
+              firstGameAccountId = walletCache?.accountId || undefined;
+            }
+          } catch (e) {
+            console.log("WalletCache lookup failed:", e);
+          }
+        }
+
         // If user has already played games, just award the bonus
         if (userForFirstGame.gamesPlayed > 0) {
-          // Apply multiplier to first game bonus
+          // Apply multiplier to first game bonus using accountId
           const firstGameCalculation = await calculatePointsWithMultiplier(
-            FIRST_GAME_SOLV
+            FIRST_GAME_SOLV,
+            firstGameAccountId
           );
 
           const updated = await prisma.user.update({
             where: { id: parseInt(userId) },
             data: {
               totalSOLV: {
+                increment: firstGameCalculation.totalPoints,
+              },
+              totalPoints: {
+                increment: firstGameCalculation.totalPoints,
+              },
+              weeklyPoints: {
                 increment: firstGameCalculation.totalPoints,
               },
             },
@@ -298,9 +370,10 @@ export async function POST(request: NextRequest) {
           });
         } else {
           // If user hasn't played games yet, increment gamesPlayed and award bonus
-          // Apply multiplier to first game bonus
+          // Apply multiplier to first game bonus using accountId
           const firstGameCalculation = await calculatePointsWithMultiplier(
-            FIRST_GAME_SOLV
+            FIRST_GAME_SOLV,
+            firstGameAccountId
           );
 
           const updated = await prisma.user.update({
@@ -310,6 +383,12 @@ export async function POST(request: NextRequest) {
                 increment: 1,
               },
               totalSOLV: {
+                increment: firstGameCalculation.totalPoints,
+              },
+              totalPoints: {
+                increment: firstGameCalculation.totalPoints,
+              },
+              weeklyPoints: {
                 increment: firstGameCalculation.totalPoints,
               },
             },
@@ -427,7 +506,47 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: true, alreadyClaimed: true });
         }
 
-        // Mark completed and award SOLV equal to task.points
+        // Get user data to resolve accountId for multiplier
+        const userForTask = await prisma.user.findUnique({
+          where: { id: parseInt(userId) },
+          select: {
+            wallet: true,
+            chatId: true,
+          },
+        });
+
+        // Resolve accountId for multiplier calculation
+        let taskAccountId: string | undefined = undefined;
+        if (userForTask) {
+          try {
+            const walletJson = (userForTask.wallet || {}) as any;
+            taskAccountId =
+              walletJson?.account_id || walletJson?.accountId || walletJson?.near;
+          } catch {}
+
+          // Fallback: try wallet cache via telegram chatId
+          if (!taskAccountId && userForTask.chatId) {
+            try {
+              const chatNumeric = parseInt(userForTask.chatId);
+              if (!Number.isNaN(chatNumeric)) {
+                const walletCache = await prisma.walletCache.findUnique({
+                  where: { telegramUserId: chatNumeric },
+                });
+                taskAccountId = walletCache?.accountId || undefined;
+              }
+            } catch (e) {
+              console.log("WalletCache lookup failed:", e);
+            }
+          }
+        }
+
+        // Apply multiplier using accountId (same as games)
+        const taskCalculation = await calculatePointsWithMultiplier(
+          socialTask.points,
+          taskAccountId
+        );
+
+        // Mark completed and award SOLV with multiplier
         await prisma.userTask.upsert({
           where: {
             userId_taskId: {
@@ -447,13 +566,18 @@ export async function POST(request: NextRequest) {
         await prisma.user.update({
           where: { id: parseInt(userId) },
           data: {
-            totalSOLV: { increment: socialTask.points * (userMultipler || 1) },
+            totalSOLV: { increment: taskCalculation.totalPoints },
+            totalPoints: { increment: taskCalculation.totalPoints },
+            weeklyPoints: { increment: taskCalculation.totalPoints },
           },
         });
 
         return NextResponse.json({
           success: true,
-          solvEarned: socialTask.points * (userMultipler || 1),
+          solvEarned: taskCalculation.totalPoints,
+          basePoints: taskCalculation.basePoints,
+          boostAmount: taskCalculation.boostAmount,
+          multiplier: taskCalculation.multiplier,
         });
     }
   } catch (error) {

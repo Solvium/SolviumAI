@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import { useEffect } from "react";
 import { TaskIcon } from "@/components/common/icons/TaskIcon";
 import ProfileIcon from "@/components/common/icons/ProfileIcon";
 import { ContestIcon } from "@/components/common/icons/ContestIcon";
@@ -18,8 +19,32 @@ const montserrat = Montserrat({
 
 const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
   const { navigate } = useNavigation();
-  const { user } = useAuth();
-  //
+  const { user, fetchUserProfile } = useAuth();
+
+  // Force refresh user data on mount and when page becomes visible
+  useEffect(() => {
+    // Fetch fresh data immediately on mount
+    fetchUserProfile();
+
+    // Set up periodic refresh (every 30 seconds)
+    const interval = setInterval(() => {
+      fetchUserProfile();
+    }, 30000);
+
+    // Refresh when page becomes visible (user switches back to tab)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchUserProfile();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [fetchUserProfile]);
 
   return (
     <div className="h-[calc(100vh-75px)] w-full bg-[#040022] flex flex-col">
