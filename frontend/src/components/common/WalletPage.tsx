@@ -358,7 +358,7 @@ const WalletPage = () => {
 
   return (
     <>
-      <div className="min-h-screen bg-[#0a0b2e] relative flex flex-col">
+      <div className="h-screen bg-[#0a0b2e] flex flex-col overflow-hidden">
         {/* Fixed Header */}
         <div className="sticky top-0 z-50 bg-[#0a0b2e] border-b border-white/5">
           <div className="px-4 py-4">
