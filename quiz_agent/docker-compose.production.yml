@@ -187,8 +187,6 @@ services:
       - quiz-network
     environment:
       - LOKI_URL=${LOKI_URL}
-      - LOKI_USERNAME=${LOKI_USERNAME}
-      - LOKI_PASSWORD=${LOKI_PASSWORD}
       - HOSTNAME=${HOSTNAME:-srv990555}
     deploy:
       resources:
