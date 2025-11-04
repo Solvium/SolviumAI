@@ -3,7 +3,10 @@ server:
   grpc_listen_port: 0
 
 clients:
-  - url: https://1380112:glc_eyJvIjoiMTU3NTU3MCIsIm4iOiJzdGFjay0xNDIyMzE4LWhsLXJlYWQtc29sdml1bXRva2VuIiwiayI6IjNCSzQ2OUVlOWNCSks4MjZuT2cxWjN2RSIsIm0iOnsiciI6InByb2QtZXUtd2VzdC0yIn19@logs-prod-012.grafana.net/loki/api/v1/push
+  - url: ${LOKI_URL}
+    basic_auth:
+      username: ${LOKI_USERNAME}
+      password: ${LOKI_PASSWORD}
 
 positions:
   filename: /tmp/positions.yaml
@@ -15,5 +18,5 @@ scrape_configs:
           - localhost
         labels:
           job: solvium
-          host: solvium-server
+          host: ${HOSTNAME}
           __path__: /var/lib/docker/containers/*/*.log

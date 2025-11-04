@@ -180,14 +180,16 @@ services:
       - /var/log:/var/log
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - ./monitoring/promtail/config.yml:/etc/promtail/config.yml:ro
-    command: -config.file=/etc/promtail/config.yml
+    command:
+      - -config.expand-env=true
+      - -config.file=/etc/promtail/config.yml
     networks:
       - quiz-network
     environment:
       - LOKI_URL=${LOKI_URL}
       - LOKI_USERNAME=${LOKI_USERNAME}
       - LOKI_PASSWORD=${LOKI_PASSWORD}
-      - HOSTNAME=${HOSTNAME}
+      - HOSTNAME=${HOSTNAME:-srv990555}
     deploy:
       resources:
         limits:
