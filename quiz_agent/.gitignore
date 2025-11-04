@@ -16,3 +16,6 @@ __pycache__/
 *.pyd
 *.db
 *.sqlite3
+
+ssl/cert.pem
+ssl/key.pem
