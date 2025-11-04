@@ -179,22 +179,8 @@ services:
     volumes:
       - /var/log:/var/log
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - ./monitoring/promtail/config.yml:/etc/promtail/config.yml.template:ro
-      - promtail_config:/etc/promtail
-    command:
-      - /bin/sh
-      - -c
-      - |
-        if command -v envsubst >/dev/null 2>&1; then
-          envsubst < /etc/promtail/config.yml.template > /etc/promtail/config.yml
-        else
-          sed -e "s|\${LOKI_URL}|${LOKI_URL}|g" \
-              -e "s|\${LOKI_USERNAME}|${LOKI_USERNAME}|g" \
-              -e "s|\${LOKI_PASSWORD}|${LOKI_PASSWORD}|g" \
-              -e "s|\${HOSTNAME}|${HOSTNAME}|g" \
-              /etc/promtail/config.yml.template > /etc/promtail/config.yml
-        fi
-        exec /usr/bin/promtail -config.file=/etc/promtail/config.yml
+      - ./monitoring/promtail/config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
     networks:
       - quiz-network
     environment:
@@ -212,8 +198,6 @@ volumes:
   prometheus_data:
     driver: local
   grafana_data:
-    driver: local
-  promtail_config:
     driver: local
 
 networks:
