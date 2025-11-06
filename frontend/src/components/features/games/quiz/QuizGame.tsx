@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useDepositMultiplier } from "@/hooks/useDepositMultiplier";
 import { useSolviumContract } from "@/hooks/useSolviumContract";
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
+import GameHUD from "../common/GameHUD";
 
 interface QuizGameProps {
   onEarnCoins?: (amount: number) => void;
@@ -414,6 +415,18 @@ const QuizGame: React.FC<QuizGameProps> = ({
         ))}
       </div>
 
+      <GameHUD
+        score={score}
+        pointsEarned={pointsEarned}
+        multiplier={effectiveUserMultiplier}
+        currentBalance={userCoins}
+        showMultiplier={effectiveUserMultiplier > 1}
+        totalSolv={user?.totalSOLV || user?.totalPoints}
+        levelLabel={`L${user?.level ?? 1}`}
+        difficultyLabel={
+          difficulty.charAt(0).toUpperCase() + difficulty.slice(1)
+        }
+      />
       <div className="relative z-10 flex items-center justify-between px-4 py-3">
         {onClose && (
           <button

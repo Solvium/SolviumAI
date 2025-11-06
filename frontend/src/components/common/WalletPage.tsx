@@ -2,14 +2,27 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
-import { ChevronLeft, ArrowUp, Plus, DollarSign, RefreshCw, Sparkles, MessageCircle } from "lucide-react";
-import { getAccountInfo, formatNearAmount } from "@/lib/nearblocks";
+import {
+  ChevronLeft,
+  ArrowUp,
+  Plus,
+  DollarSign,
+  RefreshCw,
+  Sparkles,
+  MessageCircle,
+} from "lucide-react";
+import {
+  getAccountInfo,
+  formatNearAmount,
+  getAccountInventory,
+} from "@/lib/nearblocks";
 import { getAccountFull, formatYoctoToNear } from "@/lib/fastnear";
 import { getNearUsd } from "@/lib/prices";
 import { utils } from "near-api-js";
 import SendFlow from "@/components/features/wallet/SendFlow";
 import AddFlow from "@/components/features/wallet/AddFlow";
 import SwapFlow from "@/components/features/wallet/SwapFlow";
+import TransactionFlow from "@/components/features/wallet/TransactionFlow";
 import SuccessModal from "@/components/features/wallet/SuccessModal";
 import AIChatAgent from "@/components/features/wallet/AIChatAgent";
 import { useWalletPortfolioContext } from "@/contexts/WalletPortfolioContext";
@@ -37,19 +50,31 @@ const WalletPage = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const lastWalletFetchAtRef = useRef<number>(0);
-  
+
   // AI Agent draggable state
-  const [aiPosition, setAiPosition] = useState<{ x: number; y: number } | null>(null);
+  const [aiPosition, setAiPosition] = useState<{ x: number; y: number } | null>(
+    null
+  );
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0, elementX: 0, elementY: 0 });
   const hasDraggedRef = useRef(false);
   const aiButtonRef = useRef<HTMLButtonElement>(null);
   const [tokenHoldings, setTokenHoldings] = useState<
-    { id: string; symbol: string; balance: string; decimals?: number }[]
+    {
+      id: string;
+      symbol: string;
+      balance: string;
+      decimals?: number;
+      icon?: string;
+    }[]
   >([]);
   const [tokenPricesUsd, setTokenPricesUsd] = useState<Record<string, number>>(
     {}
   );
+  const [tokenChanges24h, setTokenChanges24h] = useState<
+    Record<string, number>
+  >({});
+  const [tokenIcons, setTokenIcons] = useState<Record<string, string>>({});
   const portfolio = useWalletPortfolioContext();
 
   // Disable background scroll when a modal/flow is active
@@ -136,6 +161,48 @@ const WalletPage = () => {
     setTokenHoldings(mapped);
   }, [portfolio]);
 
+  // Fetch token icons from inventory
+  useEffect(() => {
+    if (!accountId || tokenHoldings.length === 0) return;
+
+    (async () => {
+      try {
+        const inv = await getAccountInventory(accountId);
+        if (!inv) return;
+
+        const fromFts = Array.isArray((inv as any)?.fts)
+          ? (inv as any).fts
+          : null;
+        const fromArray = Array.isArray(inv) ? inv : null;
+
+        const iconMap: Record<string, string> = {};
+
+        if (fromFts) {
+          fromFts.forEach((t: any) => {
+            const id =
+              t?.contract || t?.token_contract || t?.token || t?.id || "";
+            const icon = t?.ft_meta?.icon || t?.icon;
+            if (id && icon) {
+              iconMap[id] = icon;
+            }
+          });
+        } else if (fromArray) {
+          fromArray.forEach((it: any) => {
+            const id = it?.token_id || it?.contract || it?.id || "";
+            const icon = it?.metadata?.icon || it?.icon;
+            if (id && icon) {
+              iconMap[id] = icon;
+            }
+          });
+        }
+
+        setTokenIcons(iconMap);
+      } catch (e) {
+        console.error("Error fetching token icons:", e);
+      }
+    })();
+  }, [accountId, tokenHoldings]);
+
   // Auto-unwrap wrapped NEAR when received
   useEffect(() => {
     if (!portfolio?.tokens || !unwrapNear) return;
@@ -192,6 +259,95 @@ const WalletPage = () => {
       } catch {}
     })();
   }, [tokenHoldings, nearUsd]);
+
+  // Fetch 24h price change for tokens from DexScreener
+  useEffect(() => {
+    (async () => {
+      try {
+        const ids = Array.from(
+          new Set((tokenHoldings || []).map((t) => t.id))
+        ).filter(Boolean) as string[];
+        if (ids.length === 0) return;
+
+        const entries = await Promise.all(
+          ids.map(async (id) => {
+            try {
+              // Handle NEAR separately via CoinGecko
+              if (id === "wrap.near" || id === "near") {
+                try {
+                  const res = await fetch(
+                    "https://api.coingecko.com/api/v3/simple/price?ids=near&vs_currencies=usd&include_24hr_change=true",
+                    { cache: "no-store" }
+                  );
+                  if (res.ok) {
+                    const data = await res.json().catch(() => null);
+                    const change = Number(data?.near?.usd_24h_change);
+                    if (Number.isFinite(change)) {
+                      return [id, change] as const;
+                    }
+                  }
+                } catch {}
+                return [id, null] as const;
+              }
+
+              // For other tokens, fetch directly from DexScreener
+              const res = await fetch(
+                `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(
+                  id
+                )}`,
+                {
+                  method: "GET",
+                  headers: { Accept: "application/json" },
+                  cache: "no-store",
+                }
+              );
+
+              if (!res.ok) return [id, null] as const;
+
+              const data = await res.json().catch(() => null);
+              if (!data?.pairs || data.pairs.length === 0)
+                return [id, null] as const;
+
+              // Find NEAR pairs and get the best one (highest liquidity)
+              const nearPairs = data.pairs.filter(
+                (p: any) =>
+                  p.chainId === "near" ||
+                  p.dexId === "ref" ||
+                  p.dexId === "joe" ||
+                  p.dexId === "trisolaris"
+              );
+
+              if (nearPairs.length === 0) return [id, null] as const;
+
+              // Sort by liquidity and get the best pair
+              const bestPair = nearPairs.sort(
+                (a: any, b: any) => b.liquidity?.usd - a.liquidity?.usd
+              )[0];
+              const change = Number(bestPair?.priceChange?.h24);
+
+              return [id, Number.isFinite(change) ? change : null] as const;
+            } catch {
+              return [id, null] as const;
+            }
+          })
+        );
+
+        const map: Record<string, number> = {};
+        for (const [id, ch] of entries) {
+          if (ch !== null && Number.isFinite(ch)) {
+            map[id] = ch as number;
+            // Also map wrap.near to near for consistency
+            if (id === "wrap.near") {
+              map["near"] = ch as number;
+            }
+          }
+        }
+        setTokenChanges24h(map);
+      } catch (error) {
+        console.error("Error fetching 24h price changes:", error);
+      }
+    })();
+  }, [tokenHoldings]);
 
   useEffect(() => {
     if (!account || nearBalance) return;
@@ -272,26 +428,26 @@ const WalletPage = () => {
   // AI Agent drag handlers
   const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
     e.stopPropagation();
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+
     let currentX = aiPosition?.x || 0;
     let currentY = aiPosition?.y || 0;
-    
+
     // If position hasn't been set yet, get the actual position from the DOM
     if (!aiPosition && aiButtonRef.current) {
       const rect = aiButtonRef.current.getBoundingClientRect();
       currentX = rect.left;
       currentY = rect.top;
     }
-    
+
     dragStartRef.current = {
       x: clientX,
       y: clientY,
       elementX: currentX,
       elementY: currentY,
     };
-    
+
     hasDraggedRef.current = false;
     setIsDragging(true);
   };
@@ -301,17 +457,23 @@ const WalletPage = () => {
 
     const handleDragMove = (e: MouseEvent | TouchEvent) => {
       e.preventDefault();
-      const clientX = 'touches' in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
-      const clientY = 'touches' in e ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
-      
+      const clientX =
+        "touches" in e
+          ? (e as TouchEvent).touches[0].clientX
+          : (e as MouseEvent).clientX;
+      const clientY =
+        "touches" in e
+          ? (e as TouchEvent).touches[0].clientY
+          : (e as MouseEvent).clientY;
+
       const deltaX = clientX - dragStartRef.current.x;
       const deltaY = clientY - dragStartRef.current.y;
-      
+
       // Mark as dragged if moved more than 5 pixels
       if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
         hasDraggedRef.current = true;
       }
-      
+
       setAiPosition({
         x: dragStartRef.current.elementX + deltaX,
         y: dragStartRef.current.elementY + deltaY,
@@ -322,16 +484,16 @@ const WalletPage = () => {
       setIsDragging(false);
     };
 
-    window.addEventListener('mousemove', handleDragMove);
-    window.addEventListener('mouseup', handleDragEnd);
-    window.addEventListener('touchmove', handleDragMove, { passive: false });
-    window.addEventListener('touchend', handleDragEnd);
-    
+    window.addEventListener("mousemove", handleDragMove);
+    window.addEventListener("mouseup", handleDragEnd);
+    window.addEventListener("touchmove", handleDragMove, { passive: false });
+    window.addEventListener("touchend", handleDragEnd);
+
     return () => {
-      window.removeEventListener('mousemove', handleDragMove);
-      window.removeEventListener('mouseup', handleDragEnd);
-      window.removeEventListener('touchmove', handleDragMove);
-      window.removeEventListener('touchend', handleDragEnd);
+      window.removeEventListener("mousemove", handleDragMove);
+      window.removeEventListener("mouseup", handleDragEnd);
+      window.removeEventListener("touchmove", handleDragMove);
+      window.removeEventListener("touchend", handleDragEnd);
     };
   }, [isDragging]);
 
@@ -362,14 +524,7 @@ const WalletPage = () => {
         {/* Fixed Header */}
         <div className="sticky top-0 z-50 bg-[#0a0b2e] border-b border-white/5">
           <div className="px-4 py-4">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => window.history.back()}
-                className="text-white/80 hover:text-white flex items-center gap-1 text-sm"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span className="text-xs">Back</span>
-              </button>
+            <div className="flex items-center justify-center">
               <h1
                 className="text-lg font-bold text-white tracking-[0.2em]"
                 style={{
@@ -379,7 +534,6 @@ const WalletPage = () => {
               >
                 WALLET
               </h1>
-              <div className="w-12" />
             </div>
           </div>
         </div>
@@ -387,7 +541,6 @@ const WalletPage = () => {
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto">
           <div className="px-4 pt-4 pb-24">
-
             {/* Balance Card */}
             <div className="relative mb-4">
               <div
@@ -414,7 +567,7 @@ const WalletPage = () => {
                         className="w-full h-full object-contain"
                         onError={(e) => {
                           // Fallback to inline SVG if image not found
-                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.style.display = "none";
                         }}
                       />
                     </div>
@@ -452,7 +605,9 @@ const WalletPage = () => {
                 <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
                   <DollarSign className="w-4 h-4 text-white" />
                 </div>
-                <span className="text-white text-[10px] font-medium">Transaction</span>
+                <span className="text-white text-[10px] font-medium">
+                  Transaction
+                </span>
               </button>
 
               <button
@@ -482,33 +637,33 @@ const WalletPage = () => {
                       <svg
                         width="20"
                         height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M12 2L2 7L12 12L22 7L12 2Z"
-                        fill="white"
-                        stroke="white"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M2 17L12 22L22 17"
-                        stroke="white"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M2 12L12 17L22 12"
-                        stroke="white"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M12 2L2 7L12 12L22 7L12 2Z"
+                          fill="white"
+                          stroke="white"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M2 17L12 22L22 17"
+                          stroke="white"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M2 12L12 17L22 12"
+                          stroke="white"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
                     </div>
                     <div>
                       <div className="text-white font-semibold text-xs">
@@ -523,24 +678,30 @@ const WalletPage = () => {
                     <div className="text-white font-bold text-sm">
                       ${nearUsdValue}
                     </div>
-                    <div className="text-green-400 text-[10px] flex items-center justify-end gap-0.5">
-                      <svg
-                        width="10"
-                        height="10"
-                      viewBox="0 0 12 12"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M6 9L6 3M6 3L3 6M6 3L9 6"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      </svg>
-                      +4.3%
-                    </div>
+                    {typeof tokenChanges24h["near"] === "number" ||
+                    typeof tokenChanges24h["wrap.near"] === "number" ? (
+                      <div
+                        className={`text-[10px] flex items-center justify-end gap-0.5 ${
+                          (tokenChanges24h["near"] ??
+                            tokenChanges24h["wrap.near"] ??
+                            0) >= 0
+                            ? "text-green-400"
+                            : "text-red-400"
+                        }`}
+                      >
+                        {(tokenChanges24h["near"] ??
+                          tokenChanges24h["wrap.near"] ??
+                          0) >= 0
+                          ? "+"
+                          : ""}
+                        {(
+                          tokenChanges24h["near"] ??
+                          tokenChanges24h["wrap.near"] ??
+                          0
+                        ).toFixed(2)}
+                        %
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -580,14 +741,36 @@ const WalletPage = () => {
                     >
                       <div className="bg-[#1a1d3f] rounded-xl px-3 py-3 flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center">
-                            <span className="text-white font-bold text-xs">
-                              {t.symbol.slice(0, 2)}
-                            </span>
+                          <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center overflow-hidden">
+                            {tokenIcons[t.id] ? (
+                              <img
+                                src={tokenIcons[t.id]}
+                                alt={t.symbol}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  // Fallback to text if image fails
+                                  e.currentTarget.style.display = "none";
+                                  const parent = e.currentTarget.parentElement;
+                                  if (parent) {
+                                    const span = document.createElement("span");
+                                    span.className =
+                                      "text-white font-bold text-xs";
+                                    span.textContent = t.symbol.slice(0, 2);
+                                    parent.appendChild(span);
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <span className="text-white font-bold text-xs">
+                                {t.symbol.slice(0, 2)}
+                              </span>
+                            )}
                           </div>
                           <div>
                             <div className="text-white font-semibold text-xs">
-                              {t.symbol.length > 8 ? `${t.symbol.slice(0, 8)}...` : t.symbol}
+                              {t.symbol.length > 8
+                                ? `${t.symbol.slice(0, 8)}...`
+                                : t.symbol}
                             </div>
                             <div className="text-white/50 text-[10px]">
                               {t.balance}
@@ -598,23 +781,18 @@ const WalletPage = () => {
                           <div className="text-white font-bold text-sm">
                             ${usd.toFixed(2)}
                           </div>
-                          <div className="text-green-400 text-[10px] flex items-center justify-end gap-0.5">
-                            <svg
-                              width="10"
-                              height="10"
-                              viewBox="0 0 12 12"
-                              fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                d="M6 9L6 3M6 3L3 6M6 3L9 6"
-                                stroke="currentColor"
-                                strokeWidth="1.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                            +4.3%
+                          <div
+                            className={`text-[10px] flex items-center justify-end gap-0.5 ${
+                              (tokenChanges24h[t.id] ?? 0) >= 0
+                                ? "text-green-400"
+                                : "text-red-400"
+                            }`}
+                          >
+                            {typeof tokenChanges24h[t.id] === "number"
+                              ? `${(tokenChanges24h[t.id] as number).toFixed(
+                                  2
+                                )}%`
+                              : "—"}
                           </div>
                         </div>
                       </div>
@@ -651,49 +829,53 @@ const WalletPage = () => {
           onMouseDown={handleDragStart}
           onTouchStart={handleDragStart}
           className="fixed group cursor-move select-none"
-          style={{ 
+          style={{
             zIndex: 9999,
-            left: aiPosition ? `${aiPosition.x}px` : 'auto',
-            top: aiPosition ? `${aiPosition.y}px` : 'auto',
-            right: !aiPosition ? '4px' : 'auto',
-            bottom: !aiPosition ? '128px' : 'auto',
-            transition: isDragging ? 'none' : 'all 0.3s ease',
+            left: aiPosition ? `${aiPosition.x}px` : "auto",
+            top: aiPosition ? `${aiPosition.y}px` : "auto",
+            right: !aiPosition ? "4px" : "auto",
+            bottom: !aiPosition ? "128px" : "auto",
+            transition: isDragging ? "none" : "all 0.3s ease",
           }}
         >
-        <div className="relative">
-          {/* Notification Badge */}
-          {/* <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-blue-500 rounded-full border-2 border-[#0a0b2e] flex items-center justify-center z-10">
+          <div className="relative">
+            {/* Notification Badge */}
+            {/* <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-blue-500 rounded-full border-2 border-[#0a0b2e] flex items-center justify-center z-10">
             <span className="text-white text-[9px] font-bold">1</span>
           </div> */}
 
-          {/* Main Button */}
-          <div className={`w-24 h-24 rounded-full items-center justify-center shadow-2xl ${!isDragging && 'group-hover:scale-110'} transition-transform overflow-hidden`}>
-            <img
-              src="/ai/AI-Assistant.svg"
-              alt="AI Assistant"
-              className="w-full h-full object-cover pointer-events-none"
-              draggable={false}
-            />
-          </div>
-
-          {/* Online Indicator */}
-          {/* <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-[#0a0b2e]"></div> */}
-        </div>
-
-        {/* Tooltip */}
-        {!isDragging && (
-          <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-            <div className="bg-white rounded-2xl px-2.5 py-1.5 shadow-lg whitespace-nowrap">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                <span className="text-xs font-medium text-gray-900">
-                  Hi! How can I help you?
-                </span>
-              </div>
-              <div className="absolute bottom-0 right-3 transform translate-y-1/2 rotate-45 w-1.5 h-1.5 bg-white"></div>
+            {/* Main Button */}
+            <div
+              className={`w-24 h-24 rounded-full items-center justify-center shadow-2xl ${
+                !isDragging && "group-hover:scale-110"
+              } transition-transform overflow-hidden`}
+            >
+              <img
+                src="/ai/AI-Assistant.svg"
+                alt="AI Assistant"
+                className="w-full h-full object-cover pointer-events-none"
+                draggable={false}
+              />
             </div>
+
+            {/* Online Indicator */}
+            {/* <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-[#0a0b2e]"></div> */}
           </div>
-        )}
+
+          {/* Tooltip */}
+          {!isDragging && (
+            <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              <div className="bg-white rounded-2xl px-2.5 py-1.5 shadow-lg whitespace-nowrap">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="text-xs font-medium text-gray-900">
+                    Hi! How can I help you?
+                  </span>
+                </div>
+                <div className="absolute bottom-0 right-3 transform translate-y-1/2 rotate-45 w-1.5 h-1.5 bg-white"></div>
+              </div>
+            </div>
+          )}
         </button>
       )}
 
@@ -712,6 +894,9 @@ const WalletPage = () => {
           onClose={() => setActiveFlow(null)}
           onSuccess={handleFlowSuccess}
         />
+      )}
+      {activeFlow === "transaction" && (
+        <TransactionFlow onClose={() => setActiveFlow(null)} />
       )}
       {showSuccess && <SuccessModal onClose={handleCloseSuccess} />}
 

@@ -57,10 +57,34 @@ function HomeShell() {
 
   // Handle initial route from Telegram start_param
   useEffect(() => {
-    if (hasCheckedInitialRoute || !isAuthenticated) return;
-
+    if (hasCheckedInitialRoute) return;
+    
+    // Check immediately, don't wait for authentication
     const urlParams = getUrlParams();
-    const route = urlParams.get("route");
+    let route = urlParams.get("route");
+    
+    // Also check Telegram's start_param directly
+    if (!route && typeof window !== "undefined") {
+      const tg = (window as any).Telegram?.WebApp;
+      if (tg?.initDataUnsafe?.start_param) {
+        const startParam = tg.initDataUnsafe.start_param;
+        const compactMatch = startParam.match(/^game[-_]([a-z0-9-]+)$/i);
+        if (compactMatch && compactMatch[1]) {
+          const gameId = compactMatch[1].toLowerCase().replace(/_/g, "-");
+          route = `/game/${gameId}`;
+        } else if (/^[a-z0-9-]+$/i.test(startParam)) {
+          const normalizedGameId = startParam.toLowerCase().replace(/_/g, "-");
+          route = `/game/${normalizedGameId}`;
+        } else {
+          try {
+            const startParams = new URLSearchParams(startParam);
+            route = startParams.get("route") || route;
+          } catch (e) {
+            // Ignore parsing errors
+          }
+        }
+      }
+    }
 
     if (route) {
       console.log("Initial route detected:", route);
@@ -70,12 +94,13 @@ function HomeShell() {
       if (gameIdMatch && gameIdMatch[1]) {
         const gameId = gameIdMatch[1];
         console.log("Navigating to game:", gameId);
+        // Navigate immediately, even before authentication
         navigateToGame(gameId);
       }
     }
 
     setHasCheckedInitialRoute(true);
-  }, [isAuthenticated, hasCheckedInitialRoute, navigateToGame]);
+  }, [hasCheckedInitialRoute, navigateToGame]);
 
   const handlePageChange = (page: string) => navigate(page as any);
 

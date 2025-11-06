@@ -2,68 +2,158 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Trophy, ChevronLeft, Coins, Gift, Sparkles } from "lucide-react";
+import { useNavigation } from "@/contexts/NavigationContext";
+import { useAuth } from "@/contexts/AuthContext";
+
+interface LeaderboardEntry {
+  rank: number;
+  username: string;
+  name?: string;
+  points: number;
+  userId: number;
+}
 
 const Contest = () => {
   const router = useRouter();
+  const { goBack } = useNavigation();
+  const { user } = useAuth();
   const [timeLeft, setTimeLeft] = useState({
     days: 3,
     hours: 12,
   });
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [userRank, setUserRank] = useState<number | null>(null);
+  const [userPoints, setUserPoints] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
 
-  // Countdown timer effect
+  // Fetch leaderboard data
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        const newHours = prev.hours - 1;
-        const newDays = newHours < 0 ? prev.days - 1 : prev.days;
+    const fetchLeaderboard = async () => {
+      if (!user?.id) {
+        setLoading(false);
+        return;
+      }
 
-        return {
-          days: newDays < 0 ? 7 : newDays,
-          hours: newHours < 0 ? 23 : newHours,
-        };
-      });
-    }, 3600000); // Update every hour
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/contest?type=get%20leaderboard&userId=${user.id}`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
 
-    return () => clearInterval(timer);
-  }, []);
+        if (response.ok) {
+          const data = await response.json();
+          const weeklyScores = data.weeklyScore || [];
+          
+          // Transform to leaderboard format with ranks
+          const ranked = weeklyScores.map((entry: any, index: number) => ({
+            rank: index + 1,
+            username: entry.user?.username || entry.user?.name || "Unknown",
+            name: entry.user?.name || entry.user?.username || "Unknown",
+            points: entry.points || 0,
+            userId: entry.userId,
+          }));
 
-  // Top 3 podium data
-  const topThree = [
-    {
-      rank: 2,
-      username: "CyberNinja",
-      initials: "CN",
-      points: 8450,
-      color: "border-gray-400",
-      bgColor: "bg-gray-400/10",
-    },
-    {
-      rank: 1,
-      username: "Clinton2965",
-      initials: "👤",
-      points: 9875,
-      color: "border-[#FFDA47]",
-      bgColor: "bg-gradient-to-br from-[#FFDA42] to-[#FFA200]",
-      isWinner: true,
-    },
-    {
-      rank: 3,
-      username: "ByteWarrior",
-      initials: "BW",
-      points: 7320,
-      color: "border-orange-500",
-      bgColor: "bg-orange-500/10",
-    },
-  ];
+          setLeaderboard(ranked);
 
-  // Leaderboard data (positions 4-8)
-  const leaderboard = [
-    { rank: 4, username: "PixelMaster", initials: "PM", points: 6890, color: "border-purple-400" },
-    { rank: 5, username: "NeonDreamer", initials: "ND", points: 6245, color: "border-blue-400" },
-    { rank: 6, username: "CodePhantom", initials: "CP", points: 5987, color: "border-cyan-400" },
-    { rank: 7, username: "GlitchHero", initials: "GH", points: 5634, color: "border-green-400" },
-    { rank: 8, username: "DataWizard", initials: "DW", points: 5321, color: "border-cyan-400" },
-  ];
+          // Find user's rank
+          const userEntry = ranked.find((entry: LeaderboardEntry) => entry.userId === user.id);
+          if (userEntry) {
+            setUserRank(userEntry.rank);
+            setUserPoints(userEntry.points);
+          } else {
+            // User not in top 50, need to find their rank
+            const userWeeklyPoints = user.weeklyPoints || 0;
+            setUserPoints(userWeeklyPoints);
+            // Calculate approximate rank (users with same or more points)
+            const rank = ranked.filter((e: LeaderboardEntry) => e.points > userWeeklyPoints).length + 1;
+            setUserRank(rank);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching leaderboard:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLeaderboard();
+    // Refresh every 60 seconds; depend only on user id to avoid re-creating intervals
+    const interval = setInterval(fetchLeaderboard, 60000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
+  // Get top 3 for podium (display order: #2, #1, #3 so winner is centered)
+  const rawTop = leaderboard.slice(0, 3);
+  const displayTop = rawTop.length === 3
+    ? [rawTop[1], rawTop[0], rawTop[2]]
+    : rawTop.length === 2
+    ? [rawTop[1], rawTop[0]]
+    : rawTop;
+
+  const topThree = displayTop.map((entry, idx) => {
+    const initials = entry.username
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) || entry.username.slice(0, 2).toUpperCase();
+    
+    return {
+      rank: entry.rank,
+      username: entry.username,
+      initials,
+      points: entry.points,
+      // idx === 1 is the center/winner slot in the layout below
+      color: idx === 1 ? "border-[#FFDA47]" : idx === 0 ? "border-gray-400" : "border-orange-500",
+      bgColor: idx === 1
+        ? "bg-gradient-to-br from-[#FFDA42] to-[#FFA200]"
+        : idx === 0
+        ? "bg-gray-400/10"
+        : "bg-orange-500/10",
+      isWinner: idx === 1,
+    };
+  });
+
+  // Fill with placeholder if less than 3
+  while (topThree.length < 3) {
+    const placeholderRank = topThree.length + 1;
+    topThree.push({
+      rank: placeholderRank,
+      username: "---",
+      initials: "--",
+      points: 0,
+      color: "border-gray-600",
+      bgColor: "bg-gray-600/10",
+      isWinner: false,
+    });
+  }
+
+  // Get positions 4-8 for leaderboard
+  const leaderboardEntries = leaderboard.slice(3, 8).map((entry) => {
+    const initials = entry.username
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) || entry.username.slice(0, 2).toUpperCase();
+    
+    const colors = [
+      "border-purple-400",
+      "border-blue-400",
+      "border-cyan-400",
+      "border-green-400",
+      "border-cyan-400",
+    ];
+    
+    return {
+      rank: entry.rank,
+      username: entry.username,
+      initials,
+      points: entry.points,
+      color: colors[(entry.rank - 4) % colors.length],
+    };
+  });
 
   // Rewards data
   const rewards = [
@@ -95,7 +185,7 @@ const Contest = () => {
       {/* Header - Fixed */}
       <header className="sticky top-0 z-10 bg-gradient-to-b from-[#0a0a1f] to-[#0f0f2e] p-4 flex items-center justify-between border-b border-purple-500/20">
         <button
-          onClick={() => router.back()}
+          onClick={() => goBack()}
           className="flex items-center gap-2 text-white hover:text-cyan-400 transition-colors"
         >
           <ChevronLeft className="w-5 h-5" />
@@ -123,8 +213,26 @@ const Contest = () => {
         </p>
 
         {/* Top 3 Podium */}
-        <div className="flex items-end justify-center gap-2 mb-6 px-2">
-          {topThree.map((player, idx) => (
+        {loading ? (
+          <div className="flex items-end justify-center gap-2 mb-6 px-2">
+            {[0, 1, 2].map((idx) => (
+              <div
+                key={idx}
+                className={`flex flex-col items-center ${idx === 1 ? "flex-1" : "flex-1"} animate-pulse`}
+              >
+                <div className="w-14 h-14 rounded-full bg-gray-600/20 border-2 border-gray-600 flex items-center justify-center mb-2"></div>
+                <div className="text-xs font-medium mb-1 text-gray-500">---</div>
+                <div className="text-yellow-400 font-bold text-sm mb-2">---</div>
+                <div className="text-xs text-gray-400 mb-2">SOLV</div>
+                <div className={`w-full rounded-t-xl border-2 border-gray-600 bg-gray-600/20 ${
+                  idx === 1 ? "h-32" : idx === 0 ? "h-24" : "h-20"
+                }`}></div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-end justify-center gap-2 mb-6 px-2">
+            {topThree.map((player, idx) => (
             <div
               key={player.rank}
               className={`flex flex-col items-center ${idx === 1 ? "flex-1" : "flex-1"}`}
@@ -145,7 +253,7 @@ const Contest = () => {
               <div className="text-yellow-400 font-bold text-sm mb-2">
                 {player.points.toLocaleString()}
               </div>
-              <div className="text-xs text-gray-400 mb-2">points</div>
+              <div className="text-xs text-gray-400 mb-2">SOLV</div>
 
               {/* Podium */}
               <div
@@ -161,37 +269,70 @@ const Contest = () => {
               </div>
             </div>
           ))}
-        </div>
+          </div>
+        )}
 
         {/* Leaderboard Positions 4-8 */}
-        <div className="space-y-3 mb-6">
-          {leaderboard.map((player) => (
-            <div
-              key={player.rank}
-              className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border-2 border-cyan-500/50 rounded-2xl p-4 flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <div className="text-xl font-bold text-white">#{player.rank}</div>
-                <div
-                  className={`w-10 h-10 rounded-full border-2 ${player.color} bg-gray-800/50 flex items-center justify-center text-sm font-bold`}
-                >
-                  {player.initials}
+        {loading ? (
+          <div className="space-y-3 mb-6">
+            {[4, 5, 6, 7, 8].map((rank) => (
+              <div
+                key={rank}
+                className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border-2 border-cyan-500/50 rounded-2xl p-4 flex items-center justify-between animate-pulse"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="text-xl font-bold text-white">#{rank}</div>
+                  <div className="w-10 h-10 rounded-full border-2 border-gray-600 bg-gray-800/50 flex items-center justify-center text-sm font-bold">
+                    --
+                  </div>
+                  <div className="font-medium text-gray-500">Loading...</div>
                 </div>
-                <div className="font-medium">{player.username}</div>
+                <div className="text-cyan-400 font-bold text-lg">---</div>
               </div>
-              <div className="text-cyan-400 font-bold text-lg">
-                {player.points.toLocaleString()}
-                <span className="text-xs text-gray-400 ml-1">pts</span>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-3 mb-6">
+            {leaderboardEntries.length > 0 ? (
+              leaderboardEntries.map((player) => (
+                <div
+                  key={player.rank}
+                  className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border-2 border-cyan-500/50 rounded-2xl p-4 flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="text-xl font-bold text-white">#{player.rank}</div>
+                    <div
+                      className={`w-10 h-10 rounded-full border-2 ${player.color} bg-gray-800/50 flex items-center justify-center text-sm font-bold`}
+                    >
+                      {player.initials}
+                    </div>
+                    <div className="font-medium">{player.username}</div>
+                  </div>
+                  <div className="text-cyan-400 font-bold text-lg">
+                    {player.points.toLocaleString()}
+                    <span className="text-xs text-gray-400 ml-1">SOLV</span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-gray-400 py-8">
+                No participants yet. Be the first!
               </div>
-            </div>
-          ))}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Progress Section with Rank Badge */}
         <div className="bg-[#1a1a3e]/60 border-2 border-[#5555ff]/50 rounded-3xl p-6 mb-6 relative backdrop-blur-sm">
           {/* Your Rank Badge - Positioned at top */}
           <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-[#1C97D8] rounded-full px-5 py-2.5 text-center font-bold text-xs text-black whitespace-nowrap">
-            Your Rank: #12 — Keep going!
+            {loading ? (
+              "Loading..."
+            ) : userRank ? (
+              `Your Rank: #${userRank} ${userRank <= 3 ? "🏆" : "— Keep going!"}`
+            ) : (
+              "Join the contest!"
+            )}
           </div>
 
           <div className="flex items-start justify-between mb-5 mt-2">
@@ -201,23 +342,36 @@ const Contest = () => {
               </div>
               <div className="text-[#00d4ff] text-[11px] font-bold" style={{ fontFamily: 'monospace', letterSpacing: '0.1em' }}>PROGRESS</div>
             </div>
-            <div className="text-3xl font-bold text-[#1C97D8]">68%</div>
+            {leaderboard.length > 0 && topThree[0]?.points > 0 && (
+              <div className="text-3xl font-bold text-[#1C97D8]">
+                {Math.round((userPoints / topThree[0].points) * 100)}%
+              </div>
+            )}
           </div>
 
           {/* Progress Bar */}
-          <div className="w-full h-2.5 bg-[#0a0a1e] rounded-full overflow-hidden mb-6">
-            <div className="h-full bg-[#1C97D8] rounded-full" style={{ width: "68%" }}></div>
-          </div>
+          {leaderboard.length > 0 && topThree[0]?.points > 0 && (
+            <div className="w-full h-2.5 bg-[#0a0a1e] rounded-full overflow-hidden mb-6">
+              <div 
+                className="h-full bg-[#1C97D8] rounded-full transition-all duration-500" 
+                style={{ width: `${Math.min((userPoints / topThree[0].points) * 100, 100)}%` }}
+              ></div>
+            </div>
+          )}
 
           {/* Stats */}
           <div className="flex justify-between items-center">
             <div className="text-left">
-              <div className="text-2xl font-bold text-[#1C97D8] mb-1">1,245</div>
-              <div className="text-[11px] text-gray-400">Solv Point Gained</div>
+              <div className="text-2xl font-bold text-[#1C97D8] mb-1">
+                {userPoints.toLocaleString()}
+              </div>
+              <div className="text-[11px] text-gray-400">SOLV Gained</div>
             </div>
             <div className="text-right">
-              <div className="text-3xl font-bold text-[#1C97D8] mb-1">18/25</div>
-              <div className="text-[11px] text-gray-400">Tasks Done</div>
+              <div className="text-3xl font-bold text-[#1C97D8] mb-1">
+                {userRank || "—"}
+              </div>
+              <div className="text-[11px] text-gray-400">Your Rank</div>
             </div>
           </div>
         </div>

@@ -163,7 +163,42 @@ export async function POST(req: NextRequest) {
 export async function GET(req: any) {
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type");
-  const username = searchParams.get("username");
+  const userId = searchParams.get("userId");
+
+  if (type === "get leaderboard" || !type) {
+    try {
+      const currentWeek = getISOWeekNumber(new Date());
+      const currentYear = getCurrentYear();
+
+      const weeklyScore = await prisma.weeklyScore.findMany({
+        where: {
+          weekNumber: currentWeek,
+          year: currentYear,
+        },
+        orderBy: {
+          points: "desc",
+        },
+        take: 50,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+            },
+          },
+        },
+      });
+
+      return NextResponse.json({ weeklyScore }, { status: 200 });
+    } catch (error) {
+      console.error("Error fetching weekly points:", error);
+      return NextResponse.json(
+        { error: "Failed to fetch weekly points" },
+        { status: 500 }
+      );
+    }
+  }
 
   try {
     return NextResponse.json("users");

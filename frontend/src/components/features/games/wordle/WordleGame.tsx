@@ -20,6 +20,7 @@ import {
 import HintSystem from "../monetization/HintSystem";
 import { useGameConfig } from "@/contexts/GameConfigContext";
 import { useAuth } from "@/contexts/AuthContext";
+import GameHUD from "../common/GameHUD";
 import {
   validateWordFrontend,
   getDailyWord,
@@ -1088,6 +1089,16 @@ const WordleGame: React.FC<WordleGameProps> = ({
             <TutorialScreen />
           ) : (
             <>
+              <GameHUD
+                score={guesses.length}
+                pointsEarned={pointCalculation?.boostAmount || 0}
+                multiplier={pointCalculation?.multiplier || 1}
+                currentBalance={userBalance}
+                showMultiplier={!!pointCalculation && pointCalculation.multiplier > 1}
+                totalSolv={user?.totalSOLV || user?.totalPoints}
+                levelLabel={`L${level}`}
+                difficultyLabel={getDifficultyLabel(level)}
+              />
               <div className="px-3 pt-4 flex-1 flex flex-col justify-center items-center pb-4">
                 {/* Game Board */}
                 <div className="space-y-2 mb-3">
