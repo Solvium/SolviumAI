@@ -133,18 +133,14 @@ export async function POST(req: NextRequest) {
         where: {
           weekNumber: currentWeek,
           year: currentYear,
+          points: { gt: 0 }, // must have earned points this week
+          user: { isOfficial: true }, // only qualified participants
         },
-        orderBy: {
-          points: "desc",
-        },
+        orderBy: { points: "desc" },
         take: 50,
         include: {
           user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-            },
+            select: { id: true, name: true, username: true },
           },
         },
       });
@@ -174,18 +170,14 @@ export async function GET(req: any) {
         where: {
           weekNumber: currentWeek,
           year: currentYear,
+          points: { gt: 0 },
+          user: { isOfficial: true },
         },
-        orderBy: {
-          points: "desc",
-        },
+        orderBy: { points: "desc" },
         take: 50,
         include: {
           user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-            },
+            select: { id: true, name: true, username: true },
           },
         },
       });

@@ -66,6 +66,58 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
     balance?: string | number;
     rawAmount?: string;
     decimals?: number;
+    icon?: string;
+  };
+  // Basic icon map for common tokens
+  const TOKEN_ICONS: Record<string, string> = {
+    NEAR: "/assets/icons/near.svg",
+    WNEAR: "/assets/icons/near.svg",
+    USDC: "/api/token-icon?symbol=USDC",
+    USDT: "/api/token-icon?symbol=USDT",
+  };
+
+  const [iconMap, setIconMap] = useState<Record<string, string>>({});
+
+  // Fetch icons from Nearblocks inventory to match WalletPage behavior
+  useEffect(() => {
+    (async () => {
+      try {
+        const inv = await getAccountInventory(accountId || "");
+        if (!inv) return;
+        const fromFts = Array.isArray((inv as any)?.fts) ? (inv as any).fts : null;
+        const fromArray = Array.isArray(inv) ? inv : null;
+        const imap: Record<string, string> = {};
+        if (fromFts) {
+          fromFts.forEach((t: any) => {
+            const id = t?.contract || t?.token_contract || t?.token || t?.id || "";
+            const icon = t?.ft_meta?.icon || t?.icon;
+            if (id && icon) imap[id] = icon;
+          });
+        } else if (fromArray) {
+          fromArray.forEach((it: any) => {
+            const id = it?.token_id || it?.contract || it?.id || "";
+            const icon = it?.metadata?.icon || it?.icon;
+            if (id && icon) imap[id] = icon;
+          });
+        }
+        setIconMap(imap);
+      } catch {}
+    })();
+  }, [accountId]);
+
+  const renderTokenIcon = (symbol: string, icon?: string) => {
+    const key = (symbol || "").toUpperCase();
+    const src = icon || TOKEN_ICONS[key];
+    if (!src) return (
+      <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center">
+        <span className="text-white font-bold text-[10px]">{symbol.slice(0, 2)}</span>
+      </div>
+    );
+    return (
+      <div className="w-8 h-8 rounded-full overflow-hidden bg-white flex items-center justify-center">
+        <img src={src} alt={symbol} className="w-full h-full object-contain p-1" />
+      </div>
+    );
   };
   const [tokenSelectorOpen, setTokenSelectorOpen] = useState(false);
   const [selectedToken, setSelectedToken] = useState<Token>({
@@ -894,11 +946,10 @@ const SendFlow = ({ onClose, onSuccess }: SendFlowProps) => {
                           className="w-full flex items-center justify-between p-2 hover:bg-white/5 rounded-lg transition-colors"
                         >
                           <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center">
-                              <span className="text-white font-bold text-[10px]">
-                                {t.symbol.slice(0, 2)}
-                              </span>
-                            </div>
+                            {renderTokenIcon(
+                              t.symbol,
+                              (t as any).address || (t as any).id ? iconMap[(t as any).address || (t as any).id] : undefined
+                            )}
                             <div className="text-left">
                               <div className="text-white font-semibold text-xs">
                                 {t.symbol.length > 8 ? `${t.symbol.slice(0, 8)}...` : t.symbol}

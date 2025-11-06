@@ -1,11 +1,20 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { ArrowLeft, Copy, Plus, Search, ArrowDownUp, Check, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Copy,
+  Plus,
+  Search,
+  ArrowDownUp,
+  Check,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toRawAmount } from "@/lib/nearIntents";
 // Quotes are now retrieved from server-side Ref SDK via /api/ref-quote
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
+import { getAccountInventory } from "@/lib/nearblocks";
 import { useWalletPortfolioContext } from "@/contexts/WalletPortfolioContext";
 import {
   DEFAULT_TOKENS,
@@ -19,7 +28,12 @@ interface SwapFlowProps {
   onSuccess: () => void;
 }
 
-type SwapStep = "swap" | "confirm" | "selectFromToken" | "selectToToken" | "confirmed";
+type SwapStep =
+  | "swap"
+  | "confirm"
+  | "selectFromToken"
+  | "selectToToken"
+  | "confirmed";
 
 const tokens = [
   {
@@ -61,6 +75,78 @@ const tokens = [
 
 const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
   const { tokens: walletTokens, nearBalance } = useWalletPortfolioContext();
+  const { accountId } = usePrivateKeyWallet();
+  // Basic icon map for common tokens
+  const TOKEN_ICONS: Record<string, string> = {
+    NEAR: "/assets/icons/near.svg",
+    WNEAR: "/assets/icons/near.svg",
+    USDC: "/api/token-icon?symbol=USDC",
+    USDT: "/api/token-icon?symbol=USDT",
+  };
+
+  const [iconMap, setIconMap] = useState<Record<string, string>>({});
+
+  // Fetch icons from Nearblocks inventory (same approach as WalletPage)
+  useEffect(() => {
+    (async () => {
+      try {
+        const inv = await getAccountInventory(accountId || "");
+        if (!inv) return;
+        const fromFts = Array.isArray((inv as any)?.fts)
+          ? (inv as any).fts
+          : null;
+        const fromArray = Array.isArray(inv) ? inv : null;
+        const imap: Record<string, string> = {};
+        if (fromFts) {
+          fromFts.forEach((t: any) => {
+            const id =
+              t?.contract || t?.token_contract || t?.token || t?.id || "";
+            const icon = t?.ft_meta?.icon || t?.icon;
+            if (id && icon) imap[id] = icon;
+          });
+        } else if (fromArray) {
+          fromArray.forEach((it: any) => {
+            const id = it?.token_id || it?.contract || it?.id || "";
+            const icon = it?.metadata?.icon || it?.icon;
+            if (id && icon) imap[id] = icon;
+          });
+        }
+        setIconMap(imap);
+      } catch {}
+    })();
+  }, [accountId]);
+
+  const renderTokenIcon = (
+    symbol: string,
+    address?: string,
+    sizeClass: string = "w-8 h-8"
+  ) => {
+    // Prefer icon from inventory when available
+    const byAddress = address ? iconMap[address] : undefined;
+    const key = (symbol || "").toUpperCase();
+    const src = byAddress || TOKEN_ICONS[key];
+    if (!src)
+      return (
+        <div
+          className={`${sizeClass} bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center`}
+        >
+          <span className="text-white font-bold text-[10px]">
+            {symbol.slice(0, 2)}
+          </span>
+        </div>
+      );
+    return (
+      <div
+        className={`${sizeClass} rounded-full overflow-hidden bg-black flex items-center justify-center`}
+      >
+        <img
+          src={src}
+          alt={symbol}
+          className="w-full h-full object-contain p-1"
+        />
+      </div>
+    );
+  };
   const [step, setStep] = useState<SwapStep>("swap");
   const [fromToken, setFromToken] = useState("NEAR");
   const [toToken, setToToken] = useState("USDC"); // Native USDC - safe default
@@ -304,7 +390,11 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
 
   // Real-time quote fetching (server-side Ref SDK)
   const fetchLiveQuote = useCallback(async () => {
-    console.log("🔄 fetchLiveQuote called with:", { amount, fromToken, toToken });
+    console.log("🔄 fetchLiveQuote called with:", {
+      amount,
+      fromToken,
+      toToken,
+    });
     if (!amount || Number(amount) <= 0) {
       console.log("❌ No amount or invalid amount");
       setLiveQuote(null);
@@ -366,14 +456,18 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
 
   // Debounced quote fetching
   useEffect(() => {
-    console.log("⏱️ Debounce effect triggered for:", { amount, fromToken, toToken });
+    console.log("⏱️ Debounce effect triggered for:", {
+      amount,
+      fromToken,
+      toToken,
+    });
     const timer = setTimeout(() => {
       fetchLiveQuote();
     }, 500); // 500ms delay
 
     return () => clearTimeout(timer);
   }, [amount, fromToken, toToken, fetchLiveQuote]);
-  
+
   // Reset quote when tokens change
   useEffect(() => {
     console.log("🔄 Tokens changed, resetting quote");
@@ -424,7 +518,6 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
   }, [step, amount, fromToken, toToken, resolveToken, liveQuote]);
 
   const {
-    accountId,
     wrapNear,
     unwrapNear,
     registerToken,
@@ -737,12 +830,15 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     return (
       <>
         {/* Background */}
-        <div 
+        <div
           className="fixed inset-0 bg-[#0a0b2e] z-50 flex flex-col cursor-pointer"
           onClick={() => setStep("swap")}
         >
           <div className="px-4 py-4 border-b border-white/5 flex items-center gap-3">
-            <button onClick={onClose} className="text-white flex items-center gap-1">
+            <button
+              onClick={onClose}
+              className="text-white flex items-center gap-1"
+            >
               <ArrowLeft className="w-5 h-5" />
               <span className="text-sm">Back</span>
             </button>
@@ -761,7 +857,7 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
 
         {/* Token Selection Modal */}
         <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 pb-20">
-          <div 
+          <div
             className="bg-[#0a0b2e] w-[95%] max-w-md mx-auto rounded-t-2xl flex flex-col max-h-[60vh] mb-2"
             onClick={(e) => e.stopPropagation()}
           >
@@ -795,12 +891,16 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
 
                 <div className="space-y-1">
                   {selectable.map((t) => {
-                    const balance = t.symbol === "NEAR" ? nearBalance : 
-                      (walletTokens || []).find(wt => wt.symbol === t.symbol)?.balance || "0";
+                    const balance =
+                      t.symbol === "NEAR"
+                        ? nearBalance
+                        : (walletTokens || []).find(
+                            (wt) => wt.symbol === t.symbol
+                          )?.balance || "0";
                     const numericBal = parseFloat(balance || "0");
                     const price = pricesUsd[t.symbol] || 0;
                     const usdValue = (numericBal * price).toFixed(2);
-                    
+
                     return (
                       <button
                         key={t.symbol}
@@ -815,17 +915,17 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                         className="w-full flex items-center justify-between p-2 hover:bg-white/5 rounded-lg transition-colors"
                       >
                         <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center">
-                            <span className="text-white font-bold text-[10px]">
-                              {t.symbol.slice(0, 2)}
-                            </span>
-                          </div>
+                          {renderTokenIcon(t.symbol, t.address)}
                           <div className="text-left">
                             <div className="text-white font-semibold text-xs">
-                              {t.symbol.length > 8 ? `${t.symbol.slice(0, 8)}...` : t.symbol}
+                              {t.symbol.length > 8
+                                ? `${t.symbol.slice(0, 8)}...`
+                                : t.symbol}
                             </div>
                             <div className="text-white/50 text-[9px]">
-                              {t.name.length > 12 ? `${t.name.slice(0, 12)}...` : t.name}
+                              {t.name.length > 12
+                                ? `${t.name.slice(0, 12)}...`
+                                : t.name}
                             </div>
                           </div>
                         </div>
@@ -853,14 +953,20 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     const fromMeta = resolveToken(fromToken);
     const toMeta = resolveToken(toToken);
     const fromBalance = getFromTokenBalance();
-    const toBalance = toToken === "NEAR" ? nearBalance : 
-      (walletTokens || []).find(wt => wt.symbol === toToken)?.balance || "0";
-    
+    const toBalance =
+      toToken === "NEAR"
+        ? nearBalance
+        : (walletTokens || []).find((wt) => wt.symbol === toToken)?.balance ||
+          "0";
+
     return (
       <div className="fixed inset-0 bg-[#0a0b2e] z-50 flex flex-col">
         {/* Header */}
         <div className="px-4 py-4 flex items-center gap-3">
-          <button onClick={onClose} className="text-white flex items-center gap-1">
+          <button
+            onClick={onClose}
+            className="text-white flex items-center gap-1"
+          >
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm">Back</span>
           </button>
@@ -895,10 +1001,26 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                   onClick={() => setStep("selectFromToken")}
                   className="flex items-center gap-1.5"
                 >
-                  <div className="w-5 h-5 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full"></div>
-                  <span className="text-white font-medium text-sm">{fromToken}</span>
-                  <svg className="w-3.5 h-3.5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  {renderTokenIcon(
+                    fromToken,
+                    resolveToken(fromToken)?.address,
+                    "w-5 h-5"
+                  )}
+                  <span className="text-white font-medium text-sm">
+                    {fromToken}
+                  </span>
+                  <svg
+                    className="w-3.5 h-3.5 text-white/60"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
                   </svg>
                 </button>
               </div>
@@ -923,20 +1045,40 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
 
             {/* You Receive Container */}
             <div className="bg-[#1a1d3f]/40 rounded-2xl p-4 mt-3">
-              <div className="text-white text-xs mb-2 font-medium">You Receive</div>
+              <div className="text-white text-xs mb-2 font-medium">
+                You Receive
+              </div>
               <div className="flex items-center justify-between mb-1.5">
                 <div className="text-white text-2xl font-light">
-                  {liveQuote && Number(amount) > 0 ? parseFloat(liveQuote).toFixed(1) : "0.0"}
+                  {liveQuote && Number(amount) > 0
+                    ? parseFloat(liveQuote).toFixed(1)
+                    : "0.0"}
                   {quoteLoading && <span className="text-xs ml-2">...</span>}
                 </div>
                 <button
                   onClick={() => setStep("selectToToken")}
                   className="flex items-center gap-1.5"
                 >
-                  <div className="w-5 h-5 bg-gradient-to-br from-pink-400 to-red-500 rounded-full"></div>
-                  <span className="text-white font-medium text-sm">{toToken}</span>
-                  <svg className="w-3.5 h-3.5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  {renderTokenIcon(
+                    toToken,
+                    resolveToken(toToken)?.address,
+                    "w-5 h-5"
+                  )}
+                  <span className="text-white font-medium text-sm">
+                    {toToken}
+                  </span>
+                  <svg
+                    className="w-3.5 h-3.5 text-white/60"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
                   </svg>
                 </button>
               </div>
@@ -971,13 +1113,13 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     const toPrice = pricesUsd[toToken] || 0;
     const fromUsd = (amountNum * fromPrice).toFixed(5);
     const toUsd = (minReceiveNum * toPrice).toFixed(2);
-    
+
     // Calculate estimated gas fee
     // NEAR gas fees: wrapping (~0.001), swap (~0.002-0.004), unwrapping (~0.001), storage (~0.001)
     const isFromNear = fromMeta.symbol === "NEAR";
     const isToNear = toMeta.symbol === "NEAR";
     let estimatedGasFee = 0.004; // Base swap gas fee
-    
+
     if (isFromNear) {
       estimatedGasFee += 0.001; // Wrapping fee
     }
@@ -986,16 +1128,19 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
     }
     // Add potential storage registration (0.001 per token if not registered)
     estimatedGasFee += 0.002; // Buffer for storage registration if needed
-    
+
     const gasFeeNear = estimatedGasFee.toFixed(4);
     const nearPrice = pricesUsd["NEAR"] || 0;
-    const gasFeeUsd = nearPrice > 0 ? (estimatedGasFee * nearPrice).toFixed(4) : "~";
-    
+    const gasFeeUsd =
+      nearPrice > 0 ? (estimatedGasFee * nearPrice).toFixed(4) : "~";
+
     return (
       <div className="fixed inset-0 bg-[#0a0b2e] z-50 flex flex-col">
         {/* Header */}
         <div className="px-3 py-3 border-b border-white/5">
-          <div className="text-white text-sm font-medium text-center">Swap Transaction</div>
+          <div className="text-white text-sm font-medium text-center">
+            Swap Transaction
+          </div>
         </div>
 
         {/* Content */}
@@ -1004,11 +1149,11 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
           <div className="flex items-center justify-between">
             {/* From Token */}
             <div className="flex flex-col items-center gap-1.5">
-              <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-xs">{fromToken.slice(0, 2)}</span>
-              </div>
+              {renderTokenIcon(fromToken, fromMeta.address, "w-10 h-10")}
               <div className="text-center">
-                <div className="text-white font-semibold text-xs">{amountNum.toFixed(4)} {fromToken.toLowerCase()}</div>
+                <div className="text-white font-semibold text-xs">
+                  {amountNum.toFixed(4)} {fromToken.toLowerCase()}
+                </div>
                 <div className="text-white/50 text-[10px]">${fromUsd}</div>
               </div>
             </div>
@@ -1020,8 +1165,12 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
               </div>
               <div className="flex items-center gap-1">
                 <div className="w-3.5 h-3.5 bg-gradient-to-br from-purple-400 to-purple-600 rounded-sm flex items-center justify-center">
-                  <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/>
+                  <svg
+                    className="w-2 h-2 text-white"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z" />
                   </svg>
                 </div>
               </div>
@@ -1029,11 +1178,11 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
 
             {/* To Token */}
             <div className="flex flex-col items-center gap-1.5">
-              <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-red-500 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-xs">{toToken.slice(0, 2)}</span>
-              </div>
+              {renderTokenIcon(toToken, toMeta.address, "w-10 h-10")}
               <div className="text-center">
-                <div className="text-white font-semibold text-xs">{minReceiveNum.toFixed(4)} {toToken}</div>
+                <div className="text-white font-semibold text-xs">
+                  {minReceiveNum.toFixed(4)} {toToken}
+                </div>
                 <div className="text-white/50 text-[10px]">${toUsd}</div>
               </div>
             </div>
@@ -1046,7 +1195,7 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
               <div className="text-white/80 text-[10px] font-mono truncate max-w-[55%]">
                 {accountId}
               </div>
-              <button 
+              <button
                 className="text-[#0075EA]"
                 onClick={async () => {
                   if (accountId) {
@@ -1071,11 +1220,21 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
           {/* Warning */}
           <div className="flex items-start gap-2 p-2.5 bg-blue-500/10 border border-blue-500/30 rounded-lg">
             <div className="w-4 h-4 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <svg className="w-2.5 h-2.5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"/>
+              <svg
+                className="w-2.5 h-2.5 text-blue-400"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
-            <div className="text-blue-300 text-[10px]">Please double check recipient address</div>
+            <div className="text-blue-300 text-[10px]">
+              Please double check recipient address
+            </div>
           </div>
 
           {/* Confirm Button */}
@@ -1097,7 +1256,9 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
                   <X className="w-6 h-6 text-red-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-white font-semibold text-base mb-1 break-words">Transaction Error</h3>
+                  <h3 className="text-white font-semibold text-base mb-1 break-words">
+                    Transaction Error
+                  </h3>
                   <p className="text-white/70 text-sm break-words">{error}</p>
                 </div>
               </div>
@@ -1126,7 +1287,9 @@ const SwapFlow = ({ onClose, onSuccess }: SwapFlowProps) => {
             <X className="w-5 h-5" />
           </button>
           <div className="text-center space-y-4">
-            <h2 className="text-white text-xl font-semibold">Transaction Confirmed</h2>
+            <h2 className="text-white text-xl font-semibold">
+              Transaction Confirmed
+            </h2>
             <div className="w-20 h-20 mx-auto rounded-full border-4 border-[#0075EA] flex items-center justify-center">
               <Check className="w-10 h-10 text-[#0075EA]" />
             </div>

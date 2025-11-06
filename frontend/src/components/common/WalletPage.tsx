@@ -260,7 +260,7 @@ const WalletPage = () => {
     })();
   }, [tokenHoldings, nearUsd]);
 
-  // Fetch 24h price change for tokens from DexScreener
+  // Fetch 24h price change for tokens via server proxy (avoids CSP)
   useEffect(() => {
     (async () => {
       try {
@@ -272,58 +272,18 @@ const WalletPage = () => {
         const entries = await Promise.all(
           ids.map(async (id) => {
             try {
-              // Handle NEAR separately via CoinGecko
-              if (id === "wrap.near" || id === "near") {
-                try {
-                  const res = await fetch(
-                    "https://api.coingecko.com/api/v3/simple/price?ids=near&vs_currencies=usd&include_24hr_change=true",
-                    { cache: "no-store" }
-                  );
-                  if (res.ok) {
-                    const data = await res.json().catch(() => null);
-                    const change = Number(data?.near?.usd_24h_change);
-                    if (Number.isFinite(change)) {
-                      return [id, change] as const;
-                    }
-                  }
-                } catch {}
-                return [id, null] as const;
-              }
-
-              // For other tokens, fetch directly from DexScreener
               const res = await fetch(
-                `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(
-                  id
-                )}`,
+                `/api/token-info?address=${encodeURIComponent(id)}`,
                 {
                   method: "GET",
                   headers: { Accept: "application/json" },
                   cache: "no-store",
                 }
               );
-
               if (!res.ok) return [id, null] as const;
 
               const data = await res.json().catch(() => null);
-              if (!data?.pairs || data.pairs.length === 0)
-                return [id, null] as const;
-
-              // Find NEAR pairs and get the best one (highest liquidity)
-              const nearPairs = data.pairs.filter(
-                (p: any) =>
-                  p.chainId === "near" ||
-                  p.dexId === "ref" ||
-                  p.dexId === "joe" ||
-                  p.dexId === "trisolaris"
-              );
-
-              if (nearPairs.length === 0) return [id, null] as const;
-
-              // Sort by liquidity and get the best pair
-              const bestPair = nearPairs.sort(
-                (a: any, b: any) => b.liquidity?.usd - a.liquidity?.usd
-              )[0];
-              const change = Number(bestPair?.priceChange?.h24);
+              const change = Number(data?.priceChange?.h24);
 
               return [id, Number.isFinite(change) ? change : null] as const;
             } catch {
@@ -633,37 +593,22 @@ const WalletPage = () => {
               >
                 <div className="bg-[#1a1d3f] rounded-xl px-3 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center">
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          d="M12 2L2 7L12 12L22 7L12 2Z"
-                          fill="white"
-                          stroke="white"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <path
-                          d="M2 17L12 22L22 17"
-                          stroke="white"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <path
-                          d="M2 12L12 17L22 12"
-                          stroke="white"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
+                    <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center bg-black">
+                      <img
+                        src="/assets/icons/near.svg"
+                        alt="NEAR"
+                        className="w-full h-full object-contain p-1"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                          const parent = e.currentTarget.parentElement;
+                          if (parent) {
+                            const span = document.createElement("span");
+                            span.className = "text-black font-bold text-xs";
+                            span.textContent = "NE";
+                            parent.appendChild(span);
+                          }
+                        }}
+                      />
                     </div>
                     <div>
                       <div className="text-white font-semibold text-xs">
