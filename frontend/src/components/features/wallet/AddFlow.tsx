@@ -84,7 +84,7 @@ const AddFlow = ({ onClose, accountId }: AddFlowProps) => {
             <div className="bg-[#1a1d3f]/50 rounded-xl p-3 flex items-start gap-2.5 border border-white/10">
               <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
               <p className="text-white/60 text-xs leading-relaxed">
-                Lorem ipsum dolor sit amet, consectetur adipiscing elit ut aliquam, sit amet luctus
+                Scan this code to receive tokens to your Solvium wallet address.
               </p>
             </div>
 
