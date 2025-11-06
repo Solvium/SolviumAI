@@ -235,33 +235,81 @@ const WalletPage = () => {
     })();
   }, [tokenHoldings, nearUsd]);
 
-  // Fetch 24h change for tokens (DexScreener via /api/token-info)
+  // Fetch 24h price change for tokens from DexScreener
   useEffect(() => {
     (async () => {
       try {
         const ids = Array.from(new Set((tokenHoldings || []).map((t) => t.id))).filter(Boolean) as string[];
         if (ids.length === 0) return;
+        
         const entries = await Promise.all(
           ids.map(async (id) => {
             try {
-              const res = await fetch(`/api/token-info?address=${encodeURIComponent(id)}`, {
-                method: 'GET',
-                headers: { Accept: 'application/json' },
-                cache: 'no-store',
-              });
+              // Handle NEAR separately via CoinGecko
+              if (id === "wrap.near" || id === "near") {
+                try {
+                  const res = await fetch(
+                    "https://api.coingecko.com/api/v3/simple/price?ids=near&vs_currencies=usd&include_24hr_change=true",
+                    { cache: "no-store" }
+                  );
+                  if (res.ok) {
+                    const data = await res.json().catch(() => null);
+                    const change = Number(data?.near?.usd_24h_change);
+                    if (Number.isFinite(change)) {
+                      return [id, change] as const;
+                    }
+                  }
+                } catch {}
+                return [id, null] as const;
+              }
+              
+              // For other tokens, fetch directly from DexScreener
+              const res = await fetch(
+                `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(id)}`,
+                {
+                  method: 'GET',
+                  headers: { Accept: 'application/json' },
+                  cache: 'no-store',
+                }
+              );
+              
               if (!res.ok) return [id, null] as const;
+              
               const data = await res.json().catch(() => null);
-              const change = Number(data?.priceChange?.h24);
+              if (!data?.pairs || data.pairs.length === 0) return [id, null] as const;
+              
+              // Find NEAR pairs and get the best one (highest liquidity)
+              const nearPairs = data.pairs.filter(
+                (p: any) => p.chainId === "near" || p.dexId === "ref" || p.dexId === "joe" || p.dexId === "trisolaris"
+              );
+              
+              if (nearPairs.length === 0) return [id, null] as const;
+              
+              // Sort by liquidity and get the best pair
+              const bestPair = nearPairs.sort((a: any, b: any) => b.liquidity?.usd - a.liquidity?.usd)[0];
+              const change = Number(bestPair?.priceChange?.h24);
+              
               return [id, Number.isFinite(change) ? change : null] as const;
             } catch {
               return [id, null] as const;
             }
           })
         );
+        
         const map: Record<string, number> = {};
-        for (const [id, ch] of entries) if (ch !== null) map[id] = ch as number;
+        for (const [id, ch] of entries) {
+          if (ch !== null && Number.isFinite(ch)) {
+            map[id] = ch as number;
+            // Also map wrap.near to near for consistency
+            if (id === "wrap.near") {
+              map["near"] = ch as number;
+            }
+          }
+        }
         setTokenChanges24h(map);
-      } catch {}
+      } catch (error) {
+        console.error("Error fetching 24h price changes:", error);
+      }
     })();
   }, [tokenHoldings]);
 
@@ -587,7 +635,14 @@ const WalletPage = () => {
                       <div className="text-white font-bold text-sm">
                         ${nearUsdValue}
                       </div>
-                      {/* PnL removed - would need historical price data to calculate */}
+                      {typeof tokenChanges24h["near"] === "number" || typeof tokenChanges24h["wrap.near"] === "number" ? (
+                        <div className={`text-[10px] flex items-center justify-end gap-0.5 ${
+                          (tokenChanges24h["near"] ?? tokenChanges24h["wrap.near"] ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {((tokenChanges24h["near"] ?? tokenChanges24h["wrap.near"] ?? 0) >= 0 ? '+' : '')}
+                          {(tokenChanges24h["near"] ?? tokenChanges24h["wrap.near"] ?? 0).toFixed(2)}%
+                        </div>
+                      ) : null}
                     </div>
                 </div>
               </div>
