@@ -56,8 +56,11 @@ const Contest = () => {
 
           setLeaderboard(ranked);
 
-          // Find user's rank
-          const userEntry = ranked.find((entry: LeaderboardEntry) => entry.userId === user.id);
+          // Find user's rank (normalize user.id which may be a string)
+          const userIdNum = typeof user.id === "string" ? parseInt(user.id) : (user.id as number);
+          const userEntry = ranked.find(
+            (entry: LeaderboardEntry) => entry.userId === userIdNum
+          );
           if (userEntry) {
             setUserRank(userEntry.rank);
             setUserPoints(userEntry.points);
