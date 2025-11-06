@@ -42,16 +42,48 @@ const NavigationContext = createContext<NavigationContextValue | undefined>(
 function getInitialPageFromUrl(): AppPage {
   if (typeof window === "undefined") return "Home";
 
+  // Check URL params first (for Telegram start_param)
   const urlParams = getUrlParams();
-  const route = urlParams.get("route") || window.location.pathname;
+  let route = urlParams.get("route");
+  
+  // If no route param, check window.location.pathname
+  if (!route) {
+    route = window.location.pathname;
+  }
+  
+  // Also check Telegram's start_param directly if available
+  if (!route && typeof window !== "undefined") {
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.initDataUnsafe?.start_param) {
+      const startParam = tg.initDataUnsafe.start_param;
+      // Handle compact formats like "game-wordle" or "game_wordle"
+      const compactMatch = startParam.match(/^game[-_]([a-z0-9-]+)$/i);
+      if (compactMatch && compactMatch[1]) {
+        const gameId = compactMatch[1].toLowerCase().replace(/_/g, "-");
+        route = `/game/${gameId}`;
+      } else if (/^[a-z0-9-]+$/i.test(startParam)) {
+        // Plain game id provided (e.g., "wordle")
+        const normalizedGameId = startParam.toLowerCase().replace(/_/g, "-");
+        route = `/game/${normalizedGameId}`;
+      } else {
+        // Try to parse as URL parameters
+        try {
+          const startParams = new URLSearchParams(startParam);
+          route = startParams.get("route") || route;
+        } catch (e) {
+          // Ignore parsing errors
+        }
+      }
+    }
+  }
 
   // Map routes to AppPage types
-  if (route.includes("/game/wordle")) return "GameWordle";
-  if (route.includes("/game/quiz")) return "GameQuiz";
-  if (route.includes("/game/puzzle")) return "GamePuzzle";
-  if (route.includes("/game/num-genius")) return "GameNumGenius";
-  if (route.includes("/game/cross-word")) return "GameCrossWord";
-  if (route.includes("/game")) return "Game";
+  if (route && route.includes("/game/wordle")) return "GameWordle";
+  if (route && route.includes("/game/quiz")) return "GameQuiz";
+  if (route && route.includes("/game/puzzle")) return "GamePuzzle";
+  if (route && route.includes("/game/num-genius")) return "GameNumGenius";
+  if (route && route.includes("/game/cross-word")) return "GameCrossWord";
+  if (route && route.includes("/game")) return "Game";
 
   return "Home";
 }

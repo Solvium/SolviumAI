@@ -3,13 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
 import { ChevronLeft, ArrowUp, Plus, DollarSign, RefreshCw, Sparkles, MessageCircle } from "lucide-react";
-import { getAccountInfo, formatNearAmount } from "@/lib/nearblocks";
+import { getAccountInfo, formatNearAmount, getAccountInventory } from "@/lib/nearblocks";
 import { getAccountFull, formatYoctoToNear } from "@/lib/fastnear";
 import { getNearUsd } from "@/lib/prices";
 import { utils } from "near-api-js";
 import SendFlow from "@/components/features/wallet/SendFlow";
 import AddFlow from "@/components/features/wallet/AddFlow";
 import SwapFlow from "@/components/features/wallet/SwapFlow";
+import TransactionFlow from "@/components/features/wallet/TransactionFlow";
 import SuccessModal from "@/components/features/wallet/SuccessModal";
 import AIChatAgent from "@/components/features/wallet/AIChatAgent";
 import { useWalletPortfolioContext } from "@/contexts/WalletPortfolioContext";
@@ -45,11 +46,13 @@ const WalletPage = () => {
   const hasDraggedRef = useRef(false);
   const aiButtonRef = useRef<HTMLButtonElement>(null);
   const [tokenHoldings, setTokenHoldings] = useState<
-    { id: string; symbol: string; balance: string; decimals?: number }[]
+    { id: string; symbol: string; balance: string; decimals?: number; icon?: string }[]
   >([]);
   const [tokenPricesUsd, setTokenPricesUsd] = useState<Record<string, number>>(
     {}
   );
+  const [tokenChanges24h, setTokenChanges24h] = useState<Record<string, number>>({});
+  const [tokenIcons, setTokenIcons] = useState<Record<string, string>>({});
   const portfolio = useWalletPortfolioContext();
 
   // Disable background scroll when a modal/flow is active
@@ -136,6 +139,45 @@ const WalletPage = () => {
     setTokenHoldings(mapped);
   }, [portfolio]);
 
+  // Fetch token icons from inventory
+  useEffect(() => {
+    if (!accountId || tokenHoldings.length === 0) return;
+    
+    (async () => {
+      try {
+        const inv = await getAccountInventory(accountId);
+        if (!inv) return;
+        
+        const fromFts = Array.isArray((inv as any)?.fts) ? (inv as any).fts : null;
+        const fromArray = Array.isArray(inv) ? inv : null;
+        
+        const iconMap: Record<string, string> = {};
+        
+        if (fromFts) {
+          fromFts.forEach((t: any) => {
+            const id = t?.contract || t?.token_contract || t?.token || t?.id || "";
+            const icon = t?.ft_meta?.icon || t?.icon;
+            if (id && icon) {
+              iconMap[id] = icon;
+            }
+          });
+        } else if (fromArray) {
+          fromArray.forEach((it: any) => {
+            const id = it?.token_id || it?.contract || it?.id || "";
+            const icon = it?.metadata?.icon || it?.icon;
+            if (id && icon) {
+              iconMap[id] = icon;
+            }
+          });
+        }
+        
+        setTokenIcons(iconMap);
+      } catch (e) {
+        console.error("Error fetching token icons:", e);
+      }
+    })();
+  }, [accountId, tokenHoldings]);
+
   // Auto-unwrap wrapped NEAR when received
   useEffect(() => {
     if (!portfolio?.tokens || !unwrapNear) return;
@@ -192,6 +234,36 @@ const WalletPage = () => {
       } catch {}
     })();
   }, [tokenHoldings, nearUsd]);
+
+  // Fetch 24h change for tokens (DexScreener via /api/token-info)
+  useEffect(() => {
+    (async () => {
+      try {
+        const ids = Array.from(new Set((tokenHoldings || []).map((t) => t.id))).filter(Boolean) as string[];
+        if (ids.length === 0) return;
+        const entries = await Promise.all(
+          ids.map(async (id) => {
+            try {
+              const res = await fetch(`/api/token-info?address=${encodeURIComponent(id)}`, {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+                cache: 'no-store',
+              });
+              if (!res.ok) return [id, null] as const;
+              const data = await res.json().catch(() => null);
+              const change = Number(data?.priceChange?.h24);
+              return [id, Number.isFinite(change) ? change : null] as const;
+            } catch {
+              return [id, null] as const;
+            }
+          })
+        );
+        const map: Record<string, number> = {};
+        for (const [id, ch] of entries) if (ch !== null) map[id] = ch as number;
+        setTokenChanges24h(map);
+      } catch {}
+    })();
+  }, [tokenHoldings]);
 
   useEffect(() => {
     if (!account || nearBalance) return;
@@ -359,17 +431,10 @@ const WalletPage = () => {
   return (
     <>
       <div className="min-h-screen bg-[#0a0b2e] relative flex flex-col">
-        {/* Fixed Header */}
+        {/* Fixed Header (no back button on wallet home) */}
         <div className="sticky top-0 z-50 bg-[#0a0b2e] border-b border-white/5">
           <div className="px-4 py-4">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => window.history.back()}
-                className="text-white/80 hover:text-white flex items-center gap-1 text-sm"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span className="text-xs">Back</span>
-              </button>
+            <div className="flex items-center justify-center">
               <h1
                 className="text-lg font-bold text-white tracking-[0.2em]"
                 style={{
@@ -379,7 +444,6 @@ const WalletPage = () => {
               >
                 WALLET
               </h1>
-              <div className="w-12" />
             </div>
           </div>
         </div>
@@ -519,29 +583,12 @@ const WalletPage = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-white font-bold text-sm">
-                      ${nearUsdValue}
+                    <div className="text-right">
+                      <div className="text-white font-bold text-sm">
+                        ${nearUsdValue}
+                      </div>
+                      {/* PnL removed - would need historical price data to calculate */}
                     </div>
-                    <div className="text-green-400 text-[10px] flex items-center justify-end gap-0.5">
-                      <svg
-                        width="10"
-                        height="10"
-                      viewBox="0 0 12 12"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M6 9L6 3M6 3L3 6M6 3L9 6"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      </svg>
-                      +4.3%
-                    </div>
-                  </div>
                 </div>
               </div>
 
@@ -580,10 +627,29 @@ const WalletPage = () => {
                     >
                       <div className="bg-[#1a1d3f] rounded-xl px-3 py-3 flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center">
-                            <span className="text-white font-bold text-xs">
-                              {t.symbol.slice(0, 2)}
-                            </span>
+                          <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center overflow-hidden">
+                            {tokenIcons[t.id] ? (
+                              <img
+                                src={tokenIcons[t.id]}
+                                alt={t.symbol}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  // Fallback to text if image fails
+                                  e.currentTarget.style.display = 'none';
+                                  const parent = e.currentTarget.parentElement;
+                                  if (parent) {
+                                    const span = document.createElement('span');
+                                    span.className = 'text-white font-bold text-xs';
+                                    span.textContent = t.symbol.slice(0, 2);
+                                    parent.appendChild(span);
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <span className="text-white font-bold text-xs">
+                                {t.symbol.slice(0, 2)}
+                              </span>
+                            )}
                           </div>
                           <div>
                             <div className="text-white font-semibold text-xs">
@@ -598,23 +664,12 @@ const WalletPage = () => {
                           <div className="text-white font-bold text-sm">
                             ${usd.toFixed(2)}
                           </div>
-                          <div className="text-green-400 text-[10px] flex items-center justify-end gap-0.5">
-                            <svg
-                              width="10"
-                              height="10"
-                              viewBox="0 0 12 12"
-                              fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                d="M6 9L6 3M6 3L3 6M6 3L9 6"
-                                stroke="currentColor"
-                                strokeWidth="1.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                            +4.3%
+                          <div className={`text-[10px] flex items-center justify-end gap-0.5 ${
+                            (tokenChanges24h[t.id] ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {typeof tokenChanges24h[t.id] === 'number'
+                              ? `${(tokenChanges24h[t.id] as number).toFixed(2)}%`
+                              : '—'}
                           </div>
                         </div>
                       </div>
@@ -712,6 +767,9 @@ const WalletPage = () => {
           onClose={() => setActiveFlow(null)}
           onSuccess={handleFlowSuccess}
         />
+      )}
+      {activeFlow === "transaction" && (
+        <TransactionFlow onClose={() => setActiveFlow(null)} />
       )}
       {showSuccess && <SuccessModal onClose={handleCloseSuccess} />}
 

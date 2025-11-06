@@ -23,10 +23,12 @@ import { useDepositMultiplier } from "@/hooks/useDepositMultiplier";
 import { useToast } from "@/hooks/use-toast";
 import { throttleApiCall } from "@/lib/requestThrottler";
 import { taskConfig } from "@/config/taskConfig";
+import { useNavigation } from "@/contexts/NavigationContext";
 
 const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
   const [loading, setLoading] = useState({ id: "", status: false });
   const router = useRouter();
+  const { goBack } = useNavigation();
   const [onGoing, setOnGoing] = useState(false);
   const [error, setError] = useState("");
   const [tasks, setTasks] = useState<any[]>([]);
@@ -887,7 +889,9 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
         <div className="relative">
           <div className="absolute top-0 left-0 z-20">
             <button
-              onClick={() => router.push("/")}
+              onClick={() => {
+                goBack();
+              }}
               className="flex items-center gap-2 text-white hover:text-blue-300 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />

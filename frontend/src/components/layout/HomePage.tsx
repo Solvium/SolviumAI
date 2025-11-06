@@ -140,9 +140,9 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
             <Image
               src="/assets/coins/golden-coin.svg"
               alt="Golden Coin"
-              width={68}
-              height={63}
-              className="w-[69px] h-[68px] object-contain"
+              width={48}
+              height={44}
+              className="w-[48px] h-[44px] sm:w-[52px] sm:h-[48px] object-contain"
             />
             <span
               className={`${montserrat.className} text-[#FDE92D] text-3xl sm:text-3xl md:text-3xl font-bold tracking-normal`}
