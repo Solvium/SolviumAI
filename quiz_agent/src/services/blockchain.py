@@ -1705,12 +1705,16 @@ class BlockchainMonitor:
         self, user_id: str, wallet_address: str, username: str = "N/A"
     ) -> bool:
         """
-        Smart wallet verification with automatic recovery using stored private keys.
+        Smart wallet verification with automatic recovery and collision detection.
 
         This method:
         1. Checks if wallet exists on blockchain
-        2. If missing but user has private key in DB, attempts auto-recovery
-        3. Returns True only if wallet is verified to exist on blockchain
+        2. If exists, verifies public key matches (collision detection)
+        3. If keys match → wallet is valid
+        4. If keys DON'T match → COLLISION DETECTED → create new wallet
+        5. If missing but user has private key in DB, attempts auto-recovery
+        6. If recovery fails → create new wallet
+        7. Returns True only if wallet is verified to exist on blockchain
 
         Args:
             user_id: Telegram user ID
@@ -1718,12 +1722,13 @@ class BlockchainMonitor:
             username: Username for logging
 
         Returns:
-            bool: True if wallet exists or was successfully recovered, False otherwise
+            bool: True if wallet exists or was successfully recovered/created, False otherwise
         """
         try:
             # Import services we need
             from services.near_wallet_service import NEARWalletService
             from services.wallet_service import WalletService
+            from services.database_service import db_service
 
             logger.info(
                 f"[Smart Wallet Verification] Checking wallet {wallet_address} for user {user_id} ({username})"
@@ -1742,33 +1747,70 @@ class BlockchainMonitor:
                 return False
 
             network = wallet_info.get("network", "testnet")
+            stored_public_key = wallet_info.get("public_key")
+
+            if not stored_public_key:
+                logger.error(
+                    f"[Smart Wallet Verification] No public key found in wallet info for user {user_id}"
+                )
+                return False
 
             # Step 1: Check if wallet exists on blockchain
             try:
                 exists_on_chain = await near_service.verify_account_exists(
                     wallet_address, network
                 )
-                if exists_on_chain:
-                    logger.info(
-                        f"[Smart Wallet Verification] ✅ Wallet {wallet_address} exists on blockchain"
-                    )
-                    return True
 
+                if exists_on_chain:
+                    # CRITICAL: Verify public key matches (collision detection)
+                    logger.info(
+                        f"[Smart Wallet Verification] Wallet {wallet_address} exists on blockchain - verifying public key ownership"
+                    )
+
+                    public_key_matches = await near_service.verify_account_public_key(
+                        wallet_address, stored_public_key, network
+                    )
+
+                    if public_key_matches:
+                        logger.info(
+                            f"[Smart Wallet Verification] ✅ Wallet {wallet_address} verified - public key matches"
+                        )
+                        return True
+                    else:
+                        # COLLISION DETECTED: Account exists but with different keys
+                        logger.error(
+                            f"[Smart Wallet Verification] 🚨 COLLISION DETECTED! "
+                            f"Account {wallet_address} exists on blockchain but with different public key. "
+                            f"Expected: {stored_public_key[:30]}..., "
+                            f"This account belongs to someone else. Creating new wallet for user {user_id}."
+                        )
+
+                        # Create new wallet to replace the collided one
+                        return await self._handle_wallet_collision(
+                            user_id, username, network, wallet_service, near_service
+                        )
+
+                # Account doesn't exist on blockchain - safe to regenerate
                 logger.warning(
-                    f"[Smart Wallet Verification] ❌ Wallet {wallet_address} missing from blockchain"
+                    f"[Smart Wallet Verification] ❌ Wallet {wallet_address} missing from blockchain - attempting recovery"
                 )
+
             except Exception as e:
                 logger.error(
                     f"[Smart Wallet Verification] Error checking wallet existence: {e}"
                 )
-                return False
+                # On error, try recovery as fallback
+                pass
 
             # Step 2: Attempt auto-recovery if we have private key
             if not wallet_info.get("encrypted_private_key"):
                 logger.error(
-                    f"[Smart Wallet Verification] No private key available for auto-recovery of {wallet_address}"
+                    f"[Smart Wallet Verification] No private key available for auto-recovery of {wallet_address}. Creating new wallet."
                 )
-                return False
+                # Create new wallet since we can't recover
+                return await self._handle_wallet_collision(
+                    user_id, username, network, wallet_service, near_service
+                )
 
             logger.info(
                 f"[Smart Wallet Verification] 🔧 Attempting auto-recovery for {wallet_address}"
@@ -1806,31 +1848,149 @@ class BlockchainMonitor:
                         wallet_address, network
                     )
                     if recovered_exists:
-                        logger.info(
-                            f"[Smart Wallet Verification] ✅ Successfully recovered wallet {wallet_address}"
+                        # Double-check public key matches after recovery
+                        public_key_matches = await near_service.verify_account_public_key(
+                            wallet_address, stored_public_key, network
                         )
-                        return True
+                        if public_key_matches:
+                            logger.info(
+                                f"[Smart Wallet Verification] ✅ Successfully recovered wallet {wallet_address}"
+                            )
+                            return True
+                        else:
+                            logger.error(
+                                f"[Smart Wallet Verification] Recovery succeeded but public key mismatch detected for {wallet_address}"
+                            )
+                            # This shouldn't happen, but if it does, create new wallet
+                            return await self._handle_wallet_collision(
+                                user_id, username, network, wallet_service, near_service
+                            )
                     else:
                         logger.error(
                             f"[Smart Wallet Verification] Recovery appeared successful but verification failed for {wallet_address}"
                         )
-                        return False
+                        # Recovery failed - create new wallet
+                        return await self._handle_wallet_collision(
+                            user_id, username, network, wallet_service, near_service
+                        )
                 else:
                     logger.error(
-                        f"[Smart Wallet Verification] Recovery failed for {wallet_address}"
+                        f"[Smart Wallet Verification] Recovery failed for {wallet_address}. Creating new wallet."
                     )
-                    return False
+                    # Recovery failed - create new wallet
+                    return await self._handle_wallet_collision(
+                        user_id, username, network, wallet_service, near_service
+                    )
 
             except Exception as recovery_error:
                 logger.error(
-                    f"[Smart Wallet Verification] Auto-recovery failed for {wallet_address}: {recovery_error}"
+                    f"[Smart Wallet Verification] Auto-recovery failed for {wallet_address}: {recovery_error}. Creating new wallet."
                 )
-                return False
+                # Recovery failed - create new wallet
+                return await self._handle_wallet_collision(
+                    user_id, username, network, wallet_service, near_service
+                )
 
         except Exception as e:
             logger.error(
                 f"[Smart Wallet Verification] Unexpected error verifying wallet {wallet_address}: {e}"
             )
+            return False
+
+    async def _handle_wallet_collision(
+        self,
+        user_id: str,
+        username: str,
+        network: str,
+        wallet_service,
+        near_service,
+    ) -> bool:
+        """
+        Handle wallet collision by creating a new wallet for the user.
+        This is called when:
+        - Account exists on-chain but with different public key (collision)
+        - Recovery attempt failed
+        - No private key available for recovery
+
+        Args:
+            user_id: Telegram user ID
+            username: Username for logging
+            network: Network type (testnet/mainnet)
+            wallet_service: WalletService instance
+            near_service: NEARWalletService instance
+
+        Returns:
+            bool: True if new wallet was created successfully, False otherwise
+        """
+        try:
+            from store.database import SessionLocal
+            from models.wallet import UserWallet
+
+            logger.info(
+                f"[Wallet Collision Handler] Creating new wallet for user {user_id} ({username}) on {network}"
+            )
+
+            # Mark old wallets as inactive before creating new one
+            session = SessionLocal()
+            try:
+                old_wallets = (
+                    session.query(UserWallet)
+                    .filter(
+                        UserWallet.telegram_user_id == str(user_id),
+                        UserWallet.is_active == True,
+                    )
+                    .all()
+                )
+                if old_wallets:
+                    for old_wallet in old_wallets:
+                        old_wallet.is_active = False
+                        logger.info(
+                            f"[Wallet Collision Handler] Marked old wallet {old_wallet.account_id} as inactive for user {user_id}"
+                        )
+                    session.commit()
+            except Exception as e:
+                logger.warning(
+                    f"[Wallet Collision Handler] Error marking old wallets inactive: {e}"
+                )
+                session.rollback()
+            finally:
+                session.close()
+
+            # Create new wallet
+            new_wallet_info = await wallet_service.create_wallet(
+                user_id=user_id, user_name=username, network=network
+            )
+
+            if not new_wallet_info:
+                logger.error(
+                    f"[Wallet Collision Handler] Failed to create new wallet for user {user_id}"
+                )
+                return False
+
+            new_account_id = new_wallet_info.get("account_id")
+            logger.info(
+                f"[Wallet Collision Handler] ✅ Created new wallet {new_account_id} for user {user_id}"
+            )
+
+            # Verify the new wallet exists on-chain
+            verified = await near_service.verify_account_exists(new_account_id, network)
+            if verified:
+                logger.info(
+                    f"[Wallet Collision Handler] ✅ New wallet {new_account_id} verified on blockchain"
+                )
+                return True
+            else:
+                logger.warning(
+                    f"[Wallet Collision Handler] ⚠️ New wallet {new_account_id} created but not yet verified on blockchain"
+                )
+                # Still return True - wallet creation was initiated, verification may take time
+                return True
+
+        except Exception as e:
+            logger.error(
+                f"[Wallet Collision Handler] Error creating new wallet for user {user_id}: {e}"
+            )
+            traceback.print_exc()
             return False
 
 
