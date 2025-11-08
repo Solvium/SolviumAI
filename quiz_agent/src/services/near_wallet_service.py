@@ -1448,6 +1448,124 @@ class NEARWalletService:
             f"All verification attempts failed for {account_id}", account_id
         )
 
+    async def verify_account_public_key(
+        self,
+        account_id: str,
+        expected_public_key: str,
+        network: str = "testnet",
+    ) -> bool:
+        """
+        Verify that an account's access keys match the expected public key.
+        This is critical for collision detection - ensures the account belongs to us.
+
+        Args:
+            account_id: The account ID to verify
+            expected_public_key: The public key we expect (format: "ed25519:...")
+            network: Network to check (testnet or mainnet)
+
+        Returns:
+            True if account exists and public key matches, False otherwise
+        """
+        try:
+            # Normalize the expected public key (remove ed25519: prefix if present in comparison)
+            expected_key_normalized = expected_public_key.replace("ed25519:", "")
+
+            # Choose RPC endpoint based on network
+            if network == "mainnet":
+                rpc_url = self.mainnet_rpc_url
+            else:
+                rpc_url = self.testnet_rpc_url
+
+            # Query access keys for the account
+            payload = {
+                "jsonrpc": "2.0",
+                "id": "dontcare",
+                "method": "query",
+                "params": {
+                    "request_type": "view_access_key_list",
+                    "finality": "final",
+                    "account_id": account_id,
+                },
+            }
+
+            async def _check_access_keys(rpc_url):
+                response = httpx.post(
+                    rpc_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=Config.ACCOUNT_VERIFICATION_TIMEOUT,
+                )
+                return response
+
+            # Use RPC fallback system for better reliability
+            response = await execute_with_rpc_fallback(
+                _check_access_keys,
+                network,
+                max_retries_per_endpoint=Config.ACCOUNT_VERIFICATION_RETRIES,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if "error" in data:
+                    error_msg = data["error"].get("message", "")
+                    if (
+                        "does not exist" in error_msg
+                        or "UnknownAccount" in error_msg
+                    ):
+                        logger.warning(
+                            f"Account {account_id} does not exist on {network} - cannot verify public key"
+                        )
+                        return False
+                    else:
+                        logger.error(
+                            f"RPC error checking access keys for {account_id}: {error_msg}"
+                        )
+                        return False
+
+                if "result" in data:
+                    # Get the list of access keys
+                    keys = data["result"].get("keys", [])
+
+                    if not keys:
+                        logger.warning(
+                            f"Account {account_id} has no access keys - cannot verify"
+                        )
+                        return False
+
+                    # Check if any of the access keys match our expected public key
+                    for key_info in keys:
+                        public_key = key_info.get("public_key", "")
+                        # Remove ed25519: prefix for comparison
+                        public_key_normalized = public_key.replace("ed25519:", "")
+
+                        if public_key_normalized == expected_key_normalized:
+                            logger.info(
+                                f"✅ Public key match verified for {account_id} on {network}"
+                            )
+                            return True
+
+                    # No matching key found
+                    logger.warning(
+                        f"❌ Public key mismatch for {account_id} on {network}. "
+                        f"Expected: {expected_public_key[:20]}..., "
+                        f"Found keys: {[k.get('public_key', '')[:20] + '...' for k in keys[:3]]}"
+                    )
+                    return False
+                else:
+                    logger.error(f"No result in RPC response for {account_id}")
+                    return False
+            else:
+                logger.error(
+                    f"HTTP error checking access keys for {account_id}: {response.status_code}"
+                )
+                return False
+
+        except Exception as e:
+            logger.error(
+                f"Error verifying public key for {account_id} on {network}: {e}"
+            )
+            return False
+
     async def get_account_balance(
         self, account_id: str, network: str = "testnet"
     ) -> str:
