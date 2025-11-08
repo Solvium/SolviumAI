@@ -132,10 +132,12 @@ const CustomMessageContainer = ({
 };
 
 // Custom Input Container - matches the original input design
+// Ensures input field and buttons are properly aligned inside the input area
 const CustomInputContainer = ({ children }: InputContainerProps) => {
   return (
     <div className="bg-white border-t border-gray-200 p-3 flex-shrink-0">
-      <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5">
+      <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5 w-full">
+        {/* Render all children - input field will flex-grow, buttons will align right via sendButtonComponent */}
         {children}
       </div>
       <div className="text-center text-[10px] text-gray-500 mt-1.5">
@@ -145,20 +147,31 @@ const CustomInputContainer = ({ children }: InputContainerProps) => {
   );
 };
 
-// Custom Send Button - matches the original send button
+// Custom Send Button - matches the original send button placement
+// The buttons should be positioned inside the input field area, aligned to the right
 const CustomSendButton = ({ onClick, isLoading }: SendButtonComponentProps) => {
   return (
     <>
-      <button className="text-gray-400 hover:text-gray-600">
+      <button
+        type="button"
+        className="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0"
+        aria-label="Emoji"
+      >
         <Smile className="w-4 h-4" />
       </button>
-      <button className="text-gray-400 hover:text-gray-600">
+      <button
+        type="button"
+        className="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0"
+        aria-label="Attachment"
+      >
         <Paperclip className="w-4 h-4" />
       </button>
       <button
+        type="button"
         onClick={onClick}
         disabled={isLoading}
-        className="text-blue-600 hover:text-blue-700 disabled:opacity-50"
+        className="text-blue-600 hover:text-blue-700 disabled:opacity-50 p-1 flex-shrink-0"
+        aria-label="Send"
       >
         <Send className="w-4 h-4" />
       </button>
@@ -292,16 +305,31 @@ const AIChatAgent = ({ isOpen, onClose }: AIChatAgentProps) => {
       <style
         dangerouslySetInnerHTML={{
           __html: `
-          /* Make BitteAiChat modal larger */
+          /* Set BitteAiChat modal size to match design - 300px width */
           [data-bitte-chat],
           [data-bitte-chat] > div:first-child,
           [data-bitte-chat] > div:first-child > div {
-            width: 400px !important;
-            min-width: 400px !important;
-            height: 600px !important;
-            min-height: 600px !important;
-            max-width: 90vw !important;
+            width: 300px !important;
+            min-width: 300px !important;
+            max-width: 300px !important;
+            height: 520px !important;
+            min-height: 520px !important;
             max-height: 90vh !important;
+          }
+          /* Ensure input field takes available space and buttons align right */
+          .bg-gray-50 input[type="text"],
+          .bg-gray-50 textarea {
+            flex: 1 !important;
+            min-width: 0 !important;
+            border: none !important;
+            outline: none !important;
+            background: transparent !important;
+          }
+          .bg-gray-50 > div:last-child {
+            margin-left: auto !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.375rem !important;
           }
         `,
         }}
