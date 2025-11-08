@@ -1,14 +1,58 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { X, Minus, ThumbsUp, ThumbsDown, Smile, Paperclip, Send } from "lucide-react";
+import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
+import { BitteAiChat } from "@bitte-ai/chat";
+import {
+  X,
+  Minus,
+  ThumbsUp,
+  ThumbsDown,
+  Smile,
+  Paperclip,
+  Send,
+} from "lucide-react";
+import React from "react";
 
-interface Message {
-  id: string;
-  sender: "agent" | "user";
-  text: string;
-  timestamp: string;
-  status?: "sent" | "read";
+// Type definitions for custom components
+interface MessageGroupComponentProps {
+  message: any;
+  isUser: boolean;
+  userName: string;
+  children: React.ReactNode;
+  style: {
+    backgroundColor: string;
+    borderColor: string;
+    textColor: string;
+  };
+  uniqueKey: string;
+}
+
+interface ChatContainerComponentProps {
+  children: React.ReactNode;
+  style?: {
+    backgroundColor?: string;
+    borderColor?: string;
+  };
+}
+
+interface InputContainerProps {
+  children: React.ReactNode;
+  style?: {
+    backgroundColor?: string;
+    borderColor?: string;
+  };
+}
+
+interface SendButtonComponentProps {
+  input: string;
+  isLoading: boolean;
+  buttonColor?: string;
+  textColor?: string;
+  onClick?: () => void;
+}
+
+interface LoadingIndicatorComponentProps {
+  textColor?: string;
 }
 
 interface AIChatAgentProps {
@@ -16,257 +60,287 @@ interface AIChatAgentProps {
   onClose: () => void;
 }
 
-const AIChatAgent = ({ isOpen, onClose }: AIChatAgentProps) => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      sender: "agent",
-      text: "Hi, I am your solvium assistant",
-      timestamp: "02:10 PM",
-    },
-    {
-      id: "2",
-      sender: "agent",
-      text: 'You can say things like "Send 10 SOLV to AjeMark" or "Check my balance."',
-      timestamp: "02:10 PM",
-    },
-    {
-      id: "3",
-      sender: "user",
-      text: "Welcome",
-      timestamp: "02:15 PM",
-      status: "read",
-    },
-  ]);
-  const [inputValue, setInputValue] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+// Custom Chat Container - wraps the messages area with proper sizing
+const CustomChatContainer = ({
+  children,
+  style,
+}: ChatContainerComponentProps) => {
+  return (
+    <div className="flex-1 overflow-y-auto bg-gray-50 p-3 space-y-3 min-h-0">
+      {children}
+    </div>
+  );
+};
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+// Custom Message Container - matches the original message bubble style
+const CustomMessageContainer = ({
+  message,
+  isUser,
+  userName,
+  children,
+  style,
+  uniqueKey,
+}: MessageGroupComponentProps) => {
+  const timestamp = new Date().toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const handleSend = () => {
-    if (!inputValue.trim()) return;
-
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      sender: "user",
-      text: inputValue,
-      timestamp: new Date().toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      status: "read",
-    };
-
-    setMessages([...messages, newMessage]);
-    setInputValue("");
-
-    // Simulate agent response
-    setTimeout(() => {
-      const agentResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        sender: "agent",
-        text: "I'm processing your request. This is a demo response.",
-        timestamp: new Date().toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      };
-      setMessages((prev) => [...prev, agentResponse]);
-    }, 1000);
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  if (!isOpen) return null;
+  if (isUser) {
+    return (
+      <div className="flex flex-col items-end">
+        <div className="text-[10px] text-gray-500 mb-0.5">
+          Visitor {timestamp}
+        </div>
+        <div className="bg-blue-600 rounded-lg rounded-tr-none px-3 py-2 max-w-[80%]">
+          <p className="text-xs text-white">{children}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="fixed bottom-28 right-3 z-[9999] pointer-events-none">
-      <div className="w-[300px] h-[520px] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden pointer-events-auto">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-3 py-2.5 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <button className="text-gray-400 hover:text-gray-600">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 20 20"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <circle cx="4" cy="10" r="1.5" fill="currentColor" />
-                <circle cx="10" cy="10" r="1.5" fill="currentColor" />
-                <circle cx="16" cy="10" r="1.5" fill="currentColor" />
-              </svg>
-            </button>
-            <span className="text-gray-600 text-xs font-medium">
-              Chat with us!
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <Minus className="w-4 h-4" />
-            </button>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+    <div className="flex items-start gap-1.5">
+      <div className="flex-shrink-0 w-5 h-5 bg-blue-600 rounded flex items-center justify-center">
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M12 2L2 7L12 12L22 7L12 2Z"
+            fill="white"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+      <div className="flex-1">
+        <div className="text-[10px] text-gray-500 mb-0.5">
+          Livechat {timestamp}
         </div>
-
-        {/* Agent Info */}
-        <div className="bg-white border-b border-gray-200 px-3 py-2.5 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="relative">
-              <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center">
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M12 2L2 7L12 12L22 7L12 2Z"
-                    fill="white"
-                    stroke="white"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M2 17L12 22L22 17"
-                    stroke="white"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M2 12L12 17L22 12"
-                    stroke="white"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
-            </div>
-            <div>
-              <div className="text-xs font-semibold text-gray-900">
-                Solvium Agent
-              </div>
-              <div className="text-[10px] text-gray-500">Support Agent</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button className="text-gray-400 hover:text-gray-600">
-              <ThumbsUp className="w-4 h-4" />
-            </button>
-            <button className="text-gray-400 hover:text-gray-600">
-              <ThumbsDown className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto bg-gray-50 p-3 space-y-3">
-          {messages.map((message) => (
-            <div key={message.id}>
-              {message.sender === "agent" ? (
-                <div className="flex items-start gap-1.5">
-                  <div className="flex-shrink-0 w-5 h-5 bg-blue-600 rounded flex items-center justify-center">
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M12 2L2 7L12 12L22 7L12 2Z"
-                        fill="white"
-                        stroke="white"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-[10px] text-gray-500 mb-0.5">
-                      Livechat {message.timestamp}
-                    </div>
-                    <div className="bg-white rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
-                      <p className="text-xs text-gray-700">{message.text}</p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-end">
-                  <div className="text-[10px] text-gray-500 mb-0.5">
-                    Visitor {message.timestamp}
-                  </div>
-                  <div className="bg-blue-600 rounded-lg rounded-tr-none px-3 py-2 max-w-[80%]">
-                    <p className="text-xs text-white">{message.text}</p>
-                  </div>
-                  {message.status && (
-                    <div className="text-[10px] text-gray-500 mt-0.5">
-                      {message.status === "read" ? "Read" : "Sent"}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input */}
-        <div className="bg-white border-t border-gray-200 p-3 flex-shrink-0">
-          <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5">
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Write a message"
-              className="flex-1 bg-transparent text-xs text-gray-900 placeholder-gray-400 outline-none"
-            />
-            <button className="text-gray-400 hover:text-gray-600">
-              <Smile className="w-4 h-4" />
-            </button>
-            <button className="text-gray-400 hover:text-gray-600">
-              <Paperclip className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleSend}
-              className="text-blue-600 hover:text-blue-700"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="text-center text-[10px] text-gray-500 mt-1.5">
-            Powered by <span className="font-semibold">Solvium Agent</span>
-          </div>
+        <div className="bg-white rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
+          <p className="text-xs text-gray-700">{children}</p>
         </div>
       </div>
     </div>
+  );
+};
+
+// Custom Input Container - matches the original input design
+const CustomInputContainer = ({ children }: InputContainerProps) => {
+  return (
+    <div className="bg-white border-t border-gray-200 p-3 flex-shrink-0">
+      <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5">
+        {children}
+      </div>
+      <div className="text-center text-[10px] text-gray-500 mt-1.5">
+        Powered by <span className="font-semibold">Solvium Agent</span>
+      </div>
+    </div>
+  );
+};
+
+// Custom Send Button - matches the original send button
+const CustomSendButton = ({ onClick, isLoading }: SendButtonComponentProps) => {
+  return (
+    <>
+      <button className="text-gray-400 hover:text-gray-600">
+        <Smile className="w-4 h-4" />
+      </button>
+      <button className="text-gray-400 hover:text-gray-600">
+        <Paperclip className="w-4 h-4" />
+      </button>
+      <button
+        onClick={onClick}
+        disabled={isLoading}
+        className="text-blue-600 hover:text-blue-700 disabled:opacity-50"
+      >
+        <Send className="w-4 h-4" />
+      </button>
+    </>
+  );
+};
+
+// Custom Loading Indicator
+const CustomLoadingIndicator = ({
+  textColor,
+}: LoadingIndicatorComponentProps) => {
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="flex-shrink-0 w-5 h-5 bg-blue-600 rounded flex items-center justify-center">
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M12 2L2 7L12 12L22 7L12 2Z"
+            fill="white"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+      <div className="bg-white rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
+        <p className="text-xs text-gray-700">Thinking...</p>
+      </div>
+    </div>
+  );
+};
+
+// Custom Welcome Message Component - Agent Info section
+const CustomWelcome = () => {
+  return (
+    <div className="bg-white border-b border-gray-200 px-3 py-2.5 flex items-center justify-between flex-shrink-0">
+      <div className="flex items-center gap-2.5">
+        <div className="relative">
+          <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M12 2L2 7L12 12L22 7L12 2Z"
+                fill="white"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M2 17L12 22L22 17"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M2 12L12 17L22 12"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+          <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-gray-900">
+            Solvium Agent
+          </div>
+          <div className="text-[10px] text-gray-500">Support Agent</div>
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <button className="text-gray-400 hover:text-gray-600">
+          <ThumbsUp className="w-4 h-4" />
+        </button>
+        <button className="text-gray-400 hover:text-gray-600">
+          <ThumbsDown className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Extra Mobile Button Component
+const ExtraMobileButton = () => {
+  return (
+    <button className="text-gray-400 hover:text-gray-600 p-1">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+    </button>
+  );
+};
+
+const AIChatAgent = ({ isOpen, onClose }: AIChatAgentProps) => {
+  const { account, accountId, isConnected } = usePrivateKeyWallet();
+
+  // Only render when wallet is connected and chat should be open
+  if (!isOpen || !isConnected || !account || !accountId) {
+    return null;
+  }
+
+  // Render BitteAiChat when isOpen is true
+  return (
+    <>
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+          /* Make BitteAiChat modal larger */
+          [data-bitte-chat],
+          [data-bitte-chat] > div:first-child,
+          [data-bitte-chat] > div:first-child > div {
+            width: 400px !important;
+            min-width: 400px !important;
+            height: 600px !important;
+            min-height: 600px !important;
+            max-width: 90vw !important;
+            max-height: 90vh !important;
+          }
+        `,
+        }}
+      />
+      <div
+        style={{
+          position: "fixed",
+          bottom: "20px",
+          right: "20px",
+          zIndex: 10000,
+        }}
+      >
+        <BitteAiChat
+          agentId="rhea-ai-eight.vercel.app"
+          apiUrl="/api/chat"
+          wallet={{
+            near: {
+              wallet: account as any,
+              account: account as any,
+              accountId: accountId as string,
+              nearWalletId: accountId as string,
+            },
+          }}
+          options={{
+            agentName: "Solvium AI Assistant",
+            placeholderText: "Write a message",
+            customComponents: {
+              welcomeMessageComponent: (<CustomWelcome />) as any,
+              mobileInputExtraButton: <ExtraMobileButton />,
+              messageContainer: CustomMessageContainer,
+              chatContainer: CustomChatContainer,
+              inputContainer: CustomInputContainer,
+              sendButtonComponent: CustomSendButton,
+              loadingIndicator: CustomLoadingIndicator,
+            },
+          }}
+        />
+      </div>
+    </>
   );
 };
 

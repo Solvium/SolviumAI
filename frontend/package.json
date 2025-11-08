@@ -21,6 +21,7 @@
     "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@bitte-ai/chat": "^0.23.0",
     "@coral-xyz/anchor": "0.29",
     "@google/generative-ai": "^0.24.1",
     "@grammyjs/types": "^3.6.2",
@@ -157,5 +158,10 @@
     "prisma": "^6.13.0",
     "tsx": "^4.20.6",
     "typescript": "^5"
-  }
+  },
+  "trustedDependencies": [
+    "protobufjs",
+    "tiny-secp256k1",
+    "unrs-resolver"
+  ]
 }
