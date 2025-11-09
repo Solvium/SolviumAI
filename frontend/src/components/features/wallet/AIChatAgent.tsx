@@ -66,7 +66,7 @@ const CustomChatContainer = ({
   style,
 }: ChatContainerComponentProps) => {
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-3 space-y-3 min-h-0">
+    <div className="flex-1 bg-red-100 overflow-y-auto bg-gray-50 p-3 space-y-3 min-h-0">
       {children}
     </div>
   );
@@ -334,39 +334,34 @@ const AIChatAgent = ({ isOpen, onClose }: AIChatAgentProps) => {
         `,
         }}
       />
-      <div
-        style={{
-          position: "fixed",
-          bottom: "20px",
-          right: "20px",
-          zIndex: 10000,
-        }}
-      >
-        <BitteAiChat
-          agentId="rhea-ai-eight.vercel.app"
-          apiUrl="/api/chat"
-          wallet={{
-            near: {
-              wallet: account as any,
-              account: account as any,
-              accountId: accountId as string,
-              nearWalletId: accountId as string,
-            },
-          }}
-          options={{
-            agentName: "Solvium AI Assistant",
-            placeholderText: "Write a message",
-            customComponents: {
-              welcomeMessageComponent: (<CustomWelcome />) as any,
-              mobileInputExtraButton: <ExtraMobileButton />,
-              messageContainer: CustomMessageContainer,
-              chatContainer: CustomChatContainer,
-              inputContainer: CustomInputContainer,
-              sendButtonComponent: CustomSendButton,
-              loadingIndicator: CustomLoadingIndicator,
-            },
-          }}
-        />
+      <div className="fixed bottom-28 right-3 z-[9999] pointer-events-none">
+        <div className="w-[300px] h-[520px] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden pointer-events-auto">
+          <BitteAiChat
+            agentId="rhea-ai-eight.vercel.app"
+            apiUrl="/api/chat"
+            wallet={{
+              near: {
+                wallet: account as any,
+                account: account as any,
+                accountId: accountId as string,
+                nearWalletId: accountId as string,
+              },
+            }}
+            options={{
+              agentName: "Solvium AI Assistant",
+              placeholderText: "Write a message",
+              customComponents: {
+                welcomeMessageComponent: (<CustomWelcome />) as any,
+                mobileInputExtraButton: <ExtraMobileButton />,
+                messageContainer: CustomMessageContainer,
+                chatContainer: CustomChatContainer,
+                inputContainer: CustomInputContainer,
+                sendButtonComponent: CustomSendButton,
+                loadingIndicator: CustomLoadingIndicator,
+              },
+            }}
+          />
+        </div>
       </div>
     </>
   );
