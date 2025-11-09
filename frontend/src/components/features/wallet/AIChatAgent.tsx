@@ -3,15 +3,7 @@
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
 import { BitteAiChat } from "@bitte-ai/chat";
 import "@bitte-ai/chat/styles.css";
-import {
-  X,
-  Minus,
-  ThumbsUp,
-  ThumbsDown,
-  Smile,
-  Paperclip,
-  Send,
-} from "lucide-react";
+import { X, Minus, ThumbsUp, ThumbsDown, Send } from "lucide-react";
 import React, { ComponentType } from "react";
 
 // Type definitions for custom components
@@ -93,8 +85,8 @@ const CustomWelcomeMessage = () => {
               minute: "2-digit",
             })}
           </div>
-          <div className="bg-white rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
-            <p className="text-xs text-gray-700">
+          <div className="bg-blue-600 rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
+            <p className="text-xs text-white">
               Hi, I am your solvium assistant
             </p>
           </div>
@@ -127,8 +119,8 @@ const CustomWelcomeMessage = () => {
               minute: "2-digit",
             })}
           </div>
-          <div className="bg-white rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
-            <p className="text-xs text-gray-700">
+          <div className="bg-blue-600 rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
+            <p className="text-xs text-white">
               You can say things like &quot;Send 10 SOLV to AjeMark&quot; or
               &quot;Check my balance.&quot;
             </p>
@@ -189,8 +181,8 @@ const CustomMessageContainer: ComponentType<MessageGroupComponentProps> = ({
         <div className="text-[10px] text-gray-500 mb-0.5">
           Livechat {timestamp}
         </div>
-        <div className="bg-white rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
-          <div className="text-xs text-gray-700">{children}</div>
+        <div className="bg-blue-600 rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
+          <div className="text-xs text-white">{children}</div>
         </div>
       </div>
     </div>
@@ -223,16 +215,29 @@ const CustomChatContainer: ComponentType<ChatContainerComponentProps> = ({
 const CustomInputContainer: ComponentType<InputContainerProps> = ({
   children,
 }) => {
+  React.useEffect(() => {
+    // Inject styles to ensure input is white
+    const styleId = "bitte-input-override";
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = `
+        .bitte-input-container input {
+          background-color: white !important;
+          color: #111827 !important;
+        }
+        .bitte-input-container input::placeholder {
+          color: #9ca3af !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
+
   return (
     <div className="bg-white border-t border-gray-200 p-3 flex-shrink-0">
-      <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5">
+      <div className="bitte-input-container flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
         {children}
-        <button className="text-gray-400 hover:text-gray-600">
-          <Smile className="w-4 h-4" />
-        </button>
-        <button className="text-gray-400 hover:text-gray-600">
-          <Paperclip className="w-4 h-4" />
-        </button>
       </div>
       <div className="text-center text-[10px] text-gray-500 mt-1.5">
         Powered by <span className="font-semibold">Solvium Agent</span>
@@ -284,18 +289,18 @@ const CustomLoadingIndicator: ComponentType<
       </div>
       <div className="flex-1">
         <div className="text-[10px] text-gray-500 mb-0.5">Livechat</div>
-        <div className="bg-white rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
+        <div className="bg-blue-600 rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
           <div className="flex gap-1">
             <div
-              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+              className="w-2 h-2 bg-white rounded-full animate-bounce"
               style={{ animationDelay: "0ms" }}
             ></div>
             <div
-              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+              className="w-2 h-2 bg-white rounded-full animate-bounce"
               style={{ animationDelay: "150ms" }}
             ></div>
             <div
-              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+              className="w-2 h-2 bg-white rounded-full animate-bounce"
               style={{ animationDelay: "300ms" }}
             ></div>
           </div>
