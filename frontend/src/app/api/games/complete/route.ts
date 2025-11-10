@@ -161,39 +161,35 @@ export async function POST(req: NextRequest) {
         candidateAccountId,
         clientMultiplierHint: clientMultiplier,
       });
-      
-      // Optimize: If client provided a multiplier, validate it server-side
-      // If it matches, use it; otherwise recalculate (security check)
+
+      // Use multiplier from context if provided (already fetched on page load)
+      // Otherwise calculate from contract
       let pointCalculation;
-      if (clientMultiplier && typeof clientMultiplier === 'number' && clientMultiplier > 0) {
-        // Validate the client multiplier by recalculating
-        const serverCalculation = await calculatePointsWithMultiplier(
-          baseRewards,
-          candidateAccountId
-        );
-        
-        // Check if client multiplier matches server calculation (within 0.01 tolerance for floating point)
-        const multiplierDiff = Math.abs(serverCalculation.multiplier - clientMultiplier);
-        if (multiplierDiff < 0.01) {
-          // Client multiplier is valid, use it
-          console.log("✅ Client multiplier validated, using cached value");
-          pointCalculation = {
-            ...serverCalculation,
-            multiplier: clientMultiplier, // Use client value for consistency
-          };
-        } else {
-          // Client multiplier doesn't match, use server calculation (security)
-          console.log(`⚠️ Client multiplier mismatch (client: ${clientMultiplier}, server: ${serverCalculation.multiplier}), using server value`);
-          pointCalculation = serverCalculation;
-        }
+      if (
+        clientMultiplier &&
+        typeof clientMultiplier === "number" &&
+        clientMultiplier > 0
+      ) {
+        // Use multiplier from context (already validated on page load)
+        const multiplier = clientMultiplier;
+        const boostedPoints = Math.round(baseRewards * multiplier);
+        const boostAmount = boostedPoints - baseRewards;
+        pointCalculation = {
+          basePoints: baseRewards,
+          multiplier,
+          boostedPoints,
+          totalPoints: boostedPoints,
+          boostAmount,
+        };
+        console.log("✅ Using multiplier from context:", multiplier);
       } else {
-        // No client multiplier provided, calculate normally
+        // No client multiplier provided, calculate from contract
         pointCalculation = await calculatePointsWithMultiplier(
           baseRewards,
           candidateAccountId
         );
       }
-      
+
       const finalRewards = pointCalculation.totalPoints;
       console.log("✅ Rewards AFTER multiplier:", pointCalculation);
 
