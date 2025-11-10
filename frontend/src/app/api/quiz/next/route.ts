@@ -15,6 +15,32 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const DAILY_LIMIT = 50;
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    const completedToday = await prisma.game.count({
+      where: {
+        userId: parseInt(userId),
+        gameType: "quiz",
+        playedAt: {
+          gte: today,
+        },
+      },
+    });
+
+    if (completedToday >= DAILY_LIMIT) {
+      return NextResponse.json(
+        {
+          error: "Daily quiz limit reached",
+          limit: DAILY_LIMIT,
+          completedToday,
+          remaining: 0,
+        },
+        { status: 403 }
+      );
+    }
+
     // Get user's completed quizzes to avoid repetition (ALL TIME, not just today)
     const completedQuizzes = await prisma.game.findMany({
       where: {

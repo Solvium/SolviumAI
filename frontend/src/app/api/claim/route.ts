@@ -193,9 +193,6 @@ export async function POST(req: NextRequest) {
           totalSOLV: {
             increment: finalPoints,
           },
-          totalPoints: {
-            increment: finalPoints,
-          },
           weeklyPoints: {
             increment: finalPoints,
           },

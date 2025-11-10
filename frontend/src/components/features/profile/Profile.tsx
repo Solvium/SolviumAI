@@ -241,7 +241,7 @@ const StatsSection = ({ userDetails }: { userDetails: any }) => {
       <div className="bg-blue-800/50 border-2 border-[#173DE7] flex flex-col items-center justify-center rounded-3xl md:p-6 p-3 text-center">
         <img src={coins.src} className="md:w-[30px] w-[20px]" alt="Coins" />
         <div className="md:text-[15px] text-[10px] font-bold text-white mb-1">
-          {userDetails?.totalSOLV || userDetails?.totalPoints || 0}
+          {userDetails?.totalSOLV || 0}
         </div>
         <div className="text-blue-300 md:text-[10px] text-[8px] font-medium uppercase tracking-wider mt-2">
           SOLV

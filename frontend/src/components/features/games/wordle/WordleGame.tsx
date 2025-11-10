@@ -1095,7 +1095,7 @@ const WordleGame: React.FC<WordleGameProps> = ({
                 multiplier={pointCalculation?.multiplier || 1}
                 currentBalance={userBalance}
                 showMultiplier={!!pointCalculation && pointCalculation.multiplier > 1}
-                totalSolv={user?.totalSOLV || user?.totalPoints}
+                totalSolv={user?.totalSOLV}
                 levelLabel={`L${level}`}
                 difficultyLabel={getDifficultyLabel(level)}
               />

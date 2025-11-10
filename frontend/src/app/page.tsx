@@ -34,7 +34,19 @@ function HomeShell() {
   const [tg, setTg] = useState<any>(null);
   const [hasCheckedInitialRoute, setHasCheckedInitialRoute] = useState(false);
 
-  const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const { user, isAuthenticated, isLoading, logout, fetchMultiplier } = useAuth();
+  
+  // Refetch multiplier on page navigation (debounced to avoid excessive calls)
+  useEffect(() => {
+    if (!isAuthenticated || !currentPage) return;
+    
+    // Debounce: only refetch after 500ms of no page changes
+    const timer = setTimeout(() => {
+      fetchMultiplier();
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [currentPage, isAuthenticated]); // Removed fetchMultiplier from deps
 
   useEffect(() => {
     if (tg) return;

@@ -205,6 +205,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({
             userId: user.id,
             ...gameData,
+            // Pass multiplier from context for optimization (server will validate it)
+            clientMultiplier: user.multiplier,
           }),
         });
 

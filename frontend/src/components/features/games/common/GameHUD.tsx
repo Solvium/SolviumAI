@@ -25,8 +25,8 @@ export default function GameHUD({
   difficultyLabel,
 }: GameHUDProps) {
   const { user } = useAuth();
-  const balance = currentBalance ?? user?.totalSOLV ?? user?.totalPoints ?? 0;
-  const total = totalSolv ?? user?.totalSOLV ?? user?.totalPoints ?? 0;
+  const balance = currentBalance ?? user?.totalSOLV ?? 0;
+  const total = totalSolv ?? user?.totalSOLV ?? 0;
 
   return (
     <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none">

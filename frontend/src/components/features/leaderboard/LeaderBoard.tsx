@@ -15,12 +15,10 @@ const LeaderBoard = () => {
     try {
       if (showLoading) setLoading(true);
       setError(null);
-      
+
       // Force fresh fetch by adding cache-busting timestamp
-      const response = await fetch(`/api/leaderboard?t=${Date.now()}`, {
-        cache: "no-store",
-      });
-      
+      const response = await fetch(`/api/leaderboard`);
+
       if (!response.ok) {
         throw new Error("Failed to fetch leaderboard");
       }
@@ -285,7 +283,7 @@ const LeaderBoard = () => {
           className="font-semibold md:text-lg text-xs"
           style={{ color: textColor }}
         >
-          {userData.totalSOLV || userData.totalPoints || 0} SOLV
+          {userData.totalSOLV || 0} SOLV
         </span>
       </div>
     );
