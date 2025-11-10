@@ -3,7 +3,7 @@
 import { usePrivateKeyWallet } from "@/contexts/PrivateKeyWalletContext";
 import { BitteAiChat } from "@bitte-ai/chat";
 import "@bitte-ai/chat/styles.css";
-import { X, Minus, ThumbsUp, ThumbsDown, Send } from "lucide-react";
+import { X, Minus, ThumbsUp, Send } from "lucide-react";
 import React, { ComponentType } from "react";
 
 // Type definitions for custom components
@@ -374,6 +374,77 @@ const CustomInputContainerFixed: ComponentType<InputContainerProps> = ({
 const AIChatAgent = ({ isOpen, onClose }: AIChatAgentProps) => {
   const { account, accountId, isConnected } = usePrivateKeyWallet();
 
+  // Hide the share button using its specific classes
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    const styleId = "bitte-hide-share-button";
+    let styleElement = document.getElementById(styleId) as HTMLStyleElement;
+
+    if (!styleElement) {
+      styleElement = document.createElement("style");
+      styleElement.id = styleId;
+      document.head.appendChild(styleElement);
+    }
+
+    styleElement.textContent = `
+      /* Hide share button by targeting its specific classes */
+      button:has(svg.lucide-share),
+      button:has(.lucide-share),
+      .bitte-absolute.bitte-right-6.bitte-top-6,
+      .bitte-absolute.bitte-right-6.bitte-top-6 button,
+      button[class*="bitte-bg-black"]:has(svg.lucide-share),
+      div.bitte-absolute.bitte-right-6.bitte-top-6.bitte-z-50 {
+        display: none !important;
+        visibility: hidden !important;
+      }
+      /* Alternative selector for browsers that don't support :has() */
+      .lucide-share {
+        display: none !important;
+      }
+      button svg.lucide-share {
+        display: none !important;
+      }
+    `;
+
+    // Also directly hide the buttons using JavaScript
+    const hideShareButtons = () => {
+      // Target the container div
+      const shareContainer = document.querySelector(
+        ".bitte-absolute.bitte-right-6.bitte-top-6.bitte-z-50"
+      );
+      if (shareContainer) {
+        (shareContainer as HTMLElement).style.display = "none";
+        (shareContainer as HTMLElement).style.visibility = "hidden";
+      }
+
+      // Target buttons with lucide-share SVG
+      const buttons = document.querySelectorAll("button");
+      buttons.forEach((button) => {
+        const shareIcon = button.querySelector("svg.lucide-share");
+        if (shareIcon) {
+          (button as HTMLElement).style.display = "none";
+          (button as HTMLElement).style.visibility = "hidden";
+        }
+      });
+    };
+
+    // Run immediately and on mutations
+    hideShareButtons();
+    const observer = new MutationObserver(hideShareButtons);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      observer.disconnect();
+      if (styleElement && styleElement.parentNode) {
+        styleElement.parentNode.removeChild(styleElement);
+      }
+    };
+  }, [isOpen]);
+
   // Only render when wallet is connected and chat should be open
   if (!isOpen || !isConnected || !account || !accountId) {
     return null;
@@ -469,8 +540,12 @@ const AIChatAgent = ({ isOpen, onClose }: AIChatAgentProps) => {
               <button className="text-gray-400 hover:text-gray-600">
                 <ThumbsUp className="w-4 h-4" />
               </button>
-              <button className="text-gray-400 hover:text-gray-600">
-                <ThumbsDown className="w-4 h-4" />
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600"
+                title="Close chat"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
           </div>
