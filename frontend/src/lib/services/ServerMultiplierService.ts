@@ -3,6 +3,7 @@
 
 import { providers } from "near-api-js";
 import type { CodeResult } from "near-api-js/lib/providers/provider";
+import { getCurrentYear, getISOWeekNumber } from "@/lib/utils/utils";
 
 export interface PointCalculationResult {
   basePoints: number;
@@ -192,4 +193,22 @@ export const getActiveDepositNear = async (
 
   const totalNear = Number(totalYocto) / 1e24;
   return Number.isFinite(totalNear) && totalNear > 0 ? totalNear : 0;
+};
+
+export const getWeeklyPoints = async (userId: number): Promise<number> => {
+  const { prisma } = await import("@/lib/prisma");
+  const currentWeek = getISOWeekNumber(new Date());
+  const currentYear = getCurrentYear();
+
+  const weeklyScore = await prisma.weeklyScore.findUnique({
+    where: {
+      userId_weekNumber_year: {
+        userId,
+        weekNumber: currentWeek,
+        year: currentYear,
+      },
+    },
+  });
+
+  return weeklyScore?.points || 0;
 };
