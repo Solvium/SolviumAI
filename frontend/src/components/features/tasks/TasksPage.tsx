@@ -921,7 +921,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-gradient-to-br from-pink-500 to-purple-600 rounded-2xl p-4 text-center">
             <div className="text-2xl font-bold">
-              {(userDetails as any)?.totalSOLV ?? userDetails?.totalPoints ?? 0}
+              {(userDetails as any)?.totalSOLV ?? 0}
             </div>
 
             <div className="text-xs text-white/80 mt-1">SOLV Points</div>

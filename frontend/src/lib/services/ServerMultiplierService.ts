@@ -99,12 +99,15 @@ async function computeEffectiveMultiplier(accountId: string): Promise<number> {
     return 1;
   }
 
-  // Filter and sum only ACTIVE deposits (within 1 week) and convert to NEAR
-  // This is the user's effective deposit amount
+  // Filter and sum only ACTIVE deposits (based on start time only)
+  // A deposit is active if it was started within the last week
   let totalYocto = BigInt(0);
   let activeCount = 0;
   Object.values(summary.deposits as Record<string, any>).forEach((d: any) => {
-    if (d?.startTime && isDepositActive(String(d.startTime))) {
+    // Only check start time - deposit is active if within 1 week
+    const isActive = d?.startTime && isDepositActive(String(d.startTime));
+
+    if (isActive) {
       try {
         totalYocto += BigInt(d.amount);
         activeCount += 1;
@@ -122,7 +125,7 @@ async function computeEffectiveMultiplier(accountId: string): Promise<number> {
 
   // Get contract multiplier factor
   const contractMul = await fetchContractMultiplier(accountId);
-  
+
   // USER MULTIPLIER = totalNear * contractMul
   // This is the effective multiplier from getUserDepositSummary
   // Example: 2.1 NEAR * 10 contractMul = 21x user multiplier

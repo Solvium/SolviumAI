@@ -31,6 +31,42 @@
   font-style: normal;
 }
 
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("/fonts/Pixelify_Sans/static/PixelifySans-Regular.ttf")
+    format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("/fonts/Pixelify_Sans/static/PixelifySans-Medium.ttf")
+    format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("/fonts/Pixelify_Sans/static/PixelifySans-SemiBold.ttf")
+    format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("/fonts/Pixelify_Sans/static/PixelifySans-Bold.ttf")
+    format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* Updated to tropical Sonic Dash color scheme */
   --foreground-rgb: 30, 58, 138;
@@ -96,6 +132,11 @@ body {
   font-size: 1rem;
   line-height: 1.5;
   letter-spacing: 0;
+}
+
+.font-pixelify {
+  font-family: "Pixelify Sans", "PixelifySans", cursive;
+  letter-spacing: 0.04em;
 }
 
 /* Wheel spinning animations */

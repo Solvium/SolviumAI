@@ -61,6 +61,43 @@ export const useQuiz = () => {
       }
 
       try {
+        // Check daily limit before fetching a new quiz
+        const limitResponse = await fetch(
+          `/api/quiz/daily-limit?userId=${user.id}`
+        );
+
+        if (!limitResponse.ok) {
+          if (limitResponse.status === 403) {
+            const limitError = await limitResponse.json().catch(() => ({}));
+            const completedToday = limitError?.completedToday ?? 0;
+            setQuizState((prev) => ({
+              ...prev,
+              dailyQuizzesCompleted: completedToday,
+              dailyLimit: limitError?.limit ?? prev.dailyLimit,
+            }));
+            gameActions.setError(
+              limitError?.error ||
+                "Daily quiz limit reached. Please come back tomorrow."
+            );
+            return false;
+          }
+          console.error("Failed to check daily quiz limit");
+        } else {
+          const limitData = await limitResponse.json();
+          setQuizState((prev) => ({
+            ...prev,
+            dailyLimit: limitData?.limit ?? prev.dailyLimit,
+            dailyQuizzesCompleted: limitData?.completedToday ?? 0,
+          }));
+
+          if (!limitData?.hasRemaining) {
+            gameActions.setError(
+              "Daily quiz limit reached (50 per day). Please come back tomorrow."
+            );
+            return false;
+          }
+        }
+
         // First, check if we need to trigger daily quiz generation
         const fetchResponse = await fetch("/api/quiz/fetch", {
           method: "POST",
@@ -93,6 +130,18 @@ export const useQuiz = () => {
             }
             throw new Error(
               "No available quizzes found. Please try again later."
+            );
+          } else if (response.status === 403) {
+            const limitError = await response.json().catch(() => ({}));
+            setQuizState((prev) => ({
+              ...prev,
+              dailyQuizzesCompleted:
+                limitError?.completedToday ?? prev.dailyQuizzesCompleted,
+              dailyLimit: limitError?.limit ?? prev.dailyLimit,
+            }));
+            throw new Error(
+              limitError?.error ||
+                "Daily quiz limit reached (50 per day). Please come back tomorrow."
             );
           }
           throw new Error("Failed to fetch quiz");
@@ -236,25 +285,34 @@ export const useQuiz = () => {
 
     try {
       const response = await fetch(
-        `/api/games/stats?userId=${user.id}&gameType=quiz`
+        `/api/quiz/daily-limit?userId=${user.id}`
       );
       if (response.ok) {
         const data = await response.json();
-        const completedToday = data.quiz?.totalGames || 0;
 
         setQuizState((prev) => ({
           ...prev,
-          dailyQuizzesCompleted: completedToday,
+          dailyLimit: data?.limit ?? prev.dailyLimit,
+          dailyQuizzesCompleted: data?.completedToday ?? 0,
         }));
 
-        return completedToday < quizState.dailyLimit;
+        return Boolean(data?.hasRemaining);
+      } else if (response.status === 403) {
+        const limitError = await response.json().catch(() => ({}));
+        setQuizState((prev) => ({
+          ...prev,
+          dailyLimit: limitError?.limit ?? prev.dailyLimit,
+          dailyQuizzesCompleted:
+            limitError?.completedToday ?? prev.dailyQuizzesCompleted,
+        }));
+        return false;
       }
       return true; // Assume limit not reached if API fails
     } catch (error) {
       console.error("Error checking daily limit:", error);
       return true; // Assume limit not reached if API fails
     }
-  }, [user?.id, quizState.dailyLimit]);
+  }, [user?.id]);
 
   return {
     gameState,

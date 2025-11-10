@@ -4,6 +4,13 @@ import { useRouter } from "next/navigation";
 import { Trophy, ChevronLeft, Coins, Gift, Sparkles } from "lucide-react";
 import { useNavigation } from "@/contexts/NavigationContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { Pixelify_Sans } from "next/font/google";
+
+const pixelify = Pixelify_Sans({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+});
 
 interface LeaderboardEntry {
   rank: number;
@@ -268,8 +275,7 @@ const Contest = () => {
         )}
         {/* Title */}
         <h1
-          className="text-4xl font-bold mb-2 tracking-wider"
-          style={{ fontFamily: "monospace" }}
+          className={`${pixelify.className} text-4xl font-bold mb-2 tracking-wider`}
         >
           <span className="text-[#1C97D8]">WEEKLY</span>
           <br />

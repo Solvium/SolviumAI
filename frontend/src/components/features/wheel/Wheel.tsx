@@ -148,10 +148,9 @@ export const WheelOfFortune = () => {
   const [isClaimed, setIsClaimed] = useState(false);
   const [isSpinning, setIsSpinning] = useState(false);
   const [wonPrize, setWonPrize] = useState<string | null>(null);
-  const [unclaimed, setUnclaimed] = useState<{
-    winner: string;
-    prizeNumber: number;
-  } | null>(null);
+  const [unclaimedList, setUnclaimedList] = useState<
+    { winner: string; prizeNumber: number; ts?: number }[]
+  >([]);
 
   // Lock spin button immediately on click to prevent double-submits
   const [isSpinLocked, setIsSpinLocked] = useState(false);
@@ -183,7 +182,8 @@ export const WheelOfFortune = () => {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [purchasingKey, setPurchasingKey] = useState<string | null>(null);
   const [showClaimedMessage, setShowClaimedMessage] = useState(false);
-  const hasUnclaimedPrize = (!!wonPrize || !!unclaimed) && !isClaimed;
+  const hasUnclaimedPrize =
+    (unclaimedList.length > 0 || !!wonPrize) && !isClaimed;
 
   // Wheel data - 8 segments, clockwise from the top to match visual
   const data = [
@@ -273,16 +273,37 @@ export const WheelOfFortune = () => {
       setHasFetchedSpinsOnce(true);
     }
 
-    const unclaimedPrize = localStorage.getItem("unclaimedPrize");
-    const lastClaimedTime = localStorage.getItem("lastClaimed");
-    if (unclaimedPrize && !lastClaimedTime) {
-      const prize = JSON.parse(unclaimedPrize);
-      setWinner(prize.winner);
-      setPrizeNumber(prize.prizeNumber);
-      setUnclaimed(prize);
-      setIsClaimed(false);
-      setShowWin(true);
-    }
+    // Migrate legacy single prize to the new array key if present
+    try {
+      const legacy = localStorage.getItem("unclaimedPrize");
+      if (legacy) {
+        const legacyPrize = JSON.parse(legacy);
+        const existingList =
+          JSON.parse(localStorage.getItem("unclaimedPrizes") || "[]") || [];
+        const merged = [
+          ...existingList,
+          {
+            winner: legacyPrize.winner,
+            prizeNumber: legacyPrize.prizeNumber,
+            ts: Date.now(),
+          },
+        ];
+        localStorage.setItem("unclaimedPrizes", JSON.stringify(merged));
+        localStorage.removeItem("unclaimedPrize");
+      }
+    } catch {}
+
+    // Load unclaimed prizes list
+    try {
+      const list = JSON.parse(localStorage.getItem("unclaimedPrizes") || "[]");
+      if (Array.isArray(list) && list.length > 0) {
+        setUnclaimedList(list);
+        setWinner(list[0].winner);
+        setPrizeNumber(list[0].prizeNumber);
+        setIsClaimed(false);
+        setShowWin(true);
+      }
+    } catch {}
   }, [nearConnected, nearAddress]); // Removed user dependency to fix warning
 
   const handleClaimRewardImproved = async ({
@@ -445,7 +466,7 @@ export const WheelOfFortune = () => {
     if (isSpinning) return; // Prevent multiple spins
 
     // Block spinning if there is an unclaimed prize
-    if ((wonPrize && !isClaimed) || (unclaimed && !isClaimed)) {
+    if ((wonPrize && !isClaimed) || (unclaimedList.length > 0 && !isClaimed)) {
       toast.info("Please claim your current reward before spinning again.");
       setShowWin(true);
       setIsSpinLocked(false);
@@ -495,13 +516,17 @@ export const WheelOfFortune = () => {
       }
 
       if (!hasDeposits) {
-        toast.info("No game deposit found. Please deposit to play the wheel.");
+        toast.info(
+          "No Power up purchase found. Please purchase power up to spin the wheel."
+        );
         setIsSpinLocked(false);
         return;
       }
     } catch (error) {
       console.error("Error verifying game deposit:", error);
-      toast.error("Unable to verify game deposit. Please try again later.");
+      toast.error(
+        "Unable to verify Power up purchase. Please try again later."
+      );
       setIsSpinLocked(false);
       return;
     }
@@ -571,9 +596,24 @@ export const WheelOfFortune = () => {
       setShowWin(true);
 
       // Persist unclaimed prize until claim completes
-      const prizeObj = { winner: selectedPrize, prizeNumber: newPrizeNumber };
-      setUnclaimed(prizeObj);
+      const prizeObj = {
+        winner: selectedPrize,
+        prizeNumber: newPrizeNumber,
+        ts: Date.now(),
+      };
+      // Append to unclaimed list (queue)
+      setUnclaimedList((prev) => {
+        const updated = [...prev, prizeObj];
+        try {
+          localStorage.setItem("unclaimedPrizes", JSON.stringify(updated));
+        } catch {}
+        // Set current to the first item if not already set
+        setWinner(updated[0]?.winner || selectedPrize);
+        setPrizeNumber(updated[0]?.prizeNumber ?? newPrizeNumber);
+        return updated;
+      });
       try {
+        // Keep legacy key in sync for safety (not required)
         localStorage.setItem("unclaimedPrize", JSON.stringify(prizeObj));
       } catch {}
 
@@ -638,9 +678,31 @@ export const WheelOfFortune = () => {
             }, 5000);
           } catch {}
           localStorage.setItem("lastClaimed", Date.now().toString());
-          localStorage.removeItem("unclaimedPrize");
-          setWonPrize(null);
-          setUnclaimed(null);
+          // Pop the first unclaimed prize and persist
+          setUnclaimedList((prev) => {
+            const [, ...rest] = prev;
+            try {
+              localStorage.setItem("unclaimedPrizes", JSON.stringify(rest));
+            } catch {}
+            if (rest.length > 0) {
+              // Move to next prize automatically and keep modal open
+              setWinner(rest[0].winner);
+              setPrizeNumber(rest[0].prizeNumber);
+              setIsClaimed(false);
+              setShowWin(true);
+            } else {
+              // No more pending prizes
+              setWinner("");
+              setPrizeNumber(0);
+              setWonPrize(null);
+              setIsClaimed(false);
+              setShowWin(false);
+            }
+            try {
+              localStorage.removeItem("unclaimedPrize");
+            } catch {}
+            return rest;
+          });
           setIsClaimLoading(false);
           // Refresh spins after successful claim
           void fetchContractSpins();
@@ -714,10 +776,7 @@ export const WheelOfFortune = () => {
       }
 
       console.log("Purchasing spin with points, count:", count);
-      balanceKey =
-        user && typeof (user as any).totalSOLV === "number"
-          ? "totalSOLV"
-          : "totalPoints";
+      balanceKey = "totalSOLV";
       originalPoints = Number((user as any)?.[balanceKey] ?? 0);
 
       if (!Number.isFinite(pointsCost) || pointsCost <= 0) {
@@ -798,7 +857,7 @@ export const WheelOfFortune = () => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-80px)] w-full relative overflow-hidden">
+    <div className="min-h-[calc(100vh-80px)] w-full h-full relative overflow-auto">
       {/* Background with floating dots */}
       <div className="absolute inset-0">
         <Image
@@ -990,13 +1049,13 @@ export const WheelOfFortune = () => {
         </div>
 
         {/* Prize Display */}
-        {wonPrize && !isSpinning && (
+        {!isSpinning && !showWin && (unclaimedList.length > 0 || wonPrize) && (
           <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-2xl p-4 text-center mb-4 animate-pulse">
             <div className="text-2xl font-black text-yellow-900 mb-2">
               🎉 CONGRATULATIONS! 🎉
             </div>
             <div className="text-xl font-bold text-yellow-900">
-              You won {wonPrize} tokens!
+              You won {(unclaimedList[0]?.winner as any) || wonPrize} tokens!
             </div>
             <button
               onClick={handleClaim}
@@ -1107,7 +1166,9 @@ export const WheelOfFortune = () => {
       )}
 
       <WinPopup
-        isVisible={Boolean((winner || unclaimed) && !isClaimed && showWin)}
+        isVisible={Boolean(
+          (winner || unclaimedList.length > 0) && !isClaimed && showWin
+        )}
         prize={winner}
         onClaim={handleClaim}
         isClaimLoading={isClaimLoading}

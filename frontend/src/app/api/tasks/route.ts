@@ -567,7 +567,6 @@ export async function POST(request: NextRequest) {
           where: { id: parseInt(userId) },
           data: {
             totalSOLV: { increment: taskCalculation.totalPoints },
-            totalPoints: { increment: taskCalculation.totalPoints },
             weeklyPoints: { increment: taskCalculation.totalPoints },
           },
         });

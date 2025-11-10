@@ -54,6 +54,13 @@ const QuizGame: React.FC<QuizGameProps> = ({
 
   // Don't auto-start the game - let user choose settings first
 
+  // Check daily limit on mount and when quiz state changes
+  useEffect(() => {
+    if (user?.id) {
+      actions.checkDailyLimit();
+    }
+  }, [user?.id, actions]);
+
   // Fetch effective user multiplier (totalNear * contractMul) on component mount
   useEffect(() => {
     const fetchEffectiveMultiplier = async () => {
@@ -333,6 +340,42 @@ const QuizGame: React.FC<QuizGameProps> = ({
             QUIZ CHALLENGE
           </h1>
 
+          {/* Daily Limit Status */}
+          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 mb-4 w-full max-w-md">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-300">
+                Daily Quizzes
+              </span>
+              <span className="text-sm font-bold text-white">
+                {quizState.dailyQuizzesCompleted} / {quizState.dailyLimit}
+              </span>
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2.5">
+              <div
+                className={`h-2.5 rounded-full transition-all ${
+                  quizState.dailyQuizzesCompleted >= quizState.dailyLimit
+                    ? "bg-red-500"
+                    : quizState.dailyQuizzesCompleted >=
+                      quizState.dailyLimit * 0.8
+                    ? "bg-yellow-500"
+                    : "bg-green-500"
+                }`}
+                style={{
+                  width: `${Math.min(
+                    (quizState.dailyQuizzesCompleted / quizState.dailyLimit) *
+                      100,
+                    100
+                  )}%`,
+                }}
+              />
+            </div>
+            {quizState.dailyQuizzesCompleted >= quizState.dailyLimit && (
+              <p className="text-xs text-red-400 mt-2 text-center">
+                Daily limit reached. Come back tomorrow!
+              </p>
+            )}
+          </div>
+
           {/* Settings */}
           <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-8 w-full max-w-md">
             <h3 className="text-xl font-semibold text-white mb-4 text-center">
@@ -380,9 +423,21 @@ const QuizGame: React.FC<QuizGameProps> = ({
 
           <button
             onClick={handleStartGame}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:scale-105 transition-transform"
+            disabled={
+              quizState.dailyQuizzesCompleted >= quizState.dailyLimit ||
+              gameState.isLoading
+            }
+            className={`px-8 py-4 rounded-xl font-bold text-lg transition-all ${
+              quizState.dailyQuizzesCompleted >= quizState.dailyLimit
+                ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                : "bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:scale-105 transition-transform"
+            }`}
           >
-            Start Quiz
+            {quizState.dailyQuizzesCompleted >= quizState.dailyLimit
+              ? "Daily Limit Reached"
+              : gameState.isLoading
+              ? "Loading..."
+              : "Start Quiz"}
           </button>
         </div>
       </div>
@@ -421,7 +476,7 @@ const QuizGame: React.FC<QuizGameProps> = ({
         multiplier={effectiveUserMultiplier}
         currentBalance={userCoins}
         showMultiplier={effectiveUserMultiplier > 1}
-        totalSolv={user?.totalSOLV || user?.totalPoints}
+        totalSolv={user?.totalSOLV}
         levelLabel={`L${user?.level ?? 1}`}
         difficultyLabel={
           difficulty.charAt(0).toUpperCase() + difficulty.slice(1)

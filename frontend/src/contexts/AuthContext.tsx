@@ -95,6 +95,7 @@ export interface AuthContextType extends AuthState {
   trackLogin: () => Promise<boolean>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   refreshToken: () => Promise<void>;
+  fetchMultiplier: () => Promise<void>;
 
   // New profile enhancement methods
   fetchUserProfile: () => Promise<void>;
@@ -191,6 +192,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       return () => clearInterval(refreshInterval);
     }
   }, [state.isAuthenticated]);
+
+  // Fetch multiplier and auto-refetch every 3 minutes
+  const fetchMultiplier = useCallback(async () => {
+    if (!state.isAuthenticated || !state.user) return;
+    
+    try {
+      const response = await axios.get("/api/user/multiplier");
+      if (response.data.success) {
+        const multiplier = response.data.multiplier || 1;
+        // Only update if multiplier actually changed to avoid unnecessary re-renders
+        setState((prev) => {
+          if (prev.user?.multiplier === multiplier) return prev; // No change
+          return {
+            ...prev,
+            user: prev.user ? { ...prev.user, multiplier } : null,
+          };
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch multiplier:", error);
+    }
+  }, [state.isAuthenticated]); // Removed state.user from deps to prevent loop
+
+  // Auto-fetch multiplier on mount and every 3 minutes
+  useEffect(() => {
+    if (!state.isAuthenticated || !state.user) return;
+    
+    // Initial fetch
+    fetchMultiplier();
+    
+    // Then refetch every 3 minutes
+    const multiplierInterval = setInterval(fetchMultiplier, 3 * 60 * 1000);
+    return () => clearInterval(multiplierInterval);
+  }, [state.isAuthenticated]); // Only depend on isAuthenticated, not user or fetchMultiplier
 
   const checkAuthStatus = async () => {
     try {
@@ -524,6 +559,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     updateUserProfile,
     logActivity,
     claimPoints,
+    fetchMultiplier, // Expose for manual refetch
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
