@@ -357,7 +357,7 @@ const CustomInputContainerFixed: ComponentType<InputContainerProps> = ({
   }, [children]);
 
   return (
-    <div className="bg-white border-t border-gray-200 p-3 flex-shrink-0">
+    <div className="bg-white border-t border-gray-200 z-[9999] p-3 flex-shrink-0">
       <div
         ref={wrapperRef}
         className="bitte-input-wrapper flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5"
@@ -365,7 +365,7 @@ const CustomInputContainerFixed: ComponentType<InputContainerProps> = ({
         {children}
       </div>
       <div className="text-center text-[10px] text-gray-500 mt-1.5">
-        Powered by <span className="font-semibold">Solvium Agent</span>
+        Powered by <span className="font-semibold">Bitte Agent</span>
       </div>
     </div>
   );
