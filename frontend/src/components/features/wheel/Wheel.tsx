@@ -764,6 +764,7 @@ export const WheelOfFortune = () => {
 
   const handleBuySpinWithPoints = async (count: string) => {
     let originalPoints: number | null = null;
+    let originalWeekly: number | null = null;
     let balanceKey: string | null = null;
     const pointsCost = Number(count);
 
@@ -778,6 +779,7 @@ export const WheelOfFortune = () => {
       console.log("Purchasing spin with points, count:", count);
       balanceKey = "totalSOLV";
       originalPoints = Number((user as any)?.[balanceKey] ?? 0);
+      originalWeekly = Number((user as any)?.weeklyPoints ?? 0);
 
       if (!Number.isFinite(pointsCost) || pointsCost <= 0) {
         toast.error("Invalid points amount");
@@ -792,6 +794,7 @@ export const WheelOfFortune = () => {
       try {
         await (updateUserProfile as any)?.({
           [balanceKey]: originalPoints - pointsCost,
+          weeklyPoints: Math.max(0, (originalWeekly ?? 0) - pointsCost),
         });
         console.log(
           `Deducted ${pointsCost} points. New balance: ${
@@ -825,6 +828,22 @@ export const WheelOfFortune = () => {
 
       // Refresh contract spins after successful purchase
       await fetchContractSpins();
+
+      if (user?.id) {
+        try {
+          await fetch("/api/weekly-points", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: user.id,
+              amount: pointsCost,
+            }),
+          });
+        } catch (weeklyError) {
+          console.error("Failed to decrement weekly points:", weeklyError);
+        }
+      }
+
       await (fetchUserProfile as any)?.();
     } catch (e) {
       console.error("Failed to buy spin with points:", e);
@@ -839,6 +858,7 @@ export const WheelOfFortune = () => {
           );
           await (updateUserProfile as any)?.({
             [balanceKey]: originalPoints,
+            weeklyPoints: originalWeekly ?? 0,
           });
           console.log("Points refunded successfully");
         } catch (refundErr) {
