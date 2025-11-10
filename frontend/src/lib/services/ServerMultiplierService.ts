@@ -168,3 +168,28 @@ export const calculatePointsWithMultiplier = async (
     boostAmount,
   };
 };
+
+export const getActiveDepositNear = async (
+  accountId: string
+): Promise<number> => {
+  const summary = await fetchUserDepositSummary(accountId);
+  if (!summary || !summary.deposits) {
+    return 0;
+  }
+
+  let totalYocto = BigInt(0);
+  Object.values(summary.deposits as Record<string, any>).forEach((d: any) => {
+    const contractActive = d?.active === true;
+    const timeActive = d?.startTime && isDepositActive(String(d.startTime));
+    if (contractActive || timeActive) {
+      try {
+        totalYocto += BigInt(d.amount);
+      } catch {
+        // ignore invalid amounts
+      }
+    }
+  });
+
+  const totalNear = Number(totalYocto) / 1e24;
+  return Number.isFinite(totalNear) && totalNear > 0 ? totalNear : 0;
+};
