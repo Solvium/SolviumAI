@@ -365,7 +365,7 @@ const CustomInputContainerFixed: ComponentType<InputContainerProps> = ({
         {children}
       </div>
       <div className="text-center text-[10px] text-gray-500 mt-1.5">
-        Powered by <span className="font-semibold">Bitte Agent</span>
+        Powered by <span className="font-semibold">Bitte AI Agent</span>
       </div>
     </div>
   );
