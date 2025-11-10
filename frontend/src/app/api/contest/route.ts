@@ -127,6 +127,8 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      await ensureWeeklyReset();
+
       const currentWeek = getISOWeekNumber(new Date());
       const currentYear = getCurrentYear();
 
@@ -192,6 +194,8 @@ export async function GET(req: any) {
 
   if (type === "get leaderboard" || !type) {
     try {
+      await ensureWeeklyReset();
+
       const currentWeek = getISOWeekNumber(new Date());
       const currentYear = getCurrentYear();
 
@@ -290,4 +294,37 @@ async function resolveAccountId(user: {
   }
 
   return accountId || null;
+}
+
+async function ensureWeeklyReset() {
+  const currentWeek = getISOWeekNumber(new Date());
+  const currentYear = getCurrentYear();
+
+  const hasCurrentWeekEntries = await prisma.weeklyScore.findFirst({
+    where: {
+      weekNumber: currentWeek,
+      year: currentYear,
+    },
+    select: { id: true },
+  });
+
+  if (hasCurrentWeekEntries) {
+    return;
+  }
+
+  await prisma.$transaction([
+    prisma.weeklyScore.deleteMany({
+      where: {
+        NOT: {
+          weekNumber: currentWeek,
+          year: currentYear,
+        },
+      },
+    }),
+    prisma.user.updateMany({
+      data: {
+        weeklyPoints: 0,
+      },
+    }),
+  ]);
 }
