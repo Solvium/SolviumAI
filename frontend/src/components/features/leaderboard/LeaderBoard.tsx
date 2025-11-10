@@ -50,27 +50,7 @@ const LeaderBoard = () => {
 
   // Fetch on mount and set up auto-refresh
   useEffect(() => {
-    // Fetch immediately on mount
     fetchLeaderboard(true);
-
-    // Set up periodic refresh (every 30 seconds)
-    const interval = setInterval(() => {
-      fetchLeaderboard(false); // Don't show loading spinner on refresh
-    }, 30000);
-
-    // Refresh when page becomes visible (user switches back to tab)
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        fetchLeaderboard(false);
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
   }, []);
 
   // Use real data if available, otherwise show empty state or error

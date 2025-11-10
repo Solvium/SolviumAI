@@ -491,6 +491,8 @@ const WordleGame: React.FC<WordleGameProps> = ({
               metadata: {
                 targetWord: targetWord,
               },
+              // Pass multiplier from context for optimization (server will validate it)
+              clientMultiplier: user?.multiplier,
             }),
           })
             .then(async (response) => {
@@ -572,6 +574,8 @@ const WordleGame: React.FC<WordleGameProps> = ({
               hintCost: hintUsed ? config.wordle.hintCost : 0,
               rewards: 0,
               metadata: { targetWord },
+              // Pass multiplier from context for optimization (server will validate it)
+              clientMultiplier: user?.multiplier,
             }),
           })
             .then(async (response) => {
@@ -1094,7 +1098,9 @@ const WordleGame: React.FC<WordleGameProps> = ({
                 pointsEarned={pointCalculation?.boostAmount || 0}
                 multiplier={pointCalculation?.multiplier || 1}
                 currentBalance={userBalance}
-                showMultiplier={!!pointCalculation && pointCalculation.multiplier > 1}
+                showMultiplier={
+                  !!pointCalculation && pointCalculation.multiplier > 1
+                }
                 totalSolv={user?.totalSOLV}
                 levelLabel={`L${level}`}
                 difficultyLabel={getDifficultyLabel(level)}
