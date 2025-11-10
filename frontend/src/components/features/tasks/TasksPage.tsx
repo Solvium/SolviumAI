@@ -160,22 +160,35 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
     );
   }, [currentMultiplier]);
 
-  // Calculate multiplier based on total active deposits and active contract multiplier
+  // Calculate EXPECTED multiplier for the typed additional deposit amount
+  // Preview should reflect the deposit the user is about to add, not current total
   const calculateMultiplierForAmount = (_amount: string) => {
-    try {
-      const totalDepositsYocto = userDepositSummary?.totalDeposits;
-      if (!totalDepositsYocto) return 1;
-      const totalActiveNear = parseFloat(totalDepositsYocto) / 1e24;
-      if (!isFinite(totalActiveNear) || totalActiveNear <= 0) return 1;
-      const effective = currentMultiplier * totalActiveNear;
-      return effective > 0 ? effective : 1;
-    } catch {
-      return 1;
-    }
+    const amt = parseFloat(_amount || "0");
+    if (!isFinite(amt) || amt <= 0) return 1;
+    const effective = currentMultiplier * amt;
+    return effective > 0 ? effective : 1;
   };
 
   // Get the calculated multiplier using active totals
   const calculatedMultiplier = calculateMultiplierForAmount(nearAmount);
+
+  const formattedNearAmount = (() => {
+    const amt = parseFloat(nearAmount || "0");
+    if (!Number.isFinite(amt) || amt <= 0) return nearAmount || "0";
+    return amt.toFixed(2);
+  })();
+
+  const rawPowerUpMultiplier =
+    (userDepositData as any)?.multiplierFactor ??
+    (userDepositSummary as any)?.multiplierFactor ??
+    (userDetails as any)?.multiplier ??
+    1;
+
+  const powerUpMultiplier = (() => {
+    const value = Number(rawPowerUpMultiplier);
+    if (!Number.isFinite(value) || value <= 0) return 1;
+    return value;
+  })();
 
   const fetchTasks = async () => {
     try {
@@ -933,11 +946,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
           <div className="bg-[#1a1a3e] border-2 border-purple-500/30 rounded-2xl p-4 text-center">
             <div className="flex items-center justify-center gap-2 mb-1">
               <div className="text-2xl font-bold">
-                {userDepositData?.multiplierFactor ||
-                  userDepositSummary?.multiplierFactor ||
-                  userDetails?.multiplier ||
-                  1}
-                x
+                {powerUpMultiplier.toFixed(2)}x
               </div>
               <button
                 onClick={async () => {
@@ -1029,24 +1038,24 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                     <span className="text-xs">⚡</span>
                   </div>
                   <span className="text-sm font-medium text-gray-300">
-                    Your Power ups for {nearAmount} NEAR:
+                    Your Power ups for {formattedNearAmount} NEAR:
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-bold text-blue-400">
-                    {calculatedMultiplier.toFixed(1)}x
+                    {calculatedMultiplier.toFixed(2)}x
                   </span>
                   {calculatedMultiplier > 1 && (
                     <span className="text-xs text-green-400 bg-green-500/20 px-2 py-1 rounded-full">
-                      +{(calculatedMultiplier - 1).toFixed(1)}x bonus
+                      +{(calculatedMultiplier - 1).toFixed(2)}x bonus
                     </span>
                   )}
                 </div>
               </div>
               {calculatedMultiplier > 1 && (
                 <div className="mt-2 text-xs text-gray-400">
-                  You'll earn {calculatedMultiplier.toFixed(1)}x more SOLV
-                  points with this deposit!
+                  You'll earn {calculatedMultiplier.toFixed(2)}x more SOLV
+                  points with this purchase!
                 </div>
               )}
             </div>
