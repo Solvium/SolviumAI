@@ -58,11 +58,11 @@ interface AIChatAgentProps {
 const CustomWelcomeMessage = () => {
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-1.5">
-        <div className="flex-shrink-0 w-5 h-5 bg-blue-600 rounded flex items-center justify-center">
+      <div className="flex items-start gap-1">
+        <div className="flex-shrink-0 w-4 h-4 bg-blue-600 rounded flex items-center justify-center">
           <svg
-            width="12"
-            height="12"
+            width="10"
+            height="10"
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
@@ -77,7 +77,7 @@ const CustomWelcomeMessage = () => {
             />
           </svg>
         </div>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="text-[10px] text-gray-500 mb-0.5">
             Livechat{" "}
             {new Date().toLocaleTimeString("en-US", {
@@ -85,18 +85,18 @@ const CustomWelcomeMessage = () => {
               minute: "2-digit",
             })}
           </div>
-          <div className="bg-blue-600 rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
-            <p className="text-xs text-white">
+          <div className="bg-blue-600 rounded-lg rounded-tl-none px-3 py-2 shadow-sm max-w-full">
+            <p className="bitte-message-content text-xs text-white">
               Hi, I am your solvium assistant
             </p>
           </div>
         </div>
       </div>
-      <div className="flex items-start gap-1.5">
-        <div className="flex-shrink-0 w-5 h-5 bg-blue-600 rounded flex items-center justify-center">
+      <div className="flex items-start gap-1">
+        <div className="flex-shrink-0 w-4 h-4 bg-blue-600 rounded flex items-center justify-center">
           <svg
-            width="12"
-            height="12"
+            width="10"
+            height="10"
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
@@ -111,7 +111,7 @@ const CustomWelcomeMessage = () => {
             />
           </svg>
         </div>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="text-[10px] text-gray-500 mb-0.5">
             Livechat{" "}
             {new Date().toLocaleTimeString("en-US", {
@@ -119,8 +119,8 @@ const CustomWelcomeMessage = () => {
               minute: "2-digit",
             })}
           </div>
-          <div className="bg-blue-600 rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
-            <p className="text-xs text-white">
+          <div className="bg-blue-600 rounded-lg rounded-tl-none px-3 py-2 shadow-sm max-w-full">
+            <p className="bitte-message-content text-xs text-white">
               You can say things like &quot;Send 10 SOLV to AjeMark&quot; or
               &quot;Check my balance.&quot;
             </p>
@@ -138,6 +138,25 @@ const CustomMessageContainer: ComponentType<MessageGroupComponentProps> = ({
   children,
   uniqueKey,
 }) => {
+  React.useEffect(() => {
+    // Inject styles for proper text wrapping in message bubbles
+    const styleId = "bitte-message-wrap";
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = `
+        .bitte-message-content {
+          word-wrap: break-word !important;
+          overflow-wrap: break-word !important;
+          word-break: break-word !important;
+          white-space: pre-wrap !important;
+          max-width: 100% !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
+
   const timestamp = new Date().toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
@@ -150,7 +169,9 @@ const CustomMessageContainer: ComponentType<MessageGroupComponentProps> = ({
           Visitor {timestamp}
         </div>
         <div className="bg-blue-600 rounded-lg rounded-tr-none px-3 py-2 max-w-[80%]">
-          <div className="text-xs text-white">{children}</div>
+          <div className="bitte-message-content text-xs text-white">
+            {children}
+          </div>
         </div>
         <div className="text-[10px] text-gray-500 mt-0.5">Read</div>
       </div>
@@ -158,11 +179,11 @@ const CustomMessageContainer: ComponentType<MessageGroupComponentProps> = ({
   }
 
   return (
-    <div key={uniqueKey} className="flex items-start gap-1.5">
-      <div className="flex-shrink-0 w-5 h-5 bg-blue-600 rounded flex items-center justify-center">
+    <div key={uniqueKey} className="flex items-start gap-1">
+      <div className="flex-shrink-0 w-4 h-4 bg-blue-600 rounded flex items-center justify-center">
         <svg
-          width="12"
-          height="12"
+          width="10"
+          height="10"
           viewBox="0 0 24 24"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
@@ -177,12 +198,14 @@ const CustomMessageContainer: ComponentType<MessageGroupComponentProps> = ({
           />
         </svg>
       </div>
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <div className="text-[10px] text-gray-500 mb-0.5">
           Livechat {timestamp}
         </div>
-        <div className="bg-blue-600 rounded-lg rounded-tl-none px-3 py-2 shadow-sm">
-          <div className="text-xs text-white">{children}</div>
+        <div className="bg-blue-600 rounded-lg rounded-tl-none px-3 py-2 shadow-sm max-w-full">
+          <div className="bitte-message-content text-xs text-white">
+            {children}
+          </div>
         </div>
       </div>
     </div>
@@ -204,44 +227,9 @@ const CustomChatContainer: ComponentType<ChatContainerComponentProps> = ({
   }, [children]);
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-3 space-y-3">
+    <div className="flex-1 overflow-y-auto bg-gray-50 pl-2 pr-3 pt-3 pb-3 space-y-3">
       {showWelcome && <CustomWelcomeMessage />}
       {children}
-    </div>
-  );
-};
-
-// Custom Input Container Component
-const CustomInputContainer: ComponentType<InputContainerProps> = ({
-  children,
-}) => {
-  React.useEffect(() => {
-    // Inject styles to ensure input is white
-    const styleId = "bitte-input-override";
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement("style");
-      style.id = styleId;
-      style.textContent = `
-        .bitte-input-container input {
-          background-color: white !important;
-          color: #111827 !important;
-        }
-        .bitte-input-container input::placeholder {
-          color: #9ca3af !important;
-        }
-      `;
-      document.head.appendChild(style);
-    }
-  }, []);
-
-  return (
-    <div className="bg-white border-t border-gray-200 p-3 flex-shrink-0">
-      <div className="bitte-input-container flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
-        {children}
-      </div>
-      <div className="text-center text-[10px] text-gray-500 mt-1.5">
-        Powered by <span className="font-semibold">Solvium Agent</span>
-      </div>
     </div>
   );
 };
@@ -305,6 +293,79 @@ const CustomLoadingIndicator: ComponentType<
             ></div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+};
+
+// Custom Input Container Component (Fixed)
+const CustomInputContainerFixed: ComponentType<InputContainerProps> = ({
+  children,
+}) => {
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    // Inject styles to ensure input is white and visible with smaller text
+    const styleId = "bitte-input-override";
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = `
+        .bitte-input-wrapper input,
+        .bitte-input-wrapper textarea {
+          background-color: white !important;
+          color: #111827 !important;
+          border: none !important;
+          outline: none !important;
+          font-size: 12px !important;
+          line-height: 1.5 !important;
+        }
+        .bitte-input-wrapper input::placeholder,
+        .bitte-input-wrapper textarea::placeholder {
+          color: #9ca3af !important;
+          font-size: 12px !important;
+        }
+        /* Target any input inside the wrapper with more specificity */
+        .bitte-input-wrapper * input,
+        .bitte-input-wrapper * textarea {
+          background-color: white !important;
+          color: #111827 !important;
+          font-size: 12px !important;
+        }
+        /* Even more specific selectors */
+        .bitte-input-wrapper input[type="text"],
+        .bitte-input-wrapper textarea {
+          background-color: white !important;
+          color: #111827 !important;
+          font-size: 12px !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Also directly style any input elements found in the wrapper
+    if (wrapperRef.current) {
+      const inputs = wrapperRef.current.querySelectorAll("input, textarea");
+      inputs.forEach((input) => {
+        (input as HTMLElement).style.backgroundColor = "white";
+        (input as HTMLElement).style.color = "#111827";
+        (input as HTMLElement).style.fontSize = "12px";
+        (input as HTMLElement).style.border = "none";
+        (input as HTMLElement).style.outline = "none";
+      });
+    }
+  }, [children]);
+
+  return (
+    <div className="bg-white border-t border-gray-200 p-3 flex-shrink-0">
+      <div
+        ref={wrapperRef}
+        className="bitte-input-wrapper flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5"
+      >
+        {children}
+      </div>
+      <div className="text-center text-[10px] text-gray-500 mt-1.5">
+        Powered by <span className="font-semibold">Solvium Agent</span>
       </div>
     </div>
   );
@@ -433,7 +494,7 @@ const AIChatAgent = ({ isOpen, onClose }: AIChatAgentProps) => {
                 customComponents: {
                   messageContainer: CustomMessageContainer,
                   chatContainer: CustomChatContainer,
-                  inputContainer: CustomInputContainer,
+                  inputContainer: CustomInputContainerFixed,
                   sendButtonComponent: CustomSendButton,
                   loadingIndicator: CustomLoadingIndicator,
                 },
