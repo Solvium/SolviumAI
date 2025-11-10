@@ -35,6 +35,17 @@ const Contest = () => {
   const [userPoints, setUserPoints] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
+  // Determine if current user is present on the leaderboard (after server-side eligibility filter)
+  const userIdNum = (() => {
+    if (!user?.id) return null as number | null;
+    return typeof user.id === "string"
+      ? parseInt(user.id)
+      : (user.id as number);
+  })();
+  const isUserOnLeaderboard = leaderboard.some((e) =>
+    userIdNum !== null ? e.userId === userIdNum : false
+  );
+
   // Compute time remaining to next Sunday midnight (local time)
   useEffect(() => {
     function nextSundayMidnight(): number {
@@ -82,6 +93,7 @@ const Contest = () => {
           {
             method: "GET",
             headers: { "Content-Type": "application/json" },
+            cache: "no-store",
           }
         );
 
@@ -266,8 +278,8 @@ const Contest = () => {
       </header>
 
       <main className="flex-1 overflow-y-auto px-4 pt-2 pb-20">
-        {/* Eligibility banner */}
-        {!Boolean(user?.isOfficial) && (
+        {/* Eligibility banner (show only when user is NOT on the filtered leaderboard) */}
+        {!isUserOnLeaderboard && (
           <div className="p-2 rounded-lg border border-yellow-400/30 bg-yellow-400/10 text-[11px] text-yellow-200 mb-4">
             Purchase a POWER UP multiplier (min 2 NEAR) to join this week's
             contest.

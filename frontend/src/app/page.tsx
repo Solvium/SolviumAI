@@ -70,7 +70,7 @@ function HomeShell() {
   // Handle initial route from Telegram start_param
   useEffect(() => {
     if (hasCheckedInitialRoute) return;
-    
+
     // Check immediately, don't wait for authentication
     const urlParams = getUrlParams();
     let route = urlParams.get("route");

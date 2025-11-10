@@ -1,6 +1,7 @@
 import { getCurrentYear, getISOWeekNumber } from "@/lib/utils/utils";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { getActiveDepositNear } from "@/lib/services/ServerMultiplierService";
 
 export async function POST(req: NextRequest) {
   const { type, userId, np: points } = await req.json();
@@ -133,19 +134,47 @@ export async function POST(req: NextRequest) {
         where: {
           weekNumber: currentWeek,
           year: currentYear,
-          points: { gt: 0 }, // must have earned points this week
-          user: { isOfficial: true }, // only qualified participants
+          points: { gt: 0 },
         },
         orderBy: { points: "desc" },
-        take: 50,
+        take: 200,
         include: {
           user: {
-            select: { id: true, name: true, username: true },
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              wallet: true,
+              chatId: true,
+            },
           },
         },
       });
 
-      return NextResponse.json({ weeklyScore }, { status: 200 });
+      const filtered = [];
+      for (const entry of weeklyScore) {
+        const accountId = await resolveAccountId(entry.user);
+        if (!accountId) continue;
+        const activeNear = await getActiveDepositNear(accountId);
+        if (activeNear >= 2) {
+          filtered.push(entry);
+        }
+        if (filtered.length >= 50) break;
+      }
+
+      return NextResponse.json(
+        { weeklyScore: filtered },
+        {
+          status: 200,
+          headers: {
+            "Cache-Control":
+              "no-store, no-cache, must-revalidate, proxy-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+            "Surrogate-Control": "no-store",
+          },
+        }
+      );
     } catch (error) {
       console.error("Error fetching weekly points:", error);
       return NextResponse.json(
@@ -171,18 +200,46 @@ export async function GET(req: any) {
           weekNumber: currentWeek,
           year: currentYear,
           points: { gt: 0 },
-          user: { isOfficial: true },
         },
         orderBy: { points: "desc" },
-        take: 50,
+        take: 200,
         include: {
           user: {
-            select: { id: true, name: true, username: true },
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              wallet: true,
+              chatId: true,
+            },
           },
         },
       });
 
-      return NextResponse.json({ weeklyScore }, { status: 200 });
+      const filtered = [];
+      for (const entry of weeklyScore) {
+        const accountId = await resolveAccountId(entry.user);
+        if (!accountId) continue;
+        const activeNear = await getActiveDepositNear(accountId);
+        if (activeNear >= 2) {
+          filtered.push(entry);
+        }
+        if (filtered.length >= 50) break;
+      }
+
+      return NextResponse.json(
+        { weeklyScore: filtered },
+        {
+          status: 200,
+          headers: {
+            "Cache-Control":
+              "no-store, no-cache, must-revalidate, proxy-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+            "Surrogate-Control": "no-store",
+          },
+        }
+      );
     } catch (error) {
       console.error("Error fetching weekly points:", error);
       return NextResponse.json(
@@ -197,4 +254,40 @@ export async function GET(req: any) {
   } catch (error) {
     return NextResponse.json({ error: "Internal Server Error" });
   }
+}
+
+async function resolveAccountId(user: {
+  wallet?: any;
+  chatId?: string | null;
+}): Promise<string | null> {
+  if (!user) return null;
+
+  let walletJson: any = undefined;
+  const rawWallet = user.wallet;
+  if (rawWallet) {
+    if (typeof rawWallet === "string") {
+      try {
+        walletJson = JSON.parse(rawWallet);
+      } catch {
+        walletJson = undefined;
+      }
+    } else {
+      walletJson = rawWallet;
+    }
+  }
+
+  let accountId =
+    walletJson?.account_id || walletJson?.accountId || walletJson?.near;
+
+  if (!accountId && user.chatId) {
+    const chatNumeric = parseInt(user.chatId, 10);
+    if (!Number.isNaN(chatNumeric)) {
+      const walletCache = await prisma.walletCache.findUnique({
+        where: { telegramUserId: chatNumeric },
+      });
+      accountId = walletCache?.accountId || accountId;
+    }
+  }
+
+  return accountId || null;
 }
