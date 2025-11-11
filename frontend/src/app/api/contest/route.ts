@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { getActiveDepositNear } from "@/lib/services/ServerMultiplierService";
 
+// Force dynamic rendering - prevent Vercel from caching this route
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function POST(req: NextRequest) {
   const { type, userId, np: points } = await req.json();
 
@@ -171,6 +175,8 @@ export async function POST(req: NextRequest) {
           headers: {
             "Cache-Control":
               "no-store, no-cache, must-revalidate, proxy-revalidate",
+            "CDN-Cache-Control": "no-store",
+            "Vercel-CDN-Cache-Control": "no-store",
             Pragma: "no-cache",
             Expires: "0",
             "Surrogate-Control": "no-store",
@@ -238,6 +244,8 @@ export async function GET(req: any) {
           headers: {
             "Cache-Control":
               "no-store, no-cache, must-revalidate, proxy-revalidate",
+            "CDN-Cache-Control": "no-store",
+            "Vercel-CDN-Cache-Control": "no-store",
             Pragma: "no-cache",
             Expires: "0",
             "Surrogate-Control": "no-store",
