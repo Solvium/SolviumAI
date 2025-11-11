@@ -146,7 +146,12 @@ export const useQuiz = () => {
         return false;
       }
     },
-    [user?.id, gameActions, quizState.dailyQuizzesCompleted, quizState.dailyLimit]
+    [
+      user?.id,
+      gameActions,
+      quizState.dailyQuizzesCompleted,
+      quizState.dailyLimit,
+    ]
   );
 
   const selectAnswer = useCallback(
@@ -206,7 +211,7 @@ export const useQuiz = () => {
       // For quiz games, rewards come from the validation result (result.points)
       // This is the base points before multiplier
       const baseRewards = result.points || 0;
-      
+
       const gameCompleted = await gameActions.completeGame({
         gameId: quizState.currentQuiz.id,
         isCorrect,
@@ -262,9 +267,7 @@ export const useQuiz = () => {
     if (!user?.id) return false;
 
     try {
-      const response = await fetch(
-        `/api/quiz/daily-limit?userId=${user.id}`
-      );
+      const response = await fetch(`/api/quiz/daily-limit?userId=${user.id}`);
       if (response.ok) {
         const data = await response.json();
 
@@ -303,7 +306,15 @@ export const useQuiz = () => {
       checkDailyLimit,
       setTimeRemaining,
     }),
-    [gameActions, fetchQuiz, selectAnswer, submitAnswer, nextQuiz, checkDailyLimit, setTimeRemaining]
+    [
+      gameActions,
+      fetchQuiz,
+      selectAnswer,
+      submitAnswer,
+      nextQuiz,
+      checkDailyLimit,
+      setTimeRemaining,
+    ]
   );
 
   return {

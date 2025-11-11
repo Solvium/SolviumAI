@@ -125,7 +125,7 @@ export const useGame = (gameType: string) => {
         // Use provided rewards if available (e.g., from quiz validation)
         // Otherwise calculate rewards based on game config
         let totalRewards = gameData.rewards;
-        
+
         if (totalRewards === undefined || totalRewards === null) {
           // Calculate rewards based on game config
           const gameConfig = config[gameType as keyof typeof config];

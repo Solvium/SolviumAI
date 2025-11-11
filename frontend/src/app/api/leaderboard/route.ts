@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// Force dynamic rendering - prevent Vercel from caching this route
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
   try {
     // Get top users ranked by totalSOLV only
@@ -62,11 +66,23 @@ export async function GET() {
       joinDate: user.createdAt,
     }));
 
-    return NextResponse.json({
-      success: true,
-      leaderboard: formattedLeaderboard,
-      total: formattedLeaderboard.length,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        leaderboard: formattedLeaderboard,
+        total: formattedLeaderboard.length,
+      },
+      {
+        headers: {
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "CDN-Cache-Control": "no-store",
+          "Vercel-CDN-Cache-Control": "no-store",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   } catch (error) {
     console.error("Leaderboard API error:", error);
     return NextResponse.json(
@@ -74,7 +90,13 @@ export async function GET() {
         success: false,
         error: "Failed to fetch leaderboard data",
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          Pragma: "no-cache",
+        },
+      }
     );
   }
 }

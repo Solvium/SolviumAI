@@ -18,7 +18,10 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "check:duplicate-quizzes": "tsx scripts/check-duplicate-quizzes.ts",
+    "remove:duplicate-quizzes": "tsx scripts/remove-duplicate-quizzes.ts",
+    "list:all-quizzes": "tsx scripts/list-all-quizzes.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.29",
