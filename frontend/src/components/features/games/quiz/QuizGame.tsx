@@ -51,15 +51,17 @@ const QuizGame: React.FC<QuizGameProps> = ({
     points: number;
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingNext, setIsLoadingNext] = useState(false);
 
   // Don't auto-start the game - let user choose settings first
 
-  // Check daily limit on mount and when quiz state changes
+  // Check daily limit on mount only
   useEffect(() => {
     if (user?.id) {
       actions.checkDailyLimit();
     }
-  }, [user?.id, actions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]); // Only depend on user?.id, not actions (which changes on every render)
 
   // Fetch effective user multiplier (totalNear * contractMul) on component mount
   useEffect(() => {
@@ -223,20 +225,25 @@ const QuizGame: React.FC<QuizGameProps> = ({
   };
 
   const handleNextQuestion = async () => {
-    const success = await actions.nextQuiz();
-    if (success) {
-      setCurrentQuestionIndex((prev) => prev + 1);
-      setSelectedAnswer(null);
-      setIsCorrect(null);
-      setShowHint(false);
-      setShowResult(false);
-      setPointsEarned(0);
-      setValidationResult(null);
-      setIsSubmitting(false); // Reset loading state
-      setTimer(60); // Reset timer to 60 seconds
-    } else {
-      setGameOver(true);
-      toast.success(`Quiz completed! You earned ${score} coins!`);
+    setIsLoadingNext(true);
+    try {
+      const success = await actions.nextQuiz();
+      if (success) {
+        setCurrentQuestionIndex((prev) => prev + 1);
+        setSelectedAnswer(null);
+        setIsCorrect(null);
+        setShowHint(false);
+        setShowResult(false);
+        setPointsEarned(0);
+        setValidationResult(null);
+        setIsSubmitting(false); // Reset loading state
+        setTimer(60); // Reset timer to 60 seconds
+      } else {
+        setGameOver(true);
+        toast.success(`Quiz completed! You earned ${score} coins!`);
+      }
+    } finally {
+      setIsLoadingNext(false);
     }
   };
 
@@ -590,9 +597,17 @@ const QuizGame: React.FC<QuizGameProps> = ({
 
             <button
               onClick={handleNextQuestion}
-              className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-bold text-base hover:scale-105 transition-transform mt-4"
+              disabled={isLoadingNext}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-bold text-base hover:scale-105 transition-transform mt-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2 min-w-[140px]"
             >
-              Next Question
+              {isLoadingNext ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Loading...</span>
+                </>
+              ) : (
+                "Next Question"
+              )}
             </button>
           </div>
         ) : (

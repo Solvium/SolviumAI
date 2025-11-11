@@ -122,36 +122,42 @@ export const useGame = (gameType: string) => {
       }));
 
       try {
-        // Calculate rewards based on game config
-        const gameConfig = config[gameType as keyof typeof config];
-        if (!gameConfig) {
-          throw new Error(`No config found for game type: ${gameType}`);
+        // Use provided rewards if available (e.g., from quiz validation)
+        // Otherwise calculate rewards based on game config
+        let totalRewards = gameData.rewards;
+        
+        if (totalRewards === undefined || totalRewards === null) {
+          // Calculate rewards based on game config
+          const gameConfig = config[gameType as keyof typeof config];
+          if (!gameConfig) {
+            throw new Error(`No config found for game type: ${gameType}`);
+          }
+
+          const baseReward = gameConfig.baseWinSOLV || 20;
+          const difficultyMultiplier =
+            gameConfig.difficultyMultiplier?.[
+              gameData.difficulty as keyof typeof gameConfig.difficultyMultiplier
+            ] || 1;
+          const levelMultiplier =
+            1 + (gameData.level || 1) * (gameConfig.levelMultiplier || 0.1);
+
+          // Calculate time bonus
+          let timeBonus = 0;
+          if (completionTime < 30000) {
+            // Under 30 seconds
+            timeBonus = gameConfig.fastCompletionBonus?.under30s || 0;
+          } else if (completionTime < 60000) {
+            // Under 1 minute
+            timeBonus = gameConfig.fastCompletionBonus?.under60s || 0;
+          } else if (completionTime < 120000) {
+            // Under 2 minutes
+            timeBonus = gameConfig.fastCompletionBonus?.under120s || 0;
+          }
+
+          totalRewards = Math.round(
+            (baseReward + timeBonus) * difficultyMultiplier * levelMultiplier
+          );
         }
-
-        const baseReward = gameConfig.baseWinSOLV || 20;
-        const difficultyMultiplier =
-          gameConfig.difficultyMultiplier?.[
-            gameData.difficulty as keyof typeof gameConfig.difficultyMultiplier
-          ] || 1;
-        const levelMultiplier =
-          1 + gameData.level * (gameConfig.levelMultiplier || 0.1);
-
-        // Calculate time bonus
-        let timeBonus = 0;
-        if (completionTime < 30000) {
-          // Under 30 seconds
-          timeBonus = gameConfig.fastCompletionBonus?.under30s || 0;
-        } else if (completionTime < 60000) {
-          // Under 1 minute
-          timeBonus = gameConfig.fastCompletionBonus?.under60s || 0;
-        } else if (completionTime < 120000) {
-          // Under 2 minutes
-          timeBonus = gameConfig.fastCompletionBonus?.under120s || 0;
-        }
-
-        const totalRewards = Math.round(
-          (baseReward + timeBonus) * difficultyMultiplier * levelMultiplier
-        );
 
         // Submit game completion
         const response = await fetch("/api/games/complete", {

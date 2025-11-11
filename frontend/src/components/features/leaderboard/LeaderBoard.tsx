@@ -10,47 +10,45 @@ const LeaderBoard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch real leaderboard data
-  const fetchLeaderboard = async (showLoading = true) => {
-    try {
-      if (showLoading) setLoading(true);
-      setError(null);
-
-      // Force fresh fetch by adding cache-busting timestamp
-      const response = await fetch(`/api/leaderboard`);
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch leaderboard");
-      }
-      const data = await response.json();
-      if (!data?.success) {
-        throw new Error(data?.error || "Leaderboard API error");
-      }
-      const toNum = (v: any) => {
-        const n = Number(v);
-        return Number.isFinite(n) ? n : 0;
-      };
-      const sorted = Array.isArray(data.leaderboard)
-        ? [...data.leaderboard].sort((a: any, b: any) => {
-            const aSolv = toNum(a.totalSOLV);
-            const bSolv = toNum(b.totalSOLV);
-            return bSolv - aSolv; // always sort by SOLV only
-          })
-        : [];
-      setLeader(sorted);
-    } catch (err) {
-      console.error("Error fetching leaderboard:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to fetch leaderboard"
-      );
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  };
-
-  // Fetch on mount and set up auto-refresh
+  // Fetch leaderboard data on page load
   useEffect(() => {
-    fetchLeaderboard(true);
+    const fetchLeaderboard = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await fetch(`/api/leaderboard`);
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch leaderboard");
+        }
+        const data = await response.json();
+        if (!data?.success) {
+          throw new Error(data?.error || "Leaderboard API error");
+        }
+        const toNum = (v: any) => {
+          const n = Number(v);
+          return Number.isFinite(n) ? n : 0;
+        };
+        const sorted = Array.isArray(data.leaderboard)
+          ? [...data.leaderboard].sort((a: any, b: any) => {
+              const aSolv = toNum(a.totalSOLV);
+              const bSolv = toNum(b.totalSOLV);
+              return bSolv - aSolv;
+            })
+          : [];
+        setLeader(sorted);
+      } catch (err) {
+        console.error("Error fetching leaderboard:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to fetch leaderboard"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLeaderboard();
   }, []);
 
   // Use real data if available, otherwise show empty state or error

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGame } from "./useGame";
 
@@ -61,41 +61,13 @@ export const useQuiz = () => {
       }
 
       try {
-        // Check daily limit before fetching a new quiz
-        const limitResponse = await fetch(
-          `/api/quiz/daily-limit?userId=${user.id}`
-        );
-
-        if (!limitResponse.ok) {
-          if (limitResponse.status === 403) {
-            const limitError = await limitResponse.json().catch(() => ({}));
-            const completedToday = limitError?.completedToday ?? 0;
-            setQuizState((prev) => ({
-              ...prev,
-              dailyQuizzesCompleted: completedToday,
-              dailyLimit: limitError?.limit ?? prev.dailyLimit,
-            }));
-            gameActions.setError(
-              limitError?.error ||
-                "Daily quiz limit reached. Please come back tomorrow."
-            );
-            return false;
-          }
-          console.error("Failed to check daily quiz limit");
-        } else {
-          const limitData = await limitResponse.json();
-          setQuizState((prev) => ({
-            ...prev,
-            dailyLimit: limitData?.limit ?? prev.dailyLimit,
-            dailyQuizzesCompleted: limitData?.completedToday ?? 0,
-          }));
-
-          if (!limitData?.hasRemaining) {
-            gameActions.setError(
-              "Daily quiz limit reached (50 per day). Please come back tomorrow."
-            );
-            return false;
-          }
+        // Check daily limit using current state (already fetched by checkDailyLimit)
+        // Only make API call if we haven't checked recently or state is stale
+        if (quizState.dailyQuizzesCompleted >= quizState.dailyLimit) {
+          gameActions.setError(
+            "Daily quiz limit reached (50 per day). Please come back tomorrow."
+          );
+          return false;
         }
 
         // First, check if we need to trigger daily quiz generation
@@ -174,7 +146,7 @@ export const useQuiz = () => {
         return false;
       }
     },
-    [user?.id, gameActions]
+    [user?.id, gameActions, quizState.dailyQuizzesCompleted, quizState.dailyLimit]
   );
 
   const selectAnswer = useCallback(
@@ -231,10 +203,16 @@ export const useQuiz = () => {
       }));
 
       // Complete the game
+      // For quiz games, rewards come from the validation result (result.points)
+      // This is the base points before multiplier
+      const baseRewards = result.points || 0;
+      
       const gameCompleted = await gameActions.completeGame({
         gameId: quizState.currentQuiz.id,
         isCorrect,
+        won: isCorrect, // Add won field
         score: result.points,
+        rewards: baseRewards, // Pass the base rewards from validation
         timeTaken,
         selectedAnswer: quizState.selectedAnswer,
         correctAnswer: result.correctAnswer,
@@ -314,10 +292,9 @@ export const useQuiz = () => {
     }
   }, [user?.id]);
 
-  return {
-    gameState,
-    quizState,
-    actions: {
+  // Memoize actions object to prevent unnecessary re-renders
+  const actions = useMemo(
+    () => ({
       ...gameActions,
       fetchQuiz,
       selectAnswer,
@@ -325,6 +302,13 @@ export const useQuiz = () => {
       nextQuiz,
       checkDailyLimit,
       setTimeRemaining,
-    },
+    }),
+    [gameActions, fetchQuiz, selectAnswer, submitAnswer, nextQuiz, checkDailyLimit, setTimeRemaining]
+  );
+
+  return {
+    gameState,
+    quizState,
+    actions,
   };
 };
