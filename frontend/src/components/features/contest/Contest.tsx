@@ -89,10 +89,16 @@ const Contest = () => {
       try {
         setLoading(true);
         const response = await fetch(
-          `/api/contest?type=get%20leaderboard&userId=${user.id}`,
+          `/api/contest?type=get%20leaderboard&userId=${
+            user.id
+          }&t=${Date.now()}`,
           {
             method: "GET",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-cache",
+              Pragma: "no-cache",
+            },
             cache: "no-store",
           }
         );
@@ -145,7 +151,19 @@ const Contest = () => {
     fetchLeaderboard();
     // Refresh every 60 seconds; depend only on user id to avoid re-creating intervals
     const interval = setInterval(fetchLeaderboard, 60000);
-    return () => clearInterval(interval);
+
+    // Refetch when page becomes visible (user navigates back)
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user?.id) {
+        fetchLeaderboard();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [user?.id]);
 
   // Get top 3 for podium (display order: #2, #1, #3 so winner is centered)
