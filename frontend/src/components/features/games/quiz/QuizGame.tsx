@@ -227,20 +227,20 @@ const QuizGame: React.FC<QuizGameProps> = ({
   const handleNextQuestion = async () => {
     setIsLoadingNext(true);
     try {
-      const success = await actions.nextQuiz();
-      if (success) {
-        setCurrentQuestionIndex((prev) => prev + 1);
-        setSelectedAnswer(null);
-        setIsCorrect(null);
-        setShowHint(false);
-        setShowResult(false);
-        setPointsEarned(0);
-        setValidationResult(null);
-        setIsSubmitting(false); // Reset loading state
-        setTimer(60); // Reset timer to 60 seconds
-      } else {
-        setGameOver(true);
-        toast.success(`Quiz completed! You earned ${score} coins!`);
+    const success = await actions.nextQuiz();
+    if (success) {
+      setCurrentQuestionIndex((prev) => prev + 1);
+      setSelectedAnswer(null);
+      setIsCorrect(null);
+      setShowHint(false);
+      setShowResult(false);
+      setPointsEarned(0);
+      setValidationResult(null);
+      setIsSubmitting(false); // Reset loading state
+      setTimer(60); // Reset timer to 60 seconds
+    } else {
+      setGameOver(true);
+      toast.success(`Quiz completed! You earned ${score} coins!`);
       }
     } finally {
       setIsLoadingNext(false);

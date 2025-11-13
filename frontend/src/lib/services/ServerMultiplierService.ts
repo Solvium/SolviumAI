@@ -126,7 +126,7 @@ async function computeEffectiveMultiplier(accountId: string): Promise<number> {
 
   // Get contract multiplier factor
   const contractMul = await fetchContractMultiplier(accountId);
-
+  
   // USER MULTIPLIER = totalNear * contractMul
   // This is the effective multiplier from getUserDepositSummary
   // Example: 2.1 NEAR * 10 contractMul = 21x user multiplier

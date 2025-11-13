@@ -23,6 +23,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import GameHUD from "../common/GameHUD";
 import {
   validateWordFrontend,
+  validateWordBackend,
   getDailyWord,
 } from "@/lib/wordle/geminiWordFetcher";
 import WordleRoomModal from "./WordleRoomModal";
@@ -402,11 +403,28 @@ const WordleGame: React.FC<WordleGameProps> = ({
       console.log(`📖 Validation result: ${isValid}`);
 
       if (!isValid) {
-        console.log(`❌ Invalid word: "${guessUpper}"`);
-        toast.error("Word not found in dictionary!");
-        return;
+        console.log(
+          `❌ Frontend dictionary rejected "${guessUpper}", attempting backend validation...`
+        );
+        try {
+          const backendValid = await validateWordBackend(guessUpper);
+          console.log(
+            `📡 Backend validation result for "${guessUpper}": ${backendValid}`
+          );
+          if (!backendValid) {
+            toast.error("Word not found in dictionary!");
+            return;
+          }
+        } catch (error) {
+          console.error(
+            `⚠️ Backend validation failed for "${guessUpper}":`,
+            error
+          );
+          toast.error("Unable to validate word. Please try again.");
+          return;
+        }
       }
-      console.log(`✅ Valid word: "${guessUpper}"`);
+      console.log(`✅ Word validated: "${guessUpper}"`);
 
       // Prefer local validation if we have the answer
       if (targetWord) {
