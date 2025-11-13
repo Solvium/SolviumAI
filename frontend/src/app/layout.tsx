@@ -9,6 +9,7 @@ import { GameProvider } from "@/contexts/GameContext";
 import { WalletPortfolioProvider } from "@/contexts/WalletPortfolioContext";
 import TelegramProvider from "@/components/providers/TelegramProvider";
 import { RefSDKInitializer } from "@/components/providers/RefSDKProvider";
+import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -32,7 +33,10 @@ export default function RootLayout({
                 <PrivateKeyWalletProvider>
                   <WalletPortfolioProvider>
                     <GameConfigProvider>
-                      <GameProvider>{children}</GameProvider>
+                      <GameProvider>
+                        {children}
+                        <Toaster />
+                      </GameProvider>
                     </GameConfigProvider>
                   </WalletPortfolioProvider>
                 </PrivateKeyWalletProvider>
