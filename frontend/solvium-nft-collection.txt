@@ -1,0 +1,115 @@
+Solvium NFT Collection: The Cypher Squad
+
+This collection features three tiers of puzzle-solving AI avatars for the Solvium platform, each representing a different level of mastery and rarity.
+
+NFT Image
+
+Suggested Name
+
+Physical Description
+
+Rarity Tier
+
+AQADFQxrG0BJ2VB-.png
+
+The Oracle
+
+A portrait-style avatar with a dark, regal appearance. The mask features a wide, rounded visor with glowing cyan eyes and a white trim. It wears a voluminous, dark blue or charcoal cloak with a high, ribbed collar, revealing a futuristic, blue and white chest piece. The head features sharp, dark, spiky hair and subtle cat-ear-like accents on the main headset unit. A small, stylized microphone boom is attached to the headset. The demeanor is serious and expert.
+
+Tier 1: Apex Algorithm (Legendary)
+
+AQADEwxrG0BJ2VB-.png
+
+The Interceptor
+
+A full-body avatar featuring a smooth, dark blue mask with glowing cyan eyes. It wears an oversized, textured bright orange hoodie with blue drawstrings and dark blue pants. The head is topped with a distinct, white, spiky, lotus-petal-like hairstyle. Blue headphones rest on the head. The overall aesthetic is vibrant and energetic.
+
+Tier 2: Elite Solver (Rare)
+
+AQADFAxrG0BJ2VB-.png
+
+The Puzzlemaster
+
+A portrait-style avatar with a minimalist, deep-blue mask and glowing cyan eyes. It wears a soft, textured pink hoodie, the color contrasting sharply with the purple accents on the mask and the patch on the chest. The head is adorned with bright purple and white cat-like ears and matching headphones. The avatar offers a friendly, open-palmed gesture. The background is a soft pink, highlighting its accessible and friendly appearance.
+
+Tier 3: Core Contender (Common)
+
+Tier Breakdown
+
+💎 Tier 1: Apex Algorithm (Legendary) - The Oracle (AQADFQxrG0BJ2VB-.png)
+
+Suggested Supply: 55 / 555
+
+Importance: The "Labyrinth Master" is a true partner to the Solvium team. This is the highest level of access, granting unique influence, maximum in-game benefits, and the largest economic upside.
+
+Physical Feature: A portrait-style avatar with a dark, regal appearance. The mask features a wide, rounded visor with glowing cyan eyes and a white trim. It wears a voluminous, dark blue or charcoal cloak with a high, ribbed collar, revealing a futuristic, blue and white chest piece. The head features sharp, dark, spiky hair and subtle cat-ear-like accents on the main headset unit. A small, stylized microphone boom is attached to the headset. The demeanor is serious and expert.
+
+Features & Utility (Includes all Core and Elite benefits, plus):
+
+Base Points Boost (Max): Upgrades to a permanent +10% base multiplier on all points earned from all sources.
+
+Free Challenge Entry: A permanent 100% discount (free entry) on the 2 NEAR token fee for all Weekly Challenges and standard Tournaments.
+
+Permanent Premium Spin Wheel: The Spin Wheel is always unlocked (no power-up purchase required) and is permanently upgraded to the "Premium" version, featuring "Legendary Prize" slots.
+
+Power-Up Rebate (Max): Upgrades to 20% of any power-up purchase cost back as bonus in-game points.
+
+AI Engine Contribution: The ability to submit puzzle questions, answers, and Wordle seeds to a special "Oracle" pool for review and potential inclusion in the proprietary AI engine.
+
+Creator Credit: An in-Game "Labyrinth Master" credit for any submitted content that is used.
+
+Future Whitelist: A guaranteed free mint or automatic whitelist spot for all future Solvium-native NFT collections.
+
+Founders' Council: Exclusive access to a private "Oracle Council" channel with the Solvium core team for high-level, direct feedback.
+
+Airdrop Multiplier (Max): Upgrades to a 2.0x multiplier on the base "Genesis" allocation for any future $SOLV (or equivalent) token airdrop.
+
+✨ Tier 2: Elite Solver (Rare) - The Interceptor (AQADEwxrG0BJ2VB-.png)
+
+Suggested Supply: 150 / 555
+
+Importance: The "Cipher Breaker" is an active participant and a core supporter. This NFT enhances the daily puzzle-solving experience and provides significant economic advantages for engaged players.
+
+Physical Feature: A full-body avatar featuring a smooth, dark blue mask with glowing cyan eyes. It wears an oversized, textured bright orange hoodie with blue drawstrings and dark blue pants. The head is topped with a distinct, white, spiky, lotus-petal-like hairstyle. Blue headphones rest on the head. The overall aesthetic is vibrant and energetic.
+
+Features & Utility (Includes all Core Contender benefits, plus):
+
+Base Points Boost: Upgrades to a permanent +5% base multiplier on all points earned from games and tasks.
+
+Challenge Discount: A permanent 25% discount on the 2 NEAR token entry fee for all Weekly Challenges (e.g., entry costs 1.5 NEAR).
+
+Upgraded Spin Wheel: When you purchase a power-up, your Spin Wheel is upgraded to include a guaranteed "Rare Prize" slot.
+
+Power-Up Rebate: Upgrades to 10% of any power-up purchase cost back as bonus in-game points.
+
+Governance Input: Access to exclusive polls and feedback sessions on new game features and community initiatives.
+
+Exclusive Cosmetic: One exclusive (NEP-171) in-game profile cosmetic (e.g., a "Cipher" banner or avatar frame).
+
+Airdrop Multiplier: Upgrades to a 1.5x multiplier on the base "Genesis" allocation for any future token airdrop.
+
+🌟 Tier 3: Core Contender (Common) - The Puzzlemaster (AQADFAxrG0BJ2VB-.png)
+
+Suggested Supply: 350 / 555
+
+Importance: This is the key that identifies you as a Solvium Founder. It grants you access to the core community, signals your status, and provides your first set of in-game and platform perks.
+
+Physical Feature: A portrait-style avatar with a minimalist, deep-blue mask and glowing cyan eyes. It wears a soft, textured pink hoodie, the color contrasting sharply with the purple accents on the mask and the patch on the chest. The head is adorned with bright purple and white cat-like ears and matching headphones. The avatar offers a friendly, open-palmed gesture. The background is a soft pink, highlighting its accessible and friendly appearance.
+
+Features & Utility:
+
+Founder Status: A permanent "Founder" or "Genesis" role in the official Solvium Discord and Telegram.
+
+In-Game Flair: A unique, non-tradable "Genesis Key" profile badge visible to all players.
+
+Beta Access: Priority access to test new AI-driven puzzle games (from the Q1 2026 roadmap) before they are released to the public.
+
+Free Weekly Spin: Receive one (1) free "Spin Wheel Token" per week.
+
+Base Points Boost: A permanent +2% base multiplier on all points earned from games and tasks.
+
+Power-Up Rebate: Receive 5% of any power-up purchase cost back as bonus in-game points.
+
+Airdrop Multiplier: A 1.2x multiplier on the base "Genesis" allocation for any future $SOLV (or equivalent) token airdrop.
+
+https://t.me/solviumquizbot

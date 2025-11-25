@@ -10,6 +10,7 @@ import { WalletPortfolioProvider } from "@/contexts/WalletPortfolioContext";
 import TelegramProvider from "@/components/providers/TelegramProvider";
 import { RefSDKInitializer } from "@/components/providers/RefSDKProvider";
 import { Toaster } from "@/components/ui/sonner";
+import MintCypherCTA from "@/components/common/MintCypherCTA";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -34,6 +35,7 @@ export default function RootLayout({
                   <WalletPortfolioProvider>
                     <GameConfigProvider>
                       <GameProvider>
+                        <MintCypherCTA />
                         {children}
                         <Toaster />
                       </GameProvider>
