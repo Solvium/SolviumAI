@@ -1923,6 +1923,10 @@ async def handle_token_selection(update, context):
                         InlineKeyboardButton("1000", callback_data="token_amount_1000"),
                     ],
                     [
+                        InlineKeyboardButton("5000", callback_data="token_amount_5000"),
+                        InlineKeyboardButton("10000", callback_data="token_amount_10000"),
+                    ],
+                    [
                         InlineKeyboardButton(
                             "Custom amount", callback_data="token_amount_custom"
                         ),
