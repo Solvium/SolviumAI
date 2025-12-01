@@ -18,7 +18,7 @@ interface QuizGameProps {
 }
 
 const QuizGame: React.FC<QuizGameProps> = ({
-  onEarnCoins = () => {},
+  onEarnCoins = () => { },
   onClose,
 }) => {
   const router = useRouter();
@@ -196,9 +196,9 @@ const QuizGame: React.FC<QuizGameProps> = ({
           // This is the correct multiplier that matches the server-side calculation
           const multiplier = Number(
             effectiveUserMultiplier ||
-              currentMultiplier ||
-              user?.multiplier ||
-              1
+            currentMultiplier ||
+            user?.multiplier ||
+            1
           );
           const earned = Math.round(
             base * (isFinite(multiplier) ? multiplier : 1)
@@ -227,20 +227,20 @@ const QuizGame: React.FC<QuizGameProps> = ({
   const handleNextQuestion = async () => {
     setIsLoadingNext(true);
     try {
-    const success = await actions.nextQuiz();
-    if (success) {
-      setCurrentQuestionIndex((prev) => prev + 1);
-      setSelectedAnswer(null);
-      setIsCorrect(null);
-      setShowHint(false);
-      setShowResult(false);
-      setPointsEarned(0);
-      setValidationResult(null);
-      setIsSubmitting(false); // Reset loading state
-      setTimer(60); // Reset timer to 60 seconds
-    } else {
-      setGameOver(true);
-      toast.success(`Quiz completed! You earned ${score} coins!`);
+      const success = await actions.nextQuiz();
+      if (success) {
+        setCurrentQuestionIndex((prev) => prev + 1);
+        setSelectedAnswer(null);
+        setIsCorrect(null);
+        setShowHint(false);
+        setShowResult(false);
+        setPointsEarned(0);
+        setValidationResult(null);
+        setIsSubmitting(false); // Reset loading state
+        setTimer(60); // Reset timer to 60 seconds
+      } else {
+        setGameOver(true);
+        toast.success(`Quiz completed! You earned ${score} coins!`);
       }
     } finally {
       setIsLoadingNext(false);
@@ -313,7 +313,7 @@ const QuizGame: React.FC<QuizGameProps> = ({
   // Show game start screen
   if (!gameState.gameStarted || !quizState.currentQuiz) {
     return (
-      <div className="h-screen bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] relative overflow-hidden">
+      <div className="h-[calc(100vh-150px)] bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] relative overflow-hidden">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {[...Array(20)].map((_, i) => (
             <div
@@ -336,94 +336,102 @@ const QuizGame: React.FC<QuizGameProps> = ({
           ))}
         </div>
 
-        <div className="relative z-10 flex flex-col items-center justify-center h-full text-white p-4">
+        <div className="relative z-10 flex flex-col items-center h-full text-white p-4 pt-16">
           <h1
-            className="text-4xl font-bold text-white tracking-wider mb-8"
+            className="text-2xl font-bold text-white tracking-wider mb-8 absolute top-4 left-0 right-0 text-center pointer-events-none"
             style={{
-              fontFamily: "monospace",
-              textShadow: "0 0 10px rgba(255,255,255,0.5)",
+              fontFamily: "'Pixelify Sans', monospace",
+              letterSpacing: "0.1em",
             }}
           >
-            QUIZ CHALLENGE
+            QUIZ
           </h1>
 
-          {/* Daily Limit Status */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 mb-4 w-full max-w-md">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-300">
-                Daily Quizzes
-              </span>
-              <span className="text-sm font-bold text-white">
-                {quizState.dailyQuizzesCompleted} / {quizState.dailyLimit}
-              </span>
-            </div>
-            <div className="w-full bg-gray-700 rounded-full h-2.5">
-              <div
-                className={`h-2.5 rounded-full transition-all ${
-                  quizState.dailyQuizzesCompleted >= quizState.dailyLimit
-                    ? "bg-red-500"
-                    : quizState.dailyQuizzesCompleted >=
-                      quizState.dailyLimit * 0.8
-                    ? "bg-yellow-500"
-                    : "bg-green-500"
-                }`}
-                style={{
-                  width: `${Math.min(
-                    (quizState.dailyQuizzesCompleted / quizState.dailyLimit) *
-                      100,
-                    100
-                  )}%`,
-                }}
-              />
-            </div>
-            {quizState.dailyQuizzesCompleted >= quizState.dailyLimit && (
-              <p className="text-xs text-red-400 mt-2 text-center">
-                Daily limit reached. Come back tomorrow!
-              </p>
-            )}
-          </div>
+          {/* Mission Control Card */}
+          <div className="bg-[#000024] backdrop-blur-md rounded-3xl p-5 mb-6 w-full max-w-md border border-[#1C97D8] shadow-2xl relative overflow-hidden group mt-8">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
-          {/* Settings */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-8 w-full max-w-md">
-            <h3 className="text-xl font-semibold text-white mb-4 text-center">
-              Game Settings
-            </h3>
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Difficulty
-                </label>
-                <select
-                  value={difficulty}
-                  onChange={(e) => setDifficulty(e.target.value)}
-                  className="w-full p-2 rounded-lg bg-white/20 text-white border border-white/30 focus:ring-2 focus:ring-purple-400 focus:border-transparent"
-                >
-                  <option value="easy">Easy</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
-                </select>
+            {/* Daily Progress Section */}
+            <div className="relative z-10 mb-5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                  Daily Progress
+                </span>
+                <span className="text-xs rounded-full font-bold text-white bg-white/10 px-2 py-1">
+                  {quizState.dailyQuizzesCompleted}/{quizState.dailyLimit}
+                </span>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Category
-                </label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full p-2 rounded-lg bg-white/20 text-white border border-white/30 focus:ring-2 focus:ring-purple-400 focus:border-transparent"
-                >
-                  <option value="all">All Categories</option>
-                  <option value="science">Science</option>
-                  <option value="history">History</option>
-                  <option value="geography">Geography</option>
-                  <option value="sports">Sports</option>
-                  <option value="entertainment">Entertainment</option>
-                  <option value="technology">Technology</option>
-                  <option value="literature">Literature</option>
-                  <option value="art">Art</option>
-                  <option value="music">Music</option>
-                  <option value="general">General</option>
-                </select>
+              <div className="w-full bg-black/30 border border-[#1C97D8] rounded-full h-2 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${quizState.dailyQuizzesCompleted >= quizState.dailyLimit
+                    ? "bg-gradient-to-r from-red-500 to-red-600"
+                    : "bg-gradient-to-r from-blue-400 to-purple-500"
+                    }`}
+                  style={{
+                    width: `${Math.min(
+                      (quizState.dailyQuizzesCompleted / quizState.dailyLimit) * 100,
+                      100
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-5"></div>
+
+            {/* Settings Section */}
+            <div className="relative z-10 space-y-5">
+              {/* Difficulty Segmented Control */}
+              <div className="bg-black/20 border border-[#1C97D8] p-1 rounded-full flex relative">
+                {["easy", "medium", "hard"].map((diff) => (
+                  <button
+                    key={diff}
+                    onClick={() => setDifficulty(diff)}
+                    className={`flex-1 py-2.5 rounded-full text-xs font-bold capitalize transition-all duration-300 relative z-10 ${difficulty === diff
+                      ? "text-white shadow-sm"
+                      : "text-gray-400 hover:text-gray-200"
+                      }`}
+                  >
+                    {diff}
+                    {difficulty === diff && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#0084FF] to-[#0084FF] rounded-full -z-10 shadow-lg"></div>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Categories Horizontal Scroll */}
+              <div className="relative">
+                <div className="flex overflow-x-auto pb-2 gap-2 no-scrollbar mask-linear-fade">
+                  {[
+                    { id: "all", label: "All" },
+                    { id: "science", label: "Science" },
+                    { id: "history", label: "History" },
+                    { id: "geography", label: "Geo" },
+                    { id: "sports", label: "Sports" },
+                    { id: "entertainment", label: "Entmt" },
+                    { id: "technology", label: "Tech" },
+                    { id: "literature", label: "Lit" },
+                    { id: "art", label: "Art" },
+                    { id: "music", label: "Music" },
+                    { id: "general", label: "General" },
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setCategory(cat.id)}
+                      className={`whitespace-nowrap py-2 px-4 rounded-full text-xs font-bold transition-all duration-300 border ${category === cat.id
+                        ? "bg-white text-[#002799] border-white shadow-lg scale-105"
+                        : "bg-white/5 border-white/5 text-gray-400 hover:bg-white/10 hover:border-white/20"
+                        }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+                {/* Fade indicators for scroll */}
+                <div className="absolute right-0 top-0 bottom-2 w-8 bg-gradient-to-l from-[#1a1f3a] to-transparent pointer-events-none"></div>
               </div>
             </div>
           </div>
@@ -434,17 +442,25 @@ const QuizGame: React.FC<QuizGameProps> = ({
               quizState.dailyQuizzesCompleted >= quizState.dailyLimit ||
               gameState.isLoading
             }
-            className={`px-8 py-4 rounded-xl font-bold text-lg transition-all ${
-              quizState.dailyQuizzesCompleted >= quizState.dailyLimit
-                ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                : "bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:scale-105 transition-transform"
-            }`}
+            className={`w-full max-w-md py-2 rounded-xl mt-6 font-bold text-lg transition-all shadow-xl ${quizState.dailyQuizzesCompleted >= quizState.dailyLimit
+              ? "bg-gray-700 text-gray-500 cursor-not-allowed"
+              : "bg-[#0084FF] border-2 border-[#B5F6FD] text-white hover:scale-[1.02] hover:shadow-[#4E07AD]/25 active:scale-[0.98]"
+              }`}
           >
-            {quizState.dailyQuizzesCompleted >= quizState.dailyLimit
-              ? "Daily Limit Reached"
-              : gameState.isLoading
-              ? "Loading..."
-              : "Start Quiz"}
+            {quizState.dailyQuizzesCompleted >= quizState.dailyLimit ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="text-xl">🔒</span> Daily Limit Reached
+              </span>
+            ) : gameState.isLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                Loading...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                Start Quiz
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -477,18 +493,7 @@ const QuizGame: React.FC<QuizGameProps> = ({
         ))}
       </div>
 
-      <GameHUD
-        score={score}
-        pointsEarned={pointsEarned}
-        multiplier={effectiveUserMultiplier}
-        currentBalance={userCoins}
-        showMultiplier={effectiveUserMultiplier > 1}
-        totalSolv={user?.totalSOLV}
-        levelLabel={`L${user?.level ?? 1}`}
-        difficultyLabel={
-          difficulty.charAt(0).toUpperCase() + difficulty.slice(1)
-        }
-      />
+
       <div className="relative z-10 flex items-center justify-between px-4 py-3">
         {onClose && (
           <button
@@ -501,14 +506,28 @@ const QuizGame: React.FC<QuizGameProps> = ({
         )}
 
         <h1
-          className="text-2xl font-bold text-white tracking-wider ml-16"
+          className="text-2xl font-bold text-white tracking-wider ml-10"
           style={{
-            fontFamily: "monospace",
-            textShadow: "0 0 10px rgba(255,255,255,0.5)",
+            fontFamily: "'Pixelify Sans', monospace",
+            letterSpacing: "0.1em",
           }}
         >
           QUIZ
         </h1>
+
+        <GameHUD
+          score={score}
+          pointsEarned={pointsEarned}
+          multiplier={effectiveUserMultiplier}
+          currentBalance={userCoins}
+          showMultiplier={effectiveUserMultiplier > 1}
+          totalSolv={user?.totalSOLV}
+          levelLabel={`L${user?.level ?? 1}`}
+          difficultyLabel={
+            difficulty.charAt(0).toUpperCase() + difficulty.slice(1)
+          }
+          isFixed={false}
+        />
 
         {!selectedAnswer && !gameOver && (
           <button
@@ -518,265 +537,246 @@ const QuizGame: React.FC<QuizGameProps> = ({
             <img
               src="/assets/quiz/hint-button.svg"
               alt="Use Hint"
-              className="w-24 h-auto"
+              className="h-9 w-auto"
             />
           </button>
         )}
         {(selectedAnswer || gameOver) && <div className="w-16" />}
       </div>
 
-      {!gameOver ? (
-        showResult ? (
-          <div className="relative z-10 px-4 text-center space-y-4">
-            <div className="text-6xl mb-4">
-              {validationResult?.isCorrect ? "🎉" : "❌"}
-            </div>
-            <h2 className="text-white text-2xl font-bold">
-              {validationResult?.isCorrect ? "Correct!" : "Incorrect!"}
-            </h2>
-
-            {validationResult?.isCorrect && pointsEarned > 0 && (
-              <div className="bg-blue-900/50 rounded-xl p-4 border border-blue-700/50 space-y-2">
-                <p className="text-white text-xl font-bold">
-                  +{pointsEarned} SOLV earned!
-                </p>
-
-                {/* Multiplier Breakdown */}
-                <div className="mt-3 pt-3 border-t border-blue-700/50 space-y-1.5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-blue-300">Base Points:</span>
-                    <span className="text-white font-semibold">
-                      {validationResult.points ||
-                        quizState.currentQuiz?.points ||
-                        0}
-                    </span>
+      {
+        !gameOver ? (
+          showResult ? (
+            <div className="relative z-10 px-4 flex flex-col items-center justify-center min-h-[50vh]">
+              <div className="bg-[#000024]/80 backdrop-blur-xl rounded-3xl p-8 w-full max-w-sm border border-[#1C97D8] shadow-2xl flex flex-col items-center text-center space-y-6 animate-in fade-in zoom-in duration-300">
+                <div className="relative">
+                  <div className={`text-7xl filter drop-shadow-lg animate-bounce ${validationResult?.isCorrect ? "grayscale-0" : "grayscale"}`}>
+                    {validationResult?.isCorrect ? "🎉" : "❌"}
                   </div>
-
-                  {effectiveUserMultiplier > 1 && (
-                    <>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-blue-300">Your Multiplier:</span>
-                        <span className="text-yellow-400 font-semibold">
-                          {effectiveUserMultiplier.toFixed(1)}x
-                        </span>
-                      </div>
-
-                      {currentMultiplier > 1 &&
-                        effectiveUserMultiplier !== currentMultiplier && (
-                          <div className="flex items-center justify-between text-xs text-blue-400">
-                            <span>(Contract: {currentMultiplier}x)</span>
-                            <span className="text-gray-400">
-                              Active deposits boost applied
-                            </span>
-                          </div>
-                        )}
-
-                      <div className="flex items-center justify-between text-sm pt-1 mt-1 border-t border-blue-700/30">
-                        <span className="text-blue-300 font-medium">
-                          Total Earned:
-                        </span>
-                        <span className="text-green-400 font-bold text-base">
-                          {pointsEarned} SOLV
-                        </span>
-                      </div>
-                    </>
+                  {validationResult?.isCorrect && (
+                    <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full animate-ping opacity-75"></div>
                   )}
                 </div>
-              </div>
-            )}
 
-            {!validationResult?.isCorrect && (
-              <p className="text-white text-lg">Better luck next time!</p>
-            )}
+                <div className="space-y-2">
+                  <h2 className={`text-3xl font-bold tracking-wide ${validationResult?.isCorrect ? "text-green-400" : "text-red-500"}`}>
+                    {validationResult?.isCorrect ? "Correct!" : "Incorrect"}
+                  </h2>
+                  {!validationResult?.isCorrect && (
+                    <p className="text-gray-300 text-sm font-medium">
+                      Don't give up! Keep going!
+                    </p>
+                  )}
+                </div>
 
-            <p className="text-gray-400 text-sm">
-              {validationResult?.isCorrect
-                ? `Total Score: ${score}`
-                : `Points for this question: 0`}
-            </p>
+                {validationResult?.isCorrect && pointsEarned > 0 ? (
+                  <div className="w-full bg-blue-900/30 rounded-2xl p-4 border border-blue-500/30 space-y-3">
+                    <div className="flex items-center justify-center gap-2">
+                      <img src="/assets/games/Solvium-coin.svg" alt="Coin" className="w-6 h-6" />
+                      <span className="text-2xl font-bold text-white">+{pointsEarned}</span>
+                      <span className="text-blue-300 font-medium">SOLV</span>
+                    </div>
 
-            <button
-              onClick={handleNextQuestion}
-              disabled={isLoadingNext}
-              className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-bold text-base hover:scale-105 transition-transform mt-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2 min-w-[140px]"
-            >
-              {isLoadingNext ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Loading...</span>
-                </>
-              ) : (
-                "Next Question"
-              )}
-            </button>
-          </div>
-        ) : (
-          <div className="relative z-10 px-4 pb-8 overflow-y-auto max-h-[calc(100vh-120px)]">
-            <div className="flex justify-center mb-3">
-              <div className="relative w-12 h-12">
-                <svg className="w-12 h-12 transform -rotate-90">
-                  <circle
-                    cx="24"
-                    cy="24"
-                    r="20"
-                    stroke="rgba(255,255,255,0.2)"
-                    strokeWidth="3"
-                    fill="none"
-                  />
-                  <circle
-                    cx="24"
-                    cy="24"
-                    r="20"
-                    stroke="white"
-                    strokeWidth="3"
-                    fill="none"
-                    strokeDasharray={`${(timer / 60) * 125.6} 125.6`}
-                    className="transition-all duration-1000"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-sm">
-                  {String(timer).padStart(2, "0")}
+                    {effectiveUserMultiplier > 1 && (
+                      <div className="flex items-center justify-center gap-2 text-xs bg-blue-500/20 py-1 px-3 rounded-full mx-auto w-fit">
+                        <span className="text-blue-300">Multiplier Active:</span>
+                        <span className="text-yellow-400 font-bold">{effectiveUserMultiplier.toFixed(1)}x</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="w-full bg-red-900/20 rounded-2xl p-3 border border-red-500/20">
+                    <p className="text-red-300 text-sm font-medium">
+                      +0 Points
+                    </p>
+                  </div>
+                )}
+
+                <div className="w-full pt-2">
+                  <button
+                    onClick={handleNextQuestion}
+                    disabled={isLoadingNext}
+                    className="w-full bg-gradient-to-r from-[#0084FF] to-[#0044FF] text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-blue-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isLoadingNext ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <span>Loading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Next Question</span>
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
+          ) : (
+            <div className="relative z-10 px-4 pb-4 overflow-y-auto max-h-[calc(100vh-120px)]">
+              <div className="flex justify-center mb-2">
+                <div className="relative w-10 h-10">
+                  <svg className="w-10 h-10 transform -rotate-90">
+                    <circle
+                      cx="20"
+                      cy="20"
+                      r="18"
+                      stroke="rgba(255,255,255,0.2)"
+                      strokeWidth="3"
+                      fill="none"
+                    />
+                    <circle
+                      cx="20"
+                      cy="20"
+                      r="18"
+                      stroke="white"
+                      strokeWidth="3"
+                      fill="none"
+                      strokeDasharray={`${(timer / 60) * 113} 113`}
+                      className="transition-all duration-1000"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-xs">
+                    {String(timer).padStart(2, "0")}
+                  </div>
+                </div>
+              </div>
 
-            <div className="mb-3">
-              <img
-                src="/mona-lisa-inspired.jpg"
-                alt="Question"
-                className="w-full h-32 object-cover rounded-xl"
-              />
-            </div>
+              <div className="mb-2">
+                <img
+                  src="/mona-lisa-inspired.jpg"
+                  alt="Question"
+                  className="w-full h-24 object-cover rounded-xl"
+                />
+              </div>
 
-            <div className="mb-4">
-              <p className="text-gray-400 text-xs mb-1">
-                Question {currentQuestionIndex + 1} of {quizState.dailyLimit}
-              </p>
-              <h2 className="text-white text-lg font-bold leading-tight">
-                {currentQuestion.question}
-              </h2>
-            </div>
+              <div className="mb-3">
+                <p className="text-gray-400 text-[10px] mb-0.5">
+                  Question {currentQuestionIndex + 1} of {quizState.dailyLimit}
+                </p>
+                <h2 className="text-white text-base font-bold leading-tight">
+                  {currentQuestion.question}
+                </h2>
+              </div>
 
-            <div className="space-y-2.5">
-              {currentQuestion.options.map((option) => {
-                const isSelected = selectedAnswer === option;
-                const isCorrectAnswer =
-                  option === currentQuestion.correctAnswer;
-                const showCorrect = isSelected && isCorrectAnswer;
-                const showIncorrect = isSelected && !isCorrectAnswer;
+              <div className="space-y-2">
+                {currentQuestion.options.map((option) => {
+                  const isSelected = selectedAnswer === option;
+                  const isCorrectAnswer =
+                    option === currentQuestion.correctAnswer;
+                  const showCorrect = isSelected && isCorrectAnswer;
+                  const showIncorrect = isSelected && !isCorrectAnswer;
 
-                return (
-                  <button
-                    key={option}
-                    onClick={() => handleAnswer(option)}
-                    disabled={quizState.isAnswered}
-                    className={`w-full p-3 rounded-xl font-semibold text-base transition-all ${
-                      showCorrect
+                  return (
+                    <button
+                      key={option}
+                      onClick={() => handleAnswer(option)}
+                      disabled={quizState.isAnswered}
+                      className={`w-full p-2 rounded-xl font-semibold text-sm transition-all ${showCorrect
                         ? "bg-green-500 text-white"
                         : showIncorrect
-                        ? "bg-red-500 text-white"
-                        : selectedAnswer === option
-                        ? "bg-blue-500 text-white"
-                        : "bg-white text-black"
-                    }`}
-                    style={{
-                      boxShadow: showCorrect
-                        ? "0 0 20px rgba(34, 197, 94, 0.5)"
-                        : selectedAnswer === option
-                        ? "0 0 15px rgba(59, 130, 246, 0.5)"
-                        : "none",
-                    }}
+                          ? "bg-red-500 text-white"
+                          : selectedAnswer === option
+                            ? "bg-blue-500 text-white"
+                            : "bg-white text-black"
+                        }`}
+                      style={{
+                        boxShadow: showCorrect
+                          ? "0 0 20px rgba(34, 197, 94, 0.5)"
+                          : selectedAnswer === option
+                            ? "0 0 15px rgba(59, 130, 246, 0.5)"
+                            : "none",
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        {showCorrect && (
+                          <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center mr-2">
+                            <svg
+                              className="w-2.5 h-2.5 text-white"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={3}
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                          </div>
+                        )}
+                        <span className="flex-1 text-center">{option}</span>
+                        {showCorrect && <div className="w-4" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {selectedAnswer && !quizState.isAnswered && (
+                <div className="mt-4">
+                  <button
+                    onClick={handleSubmitAnswer}
+                    disabled={isSubmitting}
+                    className="w-full bg-gradient-to-r from-[#0084FF] to-[#0044FF] text-white py-3 rounded-xl font-bold text-base shadow-lg shadow-blue-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    <div className="flex items-center justify-between">
-                      {showCorrect && (
-                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center mr-2">
-                          <svg
-                            className="w-3 h-3 text-white"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={3}
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
-                        </div>
-                      )}
-                      <span className="flex-1 text-center">{option}</span>
-                      {showCorrect && <div className="w-5" />}
-                    </div>
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <span>Submitting...</span>
+                      </>
+                    ) : (
+                      "Submit Answer"
+                    )}
                   </button>
-                );
-              })}
-            </div>
-
-            {selectedAnswer && isCorrect && (
-              <div className="mt-4 text-center space-y-2">
-                <p className="text-white text-sm">
-                  That's the right Answer - +{currentQuestion.points} Solv
-                </p>
-                <div className="flex justify-center">
-                  <img
-                    src="/assets/games/Solvium-coin.svg"
-                    alt="Coin"
-                    className="w-10 h-10 animate-bounce"
-                  />
                 </div>
-              </div>
-            )}
+              )}
 
-            {selectedAnswer === "TIME_UP" && (
-              <div className="mt-4 text-center space-y-2">
-                <p className="text-red-400 text-sm">
-                  Time's up! Moving to next question...
-                </p>
-              </div>
-            )}
+              {selectedAnswer && isCorrect && (
+                <div className="mt-4 text-center space-y-2">
+                  <p className="text-white text-sm">
+                    That's the right Answer - +{currentQuestion.points} Solv
+                  </p>
+                  <div className="flex justify-center">
+                    <img
+                      src="/assets/games/Solvium-coin.svg"
+                      alt="Coin"
+                      className="w-10 h-10 animate-bounce"
+                    />
+                  </div>
+                </div>
+              )}
 
-            {selectedAnswer && (
-              <div className="mt-4 flex justify-center">
-                <button
-                  onClick={handleSubmitAnswer}
-                  disabled={isSubmitting}
-                  className={`px-6 py-3 rounded-xl font-bold text-base transition-all duration-200 ${
-                    isSubmitting
-                      ? "bg-gray-500 cursor-not-allowed"
-                      : "bg-gradient-to-r from-blue-500 to-purple-600 hover:scale-105 hover:shadow-lg"
-                  }`}
-                >
-                  {isSubmitting ? (
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Submitting...</span>
-                    </div>
-                  ) : (
-                    "Submit Answer"
-                  )}
-                </button>
-              </div>
-            )}
+              {selectedAnswer === "TIME_UP" && (
+                <div className="mt-4 text-center space-y-2">
+                  <p className="text-red-400 text-sm">
+                    Time's up! Moving to next question...
+                  </p>
+                </div>
+              )}
+            </div>
+          )
+        ) : (
+          <div className="relative z-10 px-4 text-center space-y-4">
+            <div className="text-5xl mb-3">🎉</div>
+            <h2 className="text-white text-2xl font-bold">Quiz Complete!</h2>
+            <p className="text-white text-lg">
+              Your score: <span className="font-bold">{score}</span>
+            </p>
+            <p className="text-gray-400 text-sm">Hints used: {hintsUsed}</p>
+
+            <button
+              onClick={handlePlayAgain}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-bold text-base hover:scale-105 transition-transform"
+            >
+              Play Again
+            </button>
           </div>
-        )
-      ) : (
-        <div className="relative z-10 px-4 text-center space-y-4">
-          <div className="text-5xl mb-3">🎉</div>
-          <h2 className="text-white text-2xl font-bold">Quiz Complete!</h2>
-          <p className="text-white text-lg">
-            Your score: <span className="font-bold">{score}</span>
-          </p>
-          <p className="text-gray-400 text-sm">Hints used: {hintsUsed}</p>
-
-          <button
-            onClick={handlePlayAgain}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-bold text-base hover:scale-105 transition-transform"
-          >
-            Play Again
-          </button>
-        </div>
-      )}
+        )}
 
       <div
         className="absolute bottom-0 left-0 right-0 h-64 pointer-events-none"

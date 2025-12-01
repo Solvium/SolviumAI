@@ -26,7 +26,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} max-w-[630px] mx-auto`}>
+      <body className={`${inter.className} max-w-[630px] mx-auto h-screen flex flex-col overflow-hidden`}>
         <RefSDKInitializer>
           <TelegramProvider>
             <SimpleWalletProvider>

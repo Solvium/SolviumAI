@@ -291,7 +291,7 @@ export const WheelOfFortune = () => {
         localStorage.setItem("unclaimedPrizes", JSON.stringify(merged));
         localStorage.removeItem("unclaimedPrize");
       }
-    } catch {}
+    } catch { }
 
     // Load unclaimed prizes list
     try {
@@ -303,7 +303,7 @@ export const WheelOfFortune = () => {
         setIsClaimed(false);
         setShowWin(true);
       }
-    } catch {}
+    } catch { }
   }, [nearConnected, nearAddress]); // Removed user dependency to fix warning
 
   const handleClaimRewardImproved = async ({
@@ -606,7 +606,7 @@ export const WheelOfFortune = () => {
         const updated = [...prev, prizeObj];
         try {
           localStorage.setItem("unclaimedPrizes", JSON.stringify(updated));
-        } catch {}
+        } catch { }
         // Set current to the first item if not already set
         setWinner(updated[0]?.winner || selectedPrize);
         setPrizeNumber(updated[0]?.prizeNumber ?? newPrizeNumber);
@@ -615,7 +615,7 @@ export const WheelOfFortune = () => {
       try {
         // Keep legacy key in sync for safety (not required)
         localStorage.setItem("unclaimedPrize", JSON.stringify(prizeObj));
-      } catch {}
+      } catch { }
 
       // Refresh contract spins after spin completion
       await fetchContractSpins();
@@ -676,14 +676,14 @@ export const WheelOfFortune = () => {
             setTimeout(() => {
               setShowClaimedMessage(false);
             }, 5000);
-          } catch {}
+          } catch { }
           localStorage.setItem("lastClaimed", Date.now().toString());
           // Pop the first unclaimed prize and persist
           setUnclaimedList((prev) => {
             const [, ...rest] = prev;
             try {
               localStorage.setItem("unclaimedPrizes", JSON.stringify(rest));
-            } catch {}
+            } catch { }
             if (rest.length > 0) {
               // Move to next prize automatically and keep modal open
               setWinner(rest[0].winner);
@@ -700,7 +700,7 @@ export const WheelOfFortune = () => {
             }
             try {
               localStorage.removeItem("unclaimedPrize");
-            } catch {}
+            } catch { }
             return rest;
           });
           setIsClaimLoading(false);
@@ -797,8 +797,7 @@ export const WheelOfFortune = () => {
           weeklyPoints: Math.max(0, (originalWeekly ?? 0) - pointsCost),
         });
         console.log(
-          `Deducted ${pointsCost} points. New balance: ${
-            originalPoints - pointsCost
+          `Deducted ${pointsCost} points. New balance: ${originalPoints - pointsCost
           }`
         );
       } catch (e) {
@@ -877,7 +876,7 @@ export const WheelOfFortune = () => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-80px)] w-full h-full relative overflow-auto">
+    <div className="min-h-[calc(100vh-140px)] w-full h-full relative overflow-hidden p">
       {/* Background with floating dots */}
       <div className="absolute inset-0">
         <Image
@@ -939,7 +938,7 @@ export const WheelOfFortune = () => {
 
             {/* Spinning Wheel */}
             <div className="relative flex flex-col items-center justify-center">
-              <div className="relative z-20 w-[250px] h-[250px] md:w-[383px] md:h-[377px]">
+              <div className="relative z-20 w-[200px] h-[200px] md:w-[383px] md:h-[377px]">
                 <Image
                   src="/assets/wheel/spin-wheel-new.svg"
                   alt="Spin Wheel"
@@ -974,19 +973,18 @@ export const WheelOfFortune = () => {
                     <div
                       className="h-[70%] sm:h-[80%] ml-[2px] bg-[#FF309B] rounded-full shadow-lg"
                       style={{
-                        width: `${
-                          (Math.max(
-                            0,
-                            Math.min(
-                              3,
-                              Number(
-                                isLoadingSpins ? 0 : contractSpinsAvailable
-                              )
+                        width: `${(Math.max(
+                          0,
+                          Math.min(
+                            3,
+                            Number(
+                              isLoadingSpins ? 0 : contractSpinsAvailable
                             )
-                          ) /
-                            3) *
+                          )
+                        ) /
+                          3) *
                           100
-                        }%`,
+                          }%`,
                         boxShadow: "0 0 15px rgba(34, 211, 238, 0.6)",
                       }}
                     />
@@ -1013,7 +1011,7 @@ export const WheelOfFortune = () => {
         {/* Mascot and Spins Left */}
 
         {/* Spin Button */}
-        <div className="mb-2 md:mt-6 mt-6 flex justify-center">
+        <div className="mb-2 md:mt-6 mt-0 flex justify-center">
           {contractSpinsAvailable <= 0 ? (
             <div className="text-center">
               <div className="text-white text-lg font-bold mb-1">
@@ -1034,15 +1032,14 @@ export const WheelOfFortune = () => {
                   isSpinLocked ||
                   hasUnclaimedPrize
                 }
-                className={`w-[287px] h-20  flex items-center justify-center text-white font-bold transition-all duration-300 ${
-                  isSpinning ||
+                className={`w-[287px] h-20  flex items-center justify-center text-white font-bold transition-all duration-300 ${isSpinning ||
                   isLoadingSpins ||
                   isPurchasing ||
                   isSpinLocked ||
                   hasUnclaimedPrize
-                    ? "opacity-50 cursor-not-allowed"
-                    : "hover:scale-105"
-                }`}
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:scale-105"
+                  }`}
                 style={{
                   backgroundImage: "url('/assets/wheel/spin-wheel.svg')",
                   backgroundSize: "contain",
@@ -1100,11 +1097,10 @@ export const WheelOfFortune = () => {
             <button
               onClick={() => handleBuySpinWithPoints("500")}
               disabled={isPurchasing}
-              className={`w-full py-2 bg-transparent border-2 border-blue-500 rounded-2xl transition-all ${
-                isPurchasing && purchasingKey === "points-500"
-                  ? "opacity-60 cursor-not-allowed"
-                  : "hover:bg-blue-500/10"
-              }`}
+              className={`w-full py-2 bg-transparent border-2 border-blue-500 rounded-2xl transition-all ${isPurchasing && purchasingKey === "points-500"
+                ? "opacity-60 cursor-not-allowed"
+                : "hover:bg-blue-500/10"
+                }`}
             >
               {isPurchasing && purchasingKey === "points-500" ? (
                 <span className="inline-flex items-center justify-center gap-2 text-white">
@@ -1122,11 +1118,10 @@ export const WheelOfFortune = () => {
             <button
               onClick={() => handleBuySpinWithPoints("1000")}
               disabled={isPurchasing}
-              className={`w-full py-2 px-2 bg-transparent border-2 border-blue-500 rounded-2xl transition-all ${
-                isPurchasing && purchasingKey === "points-1000"
-                  ? "opacity-60 cursor-not-allowed"
-                  : "hover:bg-blue-500/10"
-              }`}
+              className={`w-full py-2 px-2 bg-transparent border-2 border-blue-500 rounded-2xl transition-all ${isPurchasing && purchasingKey === "points-1000"
+                ? "opacity-60 cursor-not-allowed"
+                : "hover:bg-blue-500/10"
+                }`}
             >
               {isPurchasing && purchasingKey === "points-1000" ? (
                 <span className="inline-flex items-center justify-center gap-2 text-white">
@@ -1144,11 +1139,10 @@ export const WheelOfFortune = () => {
             <button
               onClick={() => handleBuySpinWithPoints("1500")}
               disabled={isPurchasing}
-              className={`w-full py-2 bg-transparent border-2 border-blue-500 rounded-2xl transition-all ${
-                isPurchasing && purchasingKey === "points-1500"
-                  ? "opacity-60 cursor-not-allowed"
-                  : "hover:bg-blue-500/10"
-              }`}
+              className={`w-full py-2 bg-transparent border-2 border-blue-500 rounded-2xl transition-all ${isPurchasing && purchasingKey === "points-1500"
+                ? "opacity-60 cursor-not-allowed"
+                : "hover:bg-blue-500/10"
+                }`}
             >
               {isPurchasing && purchasingKey === "points-1500" ? (
                 <span className="inline-flex items-center justify-center gap-2 text-white">

@@ -900,7 +900,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
       {/* Fixed Header with Background */}
       <div className="sticky top-0 z-30 bg-gradient-to-b from-[#0A0A1F] via-[#0A0A1F] to-[#0A0A1F]/95 backdrop-blur-sm px-4 pt-6 pb-4">
         <div className="relative">
-          <div className="absolute top-0 left-0 z-20">
+          <div className="absolute top-1 left-0 z-20">
             <button
               onClick={() => {
                 goBack();
@@ -908,13 +908,13 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
               className="flex items-center gap-2 text-white hover:text-blue-300 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span className="text-[8px] lg:text-lg font-semibold">Back</span>
+              <span className="text-sm lg:text-lg font-semibold">Back</span>
             </button>
           </div>
 
           <div className="absolute top-0 left-20 z-20">
             <h1
-              className="text-xl md:text-4xl font-bold text-white tracking-[0.3em] drop-shadow-2xl"
+              className="text-2xl md:text-4xl font-bold text-white tracking-[0.3em] drop-shadow-2xl"
               style={{
                 fontFamily: "'Pixelify Sans', monospace",
                 letterSpacing: "0.1em",
@@ -932,20 +932,20 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
 
       <div className="px-4 mb-6">
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-gradient-to-br from-pink-500 to-purple-600 rounded-2xl p-4 text-center">
-            <div className="text-2xl font-bold">
+          <div className="bg-gradient-to-br from-pink-500 to-purple-600 rounded-2xl p-2 sm:p-4 text-center flex flex-col justify-center items-center h-full">
+            <div className="text-sm sm:text-xl md:text-2xl font-bold break-all">
               {(userDetails as any)?.totalSOLV ?? 0}
             </div>
 
-            <div className="text-xs text-white/80 mt-1">SOLV Points</div>
+            <div className="text-[10px] sm:text-xs text-white/80 mt-1">SOLV Points</div>
           </div>
-          <div className="bg-[#1a1a3e] border-2 border-blue-500/30 rounded-2xl p-4 text-center">
-            <div className="text-2xl font-bold">{nearBalance}</div>
-            <div className="text-xs text-gray-400 mt-1">NEAR</div>
+          <div className="bg-[#1a1a3e] border-2 border-blue-500/30 rounded-2xl p-2 sm:p-4 text-center flex flex-col justify-center items-center h-full">
+            <div className="text-sm sm:text-xl md:text-2xl font-bold break-all">{nearBalance}</div>
+            <div className="text-[10px] sm:text-xs text-gray-400 mt-1">NEAR</div>
           </div>
-          <div className="bg-[#1a1a3e] border-2 border-purple-500/30 rounded-2xl p-4 text-center">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <div className="text-2xl font-bold">
+          <div className="bg-[#1a1a3e] border-2 border-purple-500/30 rounded-2xl p-2 sm:p-4 text-center flex flex-col justify-center items-center h-full">
+            <div className="flex items-center justify-center gap-1 sm:gap-2 mb-1 flex-wrap">
+              <div className="text-sm sm:text-xl md:text-2xl font-bold">
                 {powerUpMultiplier.toFixed(2)}x
               </div>
               <button
@@ -970,13 +970,13 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                     console.log("⚠️ Cannot refresh - wallet not connected");
                   }
                 }}
-                className="text-xs bg-purple-500/20 hover:bg-purple-500/30 p-1 rounded-full transition-colors"
+                className="text-[10px] sm:text-xs bg-purple-500/20 hover:bg-purple-500/30 p-1 rounded-full transition-colors"
                 title="Refresh my multiplier from contract"
               >
                 🔄
               </button>
             </div>
-            <div className="text-xs text-gray-400">Power Ups</div>
+            <div className="text-[10px] sm:text-xs text-gray-400">Power Ups</div>
           </div>
         </div>
       </div>
@@ -988,14 +988,14 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
               <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">
                 <span className="text-lg">💰</span>
               </div>
-              <h3 className="text-lg font-bold">
+              <h3 className="text-lg sm:text-xl font-bold">
                 Purchase Power Ups to Multiply Points
               </h3>
             </div>
             <Info className="w-5 h-5 text-gray-400" />
           </div>
 
-          <div className="flex gap-2 mb-4">
+          <div className="flex flex-col sm:flex-row gap-2 mb-4">
             <input
               type="number"
               step="0.001"
@@ -1019,13 +1019,13 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
             <button
               onClick={handleDeposit}
               disabled={depositLoading || contractLoading || !isConnected}
-              className="bg-gradient-to-r w-[100px] from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 px-[fit-content] py-3 rounded-xl font-bold transition-all disabled:opacity-50"
+              className="bg-gradient-to-r w-full sm:w-[100px] from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 px-[fit-content] py-3 rounded-xl font-bold transition-all disabled:opacity-50"
             >
               {depositLoading || contractLoading
                 ? "..."
                 : !isConnected
-                ? "Connect Wallet"
-                : "Deposit"}
+                  ? "Connect Wallet"
+                  : "Deposit"}
             </button>
           </div>
 
@@ -1077,14 +1077,13 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                   <button
                     key={tier.amount}
                     onClick={() => setNearAmount(tier.amount.toString())}
-                    className={`${
-                      isSelected
-                        ? "bg-gradient-to-r from-blue-500/30 to-purple-500/30 border-blue-500/50"
-                        : "bg-[#0f0f2a] hover:bg-[#1a1a3e] border-gray-700 hover:border-blue-500/50"
-                    } border rounded-xl px-3 py-2 text-sm font-medium transition-all flex items-center justify-between`}
+                    className={`${isSelected
+                      ? "bg-gradient-to-r from-blue-500/30 to-purple-500/30 border-blue-500/50"
+                      : "bg-[#0f0f2a] hover:bg-[#1a1a3e] border-gray-700 hover:border-blue-500/50"
+                      } border rounded-xl p-2 text-xs sm:text-sm font-medium transition-all flex flex-row items-center justify-between gap-1 sm:gap-0 whitespace-nowrap`}
                   >
                     <span>{tier.amount} NEAR</span>
-                    <span className="bg-gradient-to-r from-blue-400 to-cyan-500 text-white text-xs px-2 py-1 rounded-full font-bold">
+                    <span className="bg-gradient-to-r from-blue-400 to-cyan-500 text-white text-[10px] sm:text-xs px-2 py-1 rounded-full font-bold">
                       +{tier.multiplier.toFixed(1)}x
                     </span>
                   </button>
@@ -1120,20 +1119,19 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
       <div className="px-4 mb-6">
         <div className="flex items-center gap-2 mb-4">
           <Star className="w-5 h-5 text-yellow-400" />
-          <h2 className="text-xl font-bold">Gaming Tasks</h2>
+          <h2 className="text-lg sm:text-xl font-bold">Gaming Tasks</h2>
         </div>
 
         <div className="space-y-3">
           {gamingTasks.map((task) => (
             <div
               key={task.id}
-              className={`rounded-2xl p-5 border-2 ${
-                task.completed
-                  ? "bg-gradient-to-br from-pink-500 to-green-600 border-green-400/30"
-                  : task.category === "special"
+              className={`rounded-2xl p-5 border-2 ${task.completed
+                ? "bg-gradient-to-br from-pink-500 to-green-600 border-green-400/30"
+                : task.category === "special"
                   ? "bg-gradient-to-br from-pink-500 to-purple-600 border-pink-400/30"
                   : "bg-gradient-to-br from-blue-600/40 to-blue-800/40 border-blue-500/30"
-              }`}
+                }`}
             >
               <div className="flex items-start gap-4 mb-4">
                 <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -1166,11 +1164,10 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                   </div>
                   <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${
-                        task.completed
-                          ? "bg-gradient-to-r from-green-400 to-green-500"
-                          : "bg-gradient-to-r from-cyan-400 to-blue-500"
-                      }`}
+                      className={`h-full rounded-full transition-all ${task.completed
+                        ? "bg-gradient-to-r from-green-400 to-green-500"
+                        : "bg-gradient-to-r from-cyan-400 to-blue-500"
+                        }`}
                       style={{
                         width: `${Math.min(
                           (task.progress / task.maxProgress) * 100,
@@ -1190,15 +1187,14 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                   (task.id === "first-game" && firstGameClaimed) ||
                   (task.completed && task.id !== "first-game")
                 }
-                className={`w-full py-3 rounded-xl font-bold transition-all ${
-                  (task.completed && task.id !== "first-game") ||
+                className={`w-full py-3 rounded-xl font-bold transition-all ${(task.completed && task.id !== "first-game") ||
                   (task.id === "daily-login" && alreadyLoggedToday) ||
                   (task.id === "first-game" && firstGameClaimed)
-                    ? "bg-pink-400 text-white-900 cursor-not-allowed"
-                    : task.category === "special"
+                  ? "bg-pink-400 text-white-900 cursor-not-allowed"
+                  : task.category === "special"
                     ? "bg-white text-purple-600 hover:bg-gray-100 disabled:opacity-50"
                     : "bg-[#0A0A1F] text-white hover:bg-black disabled:opacity-50"
-                }`}
+                  }`}
               >
                 {gamingLoadingId === task.id ? (
                   <div className="flex items-center justify-center gap-2">
@@ -1230,7 +1226,7 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
           <div className="w-5 h-5 bg-white/10 rounded flex items-center justify-center">
             <span className="text-sm">🔗</span>
           </div>
-          <h2 className="text-xl font-bold">Social Media Tasks</h2>
+          <h2 className="text-lg sm:text-xl font-bold">Social Media Tasks</h2>
         </div>
 
         {isLoadingTasks ? (
@@ -1272,8 +1268,8 @@ const Tasks = ({ tg }: { tg: typeof WebApp | null }) => {
                         {task.name.includes("X")
                           ? "Follow our official Twitter account for updates"
                           : task.name.includes("Telegram")
-                          ? "Join our community channel for exclusive content"
-                          : "Invite friends and earn rewards for each signup"}
+                            ? "Join our community channel for exclusive content"
+                            : "Invite friends and earn rewards for each signup"}
                       </p>
                     </div>
                   </div>

@@ -47,7 +47,7 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
   }, [fetchUserProfile]);
 
   return (
-    <div className="h-[calc(100vh-75px)] w-full bg-[#040022] flex flex-col">
+    <div className="h-full w-full bg-[#040022] flex flex-col overflow-hidden">
       {/* Header */}
       <div className="px-4 py-2">
         <div className="flex items-center justify-between mb-3">
@@ -109,7 +109,7 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
       <div className="flex flex-col justify-center px-2 pt-4 space-y-4 ">
         <div className="max-w-2xl mx-auto text-center space-y-4">
           {/* Motivational text */}
-          <div className="space-y-0 pb-3">
+          <div className="space-y-0 pb-1">
             <h2
               className={`${montserrat.className} text-[#FBBC05] text-[9px] sm:text-[10px] font-normal leading-relaxed`}
             >
@@ -152,7 +152,7 @@ const HomePage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
           </div>
 
           {/* Big home image */}
-          <div className="flex items-center pt-1 justify-center">
+          <div className="flex items-center justify-center">
             <Image
               src="/assets/background/home-image.svg"
               alt="Home"

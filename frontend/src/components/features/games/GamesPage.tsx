@@ -62,7 +62,7 @@ const GamesPage = () => {
   return (
     <>
       {activeGame == null ? (
-        <div className="h-screen w-screen flex flex-col relative overflow-hidden bg-gradient-to-b from-[#0a0520] via-[#1a0f3e] to-[#0a0520]">
+        <div className="h-full w-full flex flex-col relative overflow-hidden bg-gradient-to-b from-[#0a0520] via-[#1a0f3e] to-[#0a0520]">
           <div className="absolute inset-0 overflow-hidden">
             <div className="absolute top-20 left-10 w-16 h-16 bg-pink-500/30 rounded-full blur-xl animate-pulse" />
             <div className="absolute top-40 right-20 w-12 h-12 bg-purple-500/30 rounded-full blur-xl animate-pulse delay-100" />
@@ -86,14 +86,14 @@ const GamesPage = () => {
               className="text-3xl md:text-4xl font-bold text-white tracking-[0.3em] drop-shadow-2xl"
               style={{
                 fontFamily: "'Pixelify Sans', monospace",
-                letterSpacing: "0.2em",
+                letterSpacing: "0.1em",
               }}
             >
               SELECT GAME
             </h1>
           </div>
 
-          <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 pt-24 pb-8">
+          <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 md:px-[20%] pt-24 pb-8">
             <div className="grid grid-cols-2 md:gap-6 gap-3 w-full max-w-md mb-8">
               {games.map((game) => {
                 const all = getAllGames();
@@ -142,7 +142,7 @@ const GamesPage = () => {
               })}
             </div>
 
-            <div className="absolute md:top-[70%] top-[62%] md:-right-4 -right-12 w-48 h-48 md:w-56 md:h-56">
+            <div className="absolute md:top-[70%] top-[55%] md:-right-4 -right-12 w-48 h-48 md:w-56 md:h-56">
               <Image
                 src="/assets/games/mascot.svg"
                 alt="Mascot"
