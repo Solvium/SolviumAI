@@ -310,7 +310,7 @@ const QuizGame: React.FC<QuizGameProps> = ({
     );
   }
 
-  // Show game start screen
+  // Show game start screen these are the settings screen
   if (!gameState.gameStarted || !quizState.currentQuiz) {
     return (
       <div className="h-[calc(100vh-150px)] bg-gradient-to-b from-[#0a0e27] via-[#1a1f3a] to-[#0a0e27] relative overflow-hidden">
